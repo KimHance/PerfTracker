@@ -1,5 +1,5 @@
 import type { FrameBucket, FrameData } from '../schema/result.js'
-import type { Collector, CollectorEnv, ExtractContext } from './types.js'
+import type { Collector, CollectorEnv, ExtractContext, ExtractOutcome, SupportResult } from './types.js'
 
 const DATA_SOURCE = 'android.surfaceflinger.frametimeline'
 const MIN_SDK = 31
@@ -119,12 +119,20 @@ export const frameCollector: Collector<FrameData> = {
   id: 'frame',
   source: 'perfetto: actual_frame_timeline_slice.dur',
 
-  supports(env: CollectorEnv) {
+  supports(env: CollectorEnv): SupportResult {
     if (env.sdkInt < MIN_SDK) {
-      return { supported: false, reason: `requires Android 12+ (device sdk_int=${env.sdkInt})` }
+      return {
+        supported: false,
+        code: 'sdk_too_low',
+        detail: { sdk_int: env.sdkInt, min_sdk: MIN_SDK },
+      }
     }
     if (!env.dataSources.includes(DATA_SOURCE)) {
-      return { supported: false, reason: `data source not registered: ${DATA_SOURCE}` }
+      return {
+        supported: false,
+        code: 'data_source_not_registered',
+        detail: { data_source: DATA_SOURCE },
+      }
     }
     return { supported: true }
   },
@@ -133,20 +141,26 @@ export const frameCollector: Collector<FrameData> = {
     return [`data_sources { config { name: "${DATA_SOURCE}" } }`, PROCESS_STATS_BLOCK]
   },
 
-  async extract(ctx: ExtractContext): Promise<FrameData | null> {
+  async extract(ctx: ExtractContext): Promise<ExtractOutcome<FrameData>> {
     const candidates = await ctx.tp.queryJson<FrameProcessCandidate[]>(FRAME_PROCESS_SQL)
     const picked = selectRenderProcess(candidates, ctx.packageName)
-    if (!picked) return null
+    if (!picked) {
+      return { data: null, code: 'render_process_not_found', detail: { package: ctx.packageName } }
+    }
 
     const durationsNs = await ctx.tp.queryJson<number[]>(frameDurationsSql(picked.upid))
-    if (durationsNs.length === 0) return null
+    const processName = picked.name ?? String(picked.pid)
+    if (durationsNs.length === 0) {
+      return { data: null, code: 'no_frames', detail: { process: processName } }
+    }
 
     const durationsMs = durationsNs.map((ns) => ns / 1e6)
     const sorted = [...durationsMs].sort((a, b) => a - b)
     const within = durationsMs.filter((ms) => ms <= FRAME_BUDGET_MS).length
 
-    return {
-      process: picked.name ?? String(picked.pid),
+    const data: FrameData = {
+      process: processName,
+      pid: picked.pid,
       total_frames: durationsMs.length,
       buckets: bucketFrames(durationsMs),
       within_16_67ms_ratio: round(within / durationsMs.length, 4),
@@ -159,5 +173,6 @@ export const frameCollector: Collector<FrameData> = {
       mean_ms: round(durationsMs.reduce((s, v) => s + v, 0) / durationsMs.length, 2),
       max_ms: round(sorted[sorted.length - 1]!, 2),
     }
+    return { data }
   },
 }

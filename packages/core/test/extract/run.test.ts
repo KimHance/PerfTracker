@@ -166,8 +166,48 @@ describe('extractRun', () => {
     })
 
     expect(result.metrics.frame.status).toBe('unsupported')
+    // 기계가 매칭하는 것은 코드, 사람이 읽는 것은 문장 — 두 필드가 따로 있다.
+    expect(result.metrics.frame.reason_code).toBe('sdk_too_low')
     expect(result.metrics.frame.reason).toContain('sdk_int=30')
     expect(result.metrics.frame.data).toBeNull()
+  })
+
+  it('트레이스가 없으면 trace_missing 코드를 남긴다', async () => {
+    const runDir = await makeRun({ trace: null })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
+
+    expect(result.metrics.frame.reason_code).toBe('trace_missing')
+  })
+
+  it('수집에 성공하면 target_app 의 렌더 프로세스와 pid 를 채운다', async () => {
+    const runDir = await makeRun()
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: runner(join(runDir, 'trace.perfetto-trace')),
+    })
+
+    expect(result.target_app.render_process).toBe(PKG)
+    expect(result.target_app.pid).toBe(24193)
+    expect(result.metrics.frame.reason_code).toBeNull()
+  })
+
+  it('렌더 프로세스를 못 찾은 것과 프레임이 없는 것을 다른 코드로 구분한다', async () => {
+    const runDir = await makeRun()
+    const trace = join(runDir, 'trace.perfetto-trace')
+    const noFrames = runner(trace).on(`query ${trace} ${frameDurationsSql(2)}`, {
+      stdout: '"j"\n"[]"\n',
+    })
+
+    const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: noFrames })
+
+    expect(result.metrics.frame.status).toBe('partial')
+    expect(result.metrics.frame.reason_code).toBe('no_frames')
+    expect(result.metrics.frame.reason).toContain('프레임')
   })
 
   it('트레이스가 없으면 frame 을 failed 로 남기고 나머지는 채운다', async () => {
@@ -192,6 +232,7 @@ describe('extractRun', () => {
     const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: broken })
 
     expect(result.metrics.frame.status).toBe('failed')
+    expect(result.metrics.frame.reason_code).toBe('query_failed')
     expect(result.metrics.frame.reason).toContain('no such table')
     expect(result.measurement_overhead.trace_buffer_overrun).toBe(false)
   })

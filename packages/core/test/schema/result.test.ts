@@ -69,9 +69,11 @@ function minimalResult() {
       frame: {
         status: 'collected' as const,
         source: 'perfetto: actual_frame_timeline_slice.dur',
+        reason_code: null,
         reason: null,
         data: {
           process: 'com.nhn.android.webtoon',
+          pid: 24193,
           total_frames: 450,
           buckets: [{ from_ms: 0, to_ms: 5, count: 12 }],
           within_16_67ms_ratio: 0.874,
@@ -104,7 +106,8 @@ describe('ResultSchema', () => {
     r.metrics.frame = {
       status: 'unsupported',
       source: 'perfetto: actual_frame_timeline_slice.dur',
-      reason: 'requires Android 12+ (device sdk_int=30)',
+      reason_code: 'sdk_too_low',
+      reason: 'Android 12 이상이 필요합니다 (기기 sdk_int=30, 최소 sdk_int=31).',
       data: null,
     } as never
     expect(() => ResultSchema.parse(r)).not.toThrow()

@@ -141,10 +141,20 @@ describe('selectRenderProcess', () => {
 })
 
 describe('frameCollector', () => {
-  it('Android 12 미만은 미지원으로 표시한다', () => {
+  it('Android 12 미만은 안정적인 코드로 미지원을 말한다', () => {
+    // 산문이 아니라 코드가 계약이다 — 문구를 다듬어도 CI 매처가 깨지지 않는다.
     expect(frameCollector.supports({ sdkInt: 30, dataSources: [] })).toEqual({
       supported: false,
-      reason: 'requires Android 12+ (device sdk_int=30)',
+      code: 'sdk_too_low',
+      detail: { sdk_int: 30, min_sdk: 31 },
+    })
+  })
+
+  it('데이터소스 미등록도 코드로 말한다', () => {
+    expect(frameCollector.supports({ sdkInt: 36, dataSources: [] })).toEqual({
+      supported: false,
+      code: 'data_source_not_registered',
+      detail: { data_source: 'android.surfaceflinger.frametimeline' },
     })
   })
 
@@ -193,7 +203,7 @@ describe('frameCollector', () => {
       })
     const tp = new TraceProcessor('/bin/tp', '/t.pftrace', runner)
 
-    const data = await frameCollector.extract({
+    const { data } = await frameCollector.extract({
       tp,
       packageName: pkg,
       env: { sdkInt: 36, dataSources: ['android.surfaceflinger.frametimeline'] },
@@ -201,13 +211,14 @@ describe('frameCollector', () => {
 
     expect(data).not.toBeNull()
     expect(data!.process).toBe(pkg)
+    expect(data!.pid).toBe(24193)
     expect(data!.total_frames).toBe(4)
     expect(data!.max_ms).toBe(900)
     expect(data!.within_16_67ms_ratio).toBe(0.5)
     expect(data!.buckets.reduce((s, b) => s + b.count, 0)).toBe(4)
   })
 
-  it('앱 프로세스를 못 찾으면 null 을 낸다', async () => {
+  it('앱 프로세스를 못 찾으면 render_process_not_found 로 구분한다', async () => {
     const runner = new FakeProcessRunner().on(`query /t.pftrace ${FRAME_PROCESS_SQL}`, {
       stdout: '"j"\n"[{"upid":1,"pid":1,"name":"/system/bin/surfaceflinger","frames":450}]"\n',
     })
@@ -219,6 +230,25 @@ describe('frameCollector', () => {
         packageName: 'com.x',
         env: { sdkInt: 36, dataSources: ['android.surfaceflinger.frametimeline'] },
       }),
-    ).resolves.toBeNull()
+    ).resolves.toEqual({ data: null, code: 'render_process_not_found', detail: { package: 'com.x' } })
+  })
+
+  it('프로세스는 찾았지만 프레임이 없으면 no_frames 로 구분한다', async () => {
+    // 예전에는 이 경우에도 "렌더 프로세스를 찾지 못했습니다" 라는 틀린 사유가 나갔다.
+    const pkg = 'com.nhn.android.webtoon'
+    const runner = new FakeProcessRunner()
+      .on(`query /t.pftrace ${FRAME_PROCESS_SQL}`, {
+        stdout: `"j"\n"[{"upid":2,"pid":24193,"name":"${pkg}","frames":0}]"\n`,
+      })
+      .on(`query /t.pftrace ${frameDurationsSql(2)}`, { stdout: '"j"\n"[]"\n' })
+    const tp = new TraceProcessor('/bin/tp', '/t.pftrace', runner)
+
+    await expect(
+      frameCollector.extract({
+        tp,
+        packageName: pkg,
+        env: { sdkInt: 36, dataSources: ['android.surfaceflinger.frametimeline'] },
+      }),
+    ).resolves.toEqual({ data: null, code: 'no_frames', detail: { process: pkg } })
   })
 })

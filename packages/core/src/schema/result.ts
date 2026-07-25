@@ -6,11 +6,18 @@ export const SCHEMA_VERSION = '1.0.0'
 export const MetricStatusSchema = z.enum(['collected', 'partial', 'unsupported', 'failed', 'skipped'])
 export type MetricStatus = z.infer<typeof MetricStatusSchema>
 
-/** 모든 메트릭은 status 와 source 를 갖는다. source 는 "어떤 방법으로 잰 값인지"의 기록. */
+/**
+ * 모든 메트릭은 status 와 source 를 갖는다. source 는 "어떤 방법으로 잰 값인지"의 기록.
+ *
+ * `reason_code` 와 `reason` 은 일부러 두 필드다. 앞엣것은 CI 와 LLM 이 매칭하는 안정적인
+ * 식별자이고, 뒤엣것은 사람이 읽는 (한국어) 문장이라 언제든 다듬을 수 있다.
+ * 산문에게 식별자 노릇을 시키면 문구를 고칠 때마다 소비자가 깨진다.
+ */
 export function metricResultSchema<T extends z.ZodType>(data: T) {
   return z.object({
     status: MetricStatusSchema,
     source: z.string(),
+    reason_code: z.string().nullable(),
     reason: z.string().nullable(),
     data: data.nullable(),
   })
@@ -19,6 +26,7 @@ export function metricResultSchema<T extends z.ZodType>(data: T) {
 export type MetricResult<T> = {
   status: MetricStatus
   source: string
+  reason_code: string | null
   reason: string | null
   data: T | null
 }
@@ -33,6 +41,8 @@ export type FrameBucket = z.infer<typeof FrameBucketSchema>
 
 export const FrameDataSchema = z.object({
   process: z.string(),
+  /** 그 프로세스의 pid. target_app.render_process / target_app.pid 가 여기서 채워진다. */
+  pid: z.number().int(),
   total_frames: z.number().int().nonnegative(),
   buckets: z.array(FrameBucketSchema),
   within_16_67ms_ratio: z.number(),

@@ -14,6 +14,7 @@ import {
   startDetachedSession,
   stopDetachedSession,
 } from '../perfetto/session.js'
+import { renderReason } from '../schema/reasons.js'
 import type { DeviceState, TargetApp, Warning } from '../schema/result.js'
 import { CAPTURE_MANIFEST_VERSION, writeCaptureManifest } from './manifest.js'
 import { runDirName } from './paths.js'
@@ -169,7 +170,8 @@ export async function startSession(
   const blocks = support.supported ? frameCollector.traceConfigBlocks() : []
   if (blocks.length === 0) {
     throw new SessionStateError(
-      `이 기기에서 수집 가능한 항목이 없습니다: ${support.reason ?? '알 수 없음'}`,
+      `이 기기에서 수집 가능한 항목이 없습니다: ` +
+        `${support.supported ? '알 수 없음' : (renderReason(support) ?? support.code)}`,
     )
   }
   await startDetachedSession(ctx.adb, {

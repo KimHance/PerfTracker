@@ -27,9 +27,12 @@ export function formatSummary(result: Result): string {
       `Frame     collected     ${num(f.total_frames)} frames · ≤16.67ms ${(f.within_16_67ms_ratio * 100).toFixed(1)}% · ` +
         `p50 ${f.percentiles.p50} · p95 ${f.percentiles.p95} · max ${f.max_ms} (ms)`,
     )
-    lines.push(`          process       ${f.process}`)
+    lines.push(`          process       ${f.process} (pid ${f.pid})`)
   } else {
-    lines.push(`Frame     ${frame.status.padEnd(13)} ${frame.reason ?? ''}`.trimEnd())
+    // reason 은 사람용 한국어 문장, reason_code 는 CI 가 매칭하는 안정적인 키다.
+    // 사용자가 이슈에 그대로 옮길 수 있도록 둘 다 보여준다.
+    const code = frame.reason_code !== null ? `[${frame.reason_code}] ` : ''
+    lines.push(`Frame     ${frame.status.padEnd(13)} ${code}${frame.reason ?? ''}`.trimEnd())
   }
 
   lines.push(

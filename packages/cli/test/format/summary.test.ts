@@ -68,9 +68,11 @@ function result(overrides: Partial<Result['metrics']['frame']> = {}): Result {
       frame: {
         status: 'collected',
         source: 'perfetto: actual_frame_timeline_slice.dur',
+        reason_code: null,
         reason: null,
         data: {
           process: 'com.nhn.android.webtoon',
+          pid: 24193,
           total_frames: 1412,
           buckets: [],
           within_16_67ms_ratio: 0.874,
@@ -114,10 +116,27 @@ describe('formatSummary', () => {
 
   it('미수집 항목은 사유와 함께 보여준다', () => {
     const out = formatSummary(
-      result({ status: 'unsupported', reason: 'requires Android 12+ (device sdk_int=30)', data: null }),
+      result({
+        status: 'unsupported',
+        reason_code: 'sdk_too_low',
+        reason: 'Android 12 이상이 필요합니다 (기기 sdk_int=30, 최소 sdk_int=31).',
+        data: null,
+      }),
     )
     expect(out).toContain('unsupported')
     expect(out).toContain('sdk_int=30')
+  })
+
+  it('미수집 항목은 기계용 코드도 함께 보여준다', () => {
+    const out = formatSummary(
+      result({
+        status: 'partial',
+        reason_code: 'render_process_not_found',
+        reason: '대상 앱(com.x)의 렌더 프로세스를 트레이스에서 찾지 못했습니다.',
+        data: null,
+      }),
+    )
+    expect(out).toContain('[render_process_not_found]')
   })
 
   it('좋다/나쁘다 판정을 넣지 않는다', () => {

@@ -6,7 +6,15 @@ import { SchemaValidationError, SessionStateError } from '../errors.js'
 import { TraceProcessor } from '../perfetto/traceProcessor/client.js'
 import { ensureTraceProcessor } from '../perfetto/traceProcessor/locate.js'
 import { REFERENCES } from '../schema/references.js'
-import { type FrameData, type MetricResult, type Result, ResultSchema, SCHEMA_VERSION } from '../schema/result.js'
+import { type MetricReason, renderReason } from '../schema/reasons.js'
+import {
+  type FrameData,
+  type MetricResult,
+  type MetricStatus,
+  type Result,
+  ResultSchema,
+  SCHEMA_VERSION,
+} from '../schema/result.js'
 import { parseVersionedJson, readCaptureManifest } from '../session/manifest.js'
 import type { ActiveSession } from '../session/state.js'
 
@@ -37,8 +45,14 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-function failed(source: string, reason: string): MetricResult<FrameData> {
-  return { status: 'failed', source, reason, data: null }
+/** 코드와 사람용 문장을 한 번에 채운다 — 이 둘이 갈라지지 않게 통과 지점을 하나로 둔다. */
+function metric<T>(
+  status: MetricStatus,
+  source: string,
+  reason: MetricReason | null,
+  data: T | null = null,
+): MetricResult<T> {
+  return { status, source, reason_code: reason?.code ?? null, reason: renderReason(reason), data }
 }
 
 /**
@@ -82,7 +96,7 @@ export async function extractRun(
   let bufferOverrun = false
 
   if (!traceReady) {
-    frame = failed(frameCollector.source, '트레이스 원본이 없습니다.')
+    frame = metric('failed', frameCollector.source, { code: 'trace_missing' })
   } else {
     const support = frameCollector.supports(manifest.env)
     const binPath = await ensureTraceProcessor({
@@ -92,30 +106,23 @@ export async function extractRun(
     const tp = new TraceProcessor(binPath, tracePath, opts.runner)
 
     if (!support.supported) {
-      frame = {
-        status: 'unsupported',
-        source: frameCollector.source,
-        reason: support.reason ?? null,
-        data: null,
-      }
+      frame = metric('unsupported', frameCollector.source, support)
     } else {
       try {
-        const data = await frameCollector.extract({
+        const outcome = await frameCollector.extract({
           tp,
           packageName: manifest.target_app.package,
           env: manifest.env,
         })
         frame =
-          data !== null
-            ? { status: 'collected', source: frameCollector.source, reason: null, data }
-            : {
-                status: 'partial',
-                source: frameCollector.source,
-                reason: '대상 앱의 렌더 프로세스를 트레이스에서 찾지 못했습니다.',
-                data: null,
-              }
+          outcome.data !== null
+            ? metric('collected', frameCollector.source, null, outcome.data)
+            : metric('partial', frameCollector.source, outcome)
       } catch (e) {
-        frame = failed(frameCollector.source, (e as Error).message)
+        frame = metric('failed', frameCollector.source, {
+          code: 'query_failed',
+          detail: { message: (e as Error).message },
+        })
       }
     }
 
@@ -146,7 +153,12 @@ export async function extractRun(
       state_before: manifest.device.state_before,
       state_after: manifest.device.state_after,
     },
-    target_app: manifest.target_app,
+    // 렌더 프로세스는 트레이스를 파싱해야 알 수 있으므로 capture 단계에서는 null 이었다.
+    // frame 이 그것을 특정했으면 여기서 채운다 — 손에 쥐고도 안 쓰던 값이다.
+    target_app:
+      frame.data !== null
+        ? { ...manifest.target_app, render_process: frame.data.process, pid: frame.data.pid }
+        : manifest.target_app,
     metrics: { frame },
     measurement_overhead: {
       tracing_processes_cpu_time_ms: null,
