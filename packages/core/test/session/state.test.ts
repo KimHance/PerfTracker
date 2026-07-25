@@ -1,10 +1,11 @@
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   type ActiveSession,
+  activePointerPath,
   clearActiveSession,
   newSessionId,
   readActiveSession,
@@ -54,6 +55,16 @@ describe('active session 파일', () => {
   it('없는 기기는 null 을 낸다', async () => {
     const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
     expect(await readActiveSession('NOPE', home)).toBeNull()
+  })
+
+  it('잘못된 JSON 파일도 null 을 낸다', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
+    const serial = 'CORRUPT'
+    const pointerPath = activePointerPath(serial, home)
+    await mkdir(join(home, 'active'), { recursive: true })
+    writeFileSync(pointerPath, '{not json', 'utf8')
+
+    expect(await readActiveSession(serial, home)).toBeNull()
   })
 
   it('지우면 사라진다', async () => {
