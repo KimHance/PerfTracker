@@ -29,6 +29,8 @@ adb 로 붙어서 Perfetto 트레이스를 기기에 남기고, 그것을 호스
 새 프로세스는 활성 세션 포인터를 읽고 창을 복원합니다. 그리고 막힌 호출의 **횟수**를 세어
 `result.json` 의 `measurement_overhead.adb_commands_during_session` 에 적습니다.
 그 값이 0 이 아니면 그 세션 데이터는 오염된 것으로 봐야 합니다.
+(이 카운터가 세는 것은 **이 도구를 통과한** 호출뿐입니다. 자세한 한계는
+[아래](#measurement_overhead)에 적어 두었습니다.)
 
 이 제약이 설계 전체를 결정합니다:
 
@@ -213,8 +215,13 @@ npx perftracker schema > result.schema.json
 }
 ```
 
-- `adb_commands_during_session` — 측정 창이 열린 동안 **차단된** adb 호출 수.
-  0 이면 이 세션 동안 아무도 기기를 건드리지 않은 것입니다. 0 이 아니면 그 데이터는 의심하세요.
+- `adb_commands_during_session` — 측정 창이 열린 동안 **perftracker 를 통해** 시도되어
+  차단된 adb 호출 수. 0 이 아니면 그 데이터는 의심하세요.
+  **반대 방향은 성립하지 않습니다:** 0 은 "perftracker 가 아무것도 보내지 않았다"는 뜻이지
+  "아무도 기기를 건드리지 않았다"는 뜻이 아닙니다. 다른 터미널에서 직접 실행한 `adb`
+  (예: `adb shell input swipe`)는 이 도구를 거치지 않으므로 여기 잡히지 않습니다.
+  도구는 자기가 보내지 않은 트래픽을 관측할 수 없습니다 — 관측하려면 세션 중에 기기에
+  물어봐야 하고, 그게 곧 이 도구가 금지하는 행위이기 때문입니다.
 - `trace_buffer_overrun` — 트레이스 버퍼가 넘쳐 데이터가 잘렸는지. 잘린 데이터를
   정상인 척 내보내지 않기 위해 사실로 기록합니다.
 - `tracing_processes_*` 는 M2 에서 채워집니다.
