@@ -91,8 +91,20 @@ describe('matchApp', () => {
     expect(matchApp(apps, 'kakao').packageName).toBe('com.kakao.talk')
   })
 
+  it('대소문자를 무시한 완전 일치를 지원한다 (라벨)', () => {
+    expect(matchApp(apps, 'stream').packageName).toBe('com.stream.live')
+  })
+
   it('부분 일치가 여럿이면 자동 선택하지 않는다', () => {
     expect(() => matchApp(apps, 'stream.')).toThrow(AmbiguousAppError)
+  })
+
+  it('중복된 라벨은 자동 선택하지 않는다', () => {
+    const appsWithDuplicateLabel = [
+      { packageName: 'com.example.one', versionCode: 1, uid: 1, label: 'Duplicate', labelSource: 'apk_resources' as const },
+      { packageName: 'com.example.two', versionCode: 2, uid: 2, label: 'Duplicate', labelSource: 'apk_resources' as const },
+    ]
+    expect(() => matchApp(appsWithDuplicateLabel, 'Duplicate')).toThrow(AmbiguousAppError)
   })
 
   it('일치가 없으면 오류를 던진다', () => {
