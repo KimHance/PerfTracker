@@ -1,0 +1,2 @@
+List of devices attached
+R3CY0000002            device usb:0-1 product:pa1qksx model:SM_S931N device:pa1q transport_id:2
