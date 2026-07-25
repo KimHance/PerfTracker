@@ -1,0 +1,105 @@
+[31mNot meant for machine consumption. Use --query-raw for scripts.[0m
+
+Service: Perfetto v49.0 (N/A)
+Tracing sessions: 0 (started: 0)
+
+
+PRODUCER PROCESSES CONNECTED:
+
+ID     PID      UID      FLAGS  NAME                                       SDK
+==     ===      ===      =====  ====                                       ===
+1      1851     9999            traced                                     
+2      1850     9999            perfetto.traced_probes                     Perfetto v49.0 (N/A)
+3      1671     1072            /system/bin/gpuservice                     Perfetto v49.0 (N/A)
+4      1678     1000            /system/bin/surfaceflinger                 Perfetto v49.0 (N/A)
+5      784      1000            /system/bin/servicemanager                 Perfetto v49.0 (N/A)
+6      2414     1000            system_server                              Perfetto v49.0 (N/A)
+7      3517     10037           com.android.systemui                       Perfetto v49.0 (N/A)
+9      3702     1002            com.android.bluetooth                      Perfetto v49.0 (N/A)
+10     1678     1000            /system/bin/surfaceflinger                 Perfetto v49.0 (N/A)
+15     6873     10193           com.samsung.android.honeyboard             Perfetto v49.0 (N/A)
+17     7475     10277           com.samsung.android.spay                   Perfetto v49.0 (N/A)
+129    23344    10240           cronet-com.google.android.gms-23344        Perfetto v0.0 (unknown)
+132    23359    15010240        cronet-com.google.android.gms-23359        Perfetto v0.0 (unknown)
+138    23976    10240           cronet-com.google.android.gms-23976        Perfetto v0.0 (unknown)
+168    31915    1000     F      com.samsung.android.biometrics.app.setting Perfetto v49.0 (N/A)
+174    7361     10241           cronet-com.android.vending-7361            Perfetto v0.0 (unknown)
+181    15332    10143           com.sec.android.app.launcher               Perfetto v49.0 (N/A)
+186    19814    10241           cronet-com.android.vending-19814           Perfetto v0.0 (unknown)
+188    23674    10388           com.nhn.android.webtoon                    Perfetto v49.0 (N/A)
+189    23674    10388           org.chromium-com.nhn.android.webtoon-23674 Perfetto v0.0 (unknown)
+191    26081    10474           cronet-com.google.android.apps.youtube.music-26081 Perfetto v0.0 (unknown)
+192    28417    10253           cronet-com.google.android.gm-28417         Perfetto v0.0 (unknown)
+
+
+DATA SOURCES REGISTERED:
+
+NAME                                     PRODUCER                     DETAILS
+===                                      ========                     ========
+android.bluetooth_tracing                com.android.bluetooth (9)    
+android.game_interventions               perfetto.traced_probes (2)   
+android.gpu.memory                       /system/bin/gpuservice (3)   
+android.heapprofd                        traced (1)                   
+android.inputmethod                      com.android.systemui (7)     
+android.inputmethod                      system_server (6)            
+android.inputmethod                      com.samsung.android.honeyboard (15) 
+android.inputmethod                      com.samsung.android.spay (17) 
+android.inputmethod                      com.samsung.android.biometrics.app.setting (168) 
+android.inputmethod                      com.sec.android.app.launcher (181) 
+android.inputmethod                      com.nhn.android.webtoon (188) 
+android.java_hprof                       traced (1)                   
+android.java_hprof.oom                   traced (1)                   
+android.kernel_wakelocks                 perfetto.traced_probes (2)   
+android.log                              perfetto.traced_probes (2)   
+android.packages_list                    perfetto.traced_probes (2)   
+android.polled_state                     perfetto.traced_probes (2)   
+android.power                            perfetto.traced_probes (2)   
+android.protolog                         system_server (6)            
+android.protolog                         com.android.systemui (7)     
+android.protolog                         com.samsung.android.honeyboard (15) 
+android.protolog                         com.samsung.android.spay (17) 
+android.protolog                         com.samsung.android.biometrics.app.setting (168) 
+android.protolog                         com.sec.android.app.launcher (181) 
+android.protolog                         com.nhn.android.webtoon (188) 
+android.sdk_sysprop_guard                traced (1)                   
+android.statsd                           perfetto.traced_probes (2)   
+android.surfaceflinger.frame             /system/bin/surfaceflinger (4) 
+android.surfaceflinger.frametimeline     /system/bin/surfaceflinger (4) 
+android.surfaceflinger.layers            /system/bin/surfaceflinger (4) 
+android.system_property                  perfetto.traced_probes (2)   
+com.android.wm.shell.transition          system_server (6)            
+com.android.wm.shell.transition          com.android.systemui (7)     
+linux.ftrace                             perfetto.traced_probes (2)   gfx,input,view,webview,wm,am,sm,audio,vi... (use --long to expand)
+linux.inode_file_map                     perfetto.traced_probes (2)   
+linux.perf                               traced (1)                   
+linux.process_stats                      perfetto.traced_probes (2)   
+linux.sys_stats                          perfetto.traced_probes (2)   
+linux.sysfs_power                        perfetto.traced_probes (2)   
+linux.system_info                        perfetto.traced_probes (2)   
+org.chromium.background_scenario_metadata org.chromium-com.nhn.android.webtoon-23674 (189) 
+org.chromium.histogram_sample            org.chromium-com.nhn.android.webtoon-23674 (189) 
+org.chromium.memory_instrumentation      org.chromium-com.nhn.android.webtoon-23674 (189) 
+org.chromium.sampler_profiler            org.chromium-com.nhn.android.webtoon-23674 (189) 
+org.chromium.system_metrics              org.chromium-com.nhn.android.webtoon-23674 (189) 
+org.chromium.trace_metadata2             org.chromium-com.nhn.android.webtoon-23674 (189) 
+org.chromium.triggers                    org.chromium-com.nhn.android.webtoon-23674 (189) 
+perfetto.metatrace                       traced (1)                   
+perfetto.metatrace                       perfetto.traced_probes (2)   
+track_event                              /system/bin/servicemanager (5) servicemanager
+track_event                              system_server (6)            always,gfx,input,view,webview,wm,am,sm,a... (use --long to expand)
+track_event                              com.android.systemui (7)     always,gfx,input,view,webview,wm,am,sm,a... (use --long to expand)
+track_event                              /system/bin/surfaceflinger (10) always,gfx,input,view,webview,wm,am,sm,a... (use --long to expand)
+track_event                              cronet-com.google.android.gms-23344 (129) __metadata,accessibility,AccountFetcherS... (use --long to expand)
+track_event                              cronet-com.google.android.gms-23359 (132) __metadata,accessibility,AccountFetcherS... (use --long to expand)
+track_event                              cronet-com.google.android.gms-23976 (138) __metadata,accessibility,AccountFetcherS... (use --long to expand)
+track_event                              cronet-com.android.vending-7361 (174) __metadata,accessibility,AccountFetcherS... (use --long to expand)
+track_event                              cronet-com.android.vending-19814 (186) __metadata,accessibility,AccountFetcherS... (use --long to expand)
+track_event                              org.chromium-com.nhn.android.webtoon-23674 (189) __metadata,accessibility,AccountFetcherS... (use --long to expand)
+track_event                              cronet-com.google.android.apps.youtube.music-26081 (191) __metadata,accessibility,AccountFetcherS... (use --long to expand)
+track_event                              cronet-com.google.android.gm-28417 (192) __metadata,accessibility,AccountFetcherS... (use --long to expand)
+
+
+TRACING SESSIONS:
+
+ID      UID     STATE      BUF (#) KB   DUR (s)   #DS  STARTED  NAME
+===     ===     =====      ==========   =======   ===  =======  ====

@@ -105,13 +105,34 @@ describe('collectDeviceState', () => {
 
     const { state, raw } = await collectDeviceState(adb, new Date('2026-07-25T14:32:10.000Z'))
 
-    expect(state.battery_level).toBe(68)
-    expect(state.charging).toBe(true)
-    expect(state.connection).toBe('usb')
-    expect(state.network).toBe('wifi')
+    // 10개 상태 필드를 전부 단언한다 — 예전에는 절반만 봐서 수집을 지워도 통과했다.
+    expect(state).toEqual({
+      captured_at: '2026-07-25T14:32:10.000Z',
+      battery_level: 68,
+      battery_temp_c: 34.8,
+      charging: true,
+      connection: 'usb',
+      screen_brightness: 131,
+      power_save_mode: false,
+      network: 'wifi',
+      mem_available_kb: 3511516,
+      animator_duration_scale: 1,
+      thermal_zones: parseThermalZones(THERMAL),
+    })
     expect(state.thermal_zones).toHaveLength(6)
     expect(raw['battery']).toBe(BATTERY)
     expect(raw['thermalservice']).toBe(THERMAL)
+    expect(Object.keys(raw).sort()).toEqual(['battery', 'iproute', 'meminfo', 'settings', 'thermalservice'])
+  })
+
+  it('실패한 명령의 원문은 빈 문자열로 남는다', async () => {
+    const runner = new FakeProcessRunner().on('shell dumpsys battery', { stdout: BATTERY })
+    const adb = new AdbClient({ adbPath: '/fake/adb', runner })
+
+    const { raw } = await collectDeviceState(adb, new Date())
+
+    expect(raw['battery']).toBe(BATTERY)
+    expect(raw['thermalservice']).toBe('')
   })
 
   it('일부 명령이 실패해도 나머지를 채운다', async () => {

@@ -34,6 +34,8 @@ async function resolveTargetApp(ctx: CliContext, query: string | undefined): Pro
   const label = await resolveAppLabel(ctx.adb, packageName, {
     cache,
     versionCode: entry?.versionCode ?? null,
+    // 여기서만 런처 액티비티가 필요하다 (--launch). 목록 경로는 켜지 않는다.
+    withLauncherActivity: true,
   })
   await cache.save()
 

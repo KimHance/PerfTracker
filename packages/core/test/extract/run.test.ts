@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { FRAME_PROCESS_SQL, frameDurationsSql } from '../../src/collectors/frame.js'
+import { SessionStateError } from '../../src/errors.js'
 import { BUFFER_STATS_SQL, extractRun } from '../../src/extract/run.js'
 import { writeCaptureManifest } from '../../src/session/manifest.js'
 import { writeRunSession } from '../../src/session/state.js'
@@ -26,10 +27,19 @@ function deviceState() {
   }
 }
 
-async function makeRun(overrides: { trace?: string | null; sdkInt?: number } = {}): Promise<string> {
+async function makeRun(
+  overrides: {
+    trace?: string | null
+    sdkInt?: number
+    state?: 'running' | 'completed' | 'aborted' | 'failed'
+    endedAt?: string | null
+    adbCommandsDuringSession?: number
+  } = {},
+): Promise<string> {
   const runDir = mkdtempSync(join(tmpdir(), 'pt-extract-'))
   const trace = overrides.trace === undefined ? 'trace.perfetto-trace' : overrides.trace
   if (trace) writeFileSync(join(runDir, trace), 'fake')
+  const endedAt = overrides.endedAt === undefined ? '2026-07-25T14:32:52.735Z' : overrides.endedAt
 
   await writeRunSession(
     runDir,
@@ -47,7 +57,10 @@ async function makeRun(overrides: { trace?: string | null; sdkInt?: number } = {
       options: { launch: true, video: false },
       startup: { totalTimeMs: 1842, launchState: 'COLD' },
     },
-    { endedAt: '2026-07-25T14:32:52.735Z', state: 'completed' },
+    {
+      ...(endedAt !== null ? { endedAt } : {}),
+      state: overrides.state ?? 'completed',
+    },
   )
 
   await writeCaptureManifest(runDir, {
@@ -93,7 +106,7 @@ async function makeRun(overrides: { trace?: string | null; sdkInt?: number } = {
       dataSources: ['android.surfaceflinger.frametimeline'],
     },
     warnings: [{ code: 'charging_during_session', message: 'USB 충전 중이었음' }],
-    adb_commands_during_session: 0,
+    adb_commands_during_session: overrides.adbCommandsDuringSession ?? 0,
     artifacts: { trace, video: null, raw: ['raw/battery_before.txt'] },
   })
 
@@ -181,6 +194,62 @@ describe('extractRun', () => {
     expect(result.metrics.frame.status).toBe('failed')
     expect(result.metrics.frame.reason).toContain('no such table')
     expect(result.measurement_overhead.trace_buffer_overrun).toBe(false)
+  })
+
+  it('아직 stop 하지 않은 run 디렉토리에도 결과를 낸다 (raw ZodError 아님)', async () => {
+    const runDir = await makeRun({ trace: null, state: 'running', endedAt: null })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
+
+    expect(result.session.state).toBe('running')
+    expect(result.metrics.frame.status).toBe('failed')
+    expect(result.warnings.map((w) => w.code)).toContain('session_still_running')
+    expect(result.session.duration_ms).toBe(0)
+  })
+
+  it('session.json 의 version 이 다르면 조용히 잘못 읽지 않고 거부한다', async () => {
+    const runDir = await makeRun()
+    const file = join(runDir, 'session.json')
+    const stored = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>
+    writeFileSync(file, JSON.stringify({ ...stored, version: 2 }))
+
+    await expect(
+      extractRun(runDir, { traceProcessorPath: process.execPath, runner: new FakeProcessRunner() }),
+    ).rejects.toBeInstanceOf(SessionStateError)
+  })
+
+  it('capture.json 의 version 이 다르면 거부한다', async () => {
+    const runDir = await makeRun()
+    const file = join(runDir, 'capture.json')
+    const stored = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>
+    writeFileSync(file, JSON.stringify({ ...stored, version: 99 }))
+
+    await expect(
+      extractRun(runDir, { traceProcessorPath: process.execPath, runner: new FakeProcessRunner() }),
+    ).rejects.toThrow(/version/)
+  })
+
+  it('capture.json 이 깨져 있으면 사람이 읽는 오류를 낸다', async () => {
+    const runDir = await makeRun()
+    writeFileSync(join(runDir, 'capture.json'), '{not json')
+
+    await expect(
+      extractRun(runDir, { traceProcessorPath: process.execPath, runner: new FakeProcessRunner() }),
+    ).rejects.toBeInstanceOf(SessionStateError)
+  })
+
+  it('측정 창 위반 횟수를 result.json 까지 옮긴다', async () => {
+    const runDir = await makeRun({ adbCommandsDuringSession: 3 })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: runner(join(runDir, 'trace.perfetto-trace')),
+    })
+
+    expect(result.measurement_overhead.adb_commands_during_session).toBe(3)
   })
 
   it('버퍼 오버런을 사실로 기록한다', async () => {

@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import type { AdbClient } from '../adb/client.js'
 import { frameCollector } from '../collectors/frame.js'
 import { probeDevice } from '../device/probe.js'
@@ -7,9 +7,15 @@ import { collectDeviceStatic } from '../device/spec.js'
 import { collectDeviceState } from '../device/state.js'
 import { SessionStateError } from '../errors.js'
 import { buildTraceConfig, DEFAULT_MAX_DURATION_MS } from '../perfetto/config.js'
-import { remoteTracePath, startDetachedSession } from '../perfetto/session.js'
+import {
+  isSessionDetached,
+  remoteTracePath,
+  removeRemoteTrace,
+  startDetachedSession,
+  stopDetachedSession,
+} from '../perfetto/session.js'
 import type { DeviceState, TargetApp, Warning } from '../schema/result.js'
-import { writeCaptureManifest } from './manifest.js'
+import { CAPTURE_MANIFEST_VERSION, writeCaptureManifest } from './manifest.js'
 import { runDirName } from './paths.js'
 import {
   type ActiveSession,
@@ -29,7 +35,10 @@ export function parseAmStart(text: string): { totalTimeMs: number | null; launch
 }
 
 /** 관측된 사실만 담는다. "느립니다" 같은 평가는 들어가지 않는다. */
-export function buildWarnings(stateBefore: DeviceState, options: { video: boolean }): Warning[] {
+export function buildWarnings(
+  stateBefore: DeviceState,
+  options: { video: boolean; launchUnverified?: boolean },
+): Warning[] {
   const warnings: Warning[] = []
 
   if (stateBefore.charging === true) {
@@ -47,7 +56,31 @@ export function buildWarnings(stateBefore: DeviceState, options: { video: boolea
       message: 'screenrecord 오버헤드가 섞인 세션임',
     })
   }
+  if (options.launchUnverified === true) {
+    warnings.push({
+      code: 'app_launch_unverified',
+      message:
+        'am start 가 TotalTime 을 보고하지 않았음 — force-stop 된 앱이 다시 실행되지 않았을 수 있음',
+    })
+  }
   return warnings
+}
+
+/**
+ * `--force` 는 로컬 포인터만 버려서는 안 된다. 옛 perfettoKey 가 유실되면 그 tracer 를 멈출
+ * 방법이 영원히 사라져, 남은 duration_ms(최대 30분) 동안 새 측정과 **동시에** 돈다 —
+ * 옛 tracer 가 새 측정이 재는 대상의 일부가 된다. 트레이스 파일도 기기에 영구히 남는다.
+ * 이전 세션 정리 실패가 새 측정을 막을 이유는 없으므로 최선 노력으로 처리한다.
+ */
+async function discardExistingSession(adb: AdbClient, existing: ActiveSession): Promise<void> {
+  try {
+    if (await isSessionDetached(adb, existing.perfettoKey)) {
+      await stopDetachedSession(adb, existing.perfettoKey)
+    }
+    await removeRemoteTrace(adb, existing.remoteTracePath)
+  } catch {
+    // 기기 쪽 정리는 최선 노력이다.
+  }
 }
 
 export interface StartOptions {
@@ -72,13 +105,24 @@ export async function startSession(
         `perftracker stop 으로 끝내거나, --force 로 이전 세션을 버리고 시작하세요.`,
     )
   }
+  if (existing) await discardExistingSession(ctx.adb, existing)
 
   const probe = await probeDevice(ctx.adb)
   const env = { sdkInt: probe.sdkInt, dataSources: probe.dataSources }
 
+  // --launch 는 반드시 force-stop 전에 검증한다. 켤 수 없는 것이 확실한데 먼저 죽여 버리면
+  // 앱이 죽은 채로 남고, 그 상태가 측정 대상이 된다.
+  if (opts.launch && app.launcher_activity === null) {
+    throw new SessionStateError(
+      `${app.package} 의 런처 액티비티를 찾지 못해 --launch 를 쓸 수 없습니다.\n` +
+        `--launch 없이 실행한 뒤 앱을 직접 띄우세요.`,
+    )
+  }
+
   const name = opts.name ?? app.label
   const id = newSessionId()
-  const runDir = join(opts.outDir, runDirName(opts.now, name))
+  // 상대 경로로 저장하면 start 와 stop 사이에 cd 한 사용자가 세션을 통째로 잃는다.
+  const runDir = resolve(opts.outDir, runDirName(opts.now, name, id))
   await mkdir(join(runDir, 'raw'), { recursive: true })
 
   // 1) 기기 스펙과 시작 스냅샷 — 측정 창을 열기 전에 끝낸다.
@@ -99,10 +143,11 @@ export async function startSession(
   // 3) 측정을 먼저 켠다 — 그래야 콜드 스타트 구간이 프레임 트레이스에 포함된다.
   const perfettoKey = `perftracker_${id}`
   const remotePath = remoteTracePath(perfettoKey)
-  const blocks = frameCollector.supports(env).supported ? frameCollector.traceConfigBlocks() : []
+  const support = frameCollector.supports(env)
+  const blocks = support.supported ? frameCollector.traceConfigBlocks() : []
   if (blocks.length === 0) {
     throw new SessionStateError(
-      `이 기기에서 수집 가능한 항목이 없습니다: ${frameCollector.supports(env).reason ?? '알 수 없음'}`,
+      `이 기기에서 수집 가능한 항목이 없습니다: ${support.reason ?? '알 수 없음'}`,
     )
   }
   await startDetachedSession(ctx.adb, {
@@ -134,7 +179,7 @@ export async function startSession(
   }
 
   await writeCaptureManifest(runDir, {
-    version: 1,
+    version: CAPTURE_MANIFEST_VERSION,
     device: {
       serial: ctx.serial,
       static: deviceStatic,
@@ -143,7 +188,10 @@ export async function startSession(
     },
     target_app: app,
     env,
-    warnings: buildWarnings(before.state, { video: opts.video }),
+    warnings: buildWarnings(before.state, {
+      video: opts.video,
+      launchUnverified: opts.launch && startup?.totalTimeMs == null,
+    }),
     adb_commands_during_session: 0,
     artifacts: { trace: null, video: null, raw: rawFiles },
   })

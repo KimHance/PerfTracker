@@ -52,6 +52,16 @@ export class AdbClient {
     return this.check(['shell', command], opts)
   }
 
+  /**
+   * 스냅샷 수집 정책: 개별 명령의 실패는 빈 문자열로 흡수한다.
+   * `wm size` 하나가 없는 특이 기기 때문에 측정 전체가 중단되면 안 된다. 파싱 실패는
+   * 스키마의 기본값(0 / null)으로 result.json 에 그대로 드러나므로 조용히 사라지지 않는다.
+   */
+  async tryShell(command: string, opts: ProcessRunOptions = {}): Promise<string> {
+    const r = await this.raw(['shell', command], opts)
+    return r.code === 0 ? r.stdout : ''
+  }
+
   /** 바이너리를 그대로 받아야 할 때 (resources.arsc 스트리밍). */
   async execOutBinary(command: string): Promise<Buffer> {
     const r = await this.rawBinary(['exec-out', command])

@@ -51,4 +51,13 @@ describe('runDirName', () => {
   it('타임스탬프와 슬러그를 결합한다', () => {
     expect(runDirName(new Date(2026, 6, 25, 14, 32, 10), '홈 스크롤')).toBe('2026-07-25T14-32-10_홈-스크롤')
   })
+
+  it('세션 id 를 붙이면 같은 초의 같은 이름도 충돌하지 않는다', () => {
+    const at = new Date(2026, 6, 25, 14, 32, 10)
+    const a = runDirName(at, '홈 스크롤', 'a3f9c1')
+    const b = runDirName(at, '홈 스크롤', 'bb12cd')
+
+    expect(a).toBe('2026-07-25T14-32-10_홈-스크롤_a3f9c1')
+    expect(a).not.toBe(b)
+  })
 })

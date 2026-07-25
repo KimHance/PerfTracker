@@ -17,6 +17,8 @@ export const FORBIDDEN_FTRACE_EVENTS = [
 ]
 
 const MIN_POLL_PERIOD_MS = 1000
+/** Global Constraint: 파일 쓰기 주기가 짧으면 세션 내내 I/O 가 측정 대상에 섞인다. */
+const MIN_FILE_WRITE_PERIOD_MS = 30_000
 
 export interface TraceConfigOptions {
   dataSourceBlocks: string[]
@@ -77,4 +79,53 @@ export function assertLowOverheadConfig(text: string): void {
       throw new PerfettoSessionError(`${key} 가 ${m[2]}ms 입니다 — 폴링 주기는 1000ms 이상이어야 합니다.`)
     }
   }
+
+  // Global Constraint 를 정규식이 매치만 하고 지나가던 자리 — 명시적으로 검사한다.
+  const fileWrite = /file_write_period_ms:\s*(\d+)/.exec(text)
+  if (fileWrite === null) {
+    throw new PerfettoSessionError(
+      'file_write_period_ms 가 없습니다 — write_into_file 과 반드시 함께 설정해야 합니다.',
+    )
+  }
+  if (Number(fileWrite[1]) < MIN_FILE_WRITE_PERIOD_MS) {
+    throw new PerfettoSessionError(
+      `file_write_period_ms 가 ${fileWrite[1]}ms 입니다 — ${MIN_FILE_WRITE_PERIOD_MS}ms 이상이어야 합니다.`,
+    )
+  }
+}
+
+/**
+ * 여러 collector 가 낸 data_sources 블록을 합친다.
+ *
+ * 규칙: **같은 데이터소스는 완전히 같은 블록 텍스트로만 요청할 수 있다.**
+ * 같은 텍스트면 하나로 접고, 같은 `name` 에 다른 설정이 오면 던진다 — 둘 중 하나를 말없이
+ * 이기게 하면 어떤 설정으로 측정했는지가 결과에서 사라진다.
+ * 공유 데이터소스가 필요한 collector 는 블록 문자열 상수를 공유해야 한다.
+ */
+export function mergeTraceConfigBlocks(blocks: string[]): string[] {
+  const byName = new Map<string, string>()
+  const out: string[] = []
+
+  for (const block of blocks) {
+    const name = /name:\s*"([^"]+)"/.exec(block)?.[1]
+    if (name === undefined) {
+      if (!out.includes(block)) out.push(block)
+      continue
+    }
+
+    const seen = byName.get(name)
+    if (seen === undefined) {
+      byName.set(name, block)
+      out.push(block)
+      continue
+    }
+    if (seen !== block) {
+      throw new PerfettoSessionError(
+        `데이터소스 "${name}" 를 서로 다른 설정으로 두 번 요청했습니다. ` +
+          `공유 데이터소스는 동일한 블록 텍스트를 써야 합니다.\n  A: ${seen}\n  B: ${block}`,
+      )
+    }
+  }
+
+  return out
 }

@@ -77,21 +77,16 @@ export function connectionKindFromSerial(serial: string | undefined): 'usb' | 't
 }
 
 /** 실패한 명령은 빈 문자열로 흘려보낸다 — 한 항목이 없다고 스냅샷 전체를 버리지 않는다. */
-async function tryShell(adb: AdbClient, command: string): Promise<string> {
-  const r = await adb.raw(['shell', command])
-  return r.code === 0 ? r.stdout : ''
-}
-
 export async function collectDeviceState(
   adb: AdbClient,
   now: Date,
 ): Promise<{ state: DeviceState; raw: Record<string, string> }> {
   const raw: Record<string, string> = {
-    battery: await tryShell(adb, 'dumpsys battery'),
-    thermalservice: await tryShell(adb, 'dumpsys thermalservice'),
-    settings: await tryShell(adb, SETTINGS_COMMAND),
-    meminfo: await tryShell(adb, 'grep MemAvailable /proc/meminfo'),
-    iproute: await tryShell(adb, 'ip route get 8.8.8.8'),
+    battery: await adb.tryShell('dumpsys battery'),
+    thermalservice: await adb.tryShell('dumpsys thermalservice'),
+    settings: await adb.tryShell(SETTINGS_COMMAND),
+    meminfo: await adb.tryShell('grep MemAvailable /proc/meminfo'),
+    iproute: await adb.tryShell('ip route get 8.8.8.8'),
   }
 
   const battery = parseBattery(raw['battery']!)

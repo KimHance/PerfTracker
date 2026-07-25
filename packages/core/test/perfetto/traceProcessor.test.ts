@@ -76,6 +76,16 @@ describe('TraceProcessor.queryJson', () => {
     await expect(tp.queryJson(sql)).rejects.toBeInstanceOf(TraceProcessorError)
   })
 
+  it('행이 둘 이상이면 조용히 버리지 않고 던진다', async () => {
+    // 외부 바이너리와 기계 계약 사이의 경계에서 조용한 저하는 잘못된 기본값이다.
+    const runner = new FakeProcessRunner().on(`query ${TRACE} ${sql}`, {
+      stdout: '"j"\n"{"frames":450}"\n"{"frames":12}"\n',
+    })
+    const tp = new TraceProcessor(BIN, TRACE, runner)
+
+    await expect(tp.queryJson(sql)).rejects.toThrow(/2행/)
+  })
+
   it('JSON 이 아니면 오류를 던진다', async () => {
     const runner = new FakeProcessRunner().on(`query ${TRACE} ${sql}`, { stdout: '"j"\nnot-json\n' })
     const tp = new TraceProcessor(BIN, TRACE, runner)

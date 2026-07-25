@@ -34,6 +34,14 @@ export class TraceProcessor {
     if (row === undefined) {
       throw new TraceProcessorError(`쿼리 결과 행이 없습니다.\nSQL: ${sql}`)
     }
+    // "단일 행" 계약이 깨진 것을 조용히 넘기지 않는다 — 외부 바이너리와 기계 계약 사이의
+    // 경계에서 데이터를 말없이 버리면 결과가 틀린 채로 정상처럼 보인다.
+    if (lines.length > 2) {
+      throw new TraceProcessorError(
+        `쿼리가 ${lines.length - 1}행을 냈습니다 — 이 클라이언트는 단일 행만 읽습니다. ` +
+          `여러 행이 필요하면 json_group_array 로 한 행에 담으세요.\nSQL: ${sql}`,
+      )
+    }
 
     const trimmed = row.trim()
     const json =

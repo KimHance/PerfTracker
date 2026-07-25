@@ -95,3 +95,14 @@ export class SessionStateError extends PerfTrackerError {
     super('SESSION_STATE_ERROR', message)
   }
 }
+
+/**
+ * result.json 이 스키마를 통과하지 못했을 때.
+ * zod 의 ZodError 를 그대로 밖으로 내보내면 사용자가 스택트레이스를 보게 되므로
+ * 경계에서 이 오류로 바꾼다.
+ */
+export class SchemaValidationError extends PerfTrackerError {
+  constructor(message: string) {
+    super('SCHEMA_VALIDATION_FAILED', message)
+  }
+}

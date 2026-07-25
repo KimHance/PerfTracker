@@ -56,18 +56,31 @@ async function fetchArsc(adb: AdbClient, pkg: string): Promise<Buffer | null> {
   return r.stdout
 }
 
+/**
+ * `withLauncherActivity` 를 켜지 않으면 캐시 적중 시 기기에 **아무것도 묻지 않는다.**
+ * 켜지 않았을 때 `launcherActivity` 가 null 인 것은 "런처가 없다"가 아니라 "묻지 않았다"는 뜻이다.
+ * 목록 렌더링(`apps`)은 라벨만 쓰므로 끄고, `start --launch` 만 켠다 —
+ * 켠 채로 두면 완전히 캐시된 상태에서도 설치된 앱 수만큼 adb 왕복이 생긴다(테스트 기기 169회).
+ */
 export async function resolveAppLabel(
   adb: AdbClient,
   pkg: string,
-  opts: { preferredLanguage?: string; cache?: LabelCache; versionCode?: number | null } = {},
+  opts: {
+    preferredLanguage?: string
+    cache?: LabelCache
+    versionCode?: number | null
+    withLauncherActivity?: boolean
+  } = {},
 ): Promise<CachedLabel & { launcherActivity: string | null }> {
   const preferredLanguage = opts.preferredLanguage ?? hostLanguage()
+
+  const cached = opts.cache?.get(pkg, opts.versionCode ?? null)
+  if (cached && opts.withLauncherActivity !== true) return { ...cached, launcherActivity: null }
 
   const info = parseResolveActivity(
     (await adb.raw(['shell', `cmd package resolve-activity -c android.intent.category.LAUNCHER ${pkg}`])).stdout,
   )
 
-  const cached = opts.cache?.get(pkg, opts.versionCode ?? null)
   if (cached) return { ...cached, launcherActivity: info.launcherActivity }
 
   const resolved = await resolveLabelValue(adb, pkg, info, preferredLanguage)

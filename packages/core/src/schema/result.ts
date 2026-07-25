@@ -113,7 +113,9 @@ export type TargetApp = z.infer<typeof TargetAppSchema>
 export const SessionInfoSchema = z.object({
   id: z.string(),
   name: z.string(),
-  state: z.enum(['completed', 'aborted', 'failed']),
+  // 'running' 은 아직 stop 하지 않은 run 디렉토리에 extract 를 돌린 경우다.
+  // 그런 결과를 'completed' 로 둔갑시키지 않고 있는 그대로 남긴다.
+  state: z.enum(['running', 'completed', 'aborted', 'failed']),
   started_at: z.string(),
   ended_at: z.string(),
   duration_ms: z.number().int(),

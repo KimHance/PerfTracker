@@ -37,12 +37,19 @@ export function buildFrameBuckets(): FrameBucket[] {
   return buckets
 }
 
-/** 경계는 [from, to) 반개구간이다. */
+/**
+ * 경계는 [from, to) 반개구간이다.
+ * 범위 밖(음수·NaN) 입력은 조용히 오버플로 버킷으로 흘리지 않고 거부한다 — 그렇게 하면
+ * `dur = -1` 짜리 미완결 slice 가 구글의 700ms frozen frame 기준에 대응하는 자리에 섞인다.
+ */
 export function bucketFrames(durationsMs: number[]): FrameBucket[] {
   const buckets = buildFrameBuckets()
   const overflow = buckets[buckets.length - 1]!
 
   for (const ms of durationsMs) {
+    if (!Number.isFinite(ms) || ms < 0) {
+      throw new RangeError(`프레임 duration 이 버킷 범위 밖입니다: ${ms}`)
+    }
     if (ms >= OVERFLOW_FROM_MS) {
       overflow.count += 1
       continue
@@ -94,8 +101,13 @@ export const FRAME_PROCESS_SQL =
   'from (select p.upid as upid, p.pid as pid, p.name as name, count(*) as frames ' +
   'from actual_frame_timeline_slice f join process p using(upid) group by p.upid order by frames desc)'
 
+/**
+ * `dur >= 0` 이 필수다. trace_processor 는 종료 이벤트를 못 받은 slice 에 `dur = -1` 을 내는데,
+ * --stop 이 트레이스를 끊는 순간 진행 중이던 프레임이 정확히 그 모양이다.
+ * 거르지 않으면 그 유령 프레임이 700ms+ 버킷에 앉으면서 동시에 16.67ms 예산 안으로도 집계된다.
+ */
 export function frameDurationsSql(upid: number): string {
-  return `select json_group_array(dur) as j from actual_frame_timeline_slice where upid = ${upid}`
+  return `select json_group_array(dur) as j from actual_frame_timeline_slice where upid = ${upid} and dur >= 0`
 }
 
 const round = (v: number, digits: number): number => {

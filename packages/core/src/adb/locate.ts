@@ -1,6 +1,5 @@
 import { homedir } from 'node:os'
 import { accessSync, constants } from 'node:fs'
-import path from 'node:path'
 import { posix, win32 } from 'node:path'
 import { AdbNotFoundError } from '../errors.js'
 

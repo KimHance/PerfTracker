@@ -55,6 +55,23 @@ describe('bucketFrames', () => {
     const durations = [1, 7, 17, 60, 200, 400, 900]
     expect(bucketFrames(durations).reduce((s, b) => s + b.count, 0)).toBe(durations.length)
   })
+
+  it('음수는 오버플로 버킷으로 흘리지 않고 거부한다', () => {
+    // trace_processor 는 종료 이벤트를 못 받은 slice 에 dur = -1 을 낸다.
+    // 예전에는 그것이 700ms+ (frozen frame) 버킷에 앉았다.
+    expect(() => bucketFrames([-1])).toThrow(RangeError)
+    expect(() => bucketFrames([10, -1_000_000])).toThrow(/범위 밖/)
+  })
+
+  it('NaN 도 거부한다', () => {
+    expect(() => bucketFrames([Number.NaN])).toThrow(RangeError)
+  })
+})
+
+describe('frameDurationsSql', () => {
+  it('미완결 slice(dur = -1) 를 SQL 단계에서 거른다', () => {
+    expect(frameDurationsSql(2)).toContain('dur >= 0')
+  })
 })
 
 describe('percentile', () => {

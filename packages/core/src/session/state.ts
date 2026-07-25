@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { perfTrackerHome } from './paths.js'
@@ -16,6 +17,12 @@ export interface ActiveSession {
   configuredDurationMs: number
   options: { launch: boolean; video: boolean }
   startup: { totalTimeMs: number | null; launchState: string | null } | null
+  /**
+   * 측정 창이 열려 있는 동안 차단된 adb 호출 수.
+   * 창은 프로세스 메모리 안에 있고 `start` 와 `stop` 은 서로 다른 프로세스이므로,
+   * 세션 전체의 위반 횟수는 여기(포인터 파일)에 누적해야 한다.
+   */
+  adbCommandsDuringSession?: number
 }
 
 export function newSessionId(rng: () => Buffer = () => randomBytes(3)): string {
@@ -49,6 +56,24 @@ export async function readActiveSession(
 
 export async function clearActiveSession(serial: string, home: string = perfTrackerHome()): Promise<void> {
   await rm(activePointerPath(serial, home), { force: true })
+}
+
+/**
+ * 측정 창 위반 하나를 포인터에 기록한다.
+ *
+ * 동기 fs 를 쓰는 것은 의도적이다 — 이 함수는 `MeasurementWindowViolationError` 를 던지기
+ * 직전에 불리고, 그 예외가 프로세스를 끝내는 것이 정상 흐름이다. await 를 걸 자리가 없다.
+ * 포인터가 이미 사라졌으면 기록할 곳이 없지만 위반 자체는 예외로 이미 차단됐다.
+ */
+export function recordAdbViolation(serial: string, home: string = perfTrackerHome()): void {
+  const file = activePointerPath(serial, home)
+  try {
+    const session = JSON.parse(readFileSync(file, 'utf8')) as ActiveSession
+    session.adbCommandsDuringSession = (session.adbCommandsDuringSession ?? 0) + 1
+    writeFileSync(file, `${JSON.stringify(session, null, 2)}\n`, 'utf8')
+  } catch {
+    // 기록에 실패해도 차단 자체는 이미 일어났다.
+  }
 }
 
 /**

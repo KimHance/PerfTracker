@@ -29,8 +29,13 @@ export function formatLocalTimestamp(d: Date): string {
   )
 }
 
-export function runDirName(startedAt: Date, name: string): string {
-  return `${formatLocalTimestamp(startedAt)}_${slugifySessionName(name)}`
+/**
+ * 세션 id 를 붙인다 — 타임스탬프는 초 단위라, 같은 이름으로 같은 초에 두 번 start 하면
+ * 두 번째 run 이 첫 번째의 capture.json/session.json 을 조용히 덮어쓴다.
+ */
+export function runDirName(startedAt: Date, name: string, sessionId?: string): string {
+  const base = `${formatLocalTimestamp(startedAt)}_${slugifySessionName(name)}`
+  return sessionId === undefined ? base : `${base}_${sessionId}`
 }
 
 /** 도구 홈. 라벨 캐시, 활성 세션 포인터, trace_processor 바이너리가 여기 산다. */

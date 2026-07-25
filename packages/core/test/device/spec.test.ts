@@ -119,7 +119,36 @@ describe('collectDeviceStatic', () => {
     expect(spec.cpu.core_count).toBe(8)
     expect(spec.cpu.clusters).toHaveLength(2)
     expect(spec.memory_total_kb).toBe(11380228)
-    expect(spec.display.active_refresh_rate_hz).toBe(120)
-    expect(spec.display.supported_refresh_rates_hz).toContain(60)
+    // display 블록 전체를 단언한다 — 예전에는 wm size / wm density 호출을 통째로 지워도 통과했다.
+    expect(spec.display).toEqual({
+      width_px: 1080,
+      height_px: 2340,
+      density_dpi: 480,
+      active_refresh_rate_hz: 120,
+      supported_refresh_rates_hz: [10, 24, 30, 48, 60, 80, 120],
+    })
+    expect(spec.manufacturer).toBe('samsung')
+    expect(spec.android_release).toBe('16')
+    expect(spec.soc_model).toBe('SM8750')
+    expect(spec.soc_manufacturer).toBe('QTI')
+    expect(spec.build_fingerprint).toContain('samsung/pa1qksx')
+  })
+
+  it('한 명령이 실패해도 나머지 스펙은 채운다 — 상태 스냅샷과 같은 정책이다', async () => {
+    const runner = new FakeProcessRunner()
+      .on('-s S1 shell for p in ro.product.manufacturer ro.product.model ro.build.version.release ro.build.version.sdk ro.product.cpu.abilist ro.soc.model ro.soc.manufacturer ro.build.fingerprint; do echo "$p=$(getprop $p)"; done', { stdout: GETPROP })
+      .on('-s S1 shell for c in /sys/devices/system/cpu/cpu[0-9]*; do [ -d "$c" ] && echo "$(basename $c) $(cat $c/cpufreq/cpuinfo_max_freq 2>/dev/null)"; done', { stdout: CPU_FREQ })
+      .on('-s S1 shell grep MemTotal /proc/meminfo', { stdout: 'MemTotal:       11380228 kB\n' })
+      // 이 기기에는 wm size 가 없다.
+      .on('-s S1 shell wm size', { code: 1, stderr: 'cmd: Failure calling service window' })
+      .on('-s S1 shell wm density', { stdout: 'Physical density: 480\n' })
+      .on('-s S1 shell dumpsys display', { stdout: DISPLAY })
+    const adb = new AdbClient({ adbPath: '/fake/adb', runner }).withSerial('S1')
+
+    const spec = await collectDeviceStatic(adb)
+
+    expect(spec.model).toBe('SM-S931N')
+    expect(spec.display.width_px).toBe(0)
+    expect(spec.display.density_dpi).toBe(480)
   })
 })

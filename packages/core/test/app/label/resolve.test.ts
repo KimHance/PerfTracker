@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -141,7 +141,31 @@ describe('resolveAppLabel', () => {
     const r = await resolveAppLabel(adb, PKG, { cache, versionCode: 24600400 })
 
     expect(r.label).toBe('캐시된 라벨')
-    expect(runner.calls).toHaveLength(1) // 런처 액티비티 확인 한 번뿐
+    // 라벨만 필요한 경로는 adb 왕복이 0회다. 예전에는 캐시가 100% 적중해도 설치된 앱마다
+    // resolve-activity 를 한 번씩 돌았다 (테스트 기기 169회).
+    expect(runner.calls).toHaveLength(0)
+  })
+
+  it('런처 액티비티가 필요하면 캐시 적중이어도 딱 한 번만 묻는다', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'pt-cache-'))
+    const cache = await loadLabelCache('S1', home)
+    cache.set(PKG, 24600400, { label: '캐시된 라벨', source: 'apk_resources' })
+
+    const runner = new FakeProcessRunner().on(
+      `shell cmd package resolve-activity -c android.intent.category.LAUNCHER ${PKG}`,
+      { stdout: RESOLVE },
+    )
+    const adb = new AdbClient({ adbPath: '/fake/adb', runner })
+
+    const r = await resolveAppLabel(adb, PKG, {
+      cache,
+      versionCode: 24600400,
+      withLauncherActivity: true,
+    })
+
+    expect(r.label).toBe('캐시된 라벨')
+    expect(r.launcherActivity).not.toBeNull()
+    expect(runner.calls).toHaveLength(1)
   })
 
   it('해석 실패(package_name)는 캐시에 기록하지 않는다', async () => {
@@ -196,7 +220,16 @@ describe('loadLabelCache', () => {
 
   it('캐시 파일이 깨져 있어도 빈 캐시로 시작한다', async () => {
     const home = mkdtempSync(join(tmpdir(), 'pt-cache-'))
+    // 실제로 깨진 파일을 놓는다 — 예전에는 그냥 "파일 없음" 을 테스트하고 있었다.
+    mkdirSync(join(home, 'labels'), { recursive: true })
+    writeFileSync(join(home, 'labels', 'S1.json'), '{"com.a@1": {"label": "A"', 'utf8')
+
     const cache = await loadLabelCache('S1', home)
     expect(cache.get('com.a', 1)).toBeUndefined()
+
+    // 깨진 파일 위에도 새로 쓸 수 있어야 한다.
+    cache.set('com.a', 1, { label: 'A', source: 'apk_resources' })
+    await cache.save()
+    expect((await loadLabelCache('S1', home)).get('com.a', 1)?.label).toBe('A')
   })
 })

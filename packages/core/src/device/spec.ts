@@ -85,13 +85,19 @@ export function parseDisplayModes(text: string): { active: number | null; suppor
   }
 }
 
+/**
+ * 스펙 수집도 상태 스냅샷과 같은 정책을 쓴다 (`AdbClient.tryShell`):
+ * 개별 명령 실패는 흡수하고 기본값으로 남긴다. 예전에는 여기만 던지는 `shell()` 을 써서
+ * `wm size` 가 실패하는 특이 기기 하나가 `start` 전체를 중단시켰고, 같은 실패가
+ * 상태 스냅샷에서는 흡수됐다 — 한 저장소 안에 정책이 두 개였다.
+ */
 export async function collectDeviceStatic(adb: AdbClient): Promise<DeviceStatic> {
-  const props = parseGetpropLines(await adb.shell(GETPROP_COMMAND))
-  const cpus = parseCpuMaxFreqLines(await adb.shell(CPU_FREQ_COMMAND))
-  const memory = parseMemTotalKb(await adb.shell('grep MemTotal /proc/meminfo'))
-  const size = parseWmSize(await adb.shell('wm size'))
-  const density = parseWmDensity(await adb.shell('wm density'))
-  const modes = parseDisplayModes(await adb.shell('dumpsys display'))
+  const props = parseGetpropLines(await adb.tryShell(GETPROP_COMMAND))
+  const cpus = parseCpuMaxFreqLines(await adb.tryShell(CPU_FREQ_COMMAND))
+  const memory = parseMemTotalKb(await adb.tryShell('grep MemTotal /proc/meminfo'))
+  const size = parseWmSize(await adb.tryShell('wm size'))
+  const density = parseWmDensity(await adb.tryShell('wm density'))
+  const modes = parseDisplayModes(await adb.tryShell('dumpsys display'))
 
   const abilist = props['ro.product.cpu.abilist'] ?? ''
 

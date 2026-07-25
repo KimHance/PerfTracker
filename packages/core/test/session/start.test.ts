@@ -1,5 +1,17 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { isAbsolute, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { buildWarnings, parseAmStart } from '../../src/session/start.js'
+import { MeasurementWindowViolationError, SessionStateError } from '../../src/errors.js'
+import type { CaptureManifest } from '../../src/session/manifest.js'
+import { buildWarnings, parseAmStart, startSession } from '../../src/session/start.js'
+import { readActiveSession, writeActiveSession } from '../../src/session/state.js'
+import {
+  clientFor,
+  SERIAL,
+  startableDevice,
+  targetApp,
+  tempDirs,
+} from '../support/fakeDevice.js'
 
 const state = {
   captured_at: '2026-07-25T14:32:10.000Z',
@@ -59,5 +71,179 @@ describe('buildWarnings', () => {
 
   it('아무 조건도 없으면 빈 배열', () => {
     expect(buildWarnings({ ...state, charging: false }, { video: false })).toEqual([])
+  })
+
+  it('실행 확인이 안 된 --launch 는 사실로 기록한다', () => {
+    const warnings = buildWarnings({ ...state, charging: false }, { video: false, launchUnverified: true })
+    expect(warnings.map((w) => w.code)).toEqual(['app_launch_unverified'])
+  })
+})
+
+const NOW = new Date('2026-07-25T14:32:10.000Z')
+
+function start(
+  opts: {
+    launch?: boolean
+    force?: boolean
+    app?: Parameters<typeof targetApp>[0]
+    runner?: ReturnType<typeof startableDevice>
+    home?: string
+    out?: string
+  } = {},
+) {
+  const dirs = tempDirs()
+  const home = opts.home ?? dirs.home
+  const out = opts.out ?? dirs.out
+  const runner = opts.runner ?? startableDevice()
+  const adb = clientFor(runner)
+
+  return {
+    adb,
+    runner,
+    home,
+    out,
+    result: startSession({ adb, serial: SERIAL }, targetApp(opts.app ?? {}), {
+      launch: opts.launch ?? false,
+      video: false,
+      outDir: out,
+      force: opts.force ?? false,
+      now: NOW,
+      home,
+    }),
+  }
+}
+
+describe('startSession — 오케스트레이션 불변식', () => {
+  it('창을 여는 것이 마지막 동작이다 — 반환 후 어떤 adb 호출도 막힌다', async () => {
+    const h = start()
+    await h.result
+
+    expect(h.adb.window.isOpen).toBe(true)
+    await expect(h.adb.shell('dumpsys gfxinfo')).rejects.toBeInstanceOf(MeasurementWindowViolationError)
+  })
+
+  it('창이 열리기 전에 매니페스트와 session.json 이 이미 디스크에 있다', async () => {
+    const h = start()
+    const session = await h.result
+
+    // 창이 열린 뒤에는 기기에 접촉할 수 없으므로, 이 파일들이 그보다 먼저 쓰였다는 뜻이다.
+    expect(existsSync(join(session.runDir, 'capture.json'))).toBe(true)
+    expect(existsSync(join(session.runDir, 'session.json'))).toBe(true)
+    expect(h.adb.window.isOpen).toBe(true)
+  })
+
+  it('session.json 은 아직 running 이고 매니페스트에 트레이스가 없다', async () => {
+    const h = start()
+    const session = await h.result
+
+    const stored = JSON.parse(readFileSync(join(session.runDir, 'session.json'), 'utf8')) as {
+      state: string
+    }
+    expect(stored.state).toBe('running')
+
+    const manifest = JSON.parse(
+      readFileSync(join(session.runDir, 'capture.json'), 'utf8'),
+    ) as CaptureManifest
+    expect(manifest.artifacts.trace).toBeNull()
+    expect(manifest.adb_commands_during_session).toBe(0)
+  })
+
+  it('run 디렉토리를 절대 경로로 저장한다 — start 와 stop 사이의 cd 를 견딘다', async () => {
+    const h = start()
+    const session = await h.result
+
+    expect(isAbsolute(session.runDir)).toBe(true)
+    expect(isAbsolute((await readActiveSession(SERIAL, h.home))!.runDir)).toBe(true)
+  })
+
+  it('run 디렉토리 이름에 세션 id 가 들어간다 — 같은 초의 두 세션이 겹치지 않는다', async () => {
+    const dirs = tempDirs()
+    const first = await start({ home: dirs.home, out: dirs.out }).result
+    const second = await start({ home: dirs.home, out: dirs.out, force: true }).result
+
+    expect(first.runDir).toContain(first.id)
+    expect(first.runDir).not.toBe(second.runDir)
+  })
+
+  it('트레이스를 먼저 켜고 나서 앱을 실행한다 — 콜드 스타트가 트레이스 안에 들어가야 한다', async () => {
+    const h = start({ launch: true })
+    await h.result
+
+    const detach = h.runner.commands.findIndex((c) => c.includes('--detach=perftracker_'))
+    const amStart = h.runner.commands.findIndex((c) => c.includes('am start -W -n'))
+    const forceStop = h.runner.commands.findIndex((c) => c.includes('am force-stop'))
+
+    expect(forceStop).toBeGreaterThanOrEqual(0)
+    expect(detach).toBeGreaterThan(forceStop)
+    expect(amStart).toBeGreaterThan(detach)
+  })
+})
+
+describe('startSession — --launch 안전장치 (I2)', () => {
+  it('런처 액티비티가 없으면 앱을 죽이기 전에 거부한다', async () => {
+    const h = start({ launch: true, app: { launcher_activity: null } })
+
+    await expect(h.result).rejects.toBeInstanceOf(SessionStateError)
+    expect(h.runner.commands.some((c) => c.includes('am force-stop'))).toBe(false)
+  })
+
+  it('am start 가 TotalTime 을 안 내면 경고로 남긴다', async () => {
+    const runner = startableDevice((r) => {
+      r.onMatch(/shell am start -W -n /, { stdout: 'Error: Activity not started\n' })
+    })
+    const h = start({ launch: true, runner })
+    const session = await h.result
+
+    const manifest = JSON.parse(
+      readFileSync(join(session.runDir, 'capture.json'), 'utf8'),
+    ) as CaptureManifest
+    expect(manifest.warnings.map((w) => w.code)).toContain('app_launch_unverified')
+  })
+})
+
+describe('startSession — --force 는 기기 쪽 세션도 정리한다 (I3)', () => {
+  it('옛 perfetto 세션을 멈추고 남은 트레이스를 지운다', async () => {
+    const dirs = tempDirs()
+    const previous = await start({ home: dirs.home, out: dirs.out }).result
+
+    const runner = startableDevice((r) => {
+      r.on(`-s ${SERIAL} shell perfetto --is_detached=${previous.perfettoKey}`, { code: 0 })
+        .on(`-s ${SERIAL} shell perfetto --attach=${previous.perfettoKey} --stop`, {})
+        .on(`-s ${SERIAL} shell rm -f ${previous.remoteTracePath}`, {})
+    })
+    const h = start({ home: dirs.home, out: dirs.out, force: true, runner })
+    await h.result
+
+    expect(runner.commands).toContain(`-s ${SERIAL} shell perfetto --attach=${previous.perfettoKey} --stop`)
+    expect(runner.commands).toContain(`-s ${SERIAL} shell rm -f ${previous.remoteTracePath}`)
+  })
+
+  it('옛 세션 정리에 실패해도 새 세션은 시작된다', async () => {
+    const dirs = tempDirs()
+    const previous = await start({ home: dirs.home, out: dirs.out }).result
+
+    // is_detached 는 살아 있다고 하는데 attach 는 실패하는 상태.
+    const runner = startableDevice((r) => {
+      r.on(`-s ${SERIAL} shell perfetto --is_detached=${previous.perfettoKey}`, { code: 0 })
+        .on(`-s ${SERIAL} shell perfetto --attach=${previous.perfettoKey} --stop`, {
+          code: 1,
+          stderr: 'Session not found',
+        })
+    })
+    const h = start({ home: dirs.home, out: dirs.out, force: true, runner })
+
+    await expect(h.result).resolves.toMatchObject({ serial: SERIAL })
+  })
+
+  it('--force 없이 기존 세션이 있으면 기기를 건드리지 않고 거부한다', async () => {
+    const dirs = tempDirs()
+    const previous = await start({ home: dirs.home, out: dirs.out }).result
+    await writeActiveSession(previous, dirs.home)
+
+    const runner = startableDevice()
+    const h = start({ home: dirs.home, out: dirs.out, runner })
+
+    await expect(h.result).rejects.toBeInstanceOf(SessionStateError)
+    expect(runner.commands).toEqual([])
   })
 })

@@ -1,5 +1,5 @@
 import { accessSync, constants } from 'node:fs'
-import { chmod, mkdir, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { TraceProcessorError } from '../../errors.js'
@@ -119,6 +119,13 @@ export async function ensureTraceProcessor(
   }
 
   const bytes = Buffer.from(await response.arrayBuffer())
+  if (bytes.length !== artifact.sizeBytes) {
+    throw new TraceProcessorError(
+      `trace_processor 크기가 맞지 않습니다 (${bytes.length} != ${artifact.sizeBytes} bytes). ` +
+        `프록시가 중간에서 응답을 바꿨을 수 있습니다: ${url}`,
+    )
+  }
+
   const digest = createHash('sha256').update(bytes).digest('hex')
   if (digest !== artifact.sha256) {
     throw new TraceProcessorError(
@@ -126,9 +133,18 @@ export async function ensureTraceProcessor(
     )
   }
 
+  // 임시 파일에 쓰고 chmod 한 뒤 rename 한다. 곧바로 최종 경로에 쓰면 chmod 전에 죽었을 때
+  // 실행 권한 없는 파일이 남아 이후 실행이 계속 실패한다 (isExecutable 이 false 인 캐시).
   await mkdir(dirname(cached), { recursive: true })
-  await writeFile(cached, bytes)
-  await chmod(cached, 0o755)
+  const temp = `${cached}.${process.pid}.tmp`
+  try {
+    await writeFile(temp, bytes)
+    await chmod(temp, 0o755)
+    await rename(temp, cached)
+  } catch (e) {
+    await rm(temp, { force: true })
+    throw e
+  }
   return cached
 }
 

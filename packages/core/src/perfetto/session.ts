@@ -3,6 +3,12 @@ import { PerfettoSessionError } from '../errors.js'
 
 const TRACE_DIR = '/data/misc/perfetto-traces'
 
+/**
+ * pull 은 세션 길이에 비례해 커진 파일을 옮긴다 (30분 세션이면 수 MB~수십 MB).
+ * ProcessRunner 의 60초 기본 타임아웃을 상속하면 긴 세션에서 회수가 실패하므로 직접 넉넉히 준다.
+ */
+export const PULL_TIMEOUT_MS = 900_000
+
 export function remoteTracePath(key: string): string {
   return `${TRACE_DIR}/${key}.pftrace`
 }
@@ -38,8 +44,19 @@ export async function stopDetachedSession(adb: AdbClient, key: string): Promise<
   }
 }
 
+/**
+ * 기기에 회수 대기 중인 트레이스가 남아 있는지 본다.
+ * detached 세션이 없다고 해서 트레이스가 없는 것은 아니다 — 앞선 stop 시도가 세션만 멈추고
+ * pull 에서 실패했을 수 있고, 그 경우 이 파일이 유일한 정본이다.
+ * exit code 대신 stdout 마커로 판정한다 (adb shell 의 종료 코드 전달이 기기마다 다르다).
+ */
+export async function remoteTraceExists(adb: AdbClient, remotePath: string): Promise<boolean> {
+  const r = await adb.raw(['shell', `[ -s ${remotePath} ] && echo __present__`])
+  return r.stdout.includes('__present__')
+}
+
 export async function pullTrace(adb: AdbClient, remotePath: string, localPath: string): Promise<void> {
-  const r = await adb.raw(['pull', remotePath, localPath])
+  const r = await adb.raw(['pull', remotePath, localPath], { timeoutMs: PULL_TIMEOUT_MS })
   if (r.code !== 0) {
     throw new PerfettoSessionError(`트레이스를 회수하지 못했습니다.\n${r.stderr.trim()}`)
   }

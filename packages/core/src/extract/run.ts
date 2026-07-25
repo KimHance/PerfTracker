@@ -2,21 +2,31 @@ import { access, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ProcessRunner } from '../adb/process.js'
 import { frameCollector } from '../collectors/frame.js'
+import { SchemaValidationError, SessionStateError } from '../errors.js'
 import { TraceProcessor } from '../perfetto/traceProcessor/client.js'
 import { ensureTraceProcessor } from '../perfetto/traceProcessor/locate.js'
 import { REFERENCES } from '../schema/references.js'
 import { type FrameData, type MetricResult, type Result, ResultSchema, SCHEMA_VERSION } from '../schema/result.js'
-import { readCaptureManifest } from '../session/manifest.js'
+import { parseVersionedJson, readCaptureManifest } from '../session/manifest.js'
 import type { ActiveSession } from '../session/state.js'
 
 export const BUFFER_STATS_SQL =
   "select json_group_array(json_object('name', name, 'value', value)) as j from stats " +
   "where name like 'traced_buf%' and value > 0 and severity in ('error','data_loss')"
 
+/**
+ * run 디렉토리의 session.json. `start` 는 `state: 'running'` 을 쓰고 `stop` 이 그것을 덮는다.
+ * 진행 중인 run 에 extract 를 돌리는 것은 충분히 있을 법한 사용자 행동이므로 'running' 을 포함한다.
+ */
 interface StoredSession extends ActiveSession {
   endedAt?: string
-  state?: 'completed' | 'aborted' | 'failed'
+  state?: SessionState
 }
+
+type SessionState = 'running' | 'completed' | 'aborted' | 'failed'
+
+/** session.json 의 형식 버전. capture.json 과 함께 올라간다. */
+export const RUN_SESSION_VERSION = 1
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -44,9 +54,24 @@ export async function extractRun(
     toolVersion?: string
   } = {},
 ): Promise<Result> {
-  const session = JSON.parse(await readFile(join(runDir, 'session.json'), 'utf8')) as StoredSession
+  const sessionFile = join(runDir, 'session.json')
+  let sessionText: string
+  try {
+    sessionText = await readFile(sessionFile, 'utf8')
+  } catch {
+    throw new SessionStateError(
+      `session.json 을 읽지 못했습니다: ${sessionFile}\nrun 디렉토리 경로를 확인하세요.`,
+    )
+  }
+  const session = parseVersionedJson<StoredSession>(
+    sessionText,
+    sessionFile,
+    RUN_SESSION_VERSION,
+    'session.json',
+  )
   const manifest = await readCaptureManifest(runDir)
 
+  const sessionState: SessionState = session.state ?? 'completed'
   const startedAt = new Date(session.startedAt)
   const endedAt = session.endedAt !== undefined ? new Date(session.endedAt) : startedAt
 
@@ -109,7 +134,7 @@ export async function extractRun(
     session: {
       id: session.id,
       name: session.name,
-      state: session.state ?? 'completed',
+      state: sessionState,
       started_at: startedAt.toISOString(),
       ended_at: endedAt.toISOString(),
       duration_ms: endedAt.getTime() - startedAt.getTime(),
@@ -131,11 +156,29 @@ export async function extractRun(
       trace_buffer_overrun: bufferOverrun,
     },
     references: REFERENCES,
-    warnings: manifest.warnings,
+    warnings:
+      sessionState === 'running'
+        ? [
+            ...manifest.warnings,
+            {
+              code: 'session_still_running',
+              message: '아직 stop 하지 않은 세션입니다 — 이 결과는 회수 전 부분 상태입니다.',
+            },
+          ]
+        : manifest.warnings,
     artifacts: manifest.artifacts,
   }
 
-  const validated = ResultSchema.parse(result)
+  const parsed = ResultSchema.safeParse(result)
+  if (!parsed.success) {
+    // ZodError 를 그대로 올리면 사용자가 스택트레이스를 본다.
+    throw new SchemaValidationError(
+      `result.json 이 스키마를 통과하지 못했습니다 (${runDir}).\n` +
+        parsed.error.issues.map((i) => `  ${i.path.join('.') || '(root)'}: ${i.message}`).join('\n'),
+    )
+  }
+
+  const validated = parsed.data
   await writeFile(join(runDir, 'result.json'), `${JSON.stringify(validated, null, 2)}\n`, 'utf8')
   return validated
 }
