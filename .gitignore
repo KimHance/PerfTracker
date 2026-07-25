@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# 측정 세션 산출물 (트레이스 원본이 커서 커밋하지 않음)
+runs/
+
+# 테스트 픽스처는 예외 — fixtures/ 는 의도적으로 커밋한다
+
+.DS_Store
+*.log
+.env
+.env.local
