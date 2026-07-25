@@ -1,6 +1,7 @@
 import {
   AdbClient,
   defaultLocateAdbDeps,
+  evaluateDataSources,
   listDevices,
   locateAdb,
   probeDevice,
@@ -12,12 +13,6 @@ export interface DoctorCheck {
   ok: boolean
   detail: string
 }
-
-const REQUIRED_DATA_SOURCES = [
-  'android.surfaceflinger.frametimeline',
-  'linux.process_stats',
-  'linux.sys_stats',
-]
 
 export async function runDoctor(opts: { adb?: string; device?: string }): Promise<DoctorCheck[]> {
   const checks: DoctorCheck[] = []
@@ -53,12 +48,11 @@ export async function runDoctor(opts: { adb?: string; device?: string }): Promis
       detail: probe.hasPerfetto ? '/system/bin/perfetto 사용 가능' : 'perfetto 실행 파일 없음',
     })
 
-    for (const required of REQUIRED_DATA_SOURCES) {
-      const ok = probe.dataSources.includes(required)
+    for (const source of evaluateDataSources(probe)) {
       checks.push({
-        name: `data source: ${required}`,
-        ok,
-        detail: ok ? '등록됨' : `등록되지 않음 (sdk_int=${probe.sdkInt})`,
+        name: `data source: ${source.name}`,
+        ok: source.ok,
+        detail: source.reason ?? '등록됨',
       })
     }
   } catch (e) {
