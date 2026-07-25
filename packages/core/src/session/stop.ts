@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AdbClient } from '../adb/client.js'
@@ -5,8 +6,8 @@ import { collectDeviceState } from '../device/state.js'
 import { SessionStateError } from '../errors.js'
 import {
   isSessionDetached,
+  probeRemoteTrace,
   pullTrace,
-  remoteTraceExists,
   removeRemoteTrace,
   stopDetachedSession,
 } from '../perfetto/session.js'
@@ -24,6 +25,12 @@ const TRACE_FILE = 'trace.perfetto-trace'
  * 그래야 다음 `stop` 이 같은 트레이스를 다시 집을 수 있다. 그 재시도에서는 detached 세션이
  * 이미 멈춰 있으므로 "세션 없음 ⇒ 트레이스 없음" 으로 단정하면 안 된다 — 기기에 파일이
  * 남아 있는지 직접 확인한다.
+ *
+ * `aborted` 는 **세 가지를 모두 확인한 뒤에만** 선언한다:
+ *   1. detached 세션이 없다
+ *   2. 기기에 파일이 없다 — "확인 실패" 가 아니라 확실히 없다 (`probeRemoteTrace`)
+ *   3. run 디렉토리에도 이미 회수된 파일이 없다
+ * 이 중 하나라도 못 지키면 도구가 멀쩡한 캡처의 참조를 스스로 버리게 된다.
  */
 export async function stopSession(
   ctx: { adb: AdbClient; serial: string },
@@ -39,18 +46,30 @@ export async function stopSession(
   let state: 'completed' | 'aborted' = 'completed'
   let traceRelative: string | null = null
 
+  const localTrace = join(session.runDir, TRACE_FILE)
+
   let traceOnDevice: boolean
   if (await isSessionDetached(ctx.adb, session.perfettoKey)) {
     await stopDetachedSession(ctx.adb, session.perfettoKey)
     traceOnDevice = true
   } else {
     // 앞선 stop 시도가 세션을 이미 멈췄을 수 있다. 그 경우 기기의 파일이 유일한 정본이다.
-    traceOnDevice = await remoteTraceExists(ctx.adb, session.remoteTracePath)
+    const probe = await probeRemoteTrace(ctx.adb, session.remoteTracePath)
+    if (probe === 'unknown') {
+      // 기기가 흔들리는 중이다. 여기서 "없다"고 단정하면 멀쩡한 트레이스의 참조를 버린다.
+      throw new SessionStateError(
+        `기기에 트레이스가 남아 있는지 확인하지 못했습니다. 세션 정보를 그대로 두었습니다.\n` +
+          `  기기 경로  ${session.remoteTracePath}\n` +
+          `  run 디렉토리 ${session.runDir}\n` +
+          `USB 연결을 확인한 뒤 perftracker stop 을 다시 실행하면 이 지점부터 재개됩니다.`,
+      )
+    }
+    traceOnDevice = probe === 'present'
   }
 
   if (traceOnDevice) {
     try {
-      await pullTrace(ctx.adb, session.remoteTracePath, join(session.runDir, TRACE_FILE))
+      await pullTrace(ctx.adb, session.remoteTracePath, localTrace)
     } catch (e) {
       throw new SessionStateError(
         `트레이스를 회수하지 못했습니다. 기기의 트레이스와 세션 정보는 그대로 두었습니다.\n` +
@@ -61,6 +80,12 @@ export async function stopSession(
       )
     }
     await removeRemoteTrace(ctx.adb, session.remoteTracePath)
+    traceRelative = TRACE_FILE
+  } else if (existsSync(localTrace)) {
+    // 기기에 없는데 여기에는 있다 ⇒ 앞선 시도가 pull 과 rm 까지 끝내고 매니페스트를 쓰기 전에
+    // 죽었다는 뜻이다 (Ctrl-C, after 스냅샷 쓰기 실패 등). 이미 회수된 캡처다.
+    // 기기 확인을 **먼저** 하는 순서가 중요하다 — pull 이 중간에 끊겨 잘린 파일이 남은
+    // 경우에는 원격 파일이 아직 있으므로 위 분기에서 다시 받는다.
     traceRelative = TRACE_FILE
   } else {
     state = 'aborted'

@@ -54,19 +54,36 @@ export function startableDevice(overrides: (r: FakeProcessRunner) => void = () =
   return runner
 }
 
-/** stop 이 통과할 만큼만 응답하는 기기. */
+/**
+ * stop 이 통과할 만큼만 응답하는 기기.
+ * `probe` 는 원격 트레이스 확인의 세 가지 답에 대응한다:
+ *   present / absent / unknown(= 명령 자체가 실패해 아무 마커도 못 받음).
+ */
 export function stoppableDevice(
   session: ActiveSession,
-  opts: { detached?: boolean; pullFails?: boolean; traceOnDevice?: boolean } = {},
+  opts: {
+    detached?: boolean
+    pullFails?: boolean
+    probe?: 'present' | 'absent' | 'unknown'
+  } = {},
 ): FakeProcessRunner {
+  const probe = opts.probe ?? 'present'
+  const probeResponse =
+    probe === 'present'
+      ? { stdout: '__present__\n' }
+      : probe === 'absent'
+        ? { stdout: '__absent__\n' }
+        : { code: 1, stderr: 'error: device offline\n' }
+
   const runner = new FakeProcessRunner()
     .on(`-s ${SERIAL} shell perfetto --is_detached=${session.perfettoKey}`, {
       code: opts.detached === false ? 2 : 0,
     })
     .on(`-s ${SERIAL} shell perfetto --attach=${session.perfettoKey} --stop`, {})
-    .on(`-s ${SERIAL} shell [ -s ${session.remoteTracePath} ] && echo __present__`, {
-      stdout: opts.traceOnDevice === false ? '' : '__present__\n',
-    })
+    .on(
+      `-s ${SERIAL} shell [ -s ${session.remoteTracePath} ] && echo __present__ || echo __absent__`,
+      probeResponse,
+    )
     .on(`-s ${SERIAL} shell rm -f ${session.remoteTracePath}`, {})
 
   const local = join(session.runDir, 'trace.perfetto-trace')

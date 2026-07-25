@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { METRIC_REASON_CODES, type MetricReasonCode } from './reasons.js'
 
 export const SCHEMA_VERSION = '1.0.0'
 
@@ -17,8 +18,13 @@ export function metricResultSchema<T extends z.ZodType>(data: T) {
   return z.object({
     status: MetricStatusSchema,
     source: z.string(),
-    reason_code: z.string().nullable(),
-    reason: z.string().nullable(),
+    // 값 집합을 스키마에 실어 내보낸다. "안정적인 키" 라고 말만 하고 type: string 을 내보내면
+    // 매처를 쓰는 쪽은 무엇에 매칭해야 하는지 여전히 알 수 없다.
+    reason_code: z
+      .enum(METRIC_REASON_CODES)
+      .nullable()
+      .describe('기계가 매칭하는 안정적인 사유 키. 사람용 문장은 reason 에 있다.'),
+    reason: z.string().nullable().describe('사람이 읽는 사유. 문구는 다듬힐 수 있으니 매칭에 쓰지 말 것.'),
     data: data.nullable(),
   })
 }
@@ -26,7 +32,7 @@ export function metricResultSchema<T extends z.ZodType>(data: T) {
 export type MetricResult<T> = {
   status: MetricStatus
   source: string
-  reason_code: string | null
+  reason_code: MetricReasonCode | null
   reason: string | null
   data: T | null
 }
@@ -138,7 +144,20 @@ export const MeasurementOverheadSchema = z.object({
   tracing_processes_cpu_time_ms: z.number().nullable(),
   tracing_processes_cpu_share_pct: z.number().nullable(),
   tracing_processes_peak_rss_kb: z.number().nullable(),
-  adb_commands_during_session: z.number().int().nonnegative(),
+  // 이 주의사항은 반드시 스키마에 실려야 한다. `perftracker schema` 는 CI 와 LLM 을 위한
+  // 계약으로 팔리는데, 이 필드를 가장 잘못 읽기 쉬운 소비자가 바로 그들이다.
+  adb_commands_during_session: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      '측정 창이 열린 동안 perftracker 를 통해 시도되어 차단된 adb 호출 수. ' +
+        '0 이 아니면 그 세션 데이터는 오염된 것이다. ' +
+        '역은 성립하지 않는다: 0 은 perftracker 가 아무것도 보내지 않았다는 뜻이지 ' +
+        '아무도 기기를 건드리지 않았다는 뜻이 아니다. 다른 터미널에서 직접 실행한 adb 는 ' +
+        '이 도구를 거치지 않으므로 잡히지 않으며, 도구가 그것을 관측하려면 세션 중에 기기에 ' +
+        '물어야 하고 그 행위 자체가 이 도구가 금지하는 것이다.',
+    ),
   trace_buffer_overrun: z.boolean(),
 })
 export type MeasurementOverhead = z.infer<typeof MeasurementOverheadSchema>

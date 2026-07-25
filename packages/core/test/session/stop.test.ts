@@ -68,7 +68,7 @@ describe('stopSession — 정상 경로', () => {
 
   it('세션이 사라지고 기기에도 트레이스가 없으면 aborted 로 남긴다', async () => {
     const { session, home } = await startedSession()
-    const runner = stoppableDevice(session, { detached: false, traceOnDevice: false })
+    const runner = stoppableDevice(session, { detached: false, probe: 'absent' })
 
     const r = await stopSession({ adb: clientFor(runner), serial: SERIAL }, session, LATER, home)
 
@@ -114,7 +114,7 @@ describe('stopSession — pull 실패는 세션을 파괴하지 않는다 (C1)',
     ).rejects.toBeInstanceOf(SessionStateError)
 
     // 재시도: 앞선 시도가 이미 멈췄으므로 is_detached 는 false 다. 그래도 기기에 파일이 있다.
-    const retry = stoppableDevice(session, { detached: false, traceOnDevice: true })
+    const retry = stoppableDevice(session, { detached: false, probe: 'present' })
     const r = await stopSession({ adb: clientFor(retry), serial: SERIAL }, session, LATER, home)
 
     expect(r.state).toBe('completed')
@@ -122,6 +122,85 @@ describe('stopSession — pull 실패는 세션을 파괴하지 않는다 (C1)',
     expect(manifestOf(session.runDir).warnings.map((w) => w.code)).not.toContain('trace_session_lost')
     expect(retry.commands).toContain(`-s ${SERIAL} shell rm -f ${session.remoteTracePath}`)
     expect(await readActiveSession(SERIAL, home)).toBeNull()
+  })
+})
+
+describe('stopSession — "모른다" 를 "없다" 로 읽지 않는다 (C1 후속)', () => {
+  it('원격 확인이 실패하면 aborted 로 단정하지 않고 포인터를 남긴다', async () => {
+    const { session, home } = await startedSession()
+    // 흔들리는 기기: is_detached 도 실패하고 원격 확인도 아무 마커를 못 받는다.
+    const runner = stoppableDevice(session, { detached: false, probe: 'unknown' })
+
+    await expect(
+      stopSession({ adb: clientFor(runner), serial: SERIAL }, session, LATER, home),
+    ).rejects.toBeInstanceOf(SessionStateError)
+
+    // 여기서 aborted 를 썼다면 기기에 멀쩡히 있는 트레이스의 참조를 도구가 버린 것이다.
+    expect(await readActiveSession(SERIAL, home)).not.toBeNull()
+    const manifest = manifestOf(session.runDir)
+    expect(manifest.artifacts.trace).toBeNull()
+    expect(manifest.warnings.map((w) => w.code)).not.toContain('trace_session_lost')
+    expect(runner.commands).not.toContain(`-s ${SERIAL} shell rm -f ${session.remoteTracePath}`)
+  })
+
+  it('확인 실패 메시지가 재시도 가능함을 알린다', async () => {
+    const { session, home } = await startedSession()
+    const runner = stoppableDevice(session, { detached: false, probe: 'unknown' })
+
+    await expect(
+      stopSession({ adb: clientFor(runner), serial: SERIAL }, session, LATER, home),
+    ).rejects.toThrow(/perftracker stop 을 다시 실행/)
+  })
+
+  it('확실히 없다고 답할 때만 aborted 다', async () => {
+    const { session, home } = await startedSession()
+    const runner = stoppableDevice(session, { detached: false, probe: 'absent' })
+
+    const r = await stopSession({ adb: clientFor(runner), serial: SERIAL }, session, LATER, home)
+
+    expect(r.state).toBe('aborted')
+  })
+})
+
+describe('stopSession — 이미 회수된 트레이스를 aborted 로 덮지 않는다 (C1 후속)', () => {
+  it('기기에는 없지만 run 디렉토리에 있으면 completed 다', async () => {
+    const { session, home } = await startedSession()
+    // 앞선 시도가 pull + rm 까지 끝내고 매니페스트를 쓰기 전에 죽은 상태를 만든다.
+    writeFileSync(join(session.runDir, 'trace.perfetto-trace'), 'pulled bytes', 'utf8')
+    const runner = stoppableDevice(session, { detached: false, probe: 'absent' })
+
+    const r = await stopSession({ adb: clientFor(runner), serial: SERIAL }, session, LATER, home)
+
+    expect(r.state).toBe('completed')
+    const manifest = manifestOf(session.runDir)
+    expect(manifest.artifacts.trace).toBe('trace.perfetto-trace')
+    expect(manifest.warnings.map((w) => w.code)).not.toContain('trace_session_lost')
+    // 이미 회수했으므로 다시 받지 않는다.
+    expect(runner.commands.some((c) => c.startsWith(`-s ${SERIAL} pull `))).toBe(false)
+    expect(readFileSync(join(session.runDir, 'trace.perfetto-trace'), 'utf8')).toBe('pulled bytes')
+  })
+
+  it('로컬 파일이 있어도 기기에 남아 있으면 기기 쪽을 다시 받는다 — 잘린 파일을 붙잡지 않는다', async () => {
+    const { session, home } = await startedSession()
+    // 앞선 pull 이 중간에 끊겨 잘린 파일이 남았고, 원격 파일은 아직 그대로인 상태.
+    writeFileSync(join(session.runDir, 'trace.perfetto-trace'), 'truncated', 'utf8')
+    const runner = stoppableDevice(session, { detached: false, probe: 'present' })
+
+    const r = await stopSession({ adb: clientFor(runner), serial: SERIAL }, session, LATER, home)
+
+    expect(r.state).toBe('completed')
+    expect(runner.commands.some((c) => c.startsWith(`-s ${SERIAL} pull `))).toBe(true)
+    expect(runner.commands).toContain(`-s ${SERIAL} shell rm -f ${session.remoteTracePath}`)
+  })
+
+  it('기기에도 없고 로컬에도 없을 때만 aborted 다', async () => {
+    const { session, home } = await startedSession()
+    const runner = stoppableDevice(session, { detached: false, probe: 'absent' })
+
+    const r = await stopSession({ adb: clientFor(runner), serial: SERIAL }, session, LATER, home)
+
+    expect(r.state).toBe('aborted')
+    expect(manifestOf(session.runDir).warnings.map((w) => w.code)).toContain('trace_session_lost')
   })
 })
 

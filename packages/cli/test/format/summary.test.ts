@@ -110,8 +110,15 @@ describe('formatSummary', () => {
     expect(out).toContain('87.4%')
   })
 
-  it('측정 창 안의 adb 호출 수를 보여준다', () => {
-    expect(formatSummary(result())).toContain('adb calls during session: 0')
+  it('측정 창 안의 adb 호출 수를 보여주되, 무엇을 센 값인지 라벨에 밝힌다', () => {
+    // "adb calls during session: 0" 만 쓰면 "아무도 기기를 안 건드렸다" 로 읽히는데
+    // 이 카운터는 perftracker 를 통과한 호출만 센다.
+    expect(formatSummary(result())).toContain('perftracker adb calls during session: 0')
+  })
+
+  it('프레임 예산이 패널 주사율이 아니라 고정 기준임을 밝힌다', () => {
+    // Device 줄에 @120Hz 가 있는데 Frame 줄의 ≤16.67ms 가 그와 연관된 값으로 읽히면 안 된다.
+    expect(formatSummary(result())).toContain('≤16.67ms (60fps ref)')
   })
 
   it('미수집 항목은 사유와 함께 보여준다', () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { resultJsonSchema } from '../../src/schema/jsonSchema.js'
 import { REFERENCES } from '../../src/schema/references.js'
+import { METRIC_REASON_CODES } from '../../src/schema/reasons.js'
 import { ResultSchema, SCHEMA_VERSION } from '../../src/schema/result.js'
 
 function minimalResult() {
@@ -134,10 +135,36 @@ describe('REFERENCES', () => {
 })
 
 describe('resultJsonSchema', () => {
+  const props = (node: unknown): Record<string, any> =>
+    (node as Record<string, any>)['properties'] as Record<string, any>
+
   it('object 타입 JSON Schema 를 만든다', () => {
     const schema = resultJsonSchema()
     expect(schema['type']).toBe('object')
-    expect((schema['properties'] as Record<string, unknown>)['schema_version']).toBeDefined()
-    expect((schema['properties'] as Record<string, unknown>)['metrics']).toBeDefined()
+    expect(props(schema)['schema_version']).toBeDefined()
+    expect(props(schema)['metrics']).toBeDefined()
+  })
+
+  it('reason_code 의 값 집합을 스키마에 실어 보낸다 — CI 매처가 매칭할 대상이다', () => {
+    const frame = props(props(resultJsonSchema())['metrics'])['frame']
+    const reasonCode = JSON.stringify(props(frame)['reason_code'])
+
+    for (const code of METRIC_REASON_CODES) expect(reasonCode).toContain(code)
+    // "안정적인 키" 라고 말만 하고 type: string 만 내보내면 소비자는 알 길이 없다.
+    expect(reasonCode).not.toBe('{"type":["string","null"]}')
+  })
+
+  it('adb_commands_during_session 의 한계를 description 으로 함께 내보낸다', () => {
+    const overhead = props(resultJsonSchema())['measurement_overhead']
+    const field = props(overhead)['adb_commands_during_session'] as { description?: string }
+
+    expect(field.description).toBeDefined()
+    // 이 필드를 가장 잘못 읽기 쉬운 소비자가 스키마만 읽는 CI 와 LLM 이다.
+    expect(field.description).toContain('perftracker')
+    expect(field.description).toMatch(/역은 성립하지 않는다/)
+  })
+
+  it('JSON 으로 직렬화된다 (perftracker schema 가 그대로 출력한다)', () => {
+    expect(() => JSON.parse(JSON.stringify(resultJsonSchema()))).not.toThrow()
   })
 })

@@ -15,8 +15,10 @@ export function formatSummary(result: Result): string {
       `${d.display.width_px}x${d.display.height_px}${hz !== null ? `@${hz}Hz` : ''}`,
     `App       ${app.label}  ${app.package}  ${app.version_name ?? '-'}` +
       `${app.version_code !== null ? ` (${app.version_code})` : ''}`,
+    // "adb calls during session: 0" 을 글자 그대로 읽으면 "아무도 기기를 안 건드렸다" 가 되는데
+    // 그건 사실이 아니다. 이 카운터는 perftracker 를 통과한 호출만 센다. 라벨이 그걸 말한다.
     `Duration  ${(result.session.duration_ms / 1000).toFixed(1)}s · ` +
-      `adb calls during session: ${result.measurement_overhead.adb_commands_during_session}`,
+      `perftracker adb calls during session: ${result.measurement_overhead.adb_commands_during_session}`,
     '',
   ]
 
@@ -24,7 +26,9 @@ export function formatSummary(result: Result): string {
   if (frame.status === 'collected' && frame.data) {
     const f = frame.data
     lines.push(
-      `Frame     collected     ${num(f.total_frames)} frames · ≤16.67ms ${(f.within_16_67ms_ratio * 100).toFixed(1)}% · ` +
+      // 16.67ms 는 구글의 60fps 기준(references)이지 이 패널의 예산이 아니다.
+      // Device 줄의 @120Hz 와 나란히 놓이면 연관된 값으로 읽히므로 고정 기준임을 명시한다.
+      `Frame     collected     ${num(f.total_frames)} frames · ≤16.67ms (60fps ref) ${(f.within_16_67ms_ratio * 100).toFixed(1)}% · ` +
         `p50 ${f.percentiles.p50} · p95 ${f.percentiles.p95} · max ${f.max_ms} (ms)`,
     )
     lines.push(`          process       ${f.process} (pid ${f.pid})`)

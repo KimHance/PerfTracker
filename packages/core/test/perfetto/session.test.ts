@@ -3,6 +3,7 @@ import { AdbClient } from '../../src/adb/client.js'
 import { PerfettoSessionError } from '../../src/errors.js'
 import {
   isSessionDetached,
+  probeRemoteTrace,
   pullTrace,
   remoteTracePath,
   removeRemoteTrace,
@@ -94,6 +95,50 @@ describe('stopDetachedSession', () => {
     const adb = new AdbClient({ adbPath: '/fake/adb', runner })
 
     await expect(stopDetachedSession(adb, KEY)).rejects.toBeInstanceOf(PerfettoSessionError)
+  })
+})
+
+describe('probeRemoteTrace — 세 번째 답이 있다', () => {
+  const CMD = `shell [ -s ${REMOTE} ] && echo __present__ || echo __absent__`
+
+  it('파일이 있으면 present', async () => {
+    const runner = new FakeProcessRunner().on(CMD, { stdout: '__present__\n' })
+    const adb = new AdbClient({ adbPath: '/fake/adb', runner })
+
+    await expect(probeRemoteTrace(adb, REMOTE)).resolves.toBe('present')
+  })
+
+  it('파일이 없으면 absent — 확인은 성공했다', async () => {
+    const runner = new FakeProcessRunner().on(CMD, { stdout: '__absent__\n' })
+    const adb = new AdbClient({ adbPath: '/fake/adb', runner })
+
+    await expect(probeRemoteTrace(adb, REMOTE)).resolves.toBe('absent')
+  })
+
+  it('명령 자체가 실패하면 absent 가 아니라 unknown 이다', async () => {
+    // 마커를 한쪽에만 두면 이 경우가 "파일 없음" 과 구별되지 않고, 그 모호함이
+    // 곧 "aborted ⇒ 참조 폐기" 로 이어진다. C1 이 Critical 이었던 그 손실이다.
+    const runner = new FakeProcessRunner().on(CMD, { code: 1, stderr: 'error: device offline\n' })
+    const adb = new AdbClient({ adbPath: '/fake/adb', runner })
+
+    await expect(probeRemoteTrace(adb, REMOTE)).resolves.toBe('unknown')
+  })
+
+  it('stdout 이 비어도 unknown 이다', async () => {
+    const runner = new FakeProcessRunner().on(CMD, { stdout: '' })
+    const adb = new AdbClient({ adbPath: '/fake/adb', runner })
+
+    await expect(probeRemoteTrace(adb, REMOTE)).resolves.toBe('unknown')
+  })
+
+  it('양쪽 분기 모두에서 마커를 내도록 명령을 만든다', async () => {
+    const runner = new FakeProcessRunner().on(CMD, { stdout: '__absent__\n' })
+    const adb = new AdbClient({ adbPath: '/fake/adb', runner })
+
+    await probeRemoteTrace(adb, REMOTE)
+
+    expect(runner.argsOf(0)[1]).toContain('__present__')
+    expect(runner.argsOf(0)[1]).toContain('__absent__')
   })
 })
 
