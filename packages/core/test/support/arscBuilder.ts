@@ -10,10 +10,16 @@ const RES_TABLE_TYPE_TYPE = 0x0201
 const UTF8_FLAG = 0x100
 const TYPE_STRING = 0x03
 
+/** ResStringPool_ref 의 8비트 varint 길이 인코딩. 127 이하는 1바이트, 아니면 상위비트를 세운 2바이트. */
+function encodeVarLen8(len: number): Buffer {
+  if (len < 0x80) return Buffer.from([len])
+  return Buffer.from([0x80 | (len >> 8), len & 0xff])
+}
+
 function utf8Entry(s: string): Buffer {
   const bytes = Buffer.from(s, 'utf8')
-  // [utf16 문자 수][utf8 바이트 수][바이트들][NUL] — 각 길이는 127 이하일 때 1바이트
-  return Buffer.concat([Buffer.from([[...s].length, bytes.length]), bytes, Buffer.from([0])])
+  // [utf16 문자 수][utf8 바이트 수][바이트들][NUL] — 두 길이 모두 128 이상이면 2바이트로 인코딩한다.
+  return Buffer.concat([encodeVarLen8([...s].length), encodeVarLen8(bytes.length), bytes, Buffer.from([0])])
 }
 
 export function buildStringPool(strings: string[]): Buffer {
@@ -60,6 +66,8 @@ export interface SyntheticEntry {
   language: string | null
   /** 전역 문자열 풀에서의 인덱스. */
   stringIndex: number
+  /** true 면 ResTable_entry 의 FLAG_COMPLEX 비트를 세워 bag 엔트리처럼 만든다. */
+  complex?: boolean
 }
 
 /** RES_TABLE_TYPE 청크 하나 = 하나의 config 변형. */
@@ -73,7 +81,7 @@ function buildTypeChunk(typeId: number, entryCount: number, entry: SyntheticEntr
   // ResTable_entry(8) + Res_value(8)
   const body = Buffer.alloc(16)
   body.writeUInt16LE(8, 0) // entry size
-  body.writeUInt16LE(0, 2) // flags
+  body.writeUInt16LE(entry.complex ? 0x0001 : 0, 2) // flags (0x0001 = FLAG_COMPLEX)
   body.writeUInt32LE(0, 4) // key index (파서가 안 씀)
   body.writeUInt16LE(8, 8) // Res_value size
   body.writeUInt8(0, 10) // res0

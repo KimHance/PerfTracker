@@ -6,6 +6,7 @@ const RES_TABLE_TYPE_TYPE = 0x0201
 const UTF8_FLAG = 0x100
 const TYPE_STRING = 0x03
 const NO_ENTRY = 0xffffffff
+const FLAG_COMPLEX = 0x0001
 
 export interface ResolvedResourceString {
   configHex: string
@@ -73,6 +74,18 @@ export function resolveResourceStrings(buf: Buffer, resourceId: number): Resolve
     throw new ArscParseError('resources.arsc 가 아닙니다 (RES_TABLE_TYPE 매직 불일치).')
   }
 
+  // 이 지점부터는 잘리거나 손상된 파일이 (경계마다 검사하지 않는) 원시 RangeError 를
+  // 던질 수 있다 — 호출자가 폴백 사슬로 내려갈 수 있도록 ArscParseError 로 통일해 던진다.
+  try {
+    return walkResourceTable(buf, resourceId)
+  } catch (err) {
+    if (err instanceof ArscParseError) throw err
+    const detail = err instanceof Error ? err.message : String(err)
+    throw new ArscParseError(`resources.arsc 파싱 중 오류가 발생했습니다: ${detail}`)
+  }
+}
+
+function walkResourceTable(buf: Buffer, resourceId: number): ResolvedResourceString[] {
   const packageId = (resourceId >>> 24) & 0xff
   const typeId = (resourceId >>> 16) & 0xff
   const entryIndex = resourceId & 0xffff
@@ -107,11 +120,15 @@ export function resolveResourceStrings(buf: Buffer, resourceId: number): Resolve
             const entryOffset = buf.readUInt32LE(p + innerHeaderSize + 4 * entryIndex)
             if (entryOffset !== NO_ENTRY) {
               const e = p + entriesStart + entryOffset
-              const valueType = buf[e + 11]
-              const data = buf.readUInt32LE(e + 12)
-              const value = globalPool[data]
-              if (valueType === TYPE_STRING && value !== undefined) {
-                results.push({ configHex, locale: configLocale(configHex), value })
+              const entryFlags = buf.readUInt16LE(e + 2)
+              // complex(bag) 엔트리는 Res_value 레이아웃이 다르다 — 단순 문자열이 아니므로 건너뛴다.
+              if ((entryFlags & FLAG_COMPLEX) === 0) {
+                const valueType = buf[e + 11]
+                const data = buf.readUInt32LE(e + 12)
+                const value = globalPool[data]
+                if (valueType === TYPE_STRING && value !== undefined) {
+                  results.push({ configHex, locale: configLocale(configHex), value })
+                }
               }
             }
           }
