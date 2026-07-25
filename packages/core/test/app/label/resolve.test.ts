@@ -45,6 +45,11 @@ describe('parseResolveActivity', () => {
     expect(parseResolveActivity(text).nonLocalizedLabel).toBe('My App')
   })
 
+  it('labelRes 가 0x0 이면 null 로 정규화한다', () => {
+    const text = 'ApplicationInfo:\n    labelRes=0x0 nonLocalizedLabel=null icon=0x1\n'
+    expect(parseResolveActivity(text).labelRes).toBeNull()
+  })
+
   it('아무것도 못 찾으면 전부 null', () => {
     expect(parseResolveActivity('No activity found')).toEqual({
       launcherActivity: null,
