@@ -88,6 +88,17 @@ describe('selectRenderProcess', () => {
     expect(picked?.name).toBe(`${pkg}:remote`)
   })
 
+  it('프레임이 더 많은 다른 앱이 있어도 패키지명이 정확히 일치하면 그쪽을 고른다', () => {
+    const picked = selectRenderProcess(
+      [
+        { upid: 2, pid: 2, name: pkg, frames: 10 },
+        { upid: 3, pid: 3, name: 'com.other.app', frames: 500 },
+      ],
+      pkg,
+    )
+    expect(picked?.name).toBe(pkg)
+  })
+
   it('패키지 프로세스가 없으면 시스템 프로세스를 뺀 최다 프레임을 고른다', () => {
     const picked = selectRenderProcess(
       [
