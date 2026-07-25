@@ -117,7 +117,7 @@ describe('extractRun', () => {
     const trace = join(runDir, 'trace.perfetto-trace')
 
     const result = await extractRun(runDir, {
-      traceProcessorPath: '/bin/tp',
+      traceProcessorPath: process.execPath,
       runner: runner(trace),
       toolVersion: '0.1.0',
     })
@@ -135,7 +135,10 @@ describe('extractRun', () => {
   it('result.json 을 디스크에 쓴다', async () => {
     const runDir = await makeRun()
 
-    await extractRun(runDir, { traceProcessorPath: '/bin/tp', runner: runner(join(runDir, 'trace.perfetto-trace')) })
+    await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: runner(join(runDir, 'trace.perfetto-trace')),
+    })
 
     const written = JSON.parse(readFileSync(join(runDir, 'result.json'), 'utf8')) as Record<string, unknown>
     expect(written['schema_version']).toBe('1.0.0')
@@ -145,7 +148,7 @@ describe('extractRun', () => {
     const runDir = await makeRun({ sdkInt: 30 })
 
     const result = await extractRun(runDir, {
-      traceProcessorPath: '/bin/tp',
+      traceProcessorPath: process.execPath,
       runner: runner(join(runDir, 'trace.perfetto-trace')),
     })
 
@@ -157,7 +160,10 @@ describe('extractRun', () => {
   it('트레이스가 없으면 frame 을 failed 로 남기고 나머지는 채운다', async () => {
     const runDir = await makeRun({ trace: null })
 
-    const result = await extractRun(runDir, { traceProcessorPath: '/bin/tp', runner: new FakeProcessRunner() })
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
 
     expect(result.metrics.frame.status).toBe('failed')
     expect(result.device.static.model).toBe('SM-S931N')
@@ -170,7 +176,7 @@ describe('extractRun', () => {
       .on(`query ${trace} ${FRAME_PROCESS_SQL}`, { code: 1, stderr: 'no such table' })
       .on(`query ${trace} ${BUFFER_STATS_SQL}`, { stdout: '"j"\n"[]"\n' })
 
-    const result = await extractRun(runDir, { traceProcessorPath: '/bin/tp', runner: broken })
+    const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: broken })
 
     expect(result.metrics.frame.status).toBe('failed')
     expect(result.metrics.frame.reason).toContain('no such table')
@@ -184,7 +190,7 @@ describe('extractRun', () => {
       stdout: '"j"\n"[{"name":"traced_buf_chunks_overwritten","value":12}]"\n',
     })
 
-    const result = await extractRun(runDir, { traceProcessorPath: '/bin/tp', runner: overrun })
+    const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: overrun })
 
     expect(result.measurement_overhead.trace_buffer_overrun).toBe(true)
   })

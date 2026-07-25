@@ -60,15 +60,10 @@ export async function extractRun(
     frame = failed(frameCollector.source, '트레이스 원본이 없습니다.')
   } else {
     const support = frameCollector.supports(manifest.env)
-    // runner 가 주입된 경우(테스트) 실제 프로세스를 띄우지 않으므로 실행 파일 검증을 건너뛴다.
-    // runner 가 없는 실사용 경로에서는 ensureTraceProcessor 가 실제 바이너리를 확보/검증한다.
-    const binPath =
-      opts.runner !== undefined
-        ? (opts.traceProcessorPath ?? 'trace_processor')
-        : await ensureTraceProcessor({
-            ...(opts.traceProcessorPath !== undefined ? { explicitPath: opts.traceProcessorPath } : {}),
-            ...(opts.offline !== undefined ? { offline: opts.offline } : {}),
-          })
+    const binPath = await ensureTraceProcessor({
+      ...(opts.traceProcessorPath !== undefined ? { explicitPath: opts.traceProcessorPath } : {}),
+      ...(opts.offline !== undefined ? { offline: opts.offline } : {}),
+    })
     const tp = new TraceProcessor(binPath, tracePath, opts.runner)
 
     if (!support.supported) {
