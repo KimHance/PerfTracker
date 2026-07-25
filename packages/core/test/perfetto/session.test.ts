@@ -123,6 +123,7 @@ describe('pullTrace / removeRemoteTrace', () => {
 
     await removeRemoteTrace(adb, REMOTE)
 
+    expect(runner.calls[0]?.args).toEqual(['shell', `rm -f ${REMOTE}`])
     expect(runner.calls).toHaveLength(1)
   })
 })
