@@ -145,16 +145,14 @@ describe('frameCollector', () => {
     // 산문이 아니라 코드가 계약이다 — 문구를 다듬어도 CI 매처가 깨지지 않는다.
     expect(frameCollector.supports({ sdkInt: 30, dataSources: [] })).toEqual({
       supported: false,
-      code: 'sdk_too_low',
-      detail: { sdk_int: 30, min_sdk: 31 },
+      reason: { code: 'sdk_too_low', detail: { sdk_int: 30, min_sdk: 31 } },
     })
   })
 
   it('데이터소스 미등록도 코드로 말한다', () => {
     expect(frameCollector.supports({ sdkInt: 36, dataSources: [] })).toEqual({
       supported: false,
-      code: 'data_source_not_registered',
-      detail: { data_source: 'android.surfaceflinger.frametimeline' },
+      reason: { code: 'data_source_not_registered', detail: { data_source: 'android.surfaceflinger.frametimeline' } },
     })
   })
 
@@ -203,12 +201,14 @@ describe('frameCollector', () => {
       })
     const tp = new TraceProcessor('/bin/tp', '/t.pftrace', runner)
 
-    const { data } = await frameCollector.extract({
+    const outcome = await frameCollector.extract({
       tp,
       packageName: pkg,
       env: { sdkInt: 36, dataSources: ['android.surfaceflinger.frametimeline'] },
     })
 
+    expect(outcome.collected).toBe(true)
+    const data = outcome.collected ? outcome.data : null
     expect(data).not.toBeNull()
     expect(data!.process).toBe(pkg)
     expect(data!.pid).toBe(24193)
@@ -230,7 +230,10 @@ describe('frameCollector', () => {
         packageName: 'com.x',
         env: { sdkInt: 36, dataSources: ['android.surfaceflinger.frametimeline'] },
       }),
-    ).resolves.toEqual({ data: null, code: 'render_process_not_found', detail: { package: 'com.x' } })
+    ).resolves.toEqual({
+      collected: false,
+      reason: { code: 'render_process_not_found', detail: { package: 'com.x' } },
+    })
   })
 
   it('프로세스는 찾았지만 프레임이 없으면 no_frames 로 구분한다', async () => {
@@ -249,6 +252,6 @@ describe('frameCollector', () => {
         packageName: pkg,
         env: { sdkInt: 36, dataSources: ['android.surfaceflinger.frametimeline'] },
       }),
-    ).resolves.toEqual({ data: null, code: 'no_frames', detail: { process: pkg } })
+    ).resolves.toEqual({ collected: false, reason: { code: 'no_frames', detail: { process: pkg } } })
   })
 })

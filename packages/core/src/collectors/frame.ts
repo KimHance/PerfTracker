@@ -123,15 +123,13 @@ export const frameCollector: Collector<FrameData> = {
     if (env.sdkInt < MIN_SDK) {
       return {
         supported: false,
-        code: 'sdk_too_low',
-        detail: { sdk_int: env.sdkInt, min_sdk: MIN_SDK },
+        reason: { code: 'sdk_too_low', detail: { sdk_int: env.sdkInt, min_sdk: MIN_SDK } },
       }
     }
     if (!env.dataSources.includes(DATA_SOURCE)) {
       return {
         supported: false,
-        code: 'data_source_not_registered',
-        detail: { data_source: DATA_SOURCE },
+        reason: { code: 'data_source_not_registered', detail: { data_source: DATA_SOURCE } },
       }
     }
     return { supported: true }
@@ -145,13 +143,16 @@ export const frameCollector: Collector<FrameData> = {
     const candidates = await ctx.tp.queryJson<FrameProcessCandidate[]>(FRAME_PROCESS_SQL)
     const picked = selectRenderProcess(candidates, ctx.packageName)
     if (!picked) {
-      return { data: null, code: 'render_process_not_found', detail: { package: ctx.packageName } }
+      return {
+        collected: false,
+        reason: { code: 'render_process_not_found', detail: { package: ctx.packageName } },
+      }
     }
 
     const durationsNs = await ctx.tp.queryJson<number[]>(frameDurationsSql(picked.upid))
     const processName = picked.name ?? String(picked.pid)
     if (durationsNs.length === 0) {
-      return { data: null, code: 'no_frames', detail: { process: processName } }
+      return { collected: false, reason: { code: 'no_frames', detail: { process: processName } } }
     }
 
     const durationsMs = durationsNs.map((ns) => ns / 1e6)
@@ -173,6 +174,6 @@ export const frameCollector: Collector<FrameData> = {
       mean_ms: round(durationsMs.reduce((s, v) => s + v, 0) / durationsMs.length, 2),
       max_ms: round(sorted[sorted.length - 1]!, 2),
     }
-    return { data }
+    return { collected: true, data }
   },
 }

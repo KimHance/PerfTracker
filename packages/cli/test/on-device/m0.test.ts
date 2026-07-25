@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { loadLabeledApps } from '../../src/commands/apps.js'
-import { runDoctor } from '../../src/commands/doctor.js'
-import { createContext } from '../../src/context.js'
+import { createAdbContext, loadLabeledApps, runDoctor } from '@perftracker/core'
 
 /** 실기기가 필요하다. `npm run test:device` 로만 실행된다. */
 describe('M0 기기 통합', () => {
@@ -12,7 +10,7 @@ describe('M0 기기 통합', () => {
   })
 
   it('앱 목록에서 라벨이 해석된다', async () => {
-    const ctx = await createContext({})
+    const ctx = await createAdbContext({})
     const apps = await loadLabeledApps(ctx)
 
     expect(apps.length).toBeGreaterThan(0)

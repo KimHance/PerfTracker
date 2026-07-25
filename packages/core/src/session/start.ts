@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { AdbClient } from '../adb/client.js'
-import { frameCollector } from '../collectors/frame.js'
+import { collectTraceConfigBlocks, unsupportedReasons } from '../collectors/registry.js'
 import { probeDevice } from '../device/probe.js'
 import { collectDeviceStatic } from '../device/spec.js'
 import { collectDeviceState } from '../device/state.js'
@@ -14,7 +14,6 @@ import {
   startDetachedSession,
   stopDetachedSession,
 } from '../perfetto/session.js'
-import { renderReason } from '../schema/reasons.js'
 import type { DeviceState, TargetApp, Warning } from '../schema/result.js'
 import { CAPTURE_MANIFEST_VERSION, writeCaptureManifest } from './manifest.js'
 import { runDirName } from './paths.js'
@@ -166,12 +165,10 @@ export async function startSession(
   // 3) 측정을 먼저 켠다 — 그래야 콜드 스타트 구간이 프레임 트레이스에 포함된다.
   const perfettoKey = `perftracker_${id}`
   const remotePath = remoteTracePath(perfettoKey)
-  const support = frameCollector.supports(env)
-  const blocks = support.supported ? frameCollector.traceConfigBlocks() : []
+  const blocks = collectTraceConfigBlocks(env)
   if (blocks.length === 0) {
     throw new SessionStateError(
-      `이 기기에서 수집 가능한 항목이 없습니다: ` +
-        `${support.supported ? '알 수 없음' : (renderReason(support) ?? support.code)}`,
+      `이 기기에서 수집 가능한 항목이 없습니다.\n  ${unsupportedReasons(env).join('\n  ')}`,
     )
   }
   await startDetachedSession(ctx.adb, {

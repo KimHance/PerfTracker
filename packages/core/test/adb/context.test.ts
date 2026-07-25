@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { AdbClient } from '../../src/adb/client.js'
 import { createAdbContext } from '../../src/adb/context.js'
 import { MeasurementWindowViolationError } from '../../src/errors.js'
 import { extractRun } from '../../src/extract/run.js'

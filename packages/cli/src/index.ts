@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
-import { PerfTrackerError } from '@perftracker/core'
-import { formatApps, loadLabeledApps } from './commands/apps.js'
-import { formatDoctor, runDoctor } from './commands/doctor.js'
-import { runDevices } from './commands/devices.js'
+import { listDeviceSummaries, loadLabeledApps, PerfTrackerError, runDoctor } from '@perftracker/core'
+import { formatApps } from './commands/apps.js'
+import { formatDoctor } from './commands/doctor.js'
+import { formatDevices } from './commands/devices.js'
 import { runExtract } from './commands/extract.js'
 import { runSchema } from './commands/schema.js'
 import { runStart } from './commands/start.js'
@@ -33,7 +33,7 @@ program
   .command('devices')
   .description('연결된 기기와 스펙 요약을 보여준다')
   .action(async () => {
-    console.log(await runDevices(program.opts()))
+    console.log(formatDevices(await listDeviceSummaries(program.opts())))
   })
 
 program

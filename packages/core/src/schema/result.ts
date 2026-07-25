@@ -176,9 +176,14 @@ export const ResultSchema = z.object({
     state_after: DeviceStateSchema.nullable(),
   }),
   target_app: TargetAppSchema,
-  metrics: z.object({
-    frame: metricResultSchema(FrameDataSchema),
-  }),
+  /**
+   * 알려진 collector 는 자기 데이터 스키마로 검증하고, 그 밖의 키는 MetricResult 모양만 본다.
+   * 닫힌 object 로 두면 M2 가 collector 를 "등록" 하는 게 아니라 이 선언을 다시 써야 한다
+   * (그리고 zod 가 등록되지 않은 메트릭을 조용히 벗겨낸다).
+   */
+  metrics: z.object({ frame: metricResultSchema(FrameDataSchema) }).catchall(
+    metricResultSchema(z.unknown()),
+  ),
   measurement_overhead: MeasurementOverheadSchema,
   references: z.array(ReferenceSchema),
   warnings: z.array(WarningSchema),

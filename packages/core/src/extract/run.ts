@@ -2,20 +2,22 @@ import { access, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ProcessRunner } from '../adb/process.js'
 import { frameCollector } from '../collectors/frame.js'
+import { COLLECTORS } from '../collectors/registry.js'
+import type { Collector } from '../collectors/types.js'
 import { SchemaValidationError, SessionStateError } from '../errors.js'
 import { TraceProcessor } from '../perfetto/traceProcessor/client.js'
 import { ensureTraceProcessor } from '../perfetto/traceProcessor/locate.js'
 import { REFERENCES } from '../schema/references.js'
 import { type MetricReason, renderReason } from '../schema/reasons.js'
 import {
-  type FrameData,
+  FrameDataSchema,
   type MetricResult,
   type MetricStatus,
   type Result,
   ResultSchema,
   SCHEMA_VERSION,
 } from '../schema/result.js'
-import { parseVersionedJson, readCaptureManifest } from '../session/manifest.js'
+import { type CaptureManifest, parseVersionedJson, readCaptureManifest } from '../session/manifest.js'
 import type { ActiveSession } from '../session/state.js'
 
 export const BUFFER_STATS_SQL =
@@ -55,6 +57,34 @@ function metric<T>(
   return { status, source, reason_code: reason?.code ?? null, reason: renderReason(reason), data }
 }
 
+/** collector 하나를 돌린다. 어떤 실패도 예외로 새어 나가지 않고 MetricResult 가 된다. */
+async function runCollector(
+  collector: Collector<unknown>,
+  tp: TraceProcessor | null,
+  manifest: CaptureManifest,
+): Promise<MetricResult<unknown>> {
+  if (tp === null) return metric('failed', collector.source, { code: 'trace_missing' })
+
+  const support = collector.supports(manifest.env)
+  if (!support.supported) return metric('unsupported', collector.source, support.reason)
+
+  try {
+    const outcome = await collector.extract({
+      tp,
+      packageName: manifest.target_app.package,
+      env: manifest.env,
+    })
+    return outcome.collected
+      ? metric('collected', collector.source, null, outcome.data)
+      : metric('partial', collector.source, outcome.reason)
+  } catch (e) {
+    return metric('failed', collector.source, {
+      code: 'query_failed',
+      detail: { message: (e as Error).message },
+    })
+  }
+}
+
 /**
  * run 디렉토리 → result.json. 기기에 접촉하지 않으므로 언제든 다시 돌릴 수 있고,
  * 한 메트릭이 터져도 나머지는 정상 산출된다.
@@ -92,40 +122,25 @@ export async function extractRun(
   const tracePath = manifest.artifacts.trace !== null ? join(runDir, manifest.artifacts.trace) : null
   const traceReady = tracePath !== null && (await exists(tracePath))
 
-  let frame: MetricResult<FrameData>
+  let tp: TraceProcessor | null = null
   let bufferOverrun = false
 
-  if (!traceReady) {
-    frame = metric('failed', frameCollector.source, { code: 'trace_missing' })
-  } else {
-    const support = frameCollector.supports(manifest.env)
+  if (traceReady) {
     const binPath = await ensureTraceProcessor({
       ...(opts.traceProcessorPath !== undefined ? { explicitPath: opts.traceProcessorPath } : {}),
       ...(opts.offline !== undefined ? { offline: opts.offline } : {}),
     })
-    const tp = new TraceProcessor(binPath, tracePath, opts.runner)
+    tp = new TraceProcessor(binPath, tracePath, opts.runner)
+  }
 
-    if (!support.supported) {
-      frame = metric('unsupported', frameCollector.source, support)
-    } else {
-      try {
-        const outcome = await frameCollector.extract({
-          tp,
-          packageName: manifest.target_app.package,
-          env: manifest.env,
-        })
-        frame =
-          outcome.data !== null
-            ? metric('collected', frameCollector.source, null, outcome.data)
-            : metric('partial', frameCollector.source, outcome)
-      } catch (e) {
-        frame = metric('failed', frameCollector.source, {
-          code: 'query_failed',
-          detail: { message: (e as Error).message },
-        })
-      }
-    }
+  // 레지스트리를 순회한다 — M2 는 collector 를 배열에 넣기만 하면 되고, 한 메트릭이 터져도
+  // 나머지는 정상 산출된다.
+  const metrics: Record<string, MetricResult<unknown>> = {}
+  for (const collector of COLLECTORS) {
+    metrics[collector.id] = await runCollector(collector, tp, manifest)
+  }
 
+  if (tp !== null) {
     // 버퍼가 넘쳤는지는 사실로 기록한다 — 잘린 데이터를 정상인 척 내보내지 않는다.
     try {
       const stats = await tp.queryJson<{ name: string; value: number }[]>(BUFFER_STATS_SQL)
@@ -134,6 +149,9 @@ export async function extractRun(
       bufferOverrun = false
     }
   }
+
+  // 렌더 프로세스는 트레이스를 파싱해야 알 수 있어 capture 단계에서는 null 이었다.
+  const frameData = FrameDataSchema.safeParse(metrics[frameCollector.id]?.data)
 
   const result: Result = {
     schema_version: SCHEMA_VERSION,
@@ -153,13 +171,12 @@ export async function extractRun(
       state_before: manifest.device.state_before,
       state_after: manifest.device.state_after,
     },
-    // 렌더 프로세스는 트레이스를 파싱해야 알 수 있으므로 capture 단계에서는 null 이었다.
-    // frame 이 그것을 특정했으면 여기서 채운다 — 손에 쥐고도 안 쓰던 값이다.
-    target_app:
-      frame.data !== null
-        ? { ...manifest.target_app, render_process: frame.data.process, pid: frame.data.pid }
-        : manifest.target_app,
-    metrics: { frame },
+    // frame 이 렌더 프로세스를 특정했으면 여기서 채운다 — 손에 쥐고도 안 쓰던 값이다.
+    target_app: frameData.success
+      ? { ...manifest.target_app, render_process: frameData.data.process, pid: frameData.data.pid }
+      : manifest.target_app,
+    // 키는 collector.id 다. 스키마가 frame 을 알고 나머지는 MetricResult 모양으로 검증한다.
+    metrics: metrics as Result['metrics'],
     measurement_overhead: {
       tracing_processes_cpu_time_ms: null,
       tracing_processes_cpu_share_pct: null,
