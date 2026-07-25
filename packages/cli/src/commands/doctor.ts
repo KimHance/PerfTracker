@@ -6,6 +6,7 @@ import {
   locateAdb,
   probeDevice,
   selectDevice,
+  traceProcessorCacheState,
 } from '@perftracker/core'
 
 export interface DoctorCheck {
@@ -58,6 +59,13 @@ export async function runDoctor(opts: { adb?: string; device?: string }): Promis
   } catch (e) {
     checks.push({ name: 'device', ok: false, detail: (e as Error).message })
   }
+
+  const tp = traceProcessorCacheState()
+  checks.push({
+    name: 'trace_processor',
+    ok: true,
+    detail: tp.present ? `캐시됨: ${tp.path}` : '아직 없음 — 첫 stop 실행 시 자동으로 받습니다',
+  })
 
   return checks
 }
