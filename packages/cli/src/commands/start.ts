@@ -1,4 +1,5 @@
 import {
+  beginStart,
   detectForegroundPackage,
   getAppDetail,
   listInstalledApps,
@@ -59,6 +60,10 @@ export async function runStart(
   ctx: CliContext,
   opts: { app?: string; name?: string; launch: boolean; video: boolean; out: string; force: boolean },
 ): Promise<string> {
+  // 앱 해석은 기기 접촉이다. 활성 세션이 있으면 창이 열려 있으므로, 여기서 먼저 걸러야
+  // 사용자가 MeasurementWindowViolationError 대신 "이미 세션이 있습니다" 를 본다.
+  await beginStart(ctx, { force: opts.force })
+
   const app = await resolveTargetApp(ctx, opts.app)
   const now = new Date()
 

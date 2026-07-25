@@ -1,14 +1,10 @@
-import { AdbClient, defaultLocateAdbDeps, listDevices, locateAdb, selectDevice } from '@perftracker/core'
+import { type AdbContext, createAdbContext } from '@perftracker/core'
 
-export interface CliContext {
-  adb: AdbClient
-  serial: string
-}
+/**
+ * adb 부트스트랩은 core 에 있다 — CLI 말고도 (계획된 GUI 포함) 소비자가 생기고,
+ * 활성 세션이면 측정 창을 여는 규칙 1 래치가 바로 그 안에 있기 때문이다.
+ * 여기 남은 것은 CLI 쪽 이름뿐이다.
+ */
+export type CliContext = AdbContext
 
-/** adb 탐색 → 기기 선택까지의 공통 경로. 모든 기기 접촉 명령이 여기서 시작한다. */
-export async function createContext(opts: { adb?: string; device?: string }): Promise<CliContext> {
-  const located = locateAdb(opts.adb, defaultLocateAdbDeps())
-  const base = new AdbClient({ adbPath: located.path })
-  const device = selectDevice(await listDevices(base), opts.device)
-  return { adb: base.withSerial(device.serial), serial: device.serial }
-}
+export const createContext = createAdbContext

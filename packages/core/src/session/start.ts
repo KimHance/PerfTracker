@@ -19,8 +19,10 @@ import { CAPTURE_MANIFEST_VERSION, writeCaptureManifest } from './manifest.js'
 import { runDirName } from './paths.js'
 import {
   type ActiveSession,
+  clearActiveSession,
   newSessionId,
   readActiveSession,
+  recordAdbViolation,
   writeActiveSession,
   writeRunSession,
 } from './state.js'
@@ -83,6 +85,33 @@ async function discardExistingSession(adb: AdbClient, existing: ActiveSession): 
   }
 }
 
+/**
+ * `start` 의 첫 관문. **앱 해석(=기기 접촉)보다 먼저** 불러야 한다.
+ * 활성 세션이 있으면 측정 창이 열려 있으므로, 이 검사를 건너뛴 호출자는
+ * "이미 세션이 있습니다" 대신 `MeasurementWindowViolationError` 를 보게 된다.
+ *
+ * 포인터를 지우고 끝나므로 두 번 불러도 안전하다 — `startSession` 이 자기 앞에서 다시 부른다.
+ */
+export async function beginStart(
+  ctx: { adb: AdbClient; serial: string },
+  opts: { force: boolean; home?: string },
+): Promise<void> {
+  const existing = await readActiveSession(ctx.serial, opts.home)
+  if (existing === null) return
+
+  if (!opts.force) {
+    throw new SessionStateError(
+      `이 기기에 이미 실행 중인 세션이 있습니다: ${existing.name} (${existing.id})\n` +
+        `perftracker stop 으로 끝내거나, --force 로 이전 세션을 버리고 시작하세요.`,
+    )
+  }
+
+  // --force 는 "이전 세션은 여기서 끝난다" 는 선언이다. 그 순간 측정 창도 닫힌다.
+  ctx.adb.window.close()
+  await discardExistingSession(ctx.adb, existing)
+  await clearActiveSession(ctx.serial, opts.home)
+}
+
 export interface StartOptions {
   name?: string
   launch: boolean
@@ -98,14 +127,7 @@ export async function startSession(
   app: TargetApp,
   opts: StartOptions,
 ): Promise<ActiveSession> {
-  const existing = await readActiveSession(ctx.serial, opts.home)
-  if (existing && !opts.force) {
-    throw new SessionStateError(
-      `이 기기에 이미 실행 중인 세션이 있습니다: ${existing.name} (${existing.id})\n` +
-        `perftracker stop 으로 끝내거나, --force 로 이전 세션을 버리고 시작하세요.`,
-    )
-  }
-  if (existing) await discardExistingSession(ctx.adb, existing)
+  await beginStart(ctx, { force: opts.force, ...(opts.home !== undefined ? { home: opts.home } : {}) })
 
   const probe = await probeDevice(ctx.adb)
   const env = { sdkInt: probe.sdkInt, dataSources: probe.dataSources }
@@ -199,7 +221,8 @@ export async function startSession(
   await writeActiveSession(session, opts.home)
 
   // 5) 여기서부터 stop 까지 기기에 어떤 명령도 보내지 않는다.
-  ctx.adb.window.open()
+  //    위반은 포인터에 누적한다 — 다음 프로세스(=stop)가 그 값을 result.json 으로 옮긴다.
+  ctx.adb.window.open(() => recordAdbViolation(ctx.serial, opts.home))
 
   return session
 }

@@ -5,6 +5,7 @@ export type { ProcessResult, ProcessRunner, ProcessRunOptions } from './adb/proc
 export * from './adb/window.js'
 export * from './adb/client.js'
 export * from './adb/locate.js'
+export * from './adb/context.js'
 export * from './device/list.js'
 export * from './device/spec.js'
 export * from './device/state.js'
