@@ -5,6 +5,12 @@ dist/
 # 측정 세션 산출물 (트레이스 원본이 커서 커밋하지 않음)
 runs/
 
+# superpowers 작업 산출물 (렛저, 리뷰 diff, 브리프, 보고서)
+.superpowers/
+
+# superpowers 스펙·계획서 (로컬 보관, 저장소에는 코드와 README 만 둔다)
+docs/superpowers/
+
 # 테스트 픽스처는 예외 — fixtures/ 는 의도적으로 커밋한다
 
 .DS_Store
