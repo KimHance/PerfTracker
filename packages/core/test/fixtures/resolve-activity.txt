@@ -1,0 +1,13 @@
+priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=false
+ActivityInfo:
+  name=com.naver.webtoon.splash.SplashActivity
+  packageName=com.nhn.android.webtoon
+  labelRes=0x7f14004a nonLocalizedLabel=null icon=0x7f100004
+  taskAffinity=com.nhn.android.webtoon targetActivity=null persistableMode=PERSIST_ROOT_ONLY
+  launchMode=1 flags=0x2900 privateFlags=0x0 theme=0x7f150410
+  ApplicationInfo:
+    name=com.naver.webtoon.WebtoonApplication
+    packageName=com.nhn.android.webtoon
+    labelRes=0x7f140047 nonLocalizedLabel=null icon=0x7f100004 banner=0x0
+    className=com.naver.webtoon.WebtoonApplication
+    processName=com.nhn.android.webtoon
