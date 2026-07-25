@@ -26,8 +26,8 @@ const ARSC = buildArsc({
 
 function runnerWithApk(): FakeProcessRunner {
   return new FakeProcessRunner()
-    .on(`shell cmd package resolve-activity -c android.intent.category.LAUNCHER ${PKG}`, { stdout: RESOLVE })
-    .on(`shell pm path ${PKG}`, { stdout: `package:${APK}\n` })
+    .on(`shell cmd package resolve-activity -c android.intent.category.LAUNCHER '${PKG}'`, { stdout: RESOLVE })
+    .on(`shell pm path '${PKG}'`, { stdout: `package:${APK}\n` })
     .on(`exec-out unzip -p '${APK}' resources.arsc`, { stdout: ARSC })
 }
 
@@ -94,7 +94,7 @@ describe('resolveAppLabel', () => {
 
   it('nonLocalizedLabel 이 있으면 APK 를 건드리지 않는다', async () => {
     const runner = new FakeProcessRunner().on(
-      `shell cmd package resolve-activity -c android.intent.category.LAUNCHER ${PKG}`,
+      `shell cmd package resolve-activity -c android.intent.category.LAUNCHER '${PKG}'`,
       { stdout: 'ApplicationInfo:\n    labelRes=0x0 nonLocalizedLabel=Plain App icon=0x1\n' },
     )
     const adb = new AdbClient({ adbPath: '/fake/adb', runner })
@@ -107,8 +107,8 @@ describe('resolveAppLabel', () => {
 
   it('arsc 해석에 실패하면 패키지명으로 폴백한다', async () => {
     const runner = new FakeProcessRunner()
-      .on(`shell cmd package resolve-activity -c android.intent.category.LAUNCHER ${PKG}`, { stdout: RESOLVE })
-      .on(`shell pm path ${PKG}`, { stdout: `package:${APK}\n` })
+      .on(`shell cmd package resolve-activity -c android.intent.category.LAUNCHER '${PKG}'`, { stdout: RESOLVE })
+      .on(`shell pm path '${PKG}'`, { stdout: `package:${APK}\n` })
       .on(`exec-out unzip -p '${APK}' resources.arsc`, { stdout: Buffer.from('not an arsc') })
     const adb = new AdbClient({ adbPath: '/fake/adb', runner })
 
@@ -120,8 +120,8 @@ describe('resolveAppLabel', () => {
 
   it('APK 경로를 못 찾아도 폴백한다', async () => {
     const runner = new FakeProcessRunner()
-      .on(`shell cmd package resolve-activity -c android.intent.category.LAUNCHER ${PKG}`, { stdout: RESOLVE })
-      .on(`shell pm path ${PKG}`, { stdout: '' })
+      .on(`shell cmd package resolve-activity -c android.intent.category.LAUNCHER '${PKG}'`, { stdout: RESOLVE })
+      .on(`shell pm path '${PKG}'`, { stdout: '' })
     const adb = new AdbClient({ adbPath: '/fake/adb', runner })
 
     await expect(resolveAppLabel(adb, PKG)).resolves.toMatchObject({ source: 'package_name' })
@@ -133,7 +133,7 @@ describe('resolveAppLabel', () => {
     cache.set(PKG, 24600400, { label: '캐시된 라벨', source: 'apk_resources' })
 
     const runner = new FakeProcessRunner().on(
-      `shell cmd package resolve-activity -c android.intent.category.LAUNCHER ${PKG}`,
+      `shell cmd package resolve-activity -c android.intent.category.LAUNCHER '${PKG}'`,
       { stdout: RESOLVE },
     )
     const adb = new AdbClient({ adbPath: '/fake/adb', runner })
@@ -152,7 +152,7 @@ describe('resolveAppLabel', () => {
     cache.set(PKG, 24600400, { label: '캐시된 라벨', source: 'apk_resources' })
 
     const runner = new FakeProcessRunner().on(
-      `shell cmd package resolve-activity -c android.intent.category.LAUNCHER ${PKG}`,
+      `shell cmd package resolve-activity -c android.intent.category.LAUNCHER '${PKG}'`,
       { stdout: RESOLVE },
     )
     const adb = new AdbClient({ adbPath: '/fake/adb', runner })
@@ -172,8 +172,8 @@ describe('resolveAppLabel', () => {
     const home = mkdtempSync(join(tmpdir(), 'pt-cache-'))
     const cache = await loadLabelCache('S1', home)
     const runner = new FakeProcessRunner()
-      .on(`shell cmd package resolve-activity -c android.intent.category.LAUNCHER ${PKG}`, { stdout: RESOLVE })
-      .on(`shell pm path ${PKG}`, { stdout: `package:${APK}\n` })
+      .on(`shell cmd package resolve-activity -c android.intent.category.LAUNCHER '${PKG}'`, { stdout: RESOLVE })
+      .on(`shell pm path '${PKG}'`, { stdout: `package:${APK}\n` })
       .on(`exec-out unzip -p '${APK}' resources.arsc`, { stdout: Buffer.from('not an arsc') })
     const adb = new AdbClient({ adbPath: '/fake/adb', runner })
 
@@ -190,8 +190,8 @@ describe('resolveAppLabel', () => {
   it('부정 결과 다음 실행에서 성공하면 갱신된 라벨이 캐시된다', async () => {
     const home = mkdtempSync(join(tmpdir(), 'pt-cache-'))
     const failingRunner = new FakeProcessRunner()
-      .on(`shell cmd package resolve-activity -c android.intent.category.LAUNCHER ${PKG}`, { stdout: RESOLVE })
-      .on(`shell pm path ${PKG}`, { stdout: `package:${APK}\n` })
+      .on(`shell cmd package resolve-activity -c android.intent.category.LAUNCHER '${PKG}'`, { stdout: RESOLVE })
+      .on(`shell pm path '${PKG}'`, { stdout: `package:${APK}\n` })
       .on(`exec-out unzip -p '${APK}' resources.arsc`, { stdout: Buffer.from('not an arsc') })
     const cache = await loadLabelCache('S1', home)
     const adbFail = new AdbClient({ adbPath: '/fake/adb', runner: failingRunner })

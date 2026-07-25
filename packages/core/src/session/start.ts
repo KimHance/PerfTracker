@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { AdbClient } from '../adb/client.js'
+import { shellQuote } from '../adb/shell.js'
 import { collectTraceConfigBlocks, unsupportedReasons } from '../collectors/registry.js'
 import { probeDevice } from '../device/probe.js'
 import { collectDeviceStatic } from '../device/spec.js'
@@ -159,7 +160,7 @@ export async function startSession(
 
   // 2) 콜드 상태 보장
   if (opts.launch) {
-    await ctx.adb.raw(['shell', `am force-stop ${app.package}`])
+    await ctx.adb.raw(['shell', `am force-stop ${shellQuote(app.package)}`])
   }
 
   // 3) 측정을 먼저 켠다 — 그래야 콜드 스타트 구간이 프레임 트레이스에 포함된다.
@@ -180,7 +181,7 @@ export async function startSession(
   // 4) 런처 액티비티를 콜드 실행하고 시작 시간을 잰다.
   let startup: ActiveSession['startup'] = null
   if (opts.launch && app.launcher_activity !== null) {
-    const r = await ctx.adb.raw(['shell', `am start -W -n ${app.package}/${app.launcher_activity}`])
+    const r = await ctx.adb.raw(['shell', `am start -W -n ${shellQuote(`${app.package}/${app.launcher_activity}`)}`])
     startup = parseAmStart(r.stdout)
   }
 

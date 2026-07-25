@@ -1,4 +1,5 @@
 import type { AdbClient } from '../../adb/client.js'
+import { shellQuote } from '../../adb/shell.js'
 import { pickLocalizedValue, resolveResourceStrings } from './arsc.js'
 import type { CachedLabel, LabelCache } from './cache.js'
 
@@ -45,13 +46,13 @@ export function parsePmPath(text: string): string | null {
  * 기기에 아무것도 설치하거나 실행하지 않는다.
  */
 async function fetchArsc(adb: AdbClient, pkg: string): Promise<Buffer | null> {
-  const pathOutput = await adb.raw(['shell', `pm path ${pkg}`])
+  const pathOutput = await adb.raw(['shell', `pm path ${shellQuote(pkg)}`])
   if (pathOutput.code !== 0) return null
 
   const apk = parsePmPath(pathOutput.stdout)
   if (!apk) return null
 
-  const r = await adb.rawBinary(['exec-out', `unzip -p '${apk}' resources.arsc`])
+  const r = await adb.rawBinary(['exec-out', `unzip -p ${shellQuote(apk)} resources.arsc`])
   if (r.code !== 0 || r.stdout.length === 0) return null
   return r.stdout
 }
@@ -78,7 +79,7 @@ export async function resolveAppLabel(
   if (cached && opts.withLauncherActivity !== true) return { ...cached, launcherActivity: null }
 
   const info = parseResolveActivity(
-    (await adb.raw(['shell', `cmd package resolve-activity -c android.intent.category.LAUNCHER ${pkg}`])).stdout,
+    (await adb.raw(['shell', `cmd package resolve-activity -c android.intent.category.LAUNCHER ${shellQuote(pkg)}`])).stdout,
   )
 
   if (cached) return { ...cached, launcherActivity: info.launcherActivity }

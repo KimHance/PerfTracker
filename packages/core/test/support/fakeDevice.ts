@@ -44,7 +44,7 @@ export function startableDevice(overrides: (r: FakeProcessRunner) => void = () =
     .on(`-s ${SERIAL} shell which perfetto`, { stdout: '/system/bin/perfetto\n' })
     .on(`-s ${SERIAL} shell perfetto --query`, { stdout: PERFETTO_QUERY })
     .on(`-s ${SERIAL} shell getprop ro.build.version.sdk`, { stdout: '36\n' })
-    .on(`-s ${SERIAL} shell am force-stop ${PKG}`, {})
+    .on(`-s ${SERIAL} shell am force-stop '${PKG}'`, {})
     .onMatch(/--detach=perftracker_/, { stderr: 'Connected to the Perfetto traced service\n' })
     .onMatch(/shell am start -W -n /, {
       stdout: 'Status: ok\nLaunchState: COLD\nTotalTime: 1842\n',

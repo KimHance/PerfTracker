@@ -2,6 +2,7 @@ export * from './errors.js'
 // 구체 러너는 의도적으로 내보내지 않는다 — 배럴에 있으면 소비자가 AdbClient(=측정 창 래치)를
 // 건너뛰고 기기에 직접 도달할 수 있다. 밖에서 필요한 것은 타입뿐이다.
 export type { ProcessResult, ProcessRunner, ProcessRunOptions } from './adb/process.js'
+export * from './adb/shell.js'
 export * from './adb/window.js'
 export * from './adb/client.js'
 export * from './adb/locate.js'
