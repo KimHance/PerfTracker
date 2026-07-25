@@ -7,7 +7,6 @@ const MAX_SLUG_LENGTH = 60
 export function slugifySessionName(name: string): string {
   const cleaned = name
     .normalize('NFC')
-    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x1f\x7f]/g, '')
     .replace(/[/\\:*?"<>|]/g, '')
     .trim()
@@ -16,7 +15,8 @@ export function slugifySessionName(name: string): string {
     .replace(/^[-.]+/, '')
     .replace(/[-.]+$/, '')
 
-  const sliced = [...cleaned].slice(0, MAX_SLUG_LENGTH).join('')
+  // 코드포인트 기준 자르기라 60번째 문자가 하이픈/점일 수 있다 — 자른 뒤 다시 정리한다.
+  const sliced = [...cleaned].slice(0, MAX_SLUG_LENGTH).join('').replace(/[-.]+$/, '')
   return sliced.length > 0 ? sliced : 'session'
 }
 

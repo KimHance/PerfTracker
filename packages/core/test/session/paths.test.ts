@@ -23,6 +23,18 @@ describe('slugifySessionName', () => {
     expect(slugifySessionName('가'.repeat(100))).toHaveLength(60)
   })
 
+  it('60자는 코드유닛이 아니라 코드포인트 기준으로 센다', () => {
+    const result = slugifySessionName('🙂'.repeat(100))
+    expect([...result].length).toBe(60)
+  })
+
+  it('자른 위치가 하이픈/점이면 한 번 더 제거한다', () => {
+    const result = slugifySessionName('a'.repeat(59) + ' ' + 'b')
+    expect(result).toBe('a'.repeat(59))
+    expect(result.endsWith('-')).toBe(false)
+    expect(result.endsWith('.')).toBe(false)
+  })
+
   it('결과가 비면 session 으로 대체한다', () => {
     expect(slugifySessionName('///')).toBe('session')
     expect(slugifySessionName('   ')).toBe('session')

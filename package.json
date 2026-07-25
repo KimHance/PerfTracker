@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "workspaces": ["packages/*"],
-  "engines": { "node": ">=20" },
+  "engines": { "node": ">=20.19" },
   "scripts": {
     "build": "tsc --build",
     "typecheck": "tsc --build",
