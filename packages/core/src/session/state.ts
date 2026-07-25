@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { perfTrackerHome } from './paths.js'
 
@@ -49,6 +49,32 @@ export async function readActiveSession(
 
 export async function clearActiveSession(serial: string, home: string = perfTrackerHome()): Promise<void> {
   await rm(activePointerPath(serial, home), { force: true })
+}
+
+/**
+ * 기기에 전혀 접촉하지 않고 `~/.perftracker/active/` 를 그대로 연다.
+ * 디렉토리가 없거나 비어 있으면 빈 배열이다. 포인터는 버려도 되는 데이터라는 원칙대로,
+ * 읽을 수 없거나 JSON 이 깨진 파일은 조용히 건너뛴다.
+ */
+export async function listActiveSessions(home: string = perfTrackerHome()): Promise<ActiveSession[]> {
+  const dir = join(home, 'active')
+  let entries: string[]
+  try {
+    entries = await readdir(dir)
+  } catch {
+    return []
+  }
+
+  const sessions: ActiveSession[] = []
+  for (const entry of entries) {
+    if (!entry.endsWith('.json')) continue
+    try {
+      sessions.push(JSON.parse(await readFile(join(dir, entry), 'utf8')) as ActiveSession)
+    } catch {
+      // 깨진 포인터는 버려도 되는 데이터 — 조용히 건너뛴다.
+    }
+  }
+  return sessions.sort((a, b) => a.serial.localeCompare(b.serial))
 }
 
 /** run 디렉토리 안의 session.json 이 정본이다. 활성 포인터는 그 사본에 불과하다. */

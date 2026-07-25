@@ -7,6 +7,7 @@ import {
   selectRenderProcess,
 } from '../../src/collectors/frame.js'
 import { FRAME_PROCESS_SQL, frameDurationsSql } from '../../src/collectors/frame.js'
+import { buildTraceConfig } from '../../src/perfetto/config.js'
 import { TraceProcessor } from '../../src/perfetto/traceProcessor/client.js'
 import { FakeProcessRunner } from '../support/fakeProcessRunner.js'
 
@@ -142,6 +143,26 @@ describe('frameCollector', () => {
 
   it('TraceConfig 블록에 frametimeline 이 들어간다', () => {
     expect(frameCollector.traceConfigBlocks().join('\n')).toContain('android.surfaceflinger.frametimeline')
+  })
+
+  it('TraceConfig 블록에 linux.process_stats 도 들어간다 — 프로세스 이름 해석에 필요하다', () => {
+    const text = frameCollector.traceConfigBlocks().join('\n')
+    expect(text).toContain('linux.process_stats')
+    expect(text).toContain('proc_stats_poll_ms: 1000')
+    expect(text).toContain('scan_all_processes_on_start: true')
+  })
+
+  it('내는 블록은 저부하 불변식을 통과한다 (폴링 주기 1000ms 이상)', () => {
+    expect(() =>
+      buildTraceConfig({ dataSourceBlocks: frameCollector.traceConfigBlocks() }),
+    ).not.toThrow()
+  })
+
+  it('supports() 는 linux.process_stats 를 게이트 조건으로 쓰지 않는다', () => {
+    // frametimeline 데이터소스만 등록돼 있어도 지원 판정은 그대로다.
+    expect(
+      frameCollector.supports({ sdkInt: 36, dataSources: ['android.surfaceflinger.frametimeline'] }),
+    ).toEqual({ supported: true })
   })
 
   it('트레이스에서 프레임 분포를 산출한다', async () => {

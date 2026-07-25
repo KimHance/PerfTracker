@@ -7,6 +7,7 @@ import {
   type ActiveSession,
   activePointerPath,
   clearActiveSession,
+  listActiveSessions,
   newSessionId,
   readActiveSession,
   writeActiveSession,
@@ -89,6 +90,48 @@ describe('active session 파일', () => {
 
     expect((await readActiveSession('A', home))?.id).toBe('a3f9c1')
     expect((await readActiveSession('B', home))?.id).toBe('bbbbbb')
+  })
+})
+
+describe('listActiveSessions — 기기 접촉 없이 활성 세션 포인터를 연다', () => {
+  it('active 디렉토리가 아예 없으면 빈 배열이다', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
+    expect(await listActiveSessions(home)).toEqual([])
+  })
+
+  it('세션이 하나면 그것 하나를 낸다', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
+    await writeActiveSession(session({ serial: 'R5CT0000001' }), home)
+
+    const list = await listActiveSessions(home)
+    expect(list).toHaveLength(1)
+    expect(list[0]?.serial).toBe('R5CT0000001')
+  })
+
+  it('세션이 여러 기기에 있으면 전부 낸다', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
+    await writeActiveSession(session({ serial: 'A' }), home)
+    await writeActiveSession(session({ serial: 'B', id: 'bbbbbb' }), home)
+
+    const list = await listActiveSessions(home)
+    expect(list.map((s) => s.serial).sort()).toEqual(['A', 'B'])
+  })
+
+  it('깨진 포인터 파일은 조용히 건너뛴다', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
+    await writeActiveSession(session({ serial: 'GOOD' }), home)
+    await mkdir(join(home, 'active'), { recursive: true })
+    writeFileSync(join(home, 'active', 'BROKEN.json'), '{not json', 'utf8')
+
+    const list = await listActiveSessions(home)
+    expect(list).toHaveLength(1)
+    expect(list[0]?.serial).toBe('GOOD')
+  })
+
+  it('active 디렉토리가 비어 있으면 빈 배열이다', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
+    await mkdir(join(home, 'active'), { recursive: true })
+    expect(await listActiveSessions(home)).toEqual([])
   })
 })
 

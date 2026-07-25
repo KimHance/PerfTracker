@@ -6,6 +6,16 @@ const MIN_SDK = 31
 const FRAME_BUDGET_MS = 16.67
 const OVERFLOW_FROM_MS = 700
 
+/**
+ * frametimeline 은 프레임 타이밍만 주고 트레이스의 process 테이블에는 이름을 채우지 않는다.
+ * linux.process_stats 가 그 이름을 채운다 — 없으면 FRAME_PROCESS_SQL 의 모든 후보가 name: null
+ * 로 나와 isSystemProcess 에 전부 걸러지고 selectRenderProcess 가 항상 null 을 반환한다.
+ * 폴링 주기는 assertLowOverheadConfig 의 1000ms 하한과 설계 프로브 값을 그대로 따른다.
+ */
+const PROCESS_STATS_BLOCK =
+  'data_sources { config { name: "linux.process_stats" ' +
+  'process_stats_config { proc_stats_poll_ms: 1000 scan_all_processes_on_start: true } } }'
+
 /** 60fps 예산 부근을 1ms 로 조밀하게 보고, 심한 지연으로 갈수록 폭을 넓혀 꼬리를 압축한다. */
 export const FRAME_BUCKET_RANGES: { from: number; to: number; step: number }[] = [
   { from: 0, to: 5, step: 5 },
@@ -108,7 +118,7 @@ export const frameCollector: Collector<FrameData> = {
   },
 
   traceConfigBlocks() {
-    return [`data_sources { config { name: "${DATA_SOURCE}" } }`]
+    return [`data_sources { config { name: "${DATA_SOURCE}" } }`, PROCESS_STATS_BLOCK]
   },
 
   async extract(ctx: ExtractContext): Promise<FrameData | null> {

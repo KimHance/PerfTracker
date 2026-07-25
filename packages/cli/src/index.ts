@@ -71,8 +71,7 @@ program
   .description('진행 중인 세션을 보여준다 (기기에 접촉하지 않음)')
   .option('-d, --device <serial>', '대상 기기 serial')
   .action(async (opts: { device?: string }) => {
-    const serial = opts.device ?? (await createContext({ ...program.opts() })).serial
-    console.log(await runStatus(serial))
+    console.log(await runStatus(opts.device))
   })
 
 program
