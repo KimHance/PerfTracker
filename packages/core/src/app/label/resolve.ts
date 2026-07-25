@@ -71,7 +71,11 @@ export async function resolveAppLabel(
   if (cached) return { ...cached, launcherActivity: info.launcherActivity }
 
   const resolved = await resolveLabelValue(adb, pkg, info, preferredLanguage)
-  opts.cache?.set(pkg, opts.versionCode ?? null, resolved)
+  // 폴백(source: 'package_name')은 캐싱하지 않는다 — 재계산 비용이 없는 값이고, 캐싱하면
+  // 일시적 해석 실패가 그 버전 동안 영구히 얼어붙는다. 다음 실행에서 다시 시도하게 둔다.
+  if (resolved.source !== 'package_name') {
+    opts.cache?.set(pkg, opts.versionCode ?? null, resolved)
+  }
 
   return { ...resolved, launcherActivity: info.launcherActivity }
 }

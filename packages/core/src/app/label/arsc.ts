@@ -5,8 +5,16 @@ const RES_TABLE_PACKAGE_TYPE = 0x0200
 const RES_TABLE_TYPE_TYPE = 0x0201
 const UTF8_FLAG = 0x100
 const TYPE_STRING = 0x03
+const TYPE_REFERENCE = 0x01
 const NO_ENTRY = 0xffffffff
 const FLAG_COMPLEX = 0x0001
+
+/**
+ * TYPE_REFERENCE 를 따라갈 수 있는 최대 홉 수.
+ * android:label="@string/app_name" 처럼 한 홉이 흔하지만, 방어적으로 몇 홉 더 허용한다.
+ * 한계를 넘으면 예외 없이 그 갈래를 후보 없음으로 끝낸다.
+ */
+export const MAX_REFERENCE_DEPTH = 4
 
 export interface ResolvedResourceString {
   configHex: string
@@ -65,7 +73,10 @@ export function configLocale(configHex: string): string | null {
 /**
  * 리소스 ID(0xPPTTEEEE)를 문자열 값들로 해석한다.
  * 하나의 ID 가 로케일마다 다른 값을 가지므로 config 변형을 전부 돌려준다.
- * sparse 엔트리와 complex 엔트리는 다루지 않는다 — 라벨은 항상 단순 문자열이며,
+ * android:label="@string/app_name" 처럼 TYPE_REFERENCE 로 다른 리소스를 가리키는 엔트리는
+ * MAX_REFERENCE_DEPTH 안에서 같은 버퍼 안을 다시 따라가며, 순환은 방문 집합으로 막는다 —
+ * 한계를 넘거나 순환에 걸리면 예외 없이 그 갈래만 후보 없음으로 끝난다.
+ * sparse 엔트리와 complex 엔트리는 다루지 않는다 — 라벨은 항상 단순 문자열이거나 그 참조이며,
  * 해석에 실패하면 호출자가 폴백 사슬로 내려간다.
  */
 export function resolveResourceStrings(buf: Buffer, resourceId: number): ResolvedResourceString[] {
@@ -77,7 +88,7 @@ export function resolveResourceStrings(buf: Buffer, resourceId: number): Resolve
   // 이 지점부터는 잘리거나 손상된 파일이 (경계마다 검사하지 않는) 원시 RangeError 를
   // 던질 수 있다 — 호출자가 폴백 사슬로 내려갈 수 있도록 ArscParseError 로 통일해 던진다.
   try {
-    return walkResourceTable(buf, resourceId)
+    return walkResourceTable(buf, resourceId, 0, new Set([resourceId]))
   } catch (err) {
     if (err instanceof ArscParseError) throw err
     const detail = err instanceof Error ? err.message : String(err)
@@ -85,7 +96,16 @@ export function resolveResourceStrings(buf: Buffer, resourceId: number): Resolve
   }
 }
 
-function walkResourceTable(buf: Buffer, resourceId: number): ResolvedResourceString[] {
+/**
+ * depth 와 visited 는 TYPE_REFERENCE 를 따라가는 재귀 호출끼리만 주고받는 내부 상태다.
+ * 호출마다 새로 시작하므로(모듈 전역이 아니므로) 서로 다른 resolveResourceStrings 호출 사이에 새지 않는다.
+ */
+function walkResourceTable(
+  buf: Buffer,
+  resourceId: number,
+  depth: number,
+  visited: ReadonlySet<number>,
+): ResolvedResourceString[] {
   const packageId = (resourceId >>> 24) & 0xff
   const typeId = (resourceId >>> 16) & 0xff
   const entryIndex = resourceId & 0xffff
@@ -125,9 +145,17 @@ function walkResourceTable(buf: Buffer, resourceId: number): ResolvedResourceStr
               if ((entryFlags & FLAG_COMPLEX) === 0) {
                 const valueType = buf[e + 11]
                 const data = buf.readUInt32LE(e + 12)
-                const value = globalPool[data]
-                if (valueType === TYPE_STRING && value !== undefined) {
-                  results.push({ configHex, locale: configLocale(configHex), value })
+                if (valueType === TYPE_STRING) {
+                  const value = globalPool[data]
+                  if (value !== undefined) {
+                    results.push({ configHex, locale: configLocale(configHex), value })
+                  }
+                } else if (valueType === TYPE_REFERENCE && depth < MAX_REFERENCE_DEPTH && !visited.has(data)) {
+                  // 참조를 따라간 후보는 이 config(configHex) 가 아니라 대상 리소스 자신의
+                  // config 변형들을 그대로 유지한다 — 재귀 호출이 그걸 자체적으로 만든다.
+                  const nextVisited = new Set(visited)
+                  nextVisited.add(data)
+                  results.push(...walkResourceTable(buf, data, depth + 1, nextVisited))
                 }
               }
             }

@@ -143,6 +143,42 @@ describe('resolveAppLabel', () => {
     expect(r.label).toBe('캐시된 라벨')
     expect(runner.calls).toHaveLength(1) // 런처 액티비티 확인 한 번뿐
   })
+
+  it('해석 실패(package_name)는 캐시에 기록하지 않는다', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'pt-cache-'))
+    const cache = await loadLabelCache('S1', home)
+    const runner = new FakeProcessRunner()
+      .on(`shell cmd package resolve-activity -c android.intent.category.LAUNCHER ${PKG}`, { stdout: RESOLVE })
+      .on(`shell pm path ${PKG}`, { stdout: `package:${APK}\n` })
+      .on(`exec-out unzip -p '${APK}' resources.arsc`, { stdout: Buffer.from('not an arsc') })
+    const adb = new AdbClient({ adbPath: '/fake/adb', runner })
+
+    const r = await resolveAppLabel(adb, PKG, { cache, versionCode: 928 })
+
+    expect(r.source).toBe('package_name')
+    expect(cache.get(PKG, 928)).toBeUndefined()
+
+    await cache.save()
+    const reloaded = await loadLabelCache('S1', home)
+    expect(reloaded.get(PKG, 928)).toBeUndefined()
+  })
+
+  it('부정 결과 다음 실행에서 성공하면 갱신된 라벨이 캐시된다', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'pt-cache-'))
+    const failingRunner = new FakeProcessRunner()
+      .on(`shell cmd package resolve-activity -c android.intent.category.LAUNCHER ${PKG}`, { stdout: RESOLVE })
+      .on(`shell pm path ${PKG}`, { stdout: `package:${APK}\n` })
+      .on(`exec-out unzip -p '${APK}' resources.arsc`, { stdout: Buffer.from('not an arsc') })
+    const cache = await loadLabelCache('S1', home)
+    const adbFail = new AdbClient({ adbPath: '/fake/adb', runner: failingRunner })
+    await resolveAppLabel(adbFail, PKG, { cache, versionCode: 939 })
+
+    const adbOk = new AdbClient({ adbPath: '/fake/adb', runner: runnerWithApk() })
+    const r = await resolveAppLabel(adbOk, PKG, { preferredLanguage: 'ko', cache, versionCode: 939 })
+
+    expect(r.label).toBe('네이버 웹툰')
+    expect(cache.get(PKG, 939)).toEqual({ label: '네이버 웹툰', source: 'apk_resources' })
+  })
 })
 
 describe('loadLabelCache', () => {

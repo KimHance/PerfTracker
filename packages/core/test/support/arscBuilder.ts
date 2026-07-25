@@ -9,6 +9,7 @@ const RES_TABLE_PACKAGE_TYPE = 0x0200
 const RES_TABLE_TYPE_TYPE = 0x0201
 const UTF8_FLAG = 0x100
 const TYPE_STRING = 0x03
+const TYPE_REFERENCE = 0x01
 
 /** ResStringPool_ref 의 8비트 varint 길이 인코딩. 127 이하는 1바이트, 아니면 상위비트를 세운 2바이트. */
 function encodeVarLen8(len: number): Buffer {
@@ -64,8 +65,10 @@ export interface SyntheticEntry {
   /** 리소스 ID 의 하위 16비트. */
   entryIndex: number
   language: string | null
-  /** 전역 문자열 풀에서의 인덱스. */
-  stringIndex: number
+  /** 전역 문자열 풀에서의 인덱스. TYPE_STRING 엔트리를 만든다. reference 와 배타적이다. */
+  stringIndex?: number
+  /** 지정하면 TYPE_REFERENCE 엔트리를 만든다 — data 는 대상 리소스 ID(0xPPTTEEEE). stringIndex 와 배타적. */
+  reference?: number
   /** true 면 ResTable_entry 의 FLAG_COMPLEX 비트를 세워 bag 엔트리처럼 만든다. */
   complex?: boolean
 }
@@ -78,6 +81,9 @@ function buildTypeChunk(typeId: number, entryCount: number, entry: SyntheticEntr
   const offsets = Buffer.alloc(4 * entryCount, 0xff)
   offsets.writeUInt32LE(0, 4 * entry.entryIndex)
 
+  const dataType = entry.reference !== undefined ? TYPE_REFERENCE : TYPE_STRING
+  const data = entry.reference !== undefined ? entry.reference : (entry.stringIndex ?? 0)
+
   // ResTable_entry(8) + Res_value(8)
   const body = Buffer.alloc(16)
   body.writeUInt16LE(8, 0) // entry size
@@ -85,8 +91,8 @@ function buildTypeChunk(typeId: number, entryCount: number, entry: SyntheticEntr
   body.writeUInt32LE(0, 4) // key index (파서가 안 씀)
   body.writeUInt16LE(8, 8) // Res_value size
   body.writeUInt8(0, 10) // res0
-  body.writeUInt8(TYPE_STRING, 11)
-  body.writeUInt32LE(entry.stringIndex, 12)
+  body.writeUInt8(dataType, 11)
+  body.writeUInt32LE(data, 12)
 
   const entriesStart = headerSize + offsets.length
   const size = entriesStart + body.length

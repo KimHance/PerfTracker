@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { configLocale, parseStringPool, pickLocalizedValue, resolveResourceStrings } from '../../../src/app/label/arsc.js'
+import {
+  MAX_REFERENCE_DEPTH,
+  configLocale,
+  parseStringPool,
+  pickLocalizedValue,
+  resolveResourceStrings,
+} from '../../../src/app/label/arsc.js'
 import { ArscParseError } from '../../../src/errors.js'
 import { buildArsc, buildConfig, buildStringPool } from '../../support/arscBuilder.js'
 
@@ -107,6 +113,101 @@ describe('resolveResourceStrings', () => {
       ],
     })
     expect(resolveResourceStrings(buf, LABEL_RES)).toEqual([])
+  })
+
+  describe('TYPE_REFERENCE', () => {
+    const REF_RES = 0x7f140166
+    const TARGET_RES = 0x7f140168
+
+    it('참조 한 홉이 대상 문자열로 해석된다', () => {
+      const buf = buildArsc({
+        packageId: 0x7f,
+        typeId: 0x14,
+        entryCount: 0x0169,
+        strings: ['Airbnb'],
+        entries: [
+          { entryIndex: 0x0166, language: null, reference: TARGET_RES },
+          { entryIndex: 0x0168, language: null, stringIndex: 0 },
+        ],
+      })
+
+      const found = resolveResourceStrings(buf, REF_RES)
+
+      expect(found).toEqual([{ configHex: buildConfig(null).toString('hex'), locale: null, value: 'Airbnb' }])
+    })
+
+    it('참조가 로케일 변형을 가진 대상을 가리키면 그 변형들이 후보로 나온다', () => {
+      const buf = buildArsc({
+        packageId: 0x7f,
+        typeId: 0x14,
+        entryCount: 0x0169,
+        strings: ['Airbnb', '에어비앤비'],
+        entries: [
+          { entryIndex: 0x0166, language: null, reference: TARGET_RES },
+          { entryIndex: 0x0168, language: null, stringIndex: 0 },
+          { entryIndex: 0x0168, language: 'ko', stringIndex: 1 },
+        ],
+      })
+
+      const found = resolveResourceStrings(buf, REF_RES)
+
+      expect(found.map((f) => [f.locale, f.value])).toEqual([
+        [null, 'Airbnb'],
+        ['ko', '에어비앤비'],
+      ])
+    })
+
+    it('A -> B -> A 순환이 무한 루프 없이 후보 없음으로 끝난다', () => {
+      const RES_A = 0x7f140001
+      const RES_B = 0x7f140002
+      const buf = buildArsc({
+        packageId: 0x7f,
+        typeId: 0x14,
+        entryCount: 0x0003,
+        strings: [],
+        entries: [
+          { entryIndex: 0x0001, language: null, reference: RES_B },
+          { entryIndex: 0x0002, language: null, reference: RES_A },
+        ],
+      })
+
+      expect(resolveResourceStrings(buf, RES_A)).toEqual([])
+    })
+
+    it('엔트리가 자기 자신을 참조해도 무한 루프 없이 후보 없음으로 끝난다', () => {
+      const RES_A = 0x7f140001
+      const buf = buildArsc({
+        packageId: 0x7f,
+        typeId: 0x14,
+        entryCount: 0x0002,
+        strings: [],
+        entries: [{ entryIndex: 0x0001, language: null, reference: RES_A }],
+      })
+
+      expect(resolveResourceStrings(buf, RES_A)).toEqual([])
+    })
+
+    it('깊이 한계를 넘는 사슬이 예외 없이 후보 없음으로 끝난다', () => {
+      // MAX_REFERENCE_DEPTH 를 초과하는 참조 사슬을 만든다 — 마지막 하나만 실제 문자열이고
+      // 나머지는 전부 다음 것을 가리키는 참조라, 한계 안에서는 절대 문자열에 닿지 못한다.
+      const base = 0x7f140000
+      const chainLength = MAX_REFERENCE_DEPTH + 2
+      const entries = []
+      for (let i = 1; i < chainLength; i++) {
+        entries.push({ entryIndex: i, language: null, reference: base + i + 1 })
+      }
+      entries.push({ entryIndex: chainLength, language: null, stringIndex: 0 })
+
+      const buf = buildArsc({
+        packageId: 0x7f,
+        typeId: 0x14,
+        entryCount: chainLength + 1,
+        strings: ['Too Deep'],
+        entries,
+      })
+
+      expect(resolveResourceStrings(buf, base + 1)).toEqual([])
+    })
   })
 })
 
