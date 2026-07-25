@@ -1,0 +1,8 @@
+{
+  "name": "perftracker",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": { "perftracker": "./dist/index.js" },
+  "main": "./dist/index.js",
+  "dependencies": { "@perftracker/core": "0.1.0", "commander": "^15.0.0" }
+}
