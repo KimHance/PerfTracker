@@ -5,8 +5,33 @@ import { METRIC_REASON_CODES, type MetricReasonCode } from './reasons.js'
 // 1.0.0 문서는 여전히 이 스키마를 통과한다. required 로 올리면 그것이 깨지고, 그건 major 다.
 export const SCHEMA_VERSION = '1.1.0'
 
-/** 수집 실패와 미지원을 null 로 뭉뚱그리지 않기 위한 상태 구분. */
-export const MetricStatusSchema = z.enum(['collected', 'partial', 'unsupported', 'failed', 'skipped'])
+/**
+ * 수집 실패와 미지원을 null 로 뭉뚱그리지 않기 위한 상태 구분.
+ *
+ * 네 값의 뜻이 소스 주석에만 있었고, 그중 `partial` 이 두 가지 상황을 겸한다는 사실은
+ * 어디에도 없었다. `perftracker schema` 는 `z.toJSONSchema` 라 주석을 보지 못하므로,
+ * `status === 'failed'` 로 문제를 거르는 CI 는 값이 통째로 없는 메트릭을 전부 통과시켰다.
+ */
+export const MetricStatusSchema = z
+  .enum(['collected', 'partial', 'unsupported', 'failed', 'skipped'])
+  .describe(
+    '이 메트릭의 수집 상태.\n' +
+      '- collected: 값이 전부 나왔다. data 는 non-null 이고 reason_code 는 null 이다.\n' +
+      '- partial: **두 가지를 겸한다.** (a) 값은 나왔지만 일부가 빠졌다(예: CPU 사용률은 ' +
+      '있고 주파수가 없다) — 이때 data 는 non-null 이다. (b) **값이 아예 나오지 않았다** — ' +
+      '이때 `data` 는 **null** 이다. 둘 다 reason_code 가 어느 쪽인지 말한다. ' +
+      'data 가 null 인 partial 은 render_process_not_found, no_frames, no_cpu_samples, ' +
+      'insufficient_samples, process_not_in_trace, no_rss_samples, no_log_entries, ' +
+      'launch_time_unreported, launch_wait_timed_out 등에서 나온다.\n' +
+      '- unsupported: 이 기기가 이 메트릭을 낼 수 없다 (sdk 하한 미달, 데이터소스 미등록). ' +
+      'data 는 null 이다.\n' +
+      '- failed: 예외 상황 전용이다 — 트레이스 원본이 없거나(trace_missing) ' +
+      'trace_processor 쿼리가 예외로 터진 경우(query_failed). data 는 null 이다.\n' +
+      '- skipped: 수집을 시도조차 하지 않았다 (`--launch` 없이 시작한 세션의 startup). ' +
+      'data 는 null 이다.\n' +
+      '**`failed` 만 걸러서는 수집 실패를 잡지 못한다.** 값이 있어야 하는 소비자는 ' +
+      "`status === 'collected'` 이거나 `data !== null` 인지를 보라.",
+  )
 export type MetricStatus = z.infer<typeof MetricStatusSchema>
 
 /**
@@ -154,8 +179,26 @@ export const MemoryDataSchema = z.object({
   rss: MemoryStatSchema,
   rss_anon: MemoryStatSchema.nullable(),
   rss_file: MemoryStatSchema.nullable(),
-  /** `mem.rss.watermark` (= /proc/pid/status 의 VmHWM). 커널이 기억하는 최고점이다. */
-  rss_watermark_peak_kb: z.number().int().nullable(),
+  /**
+   * `mem.rss.watermark` (= /proc/pid/status 의 VmHWM). 커널이 기억하는 최고점이다.
+   * 이 필드만 세션 구간의 값이 아니라서, 그 사실이 반드시 `.describe()` 에 있어야 한다 —
+   * 바로 위 `rss` 는 세션 통계이고 둘이 나란히 놓이면 같은 구간으로 읽힌다.
+   */
+  rss_watermark_peak_kb: z
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      '커널이 기억하는 이 프로세스의 최고 RSS(kB). `/proc/<pid>/status` 의 VmHWM 이다.\n' +
+        '**이 값만 세션 구간의 값이 아니다 — 프로세스가 시작된 뒤 지금까지의 최고점이다.** ' +
+        '옆의 rss.max_kb 는 이 세션에서 1초 주기로 관측한 최댓값이고, 이 값은 그 이전에 찍힌 ' +
+        '최고점일 수 있다. 특히 `--launch` 없이 이미 떠 있던 앱을 잰 세션에서는 몇 시간 전, ' +
+        '혹은 이전 세션의 최고점이 그대로 실린다 (실측: 연속 세션 두 개가 rss.max_kb 는 ' +
+        '399,056 / 393,668 으로 달랐는데 이 값은 둘 다 399,592 였다). ' +
+        '"폴링이 놓친 이번 세션의 진짜 피크" 로 읽으면 안 된다. ' +
+        '이번 세션 구간의 피크를 원하면 rss.max_kb 를 쓰라. ' +
+        'null 은 트레이스에 mem.rss.watermark 카운터가 없었다는 뜻이다.',
+    ),
   /** 기기 전체 메모리. linux.sys_stats 의 meminfo 가 없으면 null. */
   system: SystemMemorySchema.nullable(),
 })
@@ -186,17 +229,21 @@ export const LogDataSchema = z.object({
   min_prio: z
     .string()
     .describe(
-      '이 세션이 logd 에서 받은 최소 우선순위(문턱). 아래 개수는 전부 이 문턱 이상만 센 값이라 ' +
-        '문턱 없이는 읽을 수 없다 — "W 118건" 은 무엇을 걸렀는지 모르면 의미가 없는 숫자다.',
+      '이 세션이 android.log 데이터소스에 **요청한** 최소 우선순위(문턱). ' +
+        'logd 가 이 문턱으로 걸러 보내므로 아래 개수는 사실상 이 문턱 이상의 줄들이지만, ' +
+        '이 도구는 트레이스를 받은 뒤 우선순위로 다시 거르지 않는다 — 개수의 정의는 ' +
+        '"트레이스에 있는 것을 센다" 이지 "문턱 이상만 센다" 가 아니다. ' +
+        '그래도 문턱 없이는 개수를 읽을 수 없다: "W 118건" 은 무엇이 걸러진 뒤의 숫자인지 ' +
+        '모르면 의미가 없다.',
     ),
   total: z
     .number()
     .int()
     .nonnegative()
     .describe(
-      `트레이스에 담긴 로그 줄 수. ${LOG_SCOPE}` +
-        'min_prio 문턱 이상만 세며, 트레이스 버퍼가 넘쳤다면 그만큼 적다' +
-        '(measurement_overhead.trace_buffer_overrun 참고).',
+      `트레이스에 담긴 로그 줄 **전부**의 수. ${LOG_SCOPE}` +
+        '우선순위로 거르지 않고 트레이스에 있는 줄을 그대로 센다(min_prio 설명 참고). ' +
+        '트레이스 버퍼가 넘쳤다면 그만큼 적다(measurement_overhead.trace_buffer_overrun 참고).',
     ),
   by_priority: z
     .object({
@@ -205,8 +252,9 @@ export const LogDataSchema = z.object({
       fatal: z.number().int().nonnegative(),
     })
     .describe(
-      `우선순위별 로그 줄 수. ${LOG_SCOPE}` +
-        'total 과 합이 다를 수 있다 — total 은 문턱보다 낮은 우선순위가 섞여 와도 전부 센다.',
+      `W/E/F 세 우선순위의 로그 줄 수. ${LOG_SCOPE}` +
+        '세 값의 합은 total 과 다를 수 있다 — total 은 이 셋 밖의 우선순위(문턱보다 낮은 줄이 ' +
+        '섞여 온 경우)까지 세기 때문이다. 반대 방향의 누락은 없다.',
     ),
   crashes: z
     .array(LogEventSchema)
@@ -313,6 +361,10 @@ export const MeasurementOverheadSchema = z.object({
         '"측정 못 함"이 아니라 "10ms 미만"이라는 뜻이다. ' +
         'perfetto CLI 프로세스도 세는 대상에 들어 있지만, 실측한 트레이스에서는 --detach 직후 ' +
         '종료해 process_stats 스캔에 잡히지 않았다 — 보장이 아니라 관측이며, 잡히면 합계에 들어간다. ' +
+        '**이 값은 트레이싱의 총비용이 아니라 체계적인 하한이다.** 필드명대로 트레이싱 ' +
+        '"프로세스들" 이 쓴 시간만 담는다 — 커널이 ftrace 이벤트를 링버퍼에 기록하는 비용은 ' +
+        '인터럽트당한 프로세스(= 대상 앱일 수 있다)에 청구되므로 여기 들어오지 않는다. ' +
+        '켜는 ftrace 이벤트를 줄이면 그 몫도 줄지만 0 이 되지는 않는다. ' +
         'null 은 트레이스에 해당 카운터가 없었다는 뜻이다(record_process_runtime 이 꺼진 옛 캡처).',
     ),
   tracing_processes_cpu_share_pct: z

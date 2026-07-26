@@ -158,7 +158,7 @@ npx perftracker schema > result.schema.json
 | `device` | 기기 스펙(`static`)과 세션 전후 상태(`state_before` / `state_after`) |
 | `target_app` | 패키지, 라벨, 버전, 렌더 프로세스와 pid |
 | `metrics` | 메트릭들. 키가 곧 수집기 id (`frame` / `startup` / `cpu` / `memory` / `log`) |
-| `measurement_overhead` | 이 측정이 기기에 얼마나 개입했는지 |
+| `measurement_overhead` | 이 측정이 기기에 개입한 정도의 **하한** (아래 참고) |
 | `references` | 구글 공개 기준치. **비교에 쓰이지 않고 기록만 된다** |
 | `warnings` | 관측된 사건 (평가 아님) |
 | `artifacts` | 원본 파일들의 상대 경로 |
@@ -177,12 +177,28 @@ npx perftracker schema > result.schema.json
 }
 ```
 
-- `status` — `collected`(정상) / `partial`(일부만) / `unsupported`(이 기기가 못 함) /
-  `failed`(수집 실패) / `skipped`(요청되지 않음)
+- `status` — 다섯 값입니다.
+  - `collected` — 값이 전부 나왔습니다. `data` 는 non-null.
+  - `partial` — **두 가지를 겸합니다.** 값은 나왔는데 일부가 빠졌거나(예: CPU 사용률은
+    있고 주파수가 없음 → `data` non-null), **값이 아예 안 나왔거나**(→ `data` **null**).
+    어느 쪽인지는 `reason_code` 가 말합니다.
+  - `unsupported` — 이 기기가 못 냅니다 (sdk 하한 미달, 데이터소스 미등록). `data` null.
+  - `failed` — **예외 상황 전용**입니다. 트레이스 원본이 없거나(`trace_missing`)
+    쿼리가 예외로 터진 경우(`query_failed`)뿐입니다. `data` null.
+  - `skipped` — 시도조차 하지 않음 (`--launch` 없이 시작한 세션의 startup). `data` null.
+
+  > **`status === 'failed'` 만 걸러서는 수집 실패를 못 잡습니다.** 값이 없는 대부분의
+  > 경로는 `partial` + `data: null` 입니다. 값이 있어야 하는 CI 는
+  > `status === 'collected'` 또는 `data !== null` 로 판정하세요.
 - `source` — 이 숫자를 **어떤 방법으로 쟀는지**의 기록
 - `reason_code` — 기계가 읽는 안정적인 키. 문구가 바뀌어도 이건 안 바뀝니다.
   CI 매칭은 반드시 이걸로 하세요. (예: `sdk_too_low`, `render_process_not_found`,
   `no_frames`, `trace_missing`, `data_source_not_registered`, `query_failed`)
+
+  > `reason_code` 는 **닫힌 enum** 이고 `1.1.0` 에서 6개 → 21개로 넓어졌습니다. 그중
+  > `process_name_stale_in_trace` 는 `1.0.0` 부터 있던 `metrics.frame` 에도 실립니다.
+  > `1.0.0` 스키마를 고정해 검증하는 CI 는 정상적인 `1.1.0` 산출물을 거부하니,
+  > 스키마를 다시 꺼내(`perftracker schema`) 갱신하세요.
 - `reason` — 사람이 읽는 한국어 문장. 다듬힐 수 있으니 매칭에 쓰지 마세요.
 - `data` — 메트릭별 본문. 수집되지 않았으면 `null`
 
@@ -236,7 +252,13 @@ npx perftracker schema > result.schema.json
     물어봐야 하고, 그게 곧 이 도구가 금지하는 행위이기 때문입니다.
 - `trace_buffer_overrun` — 트레이스 버퍼가 넘쳐 데이터가 잘렸는지. 잘린 데이터를
   정상인 척 내보내지 않기 위해 사실로 기록합니다.
-- `tracing_processes_*` 는 M2 에서 채워집니다.
+- `tracing_processes_*` — 트레이싱 **프로세스들**(`traced` / `traced_probes` / `perfetto`)이
+  쓴 CPU 시간과 RSS 입니다. M2 에서 채워집니다.
+
+  > **이건 트레이싱의 총비용이 아니라 체계적인 하한입니다.** 커널이 ftrace 이벤트를
+  > 링버퍼에 기록하는 비용은 그 순간 인터럽트당한 프로세스(대상 앱일 수 있습니다)에
+  > 청구되므로 이 숫자에 들어오지 않습니다. 켜는 ftrace 이벤트를 줄이면 그 몫도 줄지만
+  > 0 이 되지는 않습니다. `stop` 요약의 `Overhead tracing procs ...% CPU` 도 같은 하한입니다.
 
 ### `references`
 

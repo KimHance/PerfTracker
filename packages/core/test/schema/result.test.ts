@@ -253,6 +253,67 @@ describe('resultJsonSchema', () => {
     }
   })
 
+  it('log 의 total 과 by_priority 가 서로 반대되는 말을 하지 않는다', () => {
+    // 출판되는 스키마 안에서 두 문장이 충돌했다: total 은 "문턱 이상만 센다" 고 하고
+    // by_priority 는 "total 은 문턱보다 낮은 것도 전부 센다" 고 했다. 코드는 후자다.
+    const total = (logProps()['total'] as { description: string }).description
+    const byPriority = (logProps()['by_priority'] as { description: string }).description
+
+    expect(total).not.toMatch(/문턱 이상만/)
+    expect(total).toContain('전부')
+    expect(byPriority).toContain('total')
+  })
+
+  /**
+   * I3. `partial` 은 "값 있는데 일부" 와 "값 아예 없음" 을 겸한다. 그 사실이 소스 주석에만
+   * 있어서, `status === 'failed'` 로 문제를 거르는 CI 는 값이 통째로 없는 메트릭을 전부
+   * 통과시켰다 (실측: 에뮬 6회 중 log 는 전부 partial+null).
+   */
+  it('status 네 값의 뜻을 스키마에 싣는다 — partial 이 data null 을 겸한다는 것까지', () => {
+    const status = (props(props(props(resultJsonSchema())['metrics'])['frame'])['status'] as {
+      description?: string
+    }).description
+
+    expect(status).toBeDefined()
+    for (const value of ['collected', 'partial', 'unsupported', 'failed', 'skipped']) {
+      expect(status, `${value} 설명 없음`).toContain(value)
+    }
+    // partial 이 data null 일 수 있다.
+    expect(status).toMatch(/값이 아예 나오지 않았다/)
+    // failed 만 걸러서는 수집 실패를 못 잡는다.
+    expect(status).toMatch(/failed. 만 걸러서는/)
+  })
+
+  /**
+   * I2. 이 필드만 세션 구간의 값이 아닌데 세션 통계(rss) 바로 옆에 무표시로 놓여 있었다.
+   */
+  it('rss_watermark_peak_kb 가 세션 값이 아니라는 사실을 스키마에서 말한다', () => {
+    const data = props(props(props(resultJsonSchema())['metrics'])['memory'])['data'] as {
+      anyOf?: Record<string, any>[]
+    }
+    const object = data.anyOf?.find((b) => b['type'] === 'object') ?? data
+    const d = (props(object)['rss_watermark_peak_kb'] as { description?: string }).description
+
+    expect(d).toBeDefined()
+    expect(d).toContain('VmHWM')
+    expect(d).toMatch(/세션 구간의 값이 아니다/)
+    expect(d).toContain('--launch')
+    expect(d).toContain('rss.max_kb')
+  })
+
+  /**
+   * M6. 커널이 ftrace 이벤트를 기록하는 비용은 인터럽트당한 프로세스에 청구되므로 이 숫자에
+   * 들어오지 않는다. 필드명이 범위를 한정하지만, 요약과 README 는 이것을 총비용으로 읽는다.
+   */
+  it('overhead CPU 시간이 총비용이 아니라 하한임을 스키마에서 말한다', () => {
+    const overhead = props(resultJsonSchema())['measurement_overhead']
+    const d = (props(overhead)['tracing_processes_cpu_time_ms'] as { description?: string })
+      .description!
+
+    expect(d).toContain('하한')
+    expect(d).toContain('ftrace')
+  })
+
   it('JSON 으로 직렬화된다 (perftracker schema 가 그대로 출력한다)', () => {
     expect(() => JSON.parse(JSON.stringify(resultJsonSchema()))).not.toThrow()
   })
