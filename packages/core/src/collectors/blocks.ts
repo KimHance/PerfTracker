@@ -35,7 +35,10 @@ export const FRAMETIMELINE_BLOCK =
  *
  * `scan_all_processes_on_start: true` 는 세션 시작 시점의 전체 스냅샷을 남긴다. 폴링은
  * 매 주기마다 /proc 전체를 훑으므로(실측: 실기기 트레이스에 953개 프로세스) 대상 앱을
- * 따로 지정할 필요가 없다.
+ * 따로 지정할 필요가 없다 — 단 이것은 **카운터** 갱신에 대한 이야기다.
+ * **프로세스 이름은 최초 관측 때 한 번만 확정되고 다시 읽히지 않는다.** zygote 가 fork 한
+ * 앱은 `Process.setArgV0()` 이전에 관측되면 트레이스에 `zygote64` 로 남는다 (실측 확인).
+ * 그래서 `collectors/appProcess.ts` 가 캡처 때 받아 둔 pid 를 두 번째 근거로 쓴다.
  */
 export const PROCESS_STATS_BLOCK =
   'data_sources { config { name: "linux.process_stats" ' +
