@@ -6,12 +6,13 @@ import { logCollector } from './log.js'
 import { memoryCollector } from './memory.js'
 import { mergeSnapshotSpecs, type SnapshotSpec } from './snapshots.js'
 import { startupCollector } from './startup.js'
+import { thermalCollector } from './thermal.js'
 import type { Collector, CollectorEnv } from './types.js'
 
 /**
  * 활성 collector 목록. **이 배열이 실제로 소비된다** — `startSession` 이 여기서 TraceConfig
  * 블록을 모으고 `extractRun` 이 여기를 순회해 `metrics` 를 채운다.
- * M3 에서 network/thermal/power 가 여기 한 줄로 붙는다.
+ * 나중에 power 가 여기 한 줄로 붙는다.
  */
 export const COLLECTORS: Collector<unknown>[] = [
   frameCollector,
@@ -19,6 +20,7 @@ export const COLLECTORS: Collector<unknown>[] = [
   cpuCollector,
   memoryCollector,
   logCollector,
+  thermalCollector,
 ]
 
 /** 이 기기에서 실제로 뭔가를 낼 수 있는 collector 들. */

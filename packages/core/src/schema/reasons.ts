@@ -86,6 +86,31 @@ export const METRIC_REASON_CODES = [
    * detail: limit
    */
   'log_events_truncated',
+  /**
+   * 필요한 `raw/<key>_{before,after}.txt` 가 run 디렉토리에 없거나 비어 있다.
+   * **스냅샷 기능이 없던 시절의 옛 run 을 재산출하면 반드시 지나가는 길이다.**
+   * `tryShell` 이 명령 실패를 빈 문자열로 흡수하므로 "없다" 와 "비었다" 를 한 코드로 묶는다.
+   * detail: key, phase('before' | 'after')
+   */
+  'snapshot_unavailable',
+  /**
+   * 원문은 있는데 기대한 절이나 표 머리를 찾지 못했다 (벤더 dumpsys 포맷 차이, 안드로이드
+   * 버전 차이). **형식을 추측해서 파싱하지 않는다** — 그러면 뒤바뀐 숫자가 사실 자리에 앉는다.
+   * detail: key, section, (있으면) header
+   */
+  'snapshot_unparsable',
+  /** dumpsys thermalservice 출력에 온도 항목이 하나도 없다. */
+  'no_thermal_zones',
+  /**
+   * 온도가 없는 이유가 "센서가 없다" 가 아니라 "HAL 이 안 붙었다" 이다 (`HAL Ready: false`).
+   * 두 가지를 한 코드로 묶으면 사용자가 기기 문제인지 도구 문제인지 구분할 수 없다.
+   */
+  'thermal_hal_not_ready',
+  /**
+   * before/after 의 존 집합이 달라 일부 존의 델타를 낼 수 없다. 낼 수 있는 것은 내고
+   * 못 내는 자리는 null 로 둔다. detail: only_before, only_after
+   */
+  'thermal_zones_changed',
 ] as const
 
 export type MetricReasonCode = (typeof METRIC_REASON_CODES)[number]
@@ -172,6 +197,26 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
   log_events_truncated: (d) =>
     `크래시/ANR 목록이 상한 ${String(d['limit'])}건에서 잘렸습니다 — ` +
     `그 뒤에 더 있었는지는 이 결과로 알 수 없습니다. 우선순위별 개수는 잘리지 않았습니다.`,
+  snapshot_unavailable: (d) =>
+    `세션 ${d['phase'] === 'after' ? '종료' : '시작'} 시점의 ${String(d['key'])} 스냅샷이 ` +
+    `이 run 에 없습니다 — 이 도구가 그 명령을 찍기 전에 만들어진 run 이거나, ` +
+    `명령이 이 기기에서 실패했거나, 아직 stop 하지 않은 세션입니다.`,
+  snapshot_unparsable: (d) =>
+    `${String(d['key'])} 원문에서 "${String(d['section'])}" 을 기대한 형식으로 읽지 못했습니다` +
+    `${d['header'] != null ? ` (읽은 줄: ${JSON.stringify(d['header'])})` : ''} — ` +
+    `형식을 추측해서 값을 만들지 않았습니다. 원본은 run 디렉토리의 raw/ 에 그대로 있습니다.`,
+  no_thermal_zones: () => 'dumpsys thermalservice 출력에 온도 항목이 하나도 없습니다.',
+  thermal_hal_not_ready: () =>
+    'Thermal HAL 이 준비되지 않았다고 기기가 보고했습니다 (HAL Ready: false) — ' +
+    '센서가 없는 것이 아니라 HAL 이 붙지 않은 상태입니다.',
+  thermal_zones_changed: (d) => {
+    const only = (v: unknown): string => (Array.isArray(v) && v.length > 0 ? v.join(', ') : '없음')
+    return (
+      `세션 전후로 관측된 센서 집합이 달라 일부 존의 변화량을 내지 못했습니다 ` +
+      `(시작에만 있던 센서: ${only(d['only_before'])} / 종료에만 있던 센서: ${only(d['only_after'])}). ` +
+      `낼 수 있는 존은 그대로 냈고, 못 낸 자리는 null 입니다.`
+    )
+  },
 }
 
 /** 코드 → 한국어 문장. 모르는 코드는 조용히 비우지 않고 코드 자체를 남긴다. */

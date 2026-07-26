@@ -286,6 +286,118 @@ export const LogDataSchema = z.object({
 })
 export type LogData = z.infer<typeof LogDataSchema>
 
+/**
+ * 이 메트릭의 모든 숫자는 **기기 전역**이다. 그 사실이 `.describe()` 에 없으면
+ * `perftracker schema` 만 읽는 CI 와 LLM 에게는 "이 앱이 기기를 얼마나 데웠는가" 로 보인다.
+ * `z.toJSONSchema` 는 런타임이라 이 주석을 보지 못한다.
+ */
+const THERMAL_SCOPE =
+  '**이 값은 기기 전역이며 대상 앱의 온도가 아니다** — 같은 시간에 돈 다른 앱, 화면 밝기, ' +
+  'USB 충전(이 도구는 adb 로 붙으므로 거의 항상 충전 중이다)이 전부 섞인다. '
+
+export const ThermalZoneReadingSchema = z.object({
+  name: z
+    .string()
+    .describe(
+      '센서 이름. **벤더가 정하는 임의 문자열이다** — 이 값으로 CPU/피부 온도를 판별하지 말 것. ' +
+        '판별은 type 으로 한다.',
+    ),
+  type: z
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      '`android.hardware.thermal` 의 TemperatureType 표준 enum: 0=CPU, 1=GPU, 2=BATTERY, ' +
+        '3=SKIN, 4=USB_PORT, 5=POWER_AMPLIFIER, 6=BCL_VOLTAGE, 7=BCL_CURRENT, ' +
+        '8=BCL_PERCENTAGE, 9=NPU. 기기가 안 주면 null.',
+    ),
+  before_c: z
+    .number()
+    .nullable()
+    .describe('세션 시작 스냅샷의 온도(°C). **null 은 그 센서가 시작 시점에 없었다는 뜻이다.**'),
+  after_c: z
+    .number()
+    .nullable()
+    .describe(
+      '세션 종료 스냅샷의 온도(°C). **null 은 두 가지다** — 그 센서가 종료 시점에 없었거나, ' +
+        '종료 스냅샷 자체가 없다(아직 stop 하지 않은 세션). 어느 쪽인지는 reason_code 가 말한다. ' +
+        '0 과 혼동하면 안 된다: 이 기기들은 실제로 0.0°C 를 보고하는 센서를 갖고 있다.',
+    ),
+  delta_c: z
+    .number()
+    .nullable()
+    .describe(
+      'after_c − before_c. **부호 있는 값이고, 음수가 정상이다** — 실기기 4세션 중 2세션에서 ' +
+        'AP 온도가 내려갔다(32.1→30.8, 32.1→31.9). 이 값을 "상승량" 이나 "발열" 로 읽으면 안 된다. ' +
+        '어느 한쪽이 null 이면 null 이다.',
+    ),
+  status_before: z
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      '시작 시점 이 센서의 throttling 단계(`mStatus`, THERMAL_STATUS_*: 0=NONE … 6=SHUTDOWN).',
+    ),
+  status_after: z.number().int().nullable().describe('종료 시점 이 센서의 throttling 단계.'),
+  source: z
+    .enum(['hal', 'cached'])
+    .describe(
+      '이 값이 dumpsys 의 어느 절에서 왔는지. `hal` = `Current temperatures from HAL`(덤프 시점에 ' +
+        'HAL 에 직접 물은 값, 우선한다), `cached` = `Cached temperatures`(프레임워크가 콜백으로 ' +
+        '들고 있던 값). HAL 이 이번에 안 준 센서가 cached 에만 남아 있는 경우가 실기기에서 관측된다.',
+    ),
+})
+export type ThermalZoneReading = z.infer<typeof ThermalZoneReadingSchema>
+
+export const ThermalDataSchema = z.object({
+  zones: z
+    .array(ThermalZoneReadingSchema)
+    .describe(
+      `세션 전/후 스냅샷에서 관측된 센서들. ${THERMAL_SCOPE}` +
+        '존 하나당 정확히 한 항목이다(전에는 같은 존이 두 절에서 두 번 실렸다). ' +
+        '순서는 기기가 보고한 순서이며 변화량 크기로 정렬하지 않는다 — 어느 센서가 중요한지는 ' +
+        '이 도구가 말하지 않는다. ' +
+        '**전/후 두 점이므로 구간 중 최고 온도는 이 결과에 없다** — 원리적으로 알 수 없다. ' +
+        '값이 정확히 0.0 인 존이 실기기에서 관측된다(SUBBAT / SUBBATRAW). ' +
+        '"실제 0°C" 인지 "이 기기에 그 센서가 없다" 인지 이 도구는 판별하지 않는다.',
+    ),
+  device_status_before: z
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      '시작 시점 기기 전체의 throttling 단계 (`dumpsys thermalservice` 의 `Thermal Status:`). ' +
+        'THERMAL_STATUS_*: 0=NONE, 1=LIGHT, 2=MODERATE, 3=SEVERE, 4=CRITICAL, 5=EMERGENCY, 6=SHUTDOWN.',
+    ),
+  device_status_after: z
+    .number()
+    .int()
+    .nullable()
+    .describe('종료 시점 기기 전체의 throttling 단계.'),
+  status_override_before: z
+    .boolean()
+    .nullable()
+    .describe(
+      '시작 시점의 `IsStatusOverride`. true 면 기기의 throttling 단계가 실제 온도가 아니라 ' +
+        '강제 설정된 값이라는 뜻이다 — 그때 device_status_* 는 관측이 아니다.',
+    ),
+  status_override_after: z.boolean().nullable().describe('종료 시점의 `IsStatusOverride`.'),
+  hal_ready_before: z.boolean().nullable().describe('시작 시점의 `HAL Ready`.'),
+  hal_ready_after: z.boolean().nullable().describe('종료 시점의 `HAL Ready`.'),
+  headroom_thresholds: z
+    .array(z.number().nullable())
+    .nullable()
+    .describe(
+      '기기가 보고한 thermal headroom 임계 배열(`Temperature headroom thresholds:`). ' +
+        '인덱스가 THERMAL_STATUS_* 0..6 이고, 원문의 `NaN` 은 **null** 로 실린다(JSON 에 NaN 이 없다). ' +
+        '**이 도구는 headroom 을 산출하지 않는다** — headroom 은 앱 프로세스 안에서 ' +
+        '`PowerManager.getThermalHeadroom()` 으로만 얻을 수 있고 이 도구는 앱에 코드를 넣지 않는다. ' +
+        '그래서 이 배열은 위의 섭씨 온도와 **직접 비교할 수 없다**. 기기가 스스로 보고한 사실로만 싣는다. ' +
+        'null 은 이 기기가 그 절을 안 찍었다는 뜻이다.',
+    ),
+})
+export type ThermalData = z.infer<typeof ThermalDataSchema>
+
 export const CpuClusterSchema = z.object({
   cpus: z.array(z.number().int()),
   max_freq_khz: z.number().int().nullable(),
@@ -555,6 +667,7 @@ export const ResultSchema = z.object({
       cpu: metricResultSchema(CpuDataSchema).optional(),
       memory: metricResultSchema(MemoryDataSchema).optional(),
       log: metricResultSchema(LogDataSchema).optional(),
+      thermal: metricResultSchema(ThermalDataSchema).optional(),
     })
     .catchall(metricResultSchema(z.unknown())),
   measurement_overhead: MeasurementOverheadSchema,

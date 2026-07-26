@@ -7,6 +7,7 @@ import {
   unsupportedReasons,
 } from '../../src/collectors/registry.js'
 import { startupCollector } from '../../src/collectors/startup.js'
+import { thermalCollector } from '../../src/collectors/thermal.js'
 import { buildTraceConfig } from '../../src/perfetto/config.js'
 
 const OK = {
@@ -30,6 +31,10 @@ describe('COLLECTORS 레지스트리', () => {
   it('frame 과 startup 이 등록되어 있다', () => {
     expect(COLLECTORS).toContain(frameCollector)
     expect(COLLECTORS).toContain(startupCollector)
+  })
+
+  it('thermal 이 등록되어 있다 — 배열에 없으면 extract 가 아예 부르지 않는다', () => {
+    expect(COLLECTORS).toContain(thermalCollector)
   })
 })
 
@@ -60,13 +65,47 @@ describe('collectTraceConfigBlocks', () => {
     expect(config.split('name: "linux.process_stats"').length - 1).toBe(1)
     expect(config.split('name: "linux.sys_stats"').length - 1).toBe(1)
   })
+
+  /**
+   * D9. M3 는 데이터소스도 ftrace 이벤트도 늘리지 않는다. 이 단언이 깨진다는 것은
+   * 누가 새 데이터소스를 켰다는 뜻이고, 그때 "그것을 읽는 collector 가 어디 있나" 라는
+   * 질문이 반드시 따라와야 한다. 개수가 아니라 **이름 집합**으로 고정하는 이유는,
+   * 개수만 세면 하나가 늘고 하나가 사라진 경우를 못 잡기 때문이다.
+   */
+  it('M3 collector 들이 TraceConfig 를 한 블록도 늘리지 않는다', () => {
+    const names = collectTraceConfigBlocks(OK).map((b) => /name:\s*"([^"]+)"/.exec(b)?.[1])
+    expect(new Set(names)).toEqual(
+      new Set([
+        'android.surfaceflinger.frametimeline',
+        'linux.process_stats',
+        'linux.sys_stats',
+        'linux.ftrace',
+        'android.log',
+      ]),
+    )
+    expect(() =>
+      buildTraceConfig({ dataSourceBlocks: collectTraceConfigBlocks(OK) }),
+    ).not.toThrow()
+  })
 })
 
 describe('supportedCollectors / unsupportedReasons', () => {
   it('지원 여부로 거른다', () => {
     expect(supportedCollectors(OK)).toHaveLength(COLLECTORS.length)
     // startup 은 어디서나 지원된다 — 구형 기기에서도 목록이 비지 않는다.
-    expect(supportedCollectors(OLD)).toEqual([startupCollector])
+    // thermal 은 sdk 29 하한이라 sdk 30 인 이 기기에서도 지원된다.
+    expect(supportedCollectors(OLD)).toEqual([startupCollector, thermalCollector])
+  })
+
+  it('sdk 28 기기에서는 thermal 이 미지원이고 사유가 Android 10 을 말한다', () => {
+    const reasons = unsupportedReasons({ sdkInt: 28, dataSources: [] })
+    expect(reasons.find((r) => r.startsWith('thermal:'))).toContain('Android 10')
+  })
+
+  it('sdk 29 기기에서 thermal 은 지원된다 — frame(31)이 안 되는 기기에서도', () => {
+    const ids = supportedCollectors({ sdkInt: 29, dataSources: [] }).map((c) => c.id)
+    expect(ids).toContain('thermal')
+    expect(ids).not.toContain('frame')
   })
 
   it('미지원 항목만 사유와 함께 한국어로 낸다', () => {
