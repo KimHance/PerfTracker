@@ -63,16 +63,24 @@ export const SYS_STATS_BLOCK =
   'meminfo_counters: MEMINFO_SWAP_TOTAL meminfo_counters: MEMINFO_SWAP_FREE } } }'
 
 /**
- * 규칙 2 가 채택한 저볼륨 이벤트만. `power/cpu_frequency` 는 주파수가 실제로 바뀔 때만 뜨므로
- * 초당 수만 건이 쏟아지는 sched 계열과 근본적으로 다르다.
+ * cpu collector 가 **실제로 읽는** ftrace 이벤트 하나뿐이다.
+ * `power/cpu_frequency` 는 주파수가 실제로 바뀔 때만 뜨고, `cpu.ts` 의 `CPU_FREQ_SQL` 이
+ * 그것을 `cpufreq` 카운터 트랙으로 읽는다.
+ *
+ * 여기 `power/cpu_idle` 과 `power/suspend_resume` 이 함께 있었다. 둘을 읽는 코드는 저장소에
+ * 하나도 없었는데, 4코어 에뮬레이터 33초 세션에서 `cpu_idle` 만 **47,752건**(초당 약 1,450건)
+ * 으로 ftrace 이벤트 50,654건의 **94%** 였다. `suspend_resume` 은 0건이었다 — adb 가 붙어
+ * 있는 기기는 서스펜드하지 않으므로 애초에 아무것도 주지 않는 이벤트였다.
+ * 읽지 않는 이벤트는 트레이스만 키우는 것이 아니라 커널이 매 이벤트마다 링버퍼에 쓰는 비용을
+ * 대상 앱이 돌던 코어에 청구한다 — 원칙 1 위반이다.
+ * 필요해지면 **그것을 읽는 collector 와 같은 커밋에** `ALLOWED_FTRACE_EVENTS` 와 함께 넣는다.
  *
  * `drain_period_ms` 를 일부러 지정하지 않는다 — 그 키는 `assertLowOverheadConfig` 의
- * 화이트리스트 밖이라 어떤 값을 넣어도 검사를 통과해 버린다. perfetto 기본값을 쓴다.
+ * 주기 화이트리스트 밖이라 어떤 값을 넣어도 검사를 통과해 버린다. perfetto 기본값을 쓴다.
  */
 export const FTRACE_POWER_BLOCK =
   'data_sources { config { name: "linux.ftrace" ftrace_config { ' +
-  'ftrace_events: "power/cpu_frequency" ftrace_events: "power/cpu_idle" ' +
-  'ftrace_events: "power/suspend_resume" } } }'
+  'ftrace_events: "power/cpu_frequency" } } }'
 
 /**
  * WARN 이상만 받는다. 자바 크래시(`FATAL EXCEPTION`), 네이티브 크래시(`Fatal signal`), ANR

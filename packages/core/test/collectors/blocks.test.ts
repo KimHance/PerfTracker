@@ -8,7 +8,7 @@ import {
   PROCESS_STATS_BLOCK,
   SYS_STATS_BLOCK,
 } from '../../src/collectors/blocks.js'
-import { buildTraceConfig, FORBIDDEN_FTRACE_EVENTS, mergeTraceConfigBlocks } from '../../src/perfetto/config.js'
+import { ALLOWED_FTRACE_EVENTS, buildTraceConfig, mergeTraceConfigBlocks } from '../../src/perfetto/config.js'
 
 const ALL = [
   FRAMETIMELINE_BLOCK,
@@ -39,10 +39,22 @@ describe('데이터소스 블록', () => {
     expect(mergeTraceConfigBlocks([...ALL, ...ALL])).toEqual(ALL)
   })
 
-  it('금지된 고빈도 ftrace 이벤트를 하나도 켜지 않는다', () => {
-    for (const event of FORBIDDEN_FTRACE_EVENTS) {
-      expect(FTRACE_POWER_BLOCK).not.toContain(event)
+  /**
+   * "고빈도만 안 켜면 된다" 가 아니다. 켜는 이벤트마다 그것을 읽는 코드가 있어야 한다 —
+   * `power/cpu_idle` 은 저빈도도 아니었고(에뮬레이터에서 초당 1,400건, ftrace 의 94%)
+   * 읽는 코드도 없었다.
+   */
+  it('허용 목록 밖의 ftrace 이벤트를 하나도 켜지 않는다', () => {
+    const events = [...FTRACE_POWER_BLOCK.matchAll(/ftrace_events:\s*"([^"]+)"/g)].map((m) => m[1]!)
+    expect(events.length).toBeGreaterThan(0)
+    for (const event of events) {
+      expect(ALLOWED_FTRACE_EVENTS, event).toContain(event)
     }
+  })
+
+  it('아무도 읽지 않는 전력 이벤트를 켜지 않는다 — cpu.ts 는 cpufreq 만 읽는다', () => {
+    expect(FTRACE_POWER_BLOCK).not.toContain('cpu_idle')
+    expect(FTRACE_POWER_BLOCK).not.toContain('suspend_resume')
   })
 
   it('process_stats 가 record_process_runtime 을 켠다 — 없으면 overhead CPU 가 영원히 null 이다', () => {
@@ -102,8 +114,7 @@ describe('데이터소스 블록 — 전체 텍스트 고정', () => {
   it('FTRACE_POWER_BLOCK', () => {
     expect(FTRACE_POWER_BLOCK).toBe(
       'data_sources { config { name: "linux.ftrace" ftrace_config { ' +
-        'ftrace_events: "power/cpu_frequency" ftrace_events: "power/cpu_idle" ' +
-        'ftrace_events: "power/suspend_resume" } } }',
+        'ftrace_events: "power/cpu_frequency" } } }',
     )
   })
 
