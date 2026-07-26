@@ -154,6 +154,11 @@ npx perftracker schema > result.schema.json
 
 `schema_version` 이 그 계약의 버전입니다 (현재 `1.1.0`).
 
+> **다만 이 버전 하나로 "내 스키마가 최신인지" 를 판단할 수는 없습니다.** `1.1.0` 은 아직
+> 출시된 적이 없어서, 그 안에서 계약이 넓어질 때 이 도구는 버전을 올리지 않았습니다.
+> 스키마를 캐시해 두고 쓰신다면 아래 [스키마를 다시 꺼내야 하는 때](#스키마를-다시-꺼내야-하는-때)
+> 를 반드시 읽으세요.
+
 ### 최상위 구조
 
 | 필드 | 무엇인가 |
@@ -207,12 +212,39 @@ npx perftracker schema > result.schema.json
   CI 매칭은 반드시 이걸로 하세요. (예: `sdk_too_low`, `render_process_not_found`,
   `no_frames`, `trace_missing`, `data_source_not_registered`, `query_failed`)
 
-  > `reason_code` 는 **닫힌 enum** 이고 `1.1.0` 에서 6개 → 21개로 넓어졌습니다. 그중
-  > `process_name_stale_in_trace` 는 `1.0.0` 부터 있던 `metrics.frame` 에도 실립니다.
-  > `1.0.0` 스키마를 고정해 검증하는 CI 는 정상적인 `1.1.0` 산출물을 거부하니,
-  > 스키마를 다시 꺼내(`perftracker schema`) 갱신하세요.
+  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **30개**입니다
+  > (`1.0.0` 은 6개였습니다). 그중 `process_name_stale_in_trace` 는 `1.0.0` 부터 있던
+  > `metrics.frame` 에도 실립니다. 이 숫자는 테스트가 `METRIC_REASON_CODES` 와 대조해
+  > 고정하므로 코드보다 낡을 수 없습니다.
 - `reason` — 사람이 읽는 한국어 문장. 다듬힐 수 있으니 매칭에 쓰지 마세요.
 - `data` — 메트릭별 본문. 수집되지 않았으면 `null`
+
+### 스키마를 다시 꺼내야 하는 때
+
+**`schema_version` 만 보고 판단하면 안 됩니다.** `1.1.0` 은 아직 출시된 적이 없어서, 그 안에서
+계약이 넓어질 때 이 도구는 버전을 올리지 않았습니다. 그래서 **깨지는 소비자는 `1.0.0` 을
+고정한 쪽만이 아닙니다** — 지금 이 저장소가 만드는 산출물을 거부하는 가장 흔한 경우는
+`1.1.0` 시절 중간에 `perftracker schema` 를 한 번 받아 두고 그대로 쓰는 쪽입니다.
+그런데 `schema_version` 은 그때도 지금도 `1.1.0` 이라, **다시 꺼내라는 신호가 산출물 안에
+존재하지 않습니다.**
+
+`z.toJSONSchema()` 출력에서 실제로 갈라지는 곳은 둘이고, 서로 독립적입니다:
+
+1. **`device.state_*.thermal_zones` 의 항목 노드가 `additionalProperties: false` 입니다.**
+   예전 그 스키마는 `{ name, celsius }` 뿐이었고 지금 산출물은 `type` / `status` / `source`
+   를 함께 싣습니다 → 거부됩니다.
+2. **`reason_code` 가 닫힌 enum 입니다.** 예전 스키마는 21개였고 지금 산출물은
+   `snapshot_unavailable` 같은 값을 냅니다 → 거부됩니다.
+
+`1.0.0` 스키마를 고정한 CI 도 같은 이유로 거부합니다. 어느 쪽이든 답은 하나입니다 —
+
+```bash
+npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
+```
+
+**내가 가진 스키마가 낡았는지 확인하는 법:** 캐시해 둔 파일에서 `reason_code` enum 의 값
+개수를 세어 보세요. 위에 적힌 개수보다 적으면 낡은 것입니다. `thermal_zones` 항목에
+`source` 가 없어도 마찬가지입니다.
 
 ### `metrics.frame`
 
