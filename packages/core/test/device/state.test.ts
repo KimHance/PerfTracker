@@ -101,6 +101,27 @@ describe('parseThermalDump', () => {
     expect(dump.cached).toHaveLength(1)
   })
 
+  /**
+   * 깨지는 조건: 블록 리터럴이 `Temperature\{` 보다 느슨해지면(예: `Temperature\w*\{`)
+   * `TemperatureThreshold` 가 존으로 들어온다.
+   *
+   * 위 테스트와 겹쳐 보이지만 **다른 방어선을 겨눈다.** 관측된 원문에서 두 오탐 후보는
+   * 온도 절 **밖**(다른 섹션)에 있어서, 위 테스트는 실제로는 `sectionLines` 의 절 경계를
+   * 지킨다 — 리터럴을 느슨하게 만들어도 통과한다(변형으로 확인). 그래서 리터럴 자체를
+   * 겨누는 단언이 따로 필요하다: **절 안에 그 문자열이 들어오는 벤더가 있어도** 온도로
+   * 읽지 않는다는 것.
+   *
+   * 관측된 적 없는 구조라 커밋되는 픽스처에 넣지 않고 여기서 만든다 (D11).
+   */
+  it('온도 절 안에 TemperatureThreshold 가 있어도 존으로 읽지 않는다', () => {
+    const dump = parseThermalDump(
+      'Current temperatures from HAL:\n' +
+        '\tTemperature{mValue=31.1, mType=3, mName=SKIN, mStatus=0}\n' +
+        '\tTemperatureThreshold{mValue=99.9, mType=3, mName=SKIN, mStatus=0}\n',
+    )
+    expect(dump.hal).toEqual([{ name: 'SKIN', type: 3, celsius: 31.1, status: 0 }])
+  })
+
   it('섹션이 통째로 없으면 빈 배열이고 던지지 않는다', () => {
     const dump = parseThermalDump('')
     expect(dump).toEqual({
@@ -119,6 +140,26 @@ describe('parseThermalDump', () => {
       'Current temperatures from HAL:\n\tTemperature{mValue=41.5, mType=0, mName=CPU}\n',
     )
     expect(dump.hal).toEqual([{ name: 'CPU', type: 0, celsius: 41.5, status: null }])
+  })
+
+  /**
+   * 깨지는 조건: 파서가 `mValue` 가 **첫 필드**라는 것에 다시 의존하면 이 존이 통째로 사라진다.
+   *
+   * 바로 위의 `mStatus` 케이스와 같은 계열이다 — 필드 **순서**를 정규식에 박으면
+   * 값 하나가 null 이 되는 게 아니라 **존 자체가 없어진다.** 존이 없는 것과 값이 없는 것은
+   * 다른 사실이고, 없어진 존은 `thermal_zones_changed` 로 "센서 집합이 달라졌다" 는
+   * 없던 사실까지 만든다.
+   *
+   * `Temperature\{` 리터럴만으로 오탐(`CoolingDevice{...}` / `TemperatureThreshold{...}`)은
+   * 이미 배제된다 — `TemperatureThreshold{` 는 `Temperature` 다음이 `{` 가 아니라 매칭되지
+   * 않는다. 게다가 둘은 애초에 다른 섹션에 있어 `sectionLines` 가 걸러 낸다.
+   * 즉 `mValue=` 앵커가 막아 주는 것은 하나도 없고 필드 순서 의존만 남았다.
+   */
+  it('mValue 가 첫 필드가 아니어도 존을 잃지 않는다 — 필드 순서에 의존하지 않는다', () => {
+    const dump = parseThermalDump(
+      'Current temperatures from HAL:\n\tTemperature{mType=3, mValue=31.1, mName=SKIN, mStatus=0}\n',
+    )
+    expect(dump.hal).toEqual([{ name: 'SKIN', type: 3, celsius: 31.1, status: 0 }])
   })
 })
 

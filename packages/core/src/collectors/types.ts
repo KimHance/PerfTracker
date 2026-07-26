@@ -72,8 +72,18 @@ export interface CaptureFacts {
 export interface BaseExtractContext {
   packageName: string
   /**
-   * `capture.json` 의 `target_app.uid`. `pm list packages -U` 가 uid 를 주지 않았거나
-   * 시스템 앱이면 null 이다. uid 없이는 per-uid 카운터를 조회할 대상이 없다.
+   * `capture.json` 의 `target_app.uid`. uid 없이는 per-uid 카운터를 조회할 대상이 없다.
+   *
+   * **출처는 `PACKAGE_UIDS_SNAPSHOT` 이 아니다.** 이름이 비슷해 헷갈리기 쉬운데 둘은
+   * 플래그가 다른 별개의 명령이고 쓰임도 다르다:
+   *   - 이 필드 ← `app/list.ts` 의 **`pm list packages -3 -U --show-versioncode`**.
+   *     세션 시작 **전** 앱 해석 단계에서 나가고, **그 원문은 raw/ 에 남지 않는다.**
+   *   - `PACKAGE_UIDS_SNAPSHOT` = **`pm list packages -U`** (`-3` 없음, 시스템 패키지 포함).
+   *     network collector 가 `shared_uid_packages` 를 만들 때만 쓰고 `raw/packages_*.txt`
+   *     로 남는다. 이 필드와는 무관하다.
+   *
+   * null 이 되는 경우: 그 출력에 `uid:` 가 없었거나, 대상 앱이 **`-3`(서드파티) 목록에 아예
+   * 없는 경우**다 — 시스템 앱은 `-3` 때문에 목록에 나오지도 않는다.
    */
   appUid: number | null
   env: CollectorEnv

@@ -82,15 +82,22 @@ function sectionLines(lines: string[], header: string): string[] {
 
 /**
  * 두 단계로 읽는다. `Temperature{...}` 를 통째로 잡은 뒤 안에서 필드를 하나씩 꺼낸다 —
- * 필드 순서를 한 정규식에 박으면 `mStatus` 를 안 찍는 벤더의 출력에서 **존 자체가 사라진다.**
- * (값이 없는 것과 존이 없는 것은 다른 사실이다.)
+ * 필드 **순서**를 한 정규식에 박으면 그 순서를 안 지키는 벤더의 출력에서 값이 null 이 되는
+ * 게 아니라 **존 자체가 사라진다.** (값이 없는 것과 존이 없는 것은 다른 사실이고, 사라진
+ * 존은 "센서 집합이 달라졌다" 는 없던 사실까지 만든다.)
  *
- * `Temperature\{mValue=` 로 시작을 못박는 것이 중요하다. 같은 덤프에 `CoolingDevice{mValue=...}`
- * 와 `TemperatureThreshold{mType=...}` 가 있고(에뮬레이터 실측), 느슨하게 잡으면 둘 다 온도가 된다.
+ * 그래서 블록 안쪽을 `mValue=` 로 시작하도록 **묶지 않는다.** 오탐 후보
+ * (`CoolingDevice{mValue=...}` / `TemperatureThreshold{mType=...}`, 에뮬레이터 실측)는
+ * 두 겹으로 이미 배제된다:
+ *   1. `sectionLines` 가 온도 절(`Current temperatures from HAL:` / `Cached temperatures:`)
+ *      의 줄만 넘긴다 — 둘은 각각 다른 절에 있다.
+ *   2. `Temperature\{` 리터럴 — `TemperatureThreshold{` 는 `Temperature` 다음이 `{` 가
+ *      아니라 매칭되지 않고, `CoolingDevice{` 는 접두사부터 다르다.
+ * 즉 `mValue=` 앵커가 막아 주던 것은 하나도 없었고 필드 순서 의존만 남아 있었다.
  */
 function parseReadings(text: string): ThermalReading[] {
   const out: ThermalReading[] = []
-  for (const m of text.matchAll(/Temperature\{(mValue=[^}]*)\}/g)) {
+  for (const m of text.matchAll(/Temperature\{([^}]*)\}/g)) {
     const body = m[1]!
     const value = /mValue=(-?[\d.]+)/.exec(body)?.[1]
     const name = /mName=([^,}]*)/.exec(body)?.[1]?.trim()
