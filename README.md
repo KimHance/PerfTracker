@@ -320,8 +320,13 @@ npx perftracker schema > result.schema.json
 - 방화벽/데이터세이버가 버린 **송신** 패킷은 안 세고, 버려진 **수신** 패킷은 셉니다.
 - VPN(TUN)이 켜져 있으면 같은 트래픽이 앱 uid 와 VPN 앱 uid 양쪽에서 세어집니다.
 - **델타 구간은 세션 구간보다 조금 넓습니다.** 시작 스냅샷은 앱을 띄우기 전에, 종료 스냅샷은
-  트레이스를 회수한 뒤에 찍힙니다. 정확한 두 시점은 `device.state_before.captured_at` 과
-  `device.state_after.captured_at` 입니다.
+  트레이스를 회수한 뒤에 찍힙니다.
+- **`device.state_*.captured_at` 은 그 구간의 근사일 뿐 스냅샷을 찍은 시각이 아닙니다.**
+  두 값은 각각 `start` / `stop` 이 시작할 때 찍은 시계입니다. 특히 `state_after.captured_at` 은
+  **트레이스 회수 전**의 시각이라 종료 스냅샷보다 앞섭니다 (실측: 트레이스 0.3~2.1MB 인
+  4세션에서 0.5~0.7초). 그래서 **이 바이트를 그 두 시각의 차로 나눠 처리량을 구하면 안 됩니다** —
+  분자는 회수 구간을 포함하는데 분모는 제외합니다. 스냅샷 시각이 필요하면
+  `raw/netstats_{before,after}.txt` 의 파일 mtime 이 그것에 더 가깝습니다.
 - **`0` 은 "관측된 바이트가 없었다" 이지 "조회하지 못했다" 가 아닙니다.** 조회하지 못한
   세션은 `data` 가 통째로 `null` 이고 `reason_code` 가 이유를 말합니다.
 - 누적 원값은 싣지 않습니다. 감사가 필요하면 `raw/netstats_{before,after}.txt` 원문이

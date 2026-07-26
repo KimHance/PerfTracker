@@ -98,7 +98,13 @@ export const METRIC_REASON_CODES = [
   /**
    * 원문은 있는데 기대한 절이나 표 머리를 찾지 못했다 (벤더 dumpsys 포맷 차이, 안드로이드
    * 버전 차이). **형식을 추측해서 파싱하지 않는다** — 그러면 뒤바뀐 숫자가 사실 자리에 앉는다.
-   * detail: key, section, (있으면) header
+   *
+   * **표 머리는 맞았는데 행을 한 개도 못 읽은 경우도 이 코드다** (detail.rows === 0).
+   * 머리 고정은 컬럼 순서만 지키고 행의 모양은 지키지 않으므로, 벤더가 행만 다르게 찍으면
+   * 0행을 읽고도 파싱이 "성공" 한다. 그것을 uid 부재로 흘려보내면 도구가 관측하지 않은
+   * 원인("트래픽이 없었다")을 대게 된다. 표가 실제로 비어 있을 수도 있고 이 도구는 둘을
+   * 구분하지 못하므로, 사유 문장이 원인을 단정하지 않고 머리 다음 줄 원문을 함께 남긴다.
+   * detail: key, section, phase, (있으면) header, rows, first_line
    */
   'snapshot_unparsable',
   /** dumpsys thermalservice 출력에 온도 항목이 하나도 없다. */
@@ -119,9 +125,12 @@ export const METRIC_REASON_CODES = [
    */
   'app_uid_unknown',
   /**
-   * 스냅샷에 그 uid 의 행이 없다. 세션 동안 트래픽이 전혀 없었거나 맵에 등재되지 않은 것이다.
-   * **0 으로 채워 내지 않는다** — 관측한 0 과 조회하지 못한 것은 다른 사실이다.
-   * detail: uid, in_before, in_after
+   * 표는 읽었는데 **그 uid 의 행만** 없다. 세션 동안 트래픽이 전혀 없었거나 맵에 등재되지
+   * 않은 것이다. **0 으로 채워 내지 않는다** — 관측한 0 과 조회하지 못한 것은 다른 사실이다.
+   *
+   * 표를 **0행** 읽은 경우는 이 코드가 아니라 `snapshot_unparsable` 이다. 둘을 한 코드로
+   * 묶으면 형식 드리프트가 "트래픽이 없었다" 로 보고된다.
+   * detail: uid, in_before, in_after, rows_before, rows_after
    */
   'uid_not_in_netstats',
   /**
@@ -231,10 +240,25 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
     `세션 ${d['phase'] === 'after' ? '종료' : '시작'} 시점의 ${String(d['key'])} 스냅샷이 ` +
     `이 run 에 없습니다 — 이 도구가 그 명령을 찍기 전에 만들어진 run 이거나, ` +
     `명령이 이 기기에서 실패했거나, 아직 stop 하지 않은 세션입니다.`,
-  snapshot_unparsable: (d) =>
-    `${String(d['key'])} 원문에서 "${String(d['section'])}" 을 기대한 형식으로 읽지 못했습니다` +
-    `${d['header'] != null ? ` (읽은 줄: ${JSON.stringify(d['header'])})` : ''} — ` +
-    `형식을 추측해서 값을 만들지 않았습니다. 원본은 run 디렉토리의 raw/ 에 그대로 있습니다.`,
+  snapshot_unparsable: (d) => {
+    const tail = '형식을 추측해서 값을 만들지 않았습니다. 원본은 run 디렉토리의 raw/ 에 그대로 있습니다.'
+    // 머리는 맞았는데 행이 0개인 경우. **원인을 단정하지 않는다** — 표의 행 모양이 다른 것과
+    // 표가 실제로 비어 있는 것을 이 도구는 구분하지 못하고, 어느 쪽이라고 말하면 관측하지
+    // 않은 것을 사실로 내보내는 것이 된다.
+    if (d['rows'] === 0) {
+      return (
+        `${String(d['key'])} 원문의 "${String(d['section'])}" 표 머리는 기대와 같았지만 ` +
+        `행을 한 개도 읽지 못했습니다` +
+        `${d['first_line'] != null ? ` (머리 다음 줄: ${JSON.stringify(d['first_line'])})` : ''} — ` +
+        `행의 모양이 기대와 다르거나 표가 실제로 비어 있습니다. **이 도구는 둘을 구분하지 못합니다.** ` +
+        `${tail}`
+      )
+    }
+    return (
+      `${String(d['key'])} 원문에서 "${String(d['section'])}" 을 기대한 형식으로 읽지 못했습니다` +
+      `${d['header'] != null ? ` (읽은 줄: ${JSON.stringify(d['header'])})` : ''} — ${tail}`
+    )
+  },
   no_thermal_zones: () => 'dumpsys thermalservice 출력에 온도 항목이 하나도 없습니다.',
   thermal_hal_not_ready: () =>
     'Thermal HAL 이 준비되지 않았다고 기기가 보고했습니다 (HAL Ready: false) — ' +
@@ -253,6 +277,9 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
   uid_not_in_netstats: (d) =>
     `uid ${String(d['uid'])} 의 행이 netstats 스냅샷에 없습니다 ` +
     `(시작: ${d['in_before'] === true ? '있음' : '없음'} / 종료: ${d['in_after'] === true ? '있음' : '없음'}) — ` +
+    // 표에서 몇 행을 읽었는지를 같이 말한다. "표에 400행 있었는데 내 uid 만 없다" 와
+    // "표를 거의 못 읽었다" 는 소비자에게 전혀 다른 신호이고, 행 수 없이는 가를 수 없다.
+    `표에서 읽은 행은 시작 ${String(d['rows_before'] ?? '?')}행 / 종료 ${String(d['rows_after'] ?? '?')}행입니다. ` +
     `부팅 이후 이 uid 로 오간 트래픽이 없었을 수 있습니다. 0 으로 채우지 않았습니다.`,
   counter_went_backwards: (d) =>
     `누적 카운터 ${String(d['counter'])} 가 세션 구간에서 감소했습니다 ` +

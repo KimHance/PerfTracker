@@ -25,6 +25,39 @@ import { METRIC_REASON_CODES, type MetricReasonCode } from './reasons.js'
 export const SCHEMA_VERSION = '1.1.0'
 
 /**
+ * `partial` 이면서 `data` 가 **null** 인 결과를 내는 사유 코드들 — 즉 "값이 아예 안 나왔다".
+ *
+ * 소스 진실은 각 collector 의 `{ collected: false, reason }` 분기다 (거기서 `status` 를
+ * 따로 주지 않으면 `partial` 이 된다). 여기 손으로 옮겨 적는 이유는 `z.toJSONSchema()` 가
+ * 런타임이라 코드를 훑지 못하기 때문이고, **그래서 이 목록은 낡을 수 있다.**
+ * 그 사실을 describe 문구가 직접 말하고, 소비자에게는 `data !== null` 로 판정하라고 시킨다 —
+ * 목록을 계약으로 만들면 새 collector 가 생길 때마다 조용히 거짓이 된다.
+ *
+ * 이 배열의 모든 값이 실재하는 `MetricReasonCode` 인지는 테스트가 고정한다.
+ */
+const DATA_NULL_PARTIAL_CODES = [
+  'render_process_not_found',
+  'no_frames',
+  'frame_duration_out_of_range',
+  'no_cpu_samples',
+  'insufficient_samples',
+  'cpu_counters_did_not_advance',
+  'cpu_counters_not_monotonic',
+  'process_not_in_trace',
+  'no_rss_samples',
+  'no_log_entries',
+  'launch_time_unreported',
+  'launch_wait_timed_out',
+  'snapshot_unavailable',
+  'snapshot_unparsable',
+  'no_thermal_zones',
+  'thermal_hal_not_ready',
+  'app_uid_unknown',
+  'uid_not_in_netstats',
+  'counter_went_backwards',
+] as const satisfies readonly MetricReasonCode[]
+
+/**
  * 수집 실패와 미지원을 null 로 뭉뚱그리지 않기 위한 상태 구분.
  *
  * 네 값의 뜻이 소스 주석에만 있었고, 그중 `partial` 이 두 가지 상황을 겸한다는 사실은
@@ -39,9 +72,11 @@ export const MetricStatusSchema = z
       '- partial: **두 가지를 겸한다.** (a) 값은 나왔지만 일부가 빠졌다(예: CPU 사용률은 ' +
       '있고 주파수가 없다) — 이때 data 는 non-null 이다. (b) **값이 아예 나오지 않았다** — ' +
       '이때 `data` 는 **null** 이다. 둘 다 reason_code 가 어느 쪽인지 말한다. ' +
-      'data 가 null 인 partial 은 render_process_not_found, no_frames, no_cpu_samples, ' +
-      'insufficient_samples, process_not_in_trace, no_rss_samples, no_log_entries, ' +
-      'launch_time_unreported, launch_wait_timed_out 등에서 나온다.\n' +
+      `data 가 null 인 partial 을 내는 reason_code 는 이 버전에서 ${DATA_NULL_PARTIAL_CODES.join(', ')} ` +
+      '이다. **이 목록은 참고용이고 계약이 아니다** — 새 collector 가 생기면 늘어난다. ' +
+      "판정은 반드시 `data !== null`(또는 `status === 'collected'`)로 하고 이 목록으로 하지 말 것. " +
+      '스냅샷 계열(snapshot_unavailable / snapshot_unparsable)이 특히 흔하다: 이 도구가 ' +
+      '스냅샷을 찍기 전에 만들어진 옛 run 을 재산출하면 thermal / network 가 반드시 그 길을 지난다.\n' +
       '- unsupported: 이 기기가 이 메트릭을 낼 수 없다 (sdk 하한 미달, 데이터소스 미등록). ' +
       'data 는 null 이다.\n' +
       '- failed: 예외 상황 전용이다 — 트레이스 원본이 없거나(trace_missing) ' +
@@ -448,7 +483,18 @@ const NETWORK_INTERVAL =
   '**델타 구간은 세션 구간보다 조금 넓다.** 시작 스냅샷은 `am force-stop` 과 트레이스 시작과 ' +
   '`am start -W` 보다 **앞**에서 찍히므로 앱의 콜드 스타트 준비 구간이 포함되고, 종료 ' +
   '스냅샷은 트레이스를 회수한 **뒤**에 찍히므로 회수에 걸린 시간이 포함된다(트레이스가 클수록 ' +
-  '길어진다). 정확한 두 시점은 device.state_before.captured_at / state_after.captured_at 이다. '
+  '길어진다). ' +
+  // 이 문단은 한때 "정확한 두 시점은 state_*.captured_at 이다" 라고 끝났는데 **거짓이었고
+  // 바로 앞 문장과 모순이었다.** state_after.captured_at 은 stop 진입 시각이라 트레이스
+  // 회수보다 **앞**이고, netstats 종료 스냅샷은 회수가 끝난 **뒤**에 나간다. 그 문장을 믿고
+  // 처리량을 계산하면 분자는 회수 구간을 포함하고 분모는 제외한다.
+  '**device.state_*.captured_at 은 이 구간의 근사일 뿐 스냅샷을 찍은 시각이 아니다.** ' +
+  '두 값은 각각 start / stop 이 시작할 때 찍은 시계다. 특히 state_after.captured_at 은 ' +
+  '**트레이스 회수 전**의 시각이라 종료 스냅샷보다 앞선다(실측: 트레이스 0.3~2.1MB 인 ' +
+  '4세션에서 0.5~0.7초, 트레이스가 클수록 커진다). ' +
+  '그래서 이 바이트를 그 두 시각의 차로 나눠 **처리량(bytes/s)을 계산하면 안 된다** — ' +
+  '분자는 회수 구간을 포함하는데 분모는 제외한다. 스냅샷 시각이 필요하면 ' +
+  'artifacts.raw 의 raw/netstats_{before,after}.txt 파일 mtime 이 그것에 더 가깝다. '
 
 export const NetworkDataSchema = z.object({
   uid: z.number().int().describe('이 값이 집계된 리눅스 uid. target_app.uid 와 같다.'),
@@ -466,12 +512,20 @@ export const NetworkDataSchema = z.object({
     .int()
     .nonnegative()
     .describe(`같은 구간에 이 uid 가 **보낸** 바이트. ${NETWORK_SCOPE}`),
+  // 패킷 필드만 읽는 소비자도 uid 단위라는 한정에 도달해야 한다. 바이트 필드에만 SCOPE 를
+  // 싣고 여기 안 실으면, `rx_packets` 만 보는 쪽은 이 숫자가 패키지 단위인 줄 안다.
   rx_packets: z
     .number()
     .int()
     .nonnegative()
-    .describe('같은 구간의 수신 패킷 수. GSO 구간에서는 커널이 되계산한 추정 개수다.'),
-  tx_packets: z.number().int().nonnegative().describe('같은 구간의 송신 패킷 수. 위와 같다.'),
+    .describe(
+      `같은 구간의 수신 패킷 수. GSO 구간에서는 커널이 되계산한 **추정** 개수다. ${NETWORK_SCOPE}`,
+    ),
+  tx_packets: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(`같은 구간의 송신 패킷 수. 추정이라는 점까지 위와 같다. ${NETWORK_SCOPE}`),
   shared_uid_packages: z
     .array(z.string())
     .nullable()

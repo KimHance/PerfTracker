@@ -515,6 +515,36 @@ describe('resultJsonSchema', () => {
   })
 
   /**
+   * I-2. 이 문단은 한때 "정확한 두 시점은 state_*.captured_at 이다" 로 끝났는데
+   * **거짓이었고 바로 앞 문장과 모순이었다.** `state_after.captured_at` 은 stop 진입 시각이라
+   * 트레이스 회수보다 앞이고, netstats 종료 스냅샷은 회수가 끝난 뒤에 나간다.
+   * 그 문장을 그대로 믿고 처리량을 구하면 **분자는 회수 구간을 포함하고 분모는 제외한다.**
+   *
+   * 깨지는 조건: "정확한 두 시점" 같은 단정이 돌아오거나, 처리량 계산 금지가 사라지면 실패한다.
+   */
+  it('captured_at 을 정확한 스냅샷 시각이라고 말하지 않고, 처리량 계산을 금지한다', () => {
+    const rx = (metricDataProps('network')['rx_bytes'] as { description: string }).description
+
+    expect(rx).toMatch(/근사일 뿐/)
+    expect(rx).toMatch(/트레이스 회수 전/)
+    expect(rx).toMatch(/처리량/)
+    // 옛 단정이 돌아오면 안 된다.
+    expect(rx).not.toMatch(/정확한 두 시점은/)
+  })
+
+  /**
+   * M-4. 패킷 필드만 읽는 소비자도 uid 단위라는 한정에 도달해야 한다.
+   * 깨지는 조건: 패킷 필드에서 SCOPE 가 빠지면 실패한다.
+   */
+  it('패킷 필드도 uid 단위라는 한정을 들고 있다', () => {
+    for (const field of ['rx_packets', 'tx_packets']) {
+      const d = (metricDataProps('network')[field] as { description: string }).description
+      expect(d, `${field}`).toMatch(/uid 단위 값이며 패키지 단위가 아니다/)
+      expect(d, `${field}`).toContain('sharedUserId')
+    }
+  })
+
+  /**
    * C1. 옛 문서의 `thermal_zones` 에는 중복이 남아 있다. "존 하나당 정확히 한 항목이다" 를
    * 무조건문으로 두면 **오늘 이 저장소가 만들 수 있는 문서 일부가 그 문장을 위반한다.**
    */
@@ -537,6 +567,55 @@ describe('resultJsonSchema', () => {
     for (const id of ['frame', 'startup', 'cpu', 'memory', 'log', 'thermal', 'network']) {
       expect(metrics[id], `${id} 가 스키마에 없음`).toBeDefined()
     }
+  })
+
+  /**
+   * M-2. `status` 의 describe 는 CI 가 필터를 짤 때 읽는 유일한 문서다. M3 가 추가한
+   * data-null 경로(특히 스냅샷 계열)가 빠져 있으면, 커밋된 옛 run 4세션이 실제로 내는
+   * 유일한 data-null partial 이 문서에 없는 상태가 된다.
+   *
+   * 깨지는 조건: 목록에서 코드가 빠지거나, 실재하지 않는 코드가 들어오거나,
+   * "data !== null 로 판정하라" 는 지시가 사라지면 실패한다.
+   */
+  it('data 가 null 인 partial 목록이 M3 코드를 담고, 목록이 계약이 아님을 밝힌다', () => {
+    const d = (props(props(resultJsonSchema())['metrics'])['thermal'] as Record<string, any>)[
+      'properties'
+    ]['status']['description'] as string
+
+    // **목록 자체**를 뽑아서 본다. 설명 전체에 `toContain` 하면 바로 아래 산문의
+    // "스냅샷 계열(snapshot_unavailable / snapshot_unparsable)" 이 목록 없이도 매칭시켜
+    // 단언이 공허해진다 (실제로 그랬다 — 목록에서 빼도 통과했다).
+    const listed = (/이 버전에서 (.+?) 이다\./s.exec(d)?.[1] ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+    expect(listed.length).toBeGreaterThan(10)
+
+    for (const code of [
+      'snapshot_unavailable',
+      'snapshot_unparsable',
+      'no_thermal_zones',
+      'thermal_hal_not_ready',
+      'app_uid_unknown',
+      'uid_not_in_netstats',
+      'counter_went_backwards',
+    ]) {
+      expect(listed, `${code} 가 data-null partial 목록에 없다`).toContain(code)
+    }
+
+    // 목록에 적힌 코드는 전부 실재해야 한다 — 없는 코드를 적으면 소비자가 그것을 매칭한다.
+    for (const code of listed) {
+      expect(METRIC_REASON_CODES as readonly string[], `${code} 는 실재하지 않는 코드다`).toContain(code)
+    }
+
+    // 목록이 아니라 data !== null 이 계약이라는 것을 문서가 말해야 한다.
+    expect(d).toContain('계약이 아니다')
+    expect(d).toContain('data !== null')
+
+    // partialReason 전용 코드는 이 목록에 오면 안 된다 — 그 경로의 data 는 **non-null** 이다.
+    // (`no_meminfo_samples` / `cpu_freq_unavailable` 은 값이 나온 뒤 붙는 사유다.)
+    expect(listed).not.toContain('no_meminfo_samples')
+    expect(listed).not.toContain('cpu_freq_unavailable')
   })
 
   it('frame 만 required 다 — 1.0.0 문서가 계속 유효해야 한다', () => {

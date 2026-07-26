@@ -41,6 +41,19 @@ export interface AppUidStatsDump {
   header: string | null
   /** uid → 값. 같은 uid 가 여러 번 나오면 **마지막 행**이 남는다. */
   byUid: Map<number, UidNetStats>
+  /**
+   * 실제로 읽어 들인 **행의 수**. `byUid.size` 와 다르다 — 중복 uid 는 맵에서 접히기 때문이다.
+   *
+   * **0 은 그 자체로 신호다.** 헤더가 맞았는데 행이 0개면 표의 행 모양이 우리 기대와
+   * 다르거나 표가 실제로 비어 있다는 뜻이고, 이 도구는 둘을 구분하지 못한다.
+   * 실기기 `mAppUidStatsMap` 에는 시스템 uid 가 항상 여럿 있으므로 0행은 사실상 형식 드리프트다.
+   */
+  rowCount: number
+  /**
+   * 머리글 **다음** 줄의 원문(우측 공백만 제거). 행을 못 읽었을 때 형식을 진단할 유일한 근거다.
+   * 절을 못 찾았거나 다음 줄이 없으면 null.
+   */
+  firstLine: string | null
   /** 같은 uid 가 **서로 다른 값**으로 두 번 이상 나온 uid 들 (AOSP b/220084230). */
   conflictingUids: number[]
 }
@@ -61,7 +74,16 @@ const ROW = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$/
 export function parseAppUidStats(text: string): AppUidStatsDump {
   const lines = text.split('\n')
   const at = lines.findIndex((l) => /^\s*mAppUidStatsMap:\s*$/.test(l))
-  if (at < 0) return { found: false, header: null, byUid: new Map(), conflictingUids: [] }
+  if (at < 0) {
+    return {
+      found: false,
+      header: null,
+      byUid: new Map(),
+      rowCount: 0,
+      firstLine: null,
+      conflictingUids: [],
+    }
+  }
 
   let i = at + 1
   while (i < lines.length && lines[i]!.trim().length === 0) i++
@@ -69,6 +91,7 @@ export function parseAppUidStats(text: string): AppUidStatsDump {
 
   const byUid = new Map<number, UidNetStats>()
   const conflicting = new Set<number>()
+  let rowCount = 0
 
   // 머리글이 기대와 다르면 **한 행도 읽지 않는다.** 컬럼 순서를 추측하는 순간
   // 이 도구는 확인하지 못한 것을 사실로 내보내게 된다.
@@ -76,6 +99,7 @@ export function parseAppUidStats(text: string): AppUidStatsDump {
     for (let j = i + 1; j < lines.length; j++) {
       const m = ROW.exec(lines[j]!)
       if (m === null) break
+      rowCount++
       const row: UidNetStats = {
         uid: Number(m[1]),
         rxBytes: Number(m[2]),
@@ -91,10 +115,13 @@ export function parseAppUidStats(text: string): AppUidStatsDump {
     }
   }
 
+  const next = lines[i + 1]
   return {
     found: true,
     header: header.length > 0 ? header : null,
     byUid,
+    rowCount,
+    firstLine: next !== undefined ? next.replace(/\s+$/, '') : null,
     conflictingUids: [...conflicting],
   }
 }
@@ -197,6 +224,29 @@ export const networkCollector: CaptureCollector<NetworkData> = {
           },
         }
       }
+      // 머리글 고정은 **컬럼 순서**만 지킨다 — 행의 모양에는 아무 방어가 없다. 벤더나
+      // 안드로이드 버전이 행만 다르게 찍으면(`uid=… rxBytes=…`, 6번째 열, 하위 키 들여쓰기)
+      // 표를 0행 읽고도 파싱이 "성공" 한다. 그 상태를 uid 부재로 흘려보내면 도구가
+      // **관측하지 않은 원인**("트래픽이 없었다")을 대면서 형식 불일치를 삼킨다 (G1).
+      //
+      // 표가 실제로 비어 있을 가능성도 있고 이 도구는 둘을 구분하지 못한다 — 그래서
+      // 사유 문장이 원인을 단정하지 않고 머리 다음 줄 원문을 그대로 싣는다.
+      if (dump.rowCount === 0) {
+        return {
+          collected: false,
+          reason: {
+            code: 'snapshot_unparsable',
+            detail: {
+              key: NETSTATS_KEY,
+              section: 'mAppUidStatsMap',
+              phase,
+              header: dump.header,
+              rows: 0,
+              ...(dump.firstLine !== null ? { first_line: dump.firstLine } : {}),
+            },
+          },
+        }
+      }
     }
 
     const b = before.byUid.get(uid)
@@ -204,11 +254,20 @@ export const networkCollector: CaptureCollector<NetworkData> = {
     if (b === undefined || a === undefined) {
       // 0 으로 채우지 않는다. "조회했더니 이 uid 의 행이 없었다" 와 "0 바이트 오갔다" 는
       // 다른 사실이고, 후자로 내보내면 소비자가 구분할 방법이 없다.
+      //
+      // 행 수를 함께 싣는다: "표에 400행 있었는데 내 uid 만 없다" 와 "표를 거의 못 읽었다" 는
+      // 소비자에게 완전히 다른 신호다. (0행은 위에서 이미 걸러진다.)
       return {
         collected: false,
         reason: {
           code: 'uid_not_in_netstats',
-          detail: { uid, in_before: b !== undefined, in_after: a !== undefined },
+          detail: {
+            uid,
+            in_before: b !== undefined,
+            in_after: a !== undefined,
+            rows_before: before.rowCount,
+            rows_after: after.rowCount,
+          },
         },
       }
     }

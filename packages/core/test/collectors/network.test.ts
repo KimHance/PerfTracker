@@ -8,7 +8,7 @@ import {
   parsePackageUids,
 } from '../../src/collectors/network.js'
 import type { BaseExtractContext, ExtractOutcome } from '../../src/collectors/types.js'
-import type { MetricReason } from '../../src/schema/reasons.js'
+import { type MetricReason, renderReason } from '../../src/schema/reasons.js'
 import type { NetworkData } from '../../src/schema/result.js'
 
 /**
@@ -50,9 +50,32 @@ describe('parseAppUidStats', () => {
     expect(parseAppUidStats(NETSTATS).byUid.size).toBeGreaterThan(0)
   })
 
-  /** 미끼 2. `BPF map content:` 머리가 두 번 나온다 (InterfaceMapHelper 아래에 하나). */
-  it('InterfaceMapHelper 의 IfaceIndexNameMap 을 읽어 오지 않는다', () => {
-    expect([...parseAppUidStats(NETSTATS).byUid.keys()]).not.toContain(15)
+  /**
+   * 미끼 2. `BPF map content:` 머리가 **두 번** 나온다 (`InterfaceMapHelper:` 아래에 하나).
+   *
+   * 옛 단언은 `expect([...keys]).not.toContain(15)` 였는데 **어떤 앵커 선택으로도 실패할 수
+   * 없었다** — 픽스처의 `ifaceIndex=15 ifaceName=eth0` 는 `ROW`(5열 정수)에 애초에 안 걸리고,
+   * 앵커를 `BPF map content:` 로 옮기면 헤더가 `IfaceIndexNameMap:` 이 되어 헤더 고정이
+   * 행 읽기를 통째로 막으므로 맵은 그냥 빈다. 미끼 3 에서 한 변형 실험을 미끼 2 에는
+   * 하지 않아 드러나지 않았던 공허한 단언이다.
+   *
+   * 계약을 직접 겨눈다: **앵커는 `mAppUidStatsMap:` 이지 `BPF map content:` 가 아니다.**
+   * `mAppUidStatsMap` 절이 통째로 없고 `InterfaceMapHelper:` 의 `BPF map content:` 만 있는
+   * 입력에서, 앵커를 잘못 잡은 파서는 `found: true` + `header: 'IfaceIndexNameMap:'` 을 내고
+   * 올바른 파서는 `found: false` 를 낸다. 그 차이가 이 단언이다.
+   */
+  it('BPF map content: 머리를 앵커로 쓰지 않는다 — 그 절이 없으면 found=false 다', () => {
+    // 픽스처에서 mAppUidStatsMap 절부터 뒤를 잘라 낸다. InterfaceMapHelper 의
+    // `BPF map content:` 와 `BPF map status:` 의 `mAppUidStatsMap: OK` 는 그대로 남는다.
+    const head = NETSTATS.slice(0, NETSTATS.indexOf('  mAppUidStatsMap:\n    uid rxBytes'))
+    expect(head).toContain('BPF map content:')
+    expect(head).toContain('IfaceIndexNameMap:')
+    expect(head).toContain('mAppUidStatsMap: OK')
+
+    const d = parseAppUidStats(head)
+    expect(d.found).toBe(false)
+    expect(d.header).toBeNull()
+    expect(d.byUid.size).toBe(0)
   })
 
   /** 미끼 3. 절의 끝을 못 잡으면 뒤따르는 표의 행이 섞인다. */
@@ -309,9 +332,81 @@ describe('networkCollector.extract', () => {
       collected: false,
       reason: {
         code: 'uid_not_in_netstats',
-        detail: { uid: 12345, in_before: false, in_after: false },
+        detail: { uid: 12345, in_before: false, in_after: false, rows_before: 5, rows_after: 5 },
       },
     })
+  })
+
+  /**
+   * I-1. **헤더가 맞았는데 행을 한 개도 못 읽은 상태**를 "트래픽이 없었다" 로 보고하면 안 된다.
+   *
+   * 헤더 고정은 **컬럼 순서**만 지킨다 — 행의 모양에는 아무 방어가 없다. 실기기가 헤더는
+   * 같게 찍고 행만 다르게 찍으면(`uid=10388 rxBytes=…` 형태, 6번째 열, 하위 키 들여쓰기)
+   * `byUid` 가 양쪽 다 비고, 옛 코드는 `uid_not_in_netstats` 를 내면서
+   * **"부팅 이후 이 uid 로 오간 트래픽이 없었을 수 있습니다"** 라고 말했다.
+   * 관측하지 않은 원인을 대면서 형식 불일치라는 사실을 삼키는 것 — G1 이 막으려던 모양이다.
+   *
+   * 실기기 `mAppUidStatsMap` 에는 시스템 uid 가 항상 수십 개 있으므로 **행 0개는 사실상
+   * 형식 드리프트 신호**다. 이 도구는 실기기 원문을 한 줄도 본 적이 없어 특히 그렇다.
+   *
+   * 깨지는 조건: 0행 분기를 지우면 이 테스트가 `uid_not_in_netstats` 를 받고 실패한다.
+   */
+  it('헤더는 맞는데 행을 하나도 못 읽으면 uid_not_in_netstats 가 아니라 snapshot_unparsable 이다', async () => {
+    // 헤더는 그대로 두고 행만 실기기가 다르게 찍을 법한 모양으로 바꾼다.
+    const drifted = NETSTATS.replace(
+      /(uid rxBytes rxPackets txBytes txPackets\n)(?:    \d+ \d+ \d+ \d+ \d+\n)+/,
+      '$1    uid=10388 rxBytes=1200000 rxPackets=1119 txBytes=431000 txPackets=871\n',
+    )
+    const out = await networkCollector.extract(
+      withSnapshots({ netstats: { before: drifted, after: drifted } }),
+    )
+    expect(out).toMatchObject({
+      collected: false,
+      reason: {
+        code: 'snapshot_unparsable',
+        detail: {
+          key: 'netstats',
+          section: 'mAppUidStatsMap',
+          phase: 'before',
+          rows: 0,
+          // 형식을 진단할 수 있도록 머리 다음 줄 원문을 그대로 남긴다.
+          first_line: '    uid=10388 rxBytes=1200000 rxPackets=1119 txBytes=431000 txPackets=871',
+        },
+      },
+    })
+  })
+
+  /**
+   * 0행이 "표가 실제로 비어 있다" 일 수도 있다는 것을 이 도구는 **구분하지 못한다.**
+   * 그래서 사유 문장이 원인을 단정하지 않고 원문 줄을 함께 남긴다.
+   * 깨지는 조건: 문장이 "트래픽이 없었다" 같은 원인을 단정하면 실패한다.
+   */
+  it('0행 사유는 원인을 단정하지 않는다 — 트래픽이 없었다고 말하지 않는다', async () => {
+    const empty =
+      'BPF map content:\n  mAppUidStatsMap:\n    uid rxBytes rxPackets txBytes txPackets\n  mStatsMapA:\n'
+    const out = await networkCollector.extract(
+      withSnapshots({ netstats: { before: empty, after: empty } }),
+    )
+    if (out.collected) throw new Error(`collected 가 아니어야 한다: ${JSON.stringify(out)}`)
+    const text = renderReason(out.reason)!
+    expect(text).not.toContain('트래픽이 없었')
+    expect(text).toContain('구분하지 못합니다')
+    expect(text).toContain('mStatsMapA:')
+  })
+
+  /**
+   * I-1 의 나머지 절반. 행은 읽었는데 **내 uid 만** 없는 것과 표를 0행 읽은 것은
+   * 다른 사실이고, 소비자가 그것을 가를 수 있어야 한다.
+   * 깨지는 조건: detail 에서 행 수가 빠지면 두 상황이 같은 모양이 된다.
+   */
+  it('uid_not_in_netstats 는 표에서 몇 행을 읽었는지를 함께 남긴다', async () => {
+    const out = await networkCollector.extract(ctx({ appUid: 12345 }))
+    if (out.collected) throw new Error('collected 가 아니어야 한다')
+    // 픽스처는 **5행**이고 uid 는 **4개**다 (10388 이 같은 값으로 두 번 찍힌다).
+    // 그 차이가 rowCount 를 byUid.size 와 따로 세는 이유다 — 중복 행은 맵에서 접히므로
+    // byUid.size 로는 "표를 몇 행 읽었나" 에 답할 수 없다.
+    expect(out.reason.detail).toMatchObject({ rows_before: 5, rows_after: 5 })
+    expect(renderReason(out.reason)).toContain('5행')
   })
 
   it('카운터가 되감기면 값을 내지 않고 두 값을 사유에 남긴다', async () => {
