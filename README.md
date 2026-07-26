@@ -141,7 +141,7 @@ npx perftracker extract runs/2026-07-26T02-31-40_홈-스크롤_a3f9c1
 npx perftracker schema > result.schema.json
 ```
 
-`schema_version` 이 그 계약의 버전입니다 (현재 `1.0.0`).
+`schema_version` 이 그 계약의 버전입니다 (현재 `1.1.0`).
 
 ### 최상위 구조
 
@@ -151,7 +151,7 @@ npx perftracker schema > result.schema.json
 | `session` | id, 이름, `state`, 시작/종료 시각, 길이 |
 | `device` | 기기 스펙(`static`)과 세션 전후 상태(`state_before` / `state_after`) |
 | `target_app` | 패키지, 라벨, 버전, 렌더 프로세스와 pid |
-| `metrics` | 메트릭들. 키가 곧 수집기 id (M1 은 `frame` 하나) |
+| `metrics` | 메트릭들. 키가 곧 수집기 id (`frame` / `startup` / `cpu` / `memory` / `log`) |
 | `measurement_overhead` | 이 측정이 기기에 얼마나 개입했는지 |
 | `references` | 구글 공개 기준치. **비교에 쓰이지 않고 기록만 된다** |
 | `warnings` | 관측된 사건 (평가 아님) |
@@ -278,14 +278,22 @@ npm run test:device   # 실기기가 꽂혀 있어야 함
 - **big.LITTLE 코어별 거동** — 에뮬레이터는 4코어가 모두 같은 클러스터다.
 - **Thermal / GPU** — 물리 센서가 없다 (M3 범위).
 
-추가로 관측된 사실: 이 에뮬레이터에서 `--launch` 로 앱을 트레이스 도중에 콜드 스타트시키면,
-새로 fork 된 프로세스의 이름이 트레이스에 **"zygote64" 로 영구히 고정되는 경우가 있다**
-(`Process.setArgV0()` 가 실제 패키지명으로 바꾸기 전 시점에 `linux.process_stats` 의 프로세스
-트래커가 이름을 한 번만 확정하고 그 뒤로 갱신하지 않는 것으로 보임 — `trace_processor` 로
-직접 확인: 문제의 pid 가 트레이스 안에서 실제로 `name = "zygote64"` 였다). 이 상태에서
-memory collector 는 패키지명으로 정확히 매칭하다가 프로세스를 못 찾아 `partial` /
-`process_not_in_trace` 를 정직하게 보고한다 — 0 을 채워 내지 않는다. frame collector 는
-이름을 그대로 흘려보내므로 결과의 `process` 필드에 "zygote64" 가 노출될 수 있다. 새로
-재부팅한 에뮬레이터에서 첫 `--launch` 는 안정적으로 성공했고, 짧은 시간 안에 같은 앱을
-반복해서 콜드 스타트시킬수록 이 현상이 잦아졌다. 이 특성은 M2 완료 기준에 포함되지 않았고
-최초에는 발견되지 않았던 사실이라, 코드나 테스트를 바꾸지 않고 이 절에 사실로만 남긴다.
+### 트레이스가 앱을 `zygote64` 로 아는 경우
+
+`--launch` 로 앱을 트레이스 도중에 콜드 스타트시키면, 새로 fork 된 프로세스의 이름이
+트레이스에 **`zygote64` 로 고정되는 경우가 있습니다.** `linux.process_stats` 는 프로세스를
+처음 관측할 때 이름을 한 번 확정하고 갱신하지 않는데, zygote 가 fork 한 앱은
+`Process.setArgV0()` 이 실제 패키지명을 붙이기 전까지 잠시 그 이름을 갖기 때문입니다
+(`trace_processor` 로 직접 확인: 문제의 pid 가 트레이스 안에서 실제로 `name = "zygote64"`,
+`uid = 0` 이었습니다). `--launch` 는 force-stop 후 재실행이라 앱 프로세스가 **항상** 갓
+fork 된 상태이므로 이것은 예외 상황이 아닙니다.
+
+perftracker 는 `am start -W` 직후(측정 창이 열리기 **전**) `pidof` 로 앱의 pid 를 받아 두고,
+트레이스 이름이 맞지 않으면 그 pid 로 대상 앱을 특정합니다. 그때:
+
+- `frame` / `memory` 의 `process` 는 **패키지명**입니다 — 확인되지 않은 이름(`zygote64`)이
+  결과에 실리는 일은 없습니다.
+- 두 메트릭의 `status` 는 `partial`, `reason_code` 는 `process_name_stale_in_trace` 입니다.
+  값은 정상이고, "이름이 아니라 pid 로 확인했다" 는 사실을 그 코드가 말합니다.
+- pid 조차 없으면(= `--launch` 없이 시작했고 이름도 안 맞음) 추측하지 않습니다 —
+  `render_process_not_found` / `process_not_in_trace` 로 값을 내지 않습니다.

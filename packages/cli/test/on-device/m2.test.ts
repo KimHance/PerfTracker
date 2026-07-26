@@ -18,8 +18,9 @@ import { createContext } from '../../src/context.js'
  * 실기기 또는 에뮬레이터가 필요하다. `npm run test:device` 로만 실행된다.
  *
  * **에뮬레이터에서 정직하게 검증되지 않는 것은 여기서 단언하지 않는다.** 목록과 이유는
- * docs/superpowers/plans/2026-07-26-perftracker-m2.md 의 Task 8 에 있다. 요약하면:
- * 주파수 값(에뮬은 cpuinfo_max_freq=2), android.log 개수(SELinux 가 logdr 를 막음),
+ * 저장소 루트 `README.md` 의 "검증 환경" 절에 있다 (계획서는 저장소에 없다 — 새로 clone 한
+ * 사람이 실제로 찾아볼 수 있는 문서를 가리킨다). 요약하면: 주파수 **값의 크기**
+ * (에뮬은 cpuinfo_max_freq=2), android.log 개수(SELinux 가 logdr 를 막음),
  * frame 수집 성공(에뮬 런처는 frametimeline 을 안 채움), runtime.* 이 0 보다 큰 것(10ms 해상도).
  */
 describe('M2 기기 통합', () => {
@@ -79,12 +80,29 @@ describe('M2 기기 통합', () => {
       expect(core.busy_pct).toBeGreaterThanOrEqual(0)
       expect(core.busy_pct).toBeLessThanOrEqual(100)
     }
+    // 주파수는 **필드의 존재**만 단언한다. 에뮬레이터에서 ftrace power/cpu_frequency 이벤트가
+    // 실제로 흐르는 것은 실측으로 확인된 사실이므로 null 이면 회귀다. 값의 크기는 보지 않는다 —
+    // 이 이미지의 cpuinfo_max_freq 는 2 이고 그것은 kHz 가 아니다.
+    expect(cpuData.frequency, `cpu: ${cpu?.reason ?? ''}`).not.toBeNull()
+    expect(cpuData.frequency!.length).toBeGreaterThan(0)
 
     // Memory: 앱 RSS 와 시스템 메모리 둘 다 나와야 한다.
+    //
+    // `collected` 하나로 못 박지 않는 이유는 레이스가 남아서가 아니다 — 트레이스가 앱을
+    // `zygote64` 로 기록한 세션에서 이 도구는 캡처한 pid 로 앱을 **찾아내고**, 그 사실을
+    // `partial` + `process_name_stale_in_trace` 로 정직하게 남긴다. 그것이 정상 동작이다.
+    // 그래서 status 대신 **실제로 중요한 것**을 단언한다: 앱을 찾았는가, 값이 있는가,
+    // 그리고 옛 결함(`process_not_in_trace` 로 값을 통째로 잃던 것)이 돌아오지 않았는가.
     const memory = result.metrics.memory
-    expect(memory?.status, `memory: ${memory?.reason ?? ''}`).toBe('collected')
+    expect(memory?.status, `memory: ${memory?.reason ?? ''}`).toMatch(/^(collected|partial)$/)
+    expect(memory?.reason_code, `memory: ${memory?.reason ?? ''}`).not.toBe('process_not_in_trace')
+    expect(memory?.data, `memory: ${memory?.reason ?? ''}`).not.toBeNull()
     const memData = memory?.data as MemoryData
     expect(memData.rss.max_kb).toBeGreaterThan(0)
+    // 확인되지 않은 이름이 결과에 실리지 않는다 (Defect 0). 멀티프로세스 앱이면
+    // `패키지:서브프로세스` 일 수 있으므로 접두어까지만 본다 — 요점은 `zygote64` 같은
+    // 무관한 이름이 절대 오지 않는다는 것이다.
+    expect(memData.process.startsWith(result.target_app.package)).toBe(true)
     expect(memData.system).not.toBeNull()
     expect(memData.system!.mem_total_kb).toBeGreaterThan(0)
 
