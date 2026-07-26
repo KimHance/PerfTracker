@@ -1,5 +1,6 @@
 import { mergeTraceConfigBlocks } from '../perfetto/config.js'
 import { renderReason } from '../schema/reasons.js'
+import { cpuCollector } from './cpu.js'
 import { frameCollector } from './frame.js'
 import { startupCollector } from './startup.js'
 import type { Collector, CollectorEnv } from './types.js'
@@ -9,7 +10,7 @@ import type { Collector, CollectorEnv } from './types.js'
  * 블록을 모으고 `extractRun` 이 여기를 순회해 `metrics` 를 채운다.
  * M3 에서 network/thermal/power 가 여기 한 줄로 붙는다.
  */
-export const COLLECTORS: Collector<unknown>[] = [frameCollector, startupCollector]
+export const COLLECTORS: Collector<unknown>[] = [frameCollector, startupCollector, cpuCollector]
 
 /** 이 기기에서 실제로 뭔가를 낼 수 있는 collector 들. */
 export function supportedCollectors(env: CollectorEnv): Collector<unknown>[] {

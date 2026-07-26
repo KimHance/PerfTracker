@@ -30,6 +30,12 @@ export const METRIC_REASON_CODES = [
   'launch_not_requested',
   /** `am start -W` 는 돌았지만 TotalTime 을 보고하지 않았다. */
   'launch_time_unreported',
+  /** linux.sys_stats 는 켰는데 트레이스에 cpu.times.* 표본이 하나도 없다. */
+  'no_cpu_samples',
+  /** 표본이 delta 를 낼 만큼 모이지 않았다 (세션이 폴링 주기보다 짧음). detail: samples, required */
+  'insufficient_samples',
+  /** 사용률은 나왔지만 power/cpu_frequency 이벤트가 하나도 없다. */
+  'cpu_freq_unavailable',
 ] as const
 
 export type MetricReasonCode = (typeof METRIC_REASON_CODES)[number]
@@ -48,6 +54,12 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
     '--launch 없이 시작한 세션이라 앱 시작 시간을 재지 않았습니다.',
   launch_time_unreported: () =>
     'am start -W 가 TotalTime 을 보고하지 않았습니다 — 앱이 이미 떠 있었거나 액티비티가 바로 끝났을 수 있습니다.',
+  no_cpu_samples: () =>
+    'linux.sys_stats 의 CPU 시간 표본이 트레이스에 없습니다.',
+  insufficient_samples: (d) =>
+    `표본이 ${String(d['samples'])}개뿐이라 구간 차이를 낼 수 없습니다 (최소 ${String(d['required'])}개 필요). 세션이 폴링 주기(1초)보다 짧았을 수 있습니다.`,
+  cpu_freq_unavailable: () =>
+    'ftrace power/cpu_frequency 이벤트가 없어 주파수를 함께 내지 못했습니다 — 사용률만 있는 값입니다.',
 }
 
 /** 코드 → 한국어 문장. 모르는 코드는 조용히 비우지 않고 코드 자체를 남긴다. */

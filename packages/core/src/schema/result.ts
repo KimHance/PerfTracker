@@ -76,6 +76,39 @@ export const StartupDataSchema = z.object({
 })
 export type StartupData = z.infer<typeof StartupDataSchema>
 
+export const CpuCoreUsageSchema = z.object({
+  cpu: z.number().int(),
+  busy_pct: z.number(),
+})
+export type CpuCoreUsage = z.infer<typeof CpuCoreUsageSchema>
+
+export const CpuFrequencySchema = z.object({
+  cpu: z.number().int(),
+  samples: z.number().int().nonnegative(),
+  min_khz: z.number(),
+  max_khz: z.number(),
+  avg_khz: z.number(),
+})
+export type CpuFrequency = z.infer<typeof CpuFrequencySchema>
+
+export const CpuDataSchema = z.object({
+  /** 첫 표본과 마지막 표본 사이. 폴링이라 세션 길이와 정확히 같지 않다. */
+  sampled_ms: z.number().int().nonnegative(),
+  samples: z.number().int().nonnegative(),
+  /**
+   * 전체 코어를 합친 사용률. (총 CPU시간 − idle − iowait) / 총 CPU시간.
+   * 기기 전체의 값이며 대상 앱만의 값이 아니다 — /proc/stat 은 프로세스를 구분하지 않는다.
+   */
+  total_busy_pct: z.number(),
+  per_core: z.array(CpuCoreUsageSchema),
+  /**
+   * ftrace `power/cpu_frequency` 로 관측한 코어별 주파수(kHz).
+   * 이벤트가 하나도 없으면 **null** 이다 — 사용률만 있는 결과가 사용률+주파수인 척하지 않게.
+   */
+  frequency: z.array(CpuFrequencySchema).nullable(),
+})
+export type CpuData = z.infer<typeof CpuDataSchema>
+
 export const CpuClusterSchema = z.object({
   cpus: z.array(z.number().int()),
   max_freq_khz: z.number().int().nullable(),
@@ -220,6 +253,7 @@ export const ResultSchema = z.object({
     .object({
       frame: metricResultSchema(FrameDataSchema),
       startup: metricResultSchema(StartupDataSchema).optional(),
+      cpu: metricResultSchema(CpuDataSchema).optional(),
     })
     .catchall(metricResultSchema(z.unknown())),
   measurement_overhead: MeasurementOverheadSchema,

@@ -9,7 +9,10 @@ import {
 import { startupCollector } from '../../src/collectors/startup.js'
 import { buildTraceConfig } from '../../src/perfetto/config.js'
 
-const OK = { sdkInt: 36, dataSources: ['android.surfaceflinger.frametimeline'] }
+const OK = {
+  sdkInt: 36,
+  dataSources: ['android.surfaceflinger.frametimeline', 'linux.sys_stats', 'linux.ftrace'],
+}
 const OLD = { sdkInt: 30, dataSources: [] }
 
 describe('COLLECTORS 레지스트리', () => {
