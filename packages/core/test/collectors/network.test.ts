@@ -104,6 +104,42 @@ describe('parseAppUidStats', () => {
     expect([...parseAppUidStats(text).byUid.keys()]).not.toContain(99999)
   })
 
+  /**
+   * 실기기(SM-S901N / sdk 36)의 `mAppUidStatsMap` 은 uid 열에 **음수**를 찍는다.
+   * 실측 원문 (3회 연속 동일, 표 93행 중 82번째):
+   *
+   *     -253 151772 1156 2367519 1871
+   *
+   * 그 값이 무엇인지 이 도구는 모른다 — 그리고 알 필요도 없다. 문제는 uid 열을 `\d+` 로
+   * 읽던 옛 파서가 이 줄을 **행이 아니라고 판단해 표 읽기를 통째로 멈췄다**는 것이다.
+   * 뒤따르던 12행(uid 10070 은 1.6GB 를 받은 행이다)이 소리 없이 사라졌고, 그 12행 중에
+   * 대상 앱의 uid 가 있었으면 이 도구는 `uid_not_in_netstats` 를 내면서
+   * **"부팅 이후 이 uid 로 오간 트래픽이 없었을 수 있습니다"** 라고 말했을 것이다.
+   * 관측하지 않은 원인을 사실 자리에 앉히는 바로 그 모양이다.
+   *
+   * 깨지는 조건: uid 열이 다시 부호를 안 받으면 `1051` 행을 못 읽고 실패한다.
+   */
+  it('uid 열의 음수 행에서 표 읽기를 멈추지 않는다 — 실기기가 실제로 찍는다', () => {
+    const text = NETSTATS.replace(
+      '    1051 0 0 1088 18\n',
+      '    -253 151772 1156 2367519 1871\n    1051 0 0 1088 18\n',
+    )
+    const d = parseAppUidStats(text)
+    // 음수 행 **뒤**의 행이 살아 있어야 한다. 이것이 이 테스트의 전부다.
+    expect(d.byUid.get(1051)).toEqual({
+      uid: 1051,
+      rxBytes: 0,
+      rxPackets: 0,
+      txBytes: 1088,
+      txPackets: 18,
+    })
+    // 읽은 행 수도 그 줄을 포함한다 — 읽고도 안 셌다고 말하지 않는다.
+    expect(d.rowCount).toBe(6)
+    // 값 자체는 지어내지 않고 원문 그대로 싣는다. 대상 앱 uid 는 음수일 수 없으므로
+    // 이 항목이 조회에 걸리는 일은 없다.
+    expect(d.byUid.get(-253)?.rxBytes).toBe(151_772)
+  })
+
   it('같은 uid 가 같은 값으로 두 번 나오면 충돌로 치지 않는다', () => {
     expect(parseAppUidStats(NETSTATS).conflictingUids).toEqual([])
   })

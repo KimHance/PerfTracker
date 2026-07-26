@@ -17,3 +17,6 @@ docs/superpowers/
 *.log
 .env
 .env.local
+
+# 실기기 조사용 스크래치 (커밋하지 않는다)
+.scratch/
