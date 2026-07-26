@@ -109,6 +109,38 @@ export const CpuDataSchema = z.object({
 })
 export type CpuData = z.infer<typeof CpuDataSchema>
 
+/** 세션 구간의 관측 통계. 값은 kB 다 — trace_processor 는 바이트로 주므로 반드시 변환한다. */
+export const MemoryStatSchema = z.object({
+  min_kb: z.number().int(),
+  max_kb: z.number().int(),
+  avg_kb: z.number().int(),
+})
+export type MemoryStat = z.infer<typeof MemoryStatSchema>
+
+export const SystemMemorySchema = z.object({
+  mem_total_kb: z.number().int(),
+  mem_available: MemoryStatSchema,
+  mem_free: MemoryStatSchema,
+  cached: MemoryStatSchema,
+  swap_total_kb: z.number().int(),
+  swap_free: MemoryStatSchema,
+})
+export type SystemMemory = z.infer<typeof SystemMemorySchema>
+
+export const MemoryDataSchema = z.object({
+  process: z.string(),
+  pid: z.number().int(),
+  samples: z.number().int().nonnegative(),
+  rss: MemoryStatSchema,
+  rss_anon: MemoryStatSchema.nullable(),
+  rss_file: MemoryStatSchema.nullable(),
+  /** `mem.rss.watermark` (= /proc/pid/status 의 VmHWM). 커널이 기억하는 최고점이다. */
+  rss_watermark_peak_kb: z.number().int().nullable(),
+  /** 기기 전체 메모리. linux.sys_stats 의 meminfo 가 없으면 null. */
+  system: SystemMemorySchema.nullable(),
+})
+export type MemoryData = z.infer<typeof MemoryDataSchema>
+
 export const CpuClusterSchema = z.object({
   cpus: z.array(z.number().int()),
   max_freq_khz: z.number().int().nullable(),
@@ -254,6 +286,7 @@ export const ResultSchema = z.object({
       frame: metricResultSchema(FrameDataSchema),
       startup: metricResultSchema(StartupDataSchema).optional(),
       cpu: metricResultSchema(CpuDataSchema).optional(),
+      memory: metricResultSchema(MemoryDataSchema).optional(),
     })
     .catchall(metricResultSchema(z.unknown())),
   measurement_overhead: MeasurementOverheadSchema,

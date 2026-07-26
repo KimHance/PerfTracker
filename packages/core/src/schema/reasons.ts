@@ -36,6 +36,12 @@ export const METRIC_REASON_CODES = [
   'insufficient_samples',
   /** 사용률은 나왔지만 power/cpu_frequency 이벤트가 하나도 없다. */
   'cpu_freq_unavailable',
+  /** 대상 앱의 프로세스가 process_stats 스캔에 잡히지 않았다. detail: package */
+  'process_not_in_trace',
+  /** 프로세스는 찾았지만 mem.rss 표본이 없다. detail: process */
+  'no_rss_samples',
+  /** linux.sys_stats 는 켰는데 meminfo 표본이 없다. */
+  'no_meminfo_samples',
 ] as const
 
 export type MetricReasonCode = (typeof METRIC_REASON_CODES)[number]
@@ -60,6 +66,11 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
     `표본이 ${String(d['samples'])}개뿐이라 구간 차이를 낼 수 없습니다 (최소 ${String(d['required'])}개 필요). 세션이 폴링 주기(1초)보다 짧았을 수 있습니다.`,
   cpu_freq_unavailable: () =>
     'ftrace power/cpu_frequency 이벤트가 없어 주파수를 함께 내지 못했습니다 — 사용률만 있는 값입니다.',
+  process_not_in_trace: (d) =>
+    `대상 앱(${String(d['package'])})의 프로세스가 트레이스에 없습니다 — 세션 동안 실행되지 않았을 수 있습니다.`,
+  no_rss_samples: (d) => `프로세스(${String(d['process'])})의 메모리 표본을 찾지 못했습니다.`,
+  no_meminfo_samples: () =>
+    'linux.sys_stats 의 meminfo 표본이 없어 기기 전체 메모리를 함께 내지 못했습니다.',
 }
 
 /** 코드 → 한국어 문장. 모르는 코드는 조용히 비우지 않고 코드 자체를 남긴다. */

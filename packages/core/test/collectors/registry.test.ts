@@ -11,7 +11,13 @@ import { buildTraceConfig } from '../../src/perfetto/config.js'
 
 const OK = {
   sdkInt: 36,
-  dataSources: ['android.surfaceflinger.frametimeline', 'linux.sys_stats', 'linux.ftrace'],
+  dataSources: [
+    'android.surfaceflinger.frametimeline',
+    'linux.process_stats',
+    'linux.sys_stats',
+    'linux.ftrace',
+    'android.log',
+  ],
 }
 const OLD = { sdkInt: 30, dataSources: [] }
 
@@ -47,6 +53,12 @@ describe('collectTraceConfigBlocks', () => {
       dataSourceBlocks: [...new Set(doubled)],
     })
     expect(config.split('linux.process_stats').length - 1).toBe(1)
+  })
+
+  it('두 collector 가 요구하는 linux.process_stats 가 한 번만 나간다', () => {
+    const config = buildTraceConfig({ dataSourceBlocks: collectTraceConfigBlocks(OK) })
+    expect(config.split('name: "linux.process_stats"').length - 1).toBe(1)
+    expect(config.split('name: "linux.sys_stats"').length - 1).toBe(1)
   })
 })
 
