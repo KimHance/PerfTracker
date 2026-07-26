@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { TraceProcessorError } from '../../src/errors.js'
-import { TraceProcessor } from '../../src/perfetto/traceProcessor/client.js'
+import { sqlQuote, TraceProcessor } from '../../src/perfetto/traceProcessor/client.js'
 import { artifactFor, downloadUrl, TRACE_PROCESSOR_VERSION } from '../../src/perfetto/traceProcessor/locate.js'
 import { FakeProcessRunner } from '../support/fakeProcessRunner.js'
 
@@ -91,5 +91,20 @@ describe('TraceProcessor.queryJson', () => {
     const tp = new TraceProcessor(BIN, TRACE, runner)
 
     await expect(tp.queryJson(sql)).rejects.toBeInstanceOf(TraceProcessorError)
+  })
+})
+
+describe('sqlQuote', () => {
+  it('작은따옴표로 감싼다', () => {
+    expect(sqlQuote('com.foo.bar')).toBe("'com.foo.bar'")
+  })
+
+  it('작은따옴표를 두 번 써서 이스케이프한다 — SQL 리터럴 밖으로 못 새게', () => {
+    expect(sqlQuote("a'b")).toBe("'a''b'")
+    expect(sqlQuote("' or 1=1 --")).toBe("''' or 1=1 --'")
+  })
+
+  it('빈 문자열도 리터럴이다', () => {
+    expect(sqlQuote('')).toBe("''")
   })
 })

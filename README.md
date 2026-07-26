@@ -16,6 +16,12 @@ adb 로 붙어서 Perfetto 트레이스를 기기에 남기고, 그것을 호스
 
 `start` 가 끝난 순간부터 `stop` 을 부를 때까지 **기기에 단 한 개의 adb 명령도 나가지 않습니다.**
 
+한 가지는 나란히 알아야 합니다. **트레이스는 `start` 가 끝나기 전에 이미 시작합니다** —
+그래야 콜드 스타트가 트레이스 안에 들어갑니다. `--launch` 를 주면 트레이스가 켜진 뒤,
+래치가 걸리기 전에 perftracker 자신이 `am start -W`(앱 실행 + 시작 시간)와 `pidof`(앱 pid)를
+한 번의 adb 호출로 보냅니다. 앱을 콜드로 띄우는 것이 그 세션의 목적이므로 의도된 동작이지만,
+"트레이스 구간 안의 adb 호출이 0" 이라는 뜻은 아닙니다. 그 뒤로는 0 입니다.
+
 이건 "그러려고 노력한다" 가 아니라 구조입니다. 세션이 살아 있는 동안 모든 adb 접근 경로에
 래치(`MeasurementWindow`)가 걸리고, 기기를 만지려는 명령은 예외로 막힙니다.
 세션 중에 `perftracker apps` 를 실행하면 이렇게 됩니다:
@@ -31,6 +37,11 @@ adb 로 붙어서 Perfetto 트레이스를 기기에 남기고, 그것을 호스
 그 값이 0 이 아니면 그 세션 데이터는 오염된 것으로 봐야 합니다.
 (이 카운터가 세는 것은 **이 도구를 통과한** 호출뿐입니다. 자세한 한계는
 [아래](#measurement_overhead)에 적어 두었습니다.)
+
+횟수는 창이 열려 있는 동안 활성 세션 포인터에 쌓이고 `stop` 이 그것을 거둡니다.
+그래서 아직 `stop` 하지 않은 세션에 `extract` 를 돌리면 이 값은 **최종값이 아닙니다** —
+그때까지의 누적이거나, 포인터마저 없으면 `null`(= 셀 수 없었다)입니다.
+`null` 을 0 으로 접어 읽지 마세요.
 
 이 제약이 설계 전체를 결정합니다:
 
@@ -141,21 +152,28 @@ npx perftracker extract runs/2026-07-26T02-31-40_홈-스크롤_a3f9c1
 npx perftracker schema > result.schema.json
 ```
 
-`schema_version` 이 그 계약의 버전입니다 (현재 `1.0.0`).
+`schema_version` 이 그 계약의 버전입니다 (현재 `1.1.0`).
 
 ### 최상위 구조
 
 | 필드 | 무엇인가 |
 | --- | --- |
 | `schema_version` | 이 파일 형식의 버전 |
-| `session` | id, 이름, `state`, 시작/종료 시각, 길이 |
+| `session` | id, 이름, `state`, 시작/종료 시각, 길이 (아래 참고) |
 | `device` | 기기 스펙(`static`)과 세션 전후 상태(`state_before` / `state_after`) |
 | `target_app` | 패키지, 라벨, 버전, 렌더 프로세스와 pid |
-| `metrics` | 메트릭들. 키가 곧 수집기 id (M1 은 `frame` 하나) |
-| `measurement_overhead` | 이 측정이 기기에 얼마나 개입했는지 |
+| `metrics` | 메트릭들. 키가 곧 수집기 id (`frame` / `startup` / `cpu` / `memory` / `log`) |
+| `measurement_overhead` | 이 측정이 기기에 개입한 정도의 **하한** (아래 참고) |
 | `references` | 구글 공개 기준치. **비교에 쓰이지 않고 기록만 된다** |
 | `warnings` | 관측된 사건 (평가 아님) |
 | `artifacts` | 원본 파일들의 상대 경로 |
+
+> **아직 `stop` 하지 않은 세션에 `extract` 를 돌린 결과**(`session.state === "running"`)에는
+> 아직 존재하지 않는 사실이 있습니다. 그 자리는 그럴듯한 숫자가 아니라 `null` 입니다:
+> `session.ended_at` 과 `session.duration_ms`(세션이 안 끝났으니 길이가 없습니다 — 0 이 아닙니다),
+> 그리고 `device.state_after`. `measurement_overhead` 의 두 필드도 `null` 일 수 있습니다
+> (아래). `warnings` 에는 `session_still_running` 이 함께 실립니다.
+> `stop` 한 뒤 같은 run 디렉토리로 `extract` 를 다시 돌리면 전부 채워집니다.
 
 ### 메트릭 하나의 모양
 
@@ -171,12 +189,28 @@ npx perftracker schema > result.schema.json
 }
 ```
 
-- `status` — `collected`(정상) / `partial`(일부만) / `unsupported`(이 기기가 못 함) /
-  `failed`(수집 실패) / `skipped`(요청되지 않음)
+- `status` — 다섯 값입니다.
+  - `collected` — 값이 전부 나왔습니다. `data` 는 non-null.
+  - `partial` — **두 가지를 겸합니다.** 값은 나왔는데 일부가 빠졌거나(예: CPU 사용률은
+    있고 주파수가 없음 → `data` non-null), **값이 아예 안 나왔거나**(→ `data` **null**).
+    어느 쪽인지는 `reason_code` 가 말합니다.
+  - `unsupported` — 이 기기가 못 냅니다 (sdk 하한 미달, 데이터소스 미등록). `data` null.
+  - `failed` — **예외 상황 전용**입니다. 트레이스 원본이 없거나(`trace_missing`)
+    쿼리가 예외로 터진 경우(`query_failed`)뿐입니다. `data` null.
+  - `skipped` — 시도조차 하지 않음 (`--launch` 없이 시작한 세션의 startup). `data` null.
+
+  > **`status === 'failed'` 만 걸러서는 수집 실패를 못 잡습니다.** 값이 없는 대부분의
+  > 경로는 `partial` + `data: null` 입니다. 값이 있어야 하는 CI 는
+  > `status === 'collected'` 또는 `data !== null` 로 판정하세요.
 - `source` — 이 숫자를 **어떤 방법으로 쟀는지**의 기록
 - `reason_code` — 기계가 읽는 안정적인 키. 문구가 바뀌어도 이건 안 바뀝니다.
   CI 매칭은 반드시 이걸로 하세요. (예: `sdk_too_low`, `render_process_not_found`,
   `no_frames`, `trace_missing`, `data_source_not_registered`, `query_failed`)
+
+  > `reason_code` 는 **닫힌 enum** 이고 `1.1.0` 에서 6개 → 21개로 넓어졌습니다. 그중
+  > `process_name_stale_in_trace` 는 `1.0.0` 부터 있던 `metrics.frame` 에도 실립니다.
+  > `1.0.0` 스키마를 고정해 검증하는 CI 는 정상적인 `1.1.0` 산출물을 거부하니,
+  > 스키마를 다시 꺼내(`perftracker schema`) 갱신하세요.
 - `reason` — 사람이 읽는 한국어 문장. 다듬힐 수 있으니 매칭에 쓰지 마세요.
 - `data` — 메트릭별 본문. 수집되지 않았으면 `null`
 
@@ -215,16 +249,35 @@ npx perftracker schema > result.schema.json
 }
 ```
 
-- `adb_commands_during_session` — 측정 창이 열린 동안 **perftracker 를 통해** 시도되어
+- `adb_commands_during_session` — **측정 창이 열린 동안** perftracker 를 통해 시도되어
   차단된 adb 호출 수. 0 이 아니면 그 데이터는 의심하세요.
-  **반대 방향은 성립하지 않습니다:** 0 은 "perftracker 가 아무것도 보내지 않았다"는 뜻이지
-  "아무도 기기를 건드리지 않았다"는 뜻이 아닙니다. 다른 터미널에서 직접 실행한 `adb`
-  (예: `adb shell input swipe`)는 이 도구를 거치지 않으므로 여기 잡히지 않습니다.
-  도구는 자기가 보내지 않은 트래픽을 관측할 수 없습니다 — 관측하려면 세션 중에 기기에
-  물어봐야 하고, 그게 곧 이 도구가 금지하는 행위이기 때문입니다.
+  이름과 달리 세는 구간은 "세션 전체" 가 아니라 **창이 열린 구간**입니다. 두 가지를 세지
+  않으니 함께 읽으세요.
+  - **perftracker 자신의 실행 명령.** `--launch` 세션에서는 트레이스가 시작된 뒤,
+    래치가 걸리기 전에 `am start -W` 와 `pidof` 가 한 번의 adb 호출로 나갑니다. 창 밖이라
+    이 카운터에 잡히지 않습니다. 앱을 콜드로 띄우는 것이 그 세션의 목적이므로 의도된
+    동작이고, 그 뒤로 창이 닫힐 때까지 perftracker 는 기기에 아무것도 보내지 않습니다.
+  - **다른 프로세스의 adb.** 0 은 "perftracker 가 아무것도 보내지 않았다"는 뜻이지
+    "아무도 기기를 건드리지 않았다"는 뜻이 아닙니다. 다른 터미널에서 직접 실행한 `adb`
+    (예: `adb shell input swipe`)는 이 도구를 거치지 않으므로 여기 잡히지 않습니다.
+    도구는 자기가 보내지 않은 트래픽을 관측할 수 없습니다 — 관측하려면 세션 중에 기기에
+    물어봐야 하고, 그게 곧 이 도구가 금지하는 행위이기 때문입니다.
+  - **아직 `stop` 하지 않은 세션.** 이 카운터의 정본은 `stop` 이 남깁니다. 그 전에
+    `extract` 를 돌리면 활성 세션 포인터에 그때까지 쌓인 누적치가 실리는데, **읽은 시점까지의
+    사실이지 최종값이 아닙니다** — 세션이 도는 동안 더 늘 수 있습니다. 포인터마저 없으면
+    (`--force` 로 버려진 세션 등) 셀 방법이 없어 **`null`** 입니다.
+    `null` 은 0 이 아닙니다: 0 은 "세어 봤더니 없었다", `null` 은 "셀 수 없었다" 입니다.
 - `trace_buffer_overrun` — 트레이스 버퍼가 넘쳐 데이터가 잘렸는지. 잘린 데이터를
   정상인 척 내보내지 않기 위해 사실로 기록합니다.
-- `tracing_processes_*` 는 M2 에서 채워집니다.
+  **`null` 은 확인하지 못했다는 뜻입니다**(`false` 가 아닙니다) — 이 run 에 트레이스 원본이
+  없거나(아직 `stop` 전, 또는 트레이스를 잃은 `aborted` 세션) 통계 쿼리 자체가 실패한 경우입니다.
+- `tracing_processes_*` — 트레이싱 **프로세스들**(`traced` / `traced_probes` / `perfetto`)이
+  쓴 CPU 시간과 RSS 입니다. M2 에서 채워집니다.
+
+  > **이건 트레이싱의 총비용이 아니라 체계적인 하한입니다.** 커널이 ftrace 이벤트를
+  > 링버퍼에 기록하는 비용은 그 순간 인터럽트당한 프로세스(대상 앱일 수 있습니다)에
+  > 청구되므로 이 숫자에 들어오지 않습니다. 켜는 ftrace 이벤트를 줄이면 그 몫도 줄지만
+  > 0 이 되지는 않습니다. `stop` 요약의 `Overhead tracing procs ...% CPU` 도 같은 하한입니다.
 
 ### `references`
 
@@ -259,3 +312,72 @@ npm run test:device   # 실기기가 꽂혀 있어야 함
 새 메트릭을 붙이려면 `Collector` 를 하나 만들어 `collectors/registry.ts` 의
 `COLLECTORS` 에 넣으면 됩니다. `start` 가 TraceConfig 블록을 모으고 `extract` 가
 `metrics[collector.id]` 를 채우는 것은 그 배열을 순회해서 일어납니다.
+
+## 검증 환경
+
+| 항목 | M0+M1 | M2 |
+|---|---|---|
+| 실기기 (SM-S931N, Android 16 / sdk 36) | ✅ | 미검증 |
+| 에뮬레이터 (Medium_Phone_15, API 35, 4코어) | — | ✅ |
+
+에뮬레이터에서 **검증되지 않은** 항목:
+
+- **CPU 주파수 값** — 에뮬레이터의 `cpuinfo_max_freq` 가 `2` 다. `power/cpu_frequency` 이벤트는
+  뜨지만 값이 kHz 가 아니므로 크기에 대한 검증은 실기기에서만 가능하다.
+- **로그 수집** — 이 이미지의 SELinux 가 `traced_probes` 의 `logdr` 소켓 접근을 막아
+  `android.log` 가 항상 비어 있다. 크래시·ANR 분류는 유닛 테스트로만 덮여 있다.
+  (에뮬레이터 6세션 전부 `partial` / `no_log_entries`.)
+- **big.LITTLE 코어별 거동** — 에뮬레이터는 4코어가 모두 같은 클러스터다.
+- **Thermal / GPU** — 물리 센서가 없다 (M3 범위).
+
+에뮬레이터에서 **검증된** 항목 (`npm run test:device` 로 돌린 `--launch` 세션 11회 실측):
+
+- **프레임 타임라인** — 11회 **전부** 대상 앱의 프레임을 수집했다 (4~9 프레임,
+  `process = com.example.streaming.debug`).
+  (예전 이 문서는 "에뮬레이터에서는 `actual_frame_timeline_slice` 가 채워지지 않는다" 고
+  적었는데, 그것은 런처만 조작한 세션의 관측이었고 지금은 사실이 아니다. 다만 프레임 **수**가
+  적으므로 분포·백분위의 통계적 의미는 실기기에서 봐야 한다.)
+- **CPU 사용률과 주파수 이벤트의 존재** — 11회 모두 `collected`, 4코어 전부에서 `cpufreq`
+  카운터가 나왔다 (값의 크기는 위 참조).
+
+### `--launch` 인데 시작 시간이 안 나오는 경우
+
+`metrics.startup` 이 `partial` + `launch_wait_timed_out` 으로 나오고 값이 없을 수 있습니다.
+**이 에뮬레이터에서는 11회 중 4회가 그랬습니다 (약 3분의 1).**
+
+원인은 도구가 아니라 `am start -W` 자체입니다. 이 앱의 콜드 스타트가 이 에뮬레이터에서
+12~15초 걸리는데, 그럴 때 ActivityManager 가 실행 완료 보고를 기다리다 포기하고 이렇게
+답합니다:
+
+```
+Status: timeout
+LaunchState: UNKNOWN (-1)
+Activity: <패키지>/<런처 액티비티>
+WaitTime: 11062
+Complete
+```
+
+`TotalTime` 이 아예 찍히지 않습니다. **앱이 실행되지 않았다는 뜻이 아닙니다** — 같은
+세션에서 앱의 pid 는 확보되고 프레임·메모리도 정상 수집됩니다. 그 사실을 `target_app.pid`
+로 확인할 수 있고, 경고 `app_launch_time_unmeasured` 가 "이 세션에서 시작 시간을 못 쟀다"
+는 것만 말합니다. 느린 콜드 스타트를 가진 앱은 실기기에서도 같은 일이 일어날 수 있습니다.
+
+### 트레이스가 앱을 `zygote64` 로 아는 경우
+
+`--launch` 로 앱을 트레이스 도중에 콜드 스타트시키면, 새로 fork 된 프로세스의 이름이
+트레이스에 **`zygote64` 로 고정되는 경우가 있습니다.** `linux.process_stats` 는 프로세스를
+처음 관측할 때 이름을 한 번 확정하고 갱신하지 않는데, zygote 가 fork 한 앱은
+`Process.setArgV0()` 이 실제 패키지명을 붙이기 전까지 잠시 그 이름을 갖기 때문입니다
+(`trace_processor` 로 직접 확인: 문제의 pid 가 트레이스 안에서 실제로 `name = "zygote64"`,
+`uid = 0` 이었습니다). `--launch` 는 force-stop 후 재실행이라 앱 프로세스가 **항상** 갓
+fork 된 상태이므로 이것은 예외 상황이 아닙니다.
+
+perftracker 는 `am start -W` 직후(측정 창이 열리기 **전**) `pidof` 로 앱의 pid 를 받아 두고,
+트레이스 이름이 맞지 않으면 그 pid 로 대상 앱을 특정합니다. 그때:
+
+- `frame` / `memory` 의 `process` 는 **패키지명**입니다 — 확인되지 않은 이름(`zygote64`)이
+  결과에 실리는 일은 없습니다.
+- 두 메트릭의 `status` 는 `partial`, `reason_code` 는 `process_name_stale_in_trace` 입니다.
+  값은 정상이고, "이름이 아니라 pid 로 확인했다" 는 사실을 그 코드가 말합니다.
+- pid 조차 없으면(= `--launch` 없이 시작했고 이름도 안 맞음) 추측하지 않습니다 —
+  `render_process_not_found` / `process_not_in_trace` 로 값을 내지 않습니다.

@@ -6,10 +6,63 @@ export interface CollectorEnv {
   dataSources: string[]
 }
 
-export interface ExtractContext {
-  tp: TraceProcessor
+/**
+ * `am start -W` 가 낸 것. `session/start.ts` 의 `parseAmStart` 결과가 그대로 담긴다.
+ *
+ * `status` 와 `waitTimeMs` 가 optional 인 것은 이 필드들이 없던 시절의 `session.json` 을
+ * 그대로 읽기 위해서다 — 필드 추가는 형식 버전을 올릴 이유가 아니다.
+ */
+export interface AmStartResult {
+  /** 프로세스 시작부터 첫 프레임까지. 기기가 보고하지 않으면 null. */
+  totalTimeMs: number | null
+  /** COLD / WARM / HOT / UNKNOWN. 기기가 뱉는 문자열 그대로다. */
+  launchState: string | null
+  /**
+   * `am start -W` 의 `Status:` 원문 (`ok` / `timeout` / ...).
+   * **TotalTime 이 없을 때 그 이유를 아는 유일한 단서**라 버리지 않는다.
+   */
+  status?: string | null
+  /** `WaitTime:`. TotalTime 이 없어도 이건 오는 경우가 많다 (실측). */
+  waitTimeMs?: number | null
+}
+
+/**
+ * capture 단계에서만 알 수 있고 트레이스에는 없는 사실.
+ * `extractRun` 이 `session.json` 에서 조립해 넣는다 — capture.json 의 버전을 올리지 않는 이유다.
+ */
+export interface CaptureFacts {
+  /** `am start -W` 가 보고한 값. `--launch` 없이 시작했으면 null. */
+  startup: AmStartResult | null
+  /**
+   * 사용자가 `--launch` 를 줬는지.
+   * `startup` 이 null 인 이유가 "안 켰다"(skipped)인지 "켰는데 못 읽었다"(partial)인지를 가른다.
+   */
+  launchRequested: boolean
+  /**
+   * `am start -W` 직후 기기가 알려 준 앱 프로세스의 pid. `--launch` 없이 시작했거나
+   * `pidof` 가 답하지 못했으면 null.
+   *
+   * 트레이스만으로는 갓 fork 된 앱 프로세스를 이름으로 찾지 못하는 경우가 있어서 필요하다.
+   * 자세한 이유는 `collectors/appProcess.ts` 에 있다.
+   */
+  appPid: number | null
+}
+
+/**
+ * 모든 collector 가 받는 기본 컨텍스트 — 트레이스를 읽든 안 읽든 공통이다.
+ * `ExtractContext` 는 여기에 `tp` 를 얹은 것뿐이고, 트레이스가 필요 없는 collector
+ * (`CaptureCollector`) 는 이 기본형을 그대로 받는다. `tp` 가 없다고 "capture 전용"
+ * 컨텍스트인 것은 아니다 — 두 종류 collector 가 공유하는 바닥이라서 이 자리에 있다.
+ */
+export interface BaseExtractContext {
   packageName: string
   env: CollectorEnv
+  capture: CaptureFacts
+}
+
+/** 트레이스를 읽는 collector 의 컨텍스트. 기본 컨텍스트에 `tp` 를 더한 것. */
+export interface ExtractContext extends BaseExtractContext {
+  tp: TraceProcessor
 }
 
 /**
@@ -20,20 +73,43 @@ export type SupportResult = { supported: true } | { supported: false; reason: Me
 
 /**
  * 추출 결과. 값이 없을 때 "왜 없는지"를 코드로 구분한다.
- * 예전에는 collector 가 두 경우(렌더 프로세스 없음 / 프레임 없음)에 똑같이 null 을 냈고,
- * extract 가 둘 다 "렌더 프로세스를 찾지 못했습니다" 로 적어서 한쪽은 틀린 사유였다.
+ *
+ * `partialReason` 은 **값이 나왔지만 일부만 나온** 경우다 — CPU 사용률은 잡혔는데
+ * `cpufreq` 이벤트가 하나도 없는 상황이 정확히 이것이고, 그걸 `collected` 로 내보내면
+ * 사용률만 있는 결과가 사용률+주파수인 척한다.
+ *
+ * `status` 는 값이 아예 없을 때 `partial`(기본) 과 `skipped`(수집을 시도조차 안 함) 를 가른다.
  */
-export type ExtractOutcome<T> = { collected: true; data: T } | { collected: false; reason: MetricReason }
+export type ExtractOutcome<T> =
+  | { collected: true; data: T; partialReason?: MetricReason }
+  | { collected: false; reason: MetricReason; status?: 'partial' | 'skipped' }
 
-/**
- * 메트릭 하나 = 파일 하나.
- * traceConfigBlocks 는 capture 단계에 기여하고, extract 는 기기 없이 원본만 읽는다.
- */
-export interface Collector<T> {
+interface CollectorBase {
   id: string
   /** 어떤 방법으로 잰 값인지. result.json 의 metrics[id].source 로 그대로 나간다. */
   source: string
   supports(env: CollectorEnv): SupportResult
+  /** 이 collector 가 필요로 하는 데이터소스 블록. 반드시 `collectors/blocks.ts` 의 상수를 쓴다. */
   traceConfigBlocks(): string[]
+}
+
+/** 트레이스를 파싱해야 값이 나오는 collector. */
+export interface TraceCollector<T> extends CollectorBase {
+  needsTrace: true
   extract(ctx: ExtractContext): Promise<ExtractOutcome<T>>
 }
+
+/**
+ * capture 단계의 사실만으로 값이 나오는 collector (startup).
+ * 트레이스가 없는 run 에서도 정상 산출돼야 하므로 `runCollector` 의 trace_missing 단축로를 타지 않는다.
+ */
+export interface CaptureCollector<T> extends CollectorBase {
+  needsTrace: false
+  extract(ctx: BaseExtractContext): Promise<ExtractOutcome<T>>
+}
+
+/**
+ * 메트릭 하나 = 파일 하나.
+ * `needsTrace` 가 판별자다 — `runCollector` 가 이걸로 좁히면 `as` 캐스트 없이 타입이 맞는다.
+ */
+export type Collector<T> = TraceCollector<T> | CaptureCollector<T>

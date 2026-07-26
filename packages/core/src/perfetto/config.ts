@@ -6,14 +6,25 @@ export const DEFAULT_FILE_WRITE_PERIOD_MS = 30_000
 /** 세션 상한. 사람이 stop 을 잊어도 무한히 돌지 않게 한다. */
 export const DEFAULT_MAX_DURATION_MS = 1_800_000
 
-/** 초당 수만 건이 쏟아져 그 자체로 CPU 를 먹는 이벤트들. 켜는 순간 측정이 대상을 바꾼다. */
-export const FORBIDDEN_FTRACE_EVENTS = [
-  'sched/sched_switch',
-  'sched/sched_waking',
-  'sched/sched_wakeup',
-  'raw_syscalls/sys_enter',
-  'raw_syscalls/sys_exit',
-  'ftrace/print',
+/**
+ * ftrace 이벤트 **허용 목록**. 여기 없는 이벤트는 config 에 들어갈 수 없다.
+ *
+ * 원래는 `FORBIDDEN_FTRACE_EVENTS` 라는 블랙리스트(sched 계열 6개)였는데, 블랙리스트는
+ * "명시적으로 금지한 것 말고는 다 괜찮다" 고 말한다. 그 말은 사실이 아니었다 —
+ * `power/cpu_idle` 이 검사를 그대로 통과해 에뮬레이터 33초 세션에서 47,752건,
+ * ftrace 페이로드의 **94%** 를 차지했고(전체 50,654건), 저장소 어디에도 그것을 읽는 코드는
+ * 없었다. `sched/sched_switch` 를 "켜는 것만으로 부하" 라며 막는 도구가 읽지도 않는 이벤트에
+ * 예산의 대부분을 쓰고 있었다.
+ *
+ * 뒤집은 이유는 볼륨이 아니라 **입증 책임**이다. 목록에 이벤트를 더하려는 사람은 여기를
+ * 고쳐야 하고, 그때 "이걸 읽는 collector 가 어디 있나" 라는 질문이 자동으로 따라온다.
+ * 블랙리스트에서는 그 질문이 아무 데서도 발생하지 않았다.
+ *
+ * **여기 추가할 때의 규칙: 그 이벤트를 읽는 collector 와 같은 커밋에 넣는다.**
+ */
+export const ALLOWED_FTRACE_EVENTS: readonly string[] = [
+  // collectors/cpu.ts 의 CPU_FREQ_SQL 이 `cpufreq` 카운터 트랙으로 읽는다.
+  'power/cpu_frequency',
 ]
 
 const MIN_POLL_PERIOD_MS = 1000
@@ -54,12 +65,17 @@ export function buildTraceConfig(opts: TraceConfigOptions): string {
  * 이 함수가 통과시킨 config 만 기기로 나간다.
  */
 export function assertLowOverheadConfig(text: string): void {
-  for (const event of FORBIDDEN_FTRACE_EVENTS) {
-    if (text.includes(event)) {
-      throw new PerfettoSessionError(
-        `고빈도 ftrace 이벤트 "${event}" 는 측정 자체가 기기에 부하를 주므로 사용할 수 없습니다.`,
-      )
-    }
+  for (const m of text.matchAll(/ftrace_events:\s*"([^"]+)"/g)) {
+    const event = m[1]!
+    if (ALLOWED_FTRACE_EVENTS.includes(event)) continue
+    throw new PerfettoSessionError(
+      `ftrace 이벤트 "${event}" 는 허용 목록에 없습니다.\n` +
+        `perftracker 는 켜는 이벤트를 화이트리스트로 관리합니다 (perfetto/config.ts 의 ALLOWED_FTRACE_EVENTS).\n` +
+        `  - 새 이벤트가 필요하면 **그것을 읽는 collector 와 함께** 목록에 추가하세요. ` +
+        `읽지 않는 이벤트는 트레이스만 키우고 대상 앱의 CPU 를 씁니다.\n` +
+        `  - sched/*, raw_syscalls/*, ftrace/print 처럼 초당 수만 건이 쏟아지는 이벤트는 ` +
+        `켜는 것만으로 측정이 대상을 바꾸므로 목록에 올릴 수 없습니다.`,
+    )
   }
 
   if (!text.includes('write_into_file: true')) {
@@ -72,11 +88,23 @@ export function assertLowOverheadConfig(text: string): void {
     )
   }
 
-  for (const m of text.matchAll(/(\w*poll_ms|\w*period_ms):\s*(\d+)/g)) {
-    const key = m[1]!
-    if (!key.endsWith('poll_ms') && !/^(stat|meminfo|vmstat)_period_ms$/.test(key)) continue
+  // `*_poll_ms` / `*_period_ms` 로 끝나는 키는 **전부** 하한을 받는다.
+  //
+  // 예전에는 여기에도 화이트리스트(`stat|meminfo|vmstat`)가 있어서, 목록에 없는 주기 키는
+  // 어떤 값이든 검사 없이 통과했다 — `thermal_period_ms: 250` 같은 설정이 원칙 1 의 강제
+  // 장치를 그냥 지나갔다는 뜻이다. ftrace 이벤트에서 블랙리스트가 만든 것과 같은 종류의
+  // 구멍이라 같이 막는다. 지금 쓰는 값은 전부 1000 / 30000 이라 이 강화로 달라지는 config 는
+  // 없고, 앞으로 추가되는 데이터소스가 자동으로 검사를 받는다.
+  //
+  // 여전히 안 잡히는 것: 키 이름이 이 두 접미사로 끝나지 않는 주기 설정
+  // (예: android.power 의 `battery_poll_ms` 는 잡히지만 `pull_frequency_ms` 는 안 잡힌다).
+  // 그런 데이터소스를 들일 때 이 정규식도 함께 넓혀야 한다.
+  for (const m of text.matchAll(/(\w*(?:poll|period)_ms):\s*(\d+)/g)) {
     if (Number(m[2]) < MIN_POLL_PERIOD_MS) {
-      throw new PerfettoSessionError(`${key} 가 ${m[2]}ms 입니다 — 폴링 주기는 1000ms 이상이어야 합니다.`)
+      throw new PerfettoSessionError(
+        `${m[1]} 가 ${m[2]}ms 입니다 — 주기는 1000ms 이상이어야 합니다. ` +
+          `짧은 주기는 세션 내내 대상 앱과 CPU 를 다툽니다.`,
+      )
     }
   }
 

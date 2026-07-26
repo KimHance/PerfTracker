@@ -24,8 +24,19 @@ export interface CaptureManifest {
   target_app: TargetApp
   env: CollectorEnv
   warnings: Warning[]
-  /** 측정 창 안에서 시도된 adb 호출 수. 0 이 아니면 그 데이터는 오염된 것이다. */
-  adb_commands_during_session: number
+  /**
+   * 측정 창 안에서 시도된 adb 호출 수. 0 이 아니면 그 데이터는 오염된 것이다.
+   *
+   * **`stop` 이 쓴 뒤에야 값이 있다.** 세션이 도는 동안의 위반은 활성 세션 포인터에
+   * 쌓이고(`recordAdbViolation` — 창은 프로세스 메모리 안에 있으므로 start 와 stop 사이의
+   * 다른 프로세스들은 그 파일에만 기록할 수 있다), `stop` 이 그것을 거둬 이 자리로 옮긴다.
+   *
+   * 그래서 `start` 는 여기에 **null** 을 쓴다. 0 이 아니다 — 이 필드에서 0 은 "세어 봤더니
+   * 없었다" 라는 강한 주장이고, start 는 세어 본 적이 없다. `stop` 을 거치지 않은 run 에서
+   * `extract` 는 이 자리를 보지 않고 포인터를 직접 읽는다
+   * (`extract/run.ts` 의 `countAdbCommands`).
+   */
+  adb_commands_during_session: number | null
   artifacts: { trace: string | null; video: string | null; raw: string[] }
 }
 

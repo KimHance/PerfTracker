@@ -132,6 +132,18 @@ describe('REFERENCES', () => {
     expect(REFERENCES.length).toBeGreaterThan(0)
     for (const ref of REFERENCES) expect(ref.url).toMatch(/^https:\/\//)
   })
+
+  it('references 는 출처 URL 이 있는 항목만 담는다 — 근거 없는 기준선은 곧 판정이다', () => {
+    for (const ref of REFERENCES) {
+      expect(ref.url.startsWith('https://')).toBe(true)
+      expect(ref.source.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('startup 기준선 세 개가 들어 있다', () => {
+    const startup = REFERENCES.filter((r) => r.metric === 'startup')
+    expect(startup.map((r) => r.value).sort((a, b) => a - b)).toEqual([1500, 2000, 5000])
+  })
 })
 
 describe('resultJsonSchema', () => {
@@ -161,10 +173,217 @@ describe('resultJsonSchema', () => {
     expect(field.description).toBeDefined()
     // 이 필드를 가장 잘못 읽기 쉬운 소비자가 스키마만 읽는 CI 와 LLM 이다.
     expect(field.description).toContain('perftracker')
-    expect(field.description).toMatch(/역은 성립하지 않는다/)
+    // 다른 터미널의 adb 는 안 잡힌다.
+    expect(field.description).toMatch(/다른 터미널/)
+    // 그리고 **이 도구 자신이** 트레이스 시작 뒤 창이 열리기 전에 보내는 두 명령도 안 잡힌다.
+    // 이 절이 빠져 있던 동안 스키마만 읽는 소비자는 "perftracker 는 세션 중 아무것도 안
+    // 보냈다" 로 결론냈고, `--launch` 세션에서 그건 거짓이었다.
+    expect(field.description).toContain('am start -W')
+    expect(field.description).toContain('pidof')
+  })
+
+  /**
+   * M4. `stop` 하지 않은 run 에 extract 를 돌리면 이 값은 최종값이 아니고, 셀 수 없으면
+   * null 이다. 그 사실이 소스 주석에만 있으면 스키마만 읽는 CI 는 null 을 만나 터지거나
+   * (더 나쁘게) `?? 0` 으로 접어 오염 가능성이 있는 세션을 청정으로 판정한다.
+   */
+  it('stop 전에는 이 값이 최종값이 아니고 null 일 수 있다는 것을 스키마에서 말한다', () => {
+    const overhead = props(resultJsonSchema())['measurement_overhead']
+    const field = props(overhead)['adb_commands_during_session'] as { description?: string }
+
+    expect(field.description).toContain('running')
+    expect(field.description).toMatch(/최종값이 아니다/)
+    // null 과 0 이 다른 사실이라는 것을 스키마가 직접 말해야 한다.
+    expect(field.description).toMatch(/null 은 0 이 아니다/)
+    // 그리고 M2 에서 들어간 `--launch` 공시는 그대로 살아 있어야 한다.
+    expect(field.description).toContain('am start -W')
+    expect(field.description).toContain('pidof')
+  })
+
+  it('adb_commands_during_session 이 실제로 null 을 허용한다 — 설명만이 아니라 타입도', () => {
+    const overhead = props(resultJsonSchema())['measurement_overhead']
+    expect(JSON.stringify(props(overhead)['adb_commands_during_session'])).toContain('null')
+  })
+
+  it('끝나지 않은 세션의 종료 시각과 길이가 null 임을 스키마에서 말한다', () => {
+    const session = props(props(resultJsonSchema())['session'])
+    for (const field of ['ended_at', 'duration_ms']) {
+      const f = session[field] as { description?: string }
+      expect(f.description, `${field} 설명 없음`).toBeDefined()
+      expect(JSON.stringify(session[field]), `${field} 가 null 을 안 받음`).toContain('null')
+    }
+    expect((session['duration_ms'] as { description: string }).description).toMatch(/0 과 혼동/)
+  })
+
+  it('확인하지 못한 것을 false 로 내지 않는다는 사실이 스키마에 있다', () => {
+    // 같은 계열. 트레이스가 없으면 버퍼 통계를 볼 수조차 없는데 옛 값은 false 였다.
+    const overhead = props(resultJsonSchema())['measurement_overhead']
+    const f = props(overhead)['trace_buffer_overrun'] as { description?: string }
+
+    expect(f.description).toBeDefined()
+    expect(f.description).toMatch(/null 은 확인하지 못했다는 뜻이다/)
+    expect(JSON.stringify(props(overhead)['trace_buffer_overrun'])).toContain('null')
+  })
+
+  it('진행 중인 세션의 결과(널 네 개)가 스키마를 통과한다', () => {
+    const r = minimalResult()
+    const running = {
+      ...r,
+      session: { ...r.session, state: 'running' as const, ended_at: null, duration_ms: null },
+      measurement_overhead: {
+        ...r.measurement_overhead,
+        adb_commands_during_session: null,
+        trace_buffer_overrun: null,
+      },
+    }
+    expect(() => ResultSchema.parse(running)).not.toThrow()
+  })
+
+  it('오버헤드 세 필드의 주의사항을 스키마에 실어 보낸다 — 가장 오해하기 쉬운 숫자들이다', () => {
+    const overhead = props(resultJsonSchema())['measurement_overhead']
+    for (const [field, phrase] of [
+      ['tracing_processes_cpu_time_ms', '10ms'],
+      ['tracing_processes_cpu_share_pct', 'cpu.times'],
+      ['tracing_processes_peak_rss_kb', '상계'],
+    ] as const) {
+      const f = props(overhead)[field] as { description?: string }
+      expect(f.description, `${field} 설명 없음`).toContain(phrase)
+    }
+  })
+
+  it('perfetto CLI 가 안 잡히는 것을 보장이 아니라 관측으로 적는다', () => {
+    // B-3. perfetto 는 TRACING_PROCESS_NAMES 에 들어 있으므로, 잡히면 세어진다.
+    // "잡히지 않는다" 는 우리가 지킬 수 있는 약속이 아니라 지금까지의 관측이다.
+    const overhead = props(resultJsonSchema())['measurement_overhead']
+    const d = (props(overhead)['tracing_processes_cpu_time_ms'] as { description?: string })
+      .description!
+
+    expect(d).toContain('perfetto')
+    expect(d).not.toMatch(/잡히지 않는다\./)
+    expect(d).toMatch(/관측|실측/)
+  })
+
+  it('peak RSS 가 1초 표본의 최댓값이라는 사실까지 적는다', () => {
+    // B-4. 프로세스별 최댓값을 더한 것이 상계라는 설명만으로는 부족하다 —
+    // 각 최댓값 자체가 1초 주기 표본의 최댓값이라 표본 사이의 순간 최고점은 안 보인다.
+    const overhead = props(resultJsonSchema())['measurement_overhead']
+    const d = (props(overhead)['tracing_processes_peak_rss_kb'] as { description?: string })
+      .description!
+
+    expect(d).toContain('상계')
+    expect(d).toMatch(/1초|1,000ms|1000ms/)
+  })
+
+  /**
+   * B-1/B-2. `resultJsonSchema` 는 `z.toJSONSchema` 라 **소스 주석을 못 본다.**
+   * log 의 숫자들이 기기 전역이라는 사실이 `//` 주석에만 있으면, 스키마만 읽는 CI 와 LLM 은
+   * `crashes` 를 대상 앱의 크래시로 읽는다. 그 오독이 이 필드의 기본값이 되면 안 된다.
+   */
+  const logProps = (): Record<string, any> => {
+    // data 는 nullable 이라 anyOf 로 나온다 — object 쪽 가지를 찾아 들어간다.
+    const data = props(props(props(resultJsonSchema())['metrics'])['log'])['data'] as {
+      anyOf?: Record<string, any>[]
+    }
+    const object = data.anyOf?.find((b) => b['type'] === 'object') ?? data
+    return props(object)
+  }
+
+  it('log 의 모든 숫자 필드가 기기 전역임을 스키마에서 말한다', () => {
+    for (const field of ['total', 'crashes', 'anrs']) {
+      const f = logProps()[field] as { description?: string }
+      expect(f.description, `${field} 설명 없음`).toBeDefined()
+      expect(f.description, `${field} 가 범위를 안 밝힘`).toContain('기기 전역')
+    }
+    const byPriority = logProps()['by_priority'] as { description?: string }
+    expect(byPriority.description).toContain('기기 전역')
+  })
+
+  it('log 의 min_prio 가 개수의 전제임을 스키마에서 말한다', () => {
+    expect((logProps()['min_prio'] as { description?: string }).description).toContain('문턱')
+  })
+
+  it('crashes/anrs 가 잘릴 수 있다는 사실을 스키마에 싣는다', () => {
+    for (const field of ['crashes', 'anrs']) {
+      const f = logProps()[field] as { description?: string }
+      expect(f.description, `${field} 가 상한을 안 밝힘`).toContain('200')
+      expect(f.description).toContain('log_events_truncated')
+    }
+  })
+
+  it('log 의 total 과 by_priority 가 서로 반대되는 말을 하지 않는다', () => {
+    // 출판되는 스키마 안에서 두 문장이 충돌했다: total 은 "문턱 이상만 센다" 고 하고
+    // by_priority 는 "total 은 문턱보다 낮은 것도 전부 센다" 고 했다. 코드는 후자다.
+    const total = (logProps()['total'] as { description: string }).description
+    const byPriority = (logProps()['by_priority'] as { description: string }).description
+
+    expect(total).not.toMatch(/문턱 이상만/)
+    expect(total).toContain('전부')
+    expect(byPriority).toContain('total')
+  })
+
+  /**
+   * I3. `partial` 은 "값 있는데 일부" 와 "값 아예 없음" 을 겸한다. 그 사실이 소스 주석에만
+   * 있어서, `status === 'failed'` 로 문제를 거르는 CI 는 값이 통째로 없는 메트릭을 전부
+   * 통과시켰다 (실측: 에뮬 6회 중 log 는 전부 partial+null).
+   */
+  it('status 네 값의 뜻을 스키마에 싣는다 — partial 이 data null 을 겸한다는 것까지', () => {
+    const status = (props(props(props(resultJsonSchema())['metrics'])['frame'])['status'] as {
+      description?: string
+    }).description
+
+    expect(status).toBeDefined()
+    for (const value of ['collected', 'partial', 'unsupported', 'failed', 'skipped']) {
+      expect(status, `${value} 설명 없음`).toContain(value)
+    }
+    // partial 이 data null 일 수 있다.
+    expect(status).toMatch(/값이 아예 나오지 않았다/)
+    // failed 만 걸러서는 수집 실패를 못 잡는다.
+    expect(status).toMatch(/failed. 만 걸러서는/)
+  })
+
+  /**
+   * I2. 이 필드만 세션 구간의 값이 아닌데 세션 통계(rss) 바로 옆에 무표시로 놓여 있었다.
+   */
+  it('rss_watermark_peak_kb 가 세션 값이 아니라는 사실을 스키마에서 말한다', () => {
+    const data = props(props(props(resultJsonSchema())['metrics'])['memory'])['data'] as {
+      anyOf?: Record<string, any>[]
+    }
+    const object = data.anyOf?.find((b) => b['type'] === 'object') ?? data
+    const d = (props(object)['rss_watermark_peak_kb'] as { description?: string }).description
+
+    expect(d).toBeDefined()
+    expect(d).toContain('VmHWM')
+    expect(d).toMatch(/세션 구간의 값이 아니다/)
+    expect(d).toContain('--launch')
+    expect(d).toContain('rss.max_kb')
+  })
+
+  /**
+   * M6. 커널이 ftrace 이벤트를 기록하는 비용은 인터럽트당한 프로세스에 청구되므로 이 숫자에
+   * 들어오지 않는다. 필드명이 범위를 한정하지만, 요약과 README 는 이것을 총비용으로 읽는다.
+   */
+  it('overhead CPU 시간이 총비용이 아니라 하한임을 스키마에서 말한다', () => {
+    const overhead = props(resultJsonSchema())['measurement_overhead']
+    const d = (props(overhead)['tracing_processes_cpu_time_ms'] as { description?: string })
+      .description!
+
+    expect(d).toContain('하한')
+    expect(d).toContain('ftrace')
   })
 
   it('JSON 으로 직렬화된다 (perftracker schema 가 그대로 출력한다)', () => {
     expect(() => JSON.parse(JSON.stringify(resultJsonSchema()))).not.toThrow()
+  })
+
+  it('다섯 메트릭이 모두 JSON Schema 에 실린다 — catchall 로 뭉개지지 않는다', () => {
+    const metrics = props(props(resultJsonSchema())['metrics'])
+    for (const id of ['frame', 'startup', 'cpu', 'memory', 'log']) {
+      expect(metrics[id], `${id} 가 스키마에 없음`).toBeDefined()
+    }
+  })
+
+  it('frame 만 required 다 — 1.0.0 문서가 계속 유효해야 한다', () => {
+    const metrics = props(resultJsonSchema())['metrics'] as { required?: string[] }
+    expect(metrics.required).toEqual(['frame'])
   })
 })

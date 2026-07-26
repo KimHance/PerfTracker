@@ -2,6 +2,17 @@ import { TraceProcessorError } from '../../errors.js'
 import { nodeProcessRunner, type ProcessRunner } from '../../adb/process.js'
 
 /**
+ * SQL 문자열 리터럴로 감싼다. `adb/shell.ts` 의 `shellQuote` 와 같은 역할을 SQL 경계에서 한다.
+ *
+ * 패키지명은 `pm list packages` 에서 오므로 실제로 따옴표가 섞일 일은 거의 없지만,
+ * "거의 없다" 를 근거로 인터폴레이션을 맨살로 두는 것이 정확히 이 프로젝트가 직전 커밋에서
+ * adb 쪽에 대해 고친 문제다. 경계는 경계로 다룬다.
+ */
+export function sqlQuote(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`
+}
+
+/**
  * trace_processor 는 결과를 CSV 로 내는데 내부 따옴표를 이스케이프하지 않는다.
  * 그래서 모든 쿼리는 "단일 행·단일 열의 JSON 문자열"이라는 계약을 지키고,
  * 바깥 따옴표만 벗겨서 JSON.parse 한다. 여러 행이 필요하면 json_group_array 를 쓴다.

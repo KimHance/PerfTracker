@@ -2,11 +2,13 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { CPU_TIMES_SQL } from '../../src/collectors/cpu.js'
 import { FRAME_PROCESS_SQL, frameDurationsSql } from '../../src/collectors/frame.js'
 import { SessionStateError } from '../../src/errors.js'
 import { BUFFER_STATS_SQL, extractRun } from '../../src/extract/run.js'
+import { TRACING_OVERHEAD_SQL } from '../../src/extract/overhead.js'
 import { writeCaptureManifest } from '../../src/session/manifest.js'
-import { writeRunSession } from '../../src/session/state.js'
+import { type ActiveSession, writeActiveSession, writeRunSession } from '../../src/session/state.js'
 import { FakeProcessRunner } from '../support/fakeProcessRunner.js'
 
 const PKG = 'com.nhn.android.webtoon'
@@ -34,6 +36,8 @@ async function makeRun(
     state?: 'running' | 'completed' | 'aborted' | 'failed'
     endedAt?: string | null
     adbCommandsDuringSession?: number
+    launch?: boolean
+    appPid?: number | null
   } = {},
 ): Promise<string> {
   const runDir = mkdtempSync(join(tmpdir(), 'pt-extract-'))
@@ -54,8 +58,10 @@ async function makeRun(
       remoteTracePath: '/data/misc/perfetto-traces/perftracker_a3f9c1.pftrace',
       startedAt: '2026-07-25T14:32:10.000Z',
       configuredDurationMs: 1_800_000,
-      options: { launch: true, video: false },
-      startup: { totalTimeMs: 1842, launchState: 'COLD' },
+      options: { launch: overrides.launch ?? true, video: false },
+      startup:
+        (overrides.launch ?? true) ? { totalTimeMs: 1842, launchState: 'COLD' } : null,
+      ...(overrides.appPid !== undefined ? { appPid: overrides.appPid } : {}),
     },
     {
       ...(endedAt !== null ? { endedAt } : {}),
@@ -122,6 +128,17 @@ function runner(tracePath: string): FakeProcessRunner {
       stdout: '"j"\n"[8000000,20000000,4000000,900000000]"\n',
     })
     .on(`query ${tracePath} ${BUFFER_STATS_SQL}`, { stdout: '"j"\n"[]"\n' })
+    .on(`query ${tracePath} ${TRACING_OVERHEAD_SQL}`, {
+      stdout:
+        '"j"\n"[{"process":"/system/bin/traced","counter":"mem.rss","first":3346432,"last":3477504},' +
+        '{"process":"/system/bin/traced","counter":"runtime.user_ns","first":0,"last":40000000},' +
+        '{"process":"/system/bin/traced","counter":"runtime.kernel_ns","first":0,"last":110000000}]"\n',
+    })
+    .on(`query ${tracePath} ${CPU_TIMES_SQL}`, {
+      stdout:
+        '"j"\n"[{"cpu":0,"counter":"cpu.times.idle_ns","first":0,"last":11010000000,' +
+        '"first_ts":0,"last_ts":11055000000,"samples":13}]"\n',
+    })
 }
 
 describe('extractRun', () => {
@@ -135,7 +152,7 @@ describe('extractRun', () => {
       toolVersion: '0.1.0',
     })
 
-    expect(result.schema_version).toBe('1.0.0')
+    expect(result.schema_version).toBe('1.1.0')
     expect(result.metrics.frame.status).toBe('collected')
     expect(result.metrics.frame.data?.total_frames).toBe(4)
     expect(result.session.duration_ms).toBe(42_735)
@@ -154,7 +171,7 @@ describe('extractRun', () => {
     })
 
     const written = JSON.parse(readFileSync(join(runDir, 'result.json'), 'utf8')) as Record<string, unknown>
-    expect(written['schema_version']).toBe('1.0.0')
+    expect(written['schema_version']).toBe('1.1.0')
   })
 
   it('Android 12 미만이면 frame 을 unsupported 로 남긴다', async () => {
@@ -243,12 +260,14 @@ describe('extractRun', () => {
     const result = await extractRun(runDir, {
       traceProcessorPath: process.execPath,
       runner: new FakeProcessRunner(),
+      home: mkdtempSync(join(tmpdir(), 'pt-home-')),
     })
 
     expect(result.session.state).toBe('running')
     expect(result.metrics.frame.status).toBe('failed')
     expect(result.warnings.map((w) => w.code)).toContain('session_still_running')
-    expect(result.session.duration_ms).toBe(0)
+    // 끝나지 않은 세션의 길이는 0 이 아니라 "모른다" 다 — 아래 M4 블록 참고.
+    expect(result.session.duration_ms).toBeNull()
   })
 
   it('session.json 의 version 이 다르면 조용히 잘못 읽지 않고 거부한다', async () => {
@@ -293,6 +312,35 @@ describe('extractRun', () => {
     expect(result.measurement_overhead.adb_commands_during_session).toBe(3)
   })
 
+  /**
+   * 같은 계열의 거짓 청정 신호. `false` 는 "넘치지 않았다" 로 읽히는데, 트레이스가 없으면
+   * 우리는 **본 적조차 없다**. stop 하지 않은 세션과 aborted 세션이 정확히 이 경우다.
+   */
+  it('트레이스가 없으면 버퍼가 안 넘쳤다고 말하지 않는다', async () => {
+    const runDir = await makeRun({ trace: null })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
+
+    expect(result.measurement_overhead.trace_buffer_overrun).toBeNull()
+  })
+
+  it('버퍼 통계 쿼리가 터지면 false 가 아니라 null 이다 — 못 본 것은 청정이 아니다', async () => {
+    const runDir = await makeRun()
+    const trace = join(runDir, 'trace.perfetto-trace')
+    const broken = runner(trace).on(`query ${trace} ${BUFFER_STATS_SQL}`, {
+      code: 1,
+      stderr: 'no such table: stats',
+    })
+
+    const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: broken })
+
+    expect(result.metrics.frame.status).toBe('collected')
+    expect(result.measurement_overhead.trace_buffer_overrun).toBeNull()
+  })
+
   it('버퍼 오버런을 사실로 기록한다', async () => {
     const runDir = await makeRun()
     const trace = join(runDir, 'trace.perfetto-trace')
@@ -303,5 +351,256 @@ describe('extractRun', () => {
     const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: overrun })
 
     expect(result.measurement_overhead.trace_buffer_overrun).toBe(true)
+  })
+
+  it('startup 을 session.json 의 am start -W 결과에서 채운다', async () => {
+    const runDir = await makeRun()
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: runner(join(runDir, 'trace.perfetto-trace')),
+    })
+
+    expect(result.metrics.startup?.status).toBe('collected')
+    expect(result.metrics.startup?.data).toEqual({ total_time_ms: 1842, launch_state: 'COLD' })
+  })
+
+  it('트레이스가 없어도 startup 은 살아남는다 — 트레이스에서 나온 값이 아니다', async () => {
+    const runDir = await makeRun({ trace: null })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
+
+    expect(result.metrics.frame.status).toBe('failed')
+    expect(result.metrics.startup?.status).toBe('collected')
+    expect(result.metrics.startup?.data).toEqual({ total_time_ms: 1842, launch_state: 'COLD' })
+  })
+
+  it('--launch 없이 시작한 세션의 startup 은 skipped 다', async () => {
+    const runDir = await makeRun({ launch: false })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: runner(join(runDir, 'trace.perfetto-trace')),
+    })
+
+    expect(result.metrics.startup?.status).toBe('skipped')
+    expect(result.metrics.startup?.reason_code).toBe('launch_not_requested')
+    expect(result.metrics.startup?.data).toBeNull()
+  })
+
+  it('measurement_overhead 의 CPU·RSS 를 실제로 채운다', async () => {
+    const runDir = await makeRun()
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: runner(join(runDir, 'trace.perfetto-trace')),
+    })
+
+    const o = result.measurement_overhead
+    expect(o.tracing_processes_cpu_time_ms).toBe(150)
+    expect(o.tracing_processes_peak_rss_kb).toBe(3396)
+    expect(o.tracing_processes_cpu_share_pct).toBe(1.36)
+  })
+
+  it('트레이스가 없으면 오버헤드는 null 로 남는다 — 0 이 아니라 "안 쟀다"', async () => {
+    const runDir = await makeRun({ trace: null })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
+
+    expect(result.measurement_overhead.tracing_processes_cpu_time_ms).toBeNull()
+    expect(result.measurement_overhead.tracing_processes_cpu_share_pct).toBeNull()
+    expect(result.measurement_overhead.tracing_processes_peak_rss_kb).toBeNull()
+  })
+
+  /**
+   * 에뮬레이터 실측 재현 (Defect 0). `--launch` 로 띄운 앱이 트레이스에는 `zygote64` 라는
+   * 이름으로 들어 있고, capture 단계가 받아 둔 pid 만이 그것을 대상 앱과 이어 준다.
+   */
+  describe('트레이스의 프로세스 이름이 낡았을 때', () => {
+    const STALE_CANDIDATES =
+      '[{"upid":254,"pid":551,"name":"system_server","frames":37},' +
+      '{"upid":309,"pid":6037,"name":"zygote64","frames":11}]'
+
+    function staleRunner(tracePath: string): FakeProcessRunner {
+      return runner(tracePath)
+        .on(`query ${tracePath} ${FRAME_PROCESS_SQL}`, { stdout: `"j"\n"${STALE_CANDIDATES}"\n` })
+        .on(`query ${tracePath} ${frameDurationsSql(309)}`, {
+          stdout: '"j"\n"[8000000,20000000,4000000]"\n',
+        })
+    }
+
+    it('frame 이 zygote64 대신 패키지명을 내고 그 근거를 사유로 남긴다', async () => {
+      const runDir = await makeRun({ appPid: 6037 })
+      const result = await extractRun(runDir, {
+        traceProcessorPath: process.execPath,
+        runner: staleRunner(join(runDir, 'trace.perfetto-trace')),
+      })
+
+      expect(result.metrics.frame.data?.process).toBe(PKG)
+      expect(result.metrics.frame.data?.pid).toBe(6037)
+      expect(result.metrics.frame.status).toBe('partial')
+      expect(result.metrics.frame.reason_code).toBe('process_name_stale_in_trace')
+      expect(result.metrics.frame.reason).toContain('zygote64')
+      // target_app 까지 틀린 이름이 번지지 않는다.
+      expect(result.target_app.render_process).toBe(PKG)
+      expect(result.target_app.pid).toBe(6037)
+    })
+
+    it('pid 가 없던 시절의 session.json 은 추측 대신 render_process_not_found 를 낸다', async () => {
+      const runDir = await makeRun()
+      const result = await extractRun(runDir, {
+        traceProcessorPath: process.execPath,
+        runner: staleRunner(join(runDir, 'trace.perfetto-trace')),
+      })
+
+      expect(result.metrics.frame.data).toBeNull()
+      expect(result.metrics.frame.reason_code).toBe('render_process_not_found')
+      expect(result.target_app.render_process).toBeNull()
+    })
+
+    it('frame 이 값을 못 내도 캡처한 pid 는 target_app 에 남는다', async () => {
+      const runDir = await makeRun({ trace: null, appPid: 6037 })
+      const result = await extractRun(runDir, {
+        traceProcessorPath: process.execPath,
+        runner: new FakeProcessRunner(),
+      })
+
+      expect(result.metrics.frame.status).toBe('failed')
+      expect(result.target_app.pid).toBe(6037)
+      expect(result.target_app.render_process).toBeNull()
+    })
+  })
+
+  it('오버헤드 쿼리가 터져도 result.json 은 나온다', async () => {
+    const runDir = await makeRun()
+    const trace = join(runDir, 'trace.perfetto-trace')
+    const broken = runner(trace).on(`query ${trace} ${TRACING_OVERHEAD_SQL}`, {
+      code: 1,
+      stderr: 'no such table: counter',
+    })
+
+    const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: broken })
+
+    expect(result.metrics.frame.status).toBe('collected')
+    expect(result.measurement_overhead.tracing_processes_cpu_time_ms).toBeNull()
+  })
+})
+
+/**
+ * M4. `stop` 을 거치지 않은 run 의 매니페스트에는 `start` 가 쓴 자리표시자 0 만 있다.
+ * `adb_commands_during_session` 은 "이 세션 데이터가 오염됐는가" 를 나타내는 바로 그 필드라,
+ * 0 은 소비자에게 **검증된 청정**으로 읽힌다. 실제 누적은 활성 세션 포인터에 있다.
+ */
+describe('아직 stop 하지 않은 run 에 extract 를 돌렸을 때', () => {
+  const RUN_ID = 'a3f9c1'
+
+  function pointerFor(runDir: string, overrides: Partial<ActiveSession> = {}): ActiveSession {
+    return {
+      version: 1,
+      id: RUN_ID,
+      name: '홈 스크롤',
+      serial: 'S1',
+      packageName: PKG,
+      runDir,
+      perfettoKey: `perftracker_${RUN_ID}`,
+      remoteTracePath: `/data/misc/perfetto-traces/perftracker_${RUN_ID}.pftrace`,
+      startedAt: '2026-07-25T14:32:10.000Z',
+      configuredDurationMs: 1_800_000,
+      options: { launch: true, video: false },
+      startup: null,
+      ...overrides,
+    }
+  }
+
+  /** 세션이 도는 중인 run 디렉토리 + (원하면) 그 세션의 활성 포인터. */
+  async function runningRun(
+    pointer?: Partial<ActiveSession>,
+  ): Promise<{ runDir: string; home: string }> {
+    const runDir = await makeRun({ trace: null, state: 'running', endedAt: null })
+    const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
+    if (pointer !== undefined) await writeActiveSession(pointerFor(runDir, pointer), home)
+    return { runDir, home }
+  }
+
+  const extract = (runDir: string, home: string) =>
+    extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+      home,
+    })
+
+  it('포인터에 쌓인 위반 횟수를 싣는다 — start 가 쓴 0 이 아니라', async () => {
+    const { runDir, home } = await runningRun({ adbCommandsDuringSession: 2 })
+
+    const result = await extract(runDir, home)
+
+    expect(result.measurement_overhead.adb_commands_during_session).toBe(2)
+  })
+
+  it('포인터가 없으면 0 이 아니라 null 이다 — 셀 수 없는 것은 청정이 아니다', async () => {
+    const { runDir, home } = await runningRun()
+
+    const result = await extract(runDir, home)
+
+    expect(result.measurement_overhead.adb_commands_during_session).toBeNull()
+  })
+
+  it('포인터가 다른 세션의 것이면 그 숫자를 빌려 쓰지 않는다', async () => {
+    const { runDir, home } = await runningRun({ id: 'ffffff', adbCommandsDuringSession: 7 })
+
+    const result = await extract(runDir, home)
+
+    expect(result.measurement_overhead.adb_commands_during_session).toBeNull()
+  })
+
+  it('위반이 없던 세션의 0 은 그대로 0 이다 — 포인터가 그렇게 말한다', async () => {
+    const { runDir, home } = await runningRun({ adbCommandsDuringSession: 0 })
+
+    const result = await extract(runDir, home)
+
+    expect(result.measurement_overhead.adb_commands_during_session).toBe(0)
+  })
+
+  it('끝나지 않은 세션의 종료 시각과 길이를 지어내지 않는다', async () => {
+    // 옛 동작은 endedAt 이 없으면 startedAt 을 종료 시각 자리에 넣어 "0ms 짜리 세션" 을 만들었다.
+    const { runDir, home } = await runningRun({ adbCommandsDuringSession: 0 })
+
+    const result = await extract(runDir, home)
+
+    expect(result.session.state).toBe('running')
+    expect(result.session.ended_at).toBeNull()
+    expect(result.session.duration_ms).toBeNull()
+    expect(result.session.started_at).toBe('2026-07-25T14:32:10.000Z')
+  })
+
+  it('경고와 필드가 서로 다른 말을 하지 않는다', async () => {
+    const { runDir, home } = await runningRun({ adbCommandsDuringSession: 2 })
+
+    const result = await extract(runDir, home)
+
+    const note = result.warnings.find((w) => w.code === 'session_still_running')
+    expect(note).toBeDefined()
+    // 경고는 이 값이 최종값이 아님을 말해야 한다 — 필드만 읽는 소비자를 위해 스키마에도 있다.
+    expect(note!.message).toContain('adb_commands_during_session')
+  })
+
+  it('stop 한 run 은 남아 있는 포인터가 아니라 매니페스트를 정본으로 쓴다', async () => {
+    const runDir = await makeRun({ adbCommandsDuringSession: 3 })
+    const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
+    await writeActiveSession(pointerFor(runDir, { adbCommandsDuringSession: 99 }), home)
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: runner(join(runDir, 'trace.perfetto-trace')),
+      home,
+    })
+
+    expect(result.measurement_overhead.adb_commands_during_session).toBe(3)
   })
 })

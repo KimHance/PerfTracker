@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ALLOWED_FTRACE_EVENTS,
   assertLowOverheadConfig,
   buildTraceConfig,
   mergeTraceConfigBlocks,
@@ -38,12 +39,17 @@ describe('buildTraceConfig', () => {
 })
 
 describe('assertLowOverheadConfig', () => {
+  const ftraceConfig = (...events: string[]): string =>
+    `data_sources { config { name: "linux.ftrace" ftrace_config { ${events
+      .map((e) => `ftrace_events: "${e}"`)
+      .join(' ')} } } }\n` +
+    'write_into_file: true\nflush_period_ms: 30000\nfile_write_period_ms: 30000\n'
+
   it('고빈도 ftrace 이벤트를 거부한다', () => {
     // buildTraceConfig 는 만들면서 이미 검사하므로, 검사기 자체를 보려면 문자열을 직접 준다.
-    const bad =
-      'data_sources { config { name: "linux.ftrace" ftrace_config { ftrace_events: "sched/sched_switch" } } }\n' +
-      'write_into_file: true\nflush_period_ms: 30000\n'
-    expect(() => assertLowOverheadConfig(bad)).toThrow(/sched\/sched_switch/)
+    expect(() => assertLowOverheadConfig(ftraceConfig('sched/sched_switch'))).toThrow(
+      /sched\/sched_switch/,
+    )
   })
 
   it('buildTraceConfig 도 금지 이벤트를 막는다', () => {
@@ -54,6 +60,46 @@ describe('assertLowOverheadConfig', () => {
         ],
       }),
     ).toThrow(/sched\/sched_switch/)
+  })
+
+  /**
+   * 블랙리스트였을 때 이 이벤트들은 검사를 그냥 통과했다. 실제로 `power/cpu_idle` 이 그렇게
+   * 들어와 ftrace 페이로드의 94% 를 차지했다 (에뮬레이터 33초 세션에서 47,752건 / 50,654건).
+   * 허용 목록으로 뒤집은 뒤로는 "저볼륨이니까 괜찮다" 는 판단이 검사기에 없다 — 목록에
+   * 없으면 거부한다.
+   */
+  it('허용 목록에 없는 이벤트는 저볼륨이어도 거부한다', () => {
+    for (const event of ['power/cpu_idle', 'power/suspend_resume', 'mm_event/mm_event_record']) {
+      expect(() => assertLowOverheadConfig(ftraceConfig(event)), event).toThrow(
+        new RegExp(event.replace('/', '\\/')),
+      )
+    }
+  })
+
+  it('악명 높은 고빈도 이벤트는 하나도 빠짐없이 거부된다', () => {
+    for (const event of [
+      'sched/sched_switch',
+      'sched/sched_waking',
+      'sched/sched_wakeup',
+      'raw_syscalls/sys_enter',
+      'raw_syscalls/sys_exit',
+      'ftrace/print',
+    ]) {
+      expect(ALLOWED_FTRACE_EVENTS, event).not.toContain(event)
+      expect(() => assertLowOverheadConfig(ftraceConfig(event)), event).toThrow(PerfettoSessionError)
+    }
+  })
+
+  it('허용 목록의 이벤트는 통과시킨다', () => {
+    expect(() => assertLowOverheadConfig(ftraceConfig(...ALLOWED_FTRACE_EVENTS))).not.toThrow()
+  })
+
+  /**
+   * 목록이 늘어나는 것 자체는 잘못이 아니지만, **읽는 collector 없이** 늘어나는 것이 C1 이었다.
+   * 이 테스트가 깨지면 새 이벤트를 추가한 사람이 그것을 읽는 코드도 함께 넣었는지 되묻는다.
+   */
+  it('허용 목록에는 지금 실제로 읽는 이벤트만 있다', () => {
+    expect([...ALLOWED_FTRACE_EVENTS]).toEqual(['power/cpu_frequency'])
   })
 
   it('write_into_file 없이 flush 만 있으면 거부한다', () => {
@@ -67,6 +113,17 @@ describe('assertLowOverheadConfig', () => {
   it('폴링 주기가 1000ms 미만이면 거부한다', () => {
     const bad = 'write_into_file: true\nflush_period_ms: 30000\nproc_stats_poll_ms: 100\n'
     expect(() => assertLowOverheadConfig(bad)).toThrow(/1000ms/)
+  })
+
+  /**
+   * 여기에도 화이트리스트(`stat|meminfo|vmstat`)가 있어서 목록 밖의 주기 키는 어떤 값이든
+   * 검사 없이 통과했다 — ftrace 블랙리스트가 만든 것과 같은 종류의 구멍이다.
+   */
+  it('처음 보는 주기 키도 하한을 받는다 — 목록에 없다고 통과시키지 않는다', () => {
+    for (const line of ['thermal_period_ms: 250', 'drain_period_ms: 100', 'battery_poll_ms: 500']) {
+      const bad = `write_into_file: true\nflush_period_ms: 30000\nfile_write_period_ms: 30000\n${line}\n`
+      expect(() => assertLowOverheadConfig(bad), line).toThrow(/1000ms/)
+    }
   })
 
   it('file_write_period_ms 가 없으면 거부한다', () => {

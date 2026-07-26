@@ -1,20 +1,19 @@
 import type { FrameBucket, FrameData } from '../schema/result.js'
-import type { Collector, CollectorEnv, ExtractContext, ExtractOutcome, SupportResult } from './types.js'
+import { type AppProcessCandidate, resolveAppProcess, staleNameReason } from './appProcess.js'
+import { FRAMETIMELINE_BLOCK, PROCESS_STATS_BLOCK } from './blocks.js'
+import { round } from './num.js'
+import type {
+  CollectorEnv,
+  ExtractContext,
+  ExtractOutcome,
+  SupportResult,
+  TraceCollector,
+} from './types.js'
 
 const DATA_SOURCE = 'android.surfaceflinger.frametimeline'
 const MIN_SDK = 31
 const FRAME_BUDGET_MS = 16.67
 const OVERFLOW_FROM_MS = 700
-
-/**
- * frametimeline 은 프레임 타이밍만 주고 트레이스의 process 테이블에는 이름을 채우지 않는다.
- * linux.process_stats 가 그 이름을 채운다 — 없으면 FRAME_PROCESS_SQL 의 모든 후보가 name: null
- * 로 나와 isSystemProcess 에 전부 걸러지고 selectRenderProcess 가 항상 null 을 반환한다.
- * 폴링 주기는 assertLowOverheadConfig 의 1000ms 하한과 설계 프로브 값을 그대로 따른다.
- */
-const PROCESS_STATS_BLOCK =
-  'data_sources { config { name: "linux.process_stats" ' +
-  'process_stats_config { proc_stats_poll_ms: 1000 scan_all_processes_on_start: true } } }'
 
 /** 60fps 예산 부근을 1ms 로 조밀하게 보고, 심한 지연으로 갈수록 폭을 넓혀 꼬리를 압축한다. */
 export const FRAME_BUCKET_RANGES: { from: number; to: number; step: number }[] = [
@@ -38,16 +37,27 @@ export function buildFrameBuckets(): FrameBucket[] {
 }
 
 /**
+ * 버킷에 넣을 수 있는 값인가. `bucketFrames` 와 collector 가 **같은 규칙**을 쓰게 하는 자리다 —
+ * 규칙이 둘로 갈리면 하나는 던지고 하나는 통과시키는 상태가 생긴다.
+ */
+export function isBucketableDuration(ms: number): boolean {
+  return Number.isFinite(ms) && ms >= 0
+}
+
+/**
  * 경계는 [from, to) 반개구간이다.
  * 범위 밖(음수·NaN) 입력은 조용히 오버플로 버킷으로 흘리지 않고 거부한다 — 그렇게 하면
  * `dur = -1` 짜리 미완결 slice 가 구글의 700ms frozen frame 기준에 대응하는 자리에 섞인다.
+ *
+ * 이 함수는 순수 함수의 불변식으로 던진다. collector 는 던지게 두지 않고 **부르기 전에**
+ * 같은 규칙으로 걸러 메트릭 사유로 바꾼다 (`frame_duration_out_of_range`).
  */
 export function bucketFrames(durationsMs: number[]): FrameBucket[] {
   const buckets = buildFrameBuckets()
   const overflow = buckets[buckets.length - 1]!
 
   for (const ms of durationsMs) {
-    if (!Number.isFinite(ms) || ms < 0) {
+    if (!isBucketableDuration(ms)) {
       throw new RangeError(`프레임 duration 이 버킷 범위 밖입니다: ${ms}`)
     }
     if (ms >= OVERFLOW_FROM_MS) {
@@ -67,33 +77,8 @@ export function percentile(sortedMs: number[], p: number): number {
   return sortedMs[Math.min(sortedMs.length - 1, Math.max(0, rank - 1))]!
 }
 
-export interface FrameProcessCandidate {
-  upid: number
-  pid: number
-  name: string | null
+export interface FrameProcessCandidate extends AppProcessCandidate {
   frames: number
-}
-
-function isSystemProcess(name: string | null): boolean {
-  if (name === null) return true
-  return name.startsWith('/') || name.startsWith('system_server') || name.startsWith('com.android.systemui')
-}
-
-/**
- * 런처 alias 때문에 패키지명과 실제 렌더 프로세스명이 다를 수 있다.
- * 패키지 일치를 먼저 보고, 없으면 시스템 프로세스를 뺀 프레임 최다 프로세스를 고른다.
- */
-export function selectRenderProcess(
-  candidates: FrameProcessCandidate[],
-  packageName: string,
-): FrameProcessCandidate | null {
-  const exact = candidates.find(
-    (c) => c.name === packageName || (c.name !== null && c.name.startsWith(`${packageName}:`)),
-  )
-  if (exact) return exact
-
-  const apps = candidates.filter((c) => !isSystemProcess(c.name)).sort((a, b) => b.frames - a.frames)
-  return apps[0] ?? null
 }
 
 export const FRAME_PROCESS_SQL =
@@ -110,14 +95,10 @@ export function frameDurationsSql(upid: number): string {
   return `select json_group_array(dur) as j from actual_frame_timeline_slice where upid = ${upid} and dur >= 0`
 }
 
-const round = (v: number, digits: number): number => {
-  const f = 10 ** digits
-  return Math.round(v * f) / f
-}
-
-export const frameCollector: Collector<FrameData> = {
+export const frameCollector: TraceCollector<FrameData> = {
   id: 'frame',
   source: 'perfetto: actual_frame_timeline_slice.dur',
+  needsTrace: true,
 
   supports(env: CollectorEnv): SupportResult {
     if (env.sdkInt < MIN_SDK) {
@@ -136,26 +117,47 @@ export const frameCollector: Collector<FrameData> = {
   },
 
   traceConfigBlocks() {
-    return [`data_sources { config { name: "${DATA_SOURCE}" } }`, PROCESS_STATS_BLOCK]
+    return [FRAMETIMELINE_BLOCK, PROCESS_STATS_BLOCK]
   },
 
+  /**
+   * 프로세스 특정에 **추측이 없다.** 이 필드(`data.process`)는 사실로 팔리는 값이므로,
+   * 확인하지 못한 이름을 넣느니 `render_process_not_found` 로 값을 내지 않는 쪽을 고른다.
+   * 규칙 자체는 `collectors/appProcess.ts` 가 갖고 있다 — memory 와 같은 규칙을 쓴다.
+   */
   async extract(ctx: ExtractContext): Promise<ExtractOutcome<FrameData>> {
     const candidates = await ctx.tp.queryJson<FrameProcessCandidate[]>(FRAME_PROCESS_SQL)
-    const picked = selectRenderProcess(candidates, ctx.packageName)
-    if (!picked) {
+    const resolved = resolveAppProcess(candidates, ctx.packageName, ctx.capture.appPid)
+    if (resolved === null) {
       return {
         collected: false,
         reason: { code: 'render_process_not_found', detail: { package: ctx.packageName } },
       }
     }
 
+    const picked = resolved.candidate
     const durationsNs = await ctx.tp.queryJson<number[]>(frameDurationsSql(picked.upid))
-    const processName = picked.name ?? String(picked.pid)
+    const processName = resolved.name
     if (durationsNs.length === 0) {
       return { collected: false, reason: { code: 'no_frames', detail: { process: processName } } }
     }
 
     const durationsMs = durationsNs.map((ns) => ns / 1e6)
+
+    // `bucketFrames` 가 던지는 RangeError 를 `runCollector` 의 포괄 catch 까지 흘려보내면
+    // "트레이스 쿼리에 실패했습니다: ..." 로 렌더된다 — 쿼리는 성공했으므로 사유가 틀린다.
+    // SQL 의 `dur >= 0` 덕에 도달하기 어렵지만, 도달할 때 맞는 말을 하는 것이 요점이다.
+    const outOfRange = durationsMs.find((ms) => !isBucketableDuration(ms))
+    if (outOfRange !== undefined) {
+      return {
+        collected: false,
+        reason: {
+          code: 'frame_duration_out_of_range',
+          detail: { process: processName, duration_ms: outOfRange },
+        },
+      }
+    }
+
     const sorted = [...durationsMs].sort((a, b) => a - b)
     const within = durationsMs.filter((ms) => ms <= FRAME_BUDGET_MS).length
 
@@ -174,6 +176,9 @@ export const frameCollector: Collector<FrameData> = {
       mean_ms: round(durationsMs.reduce((s, v) => s + v, 0) / durationsMs.length, 2),
       max_ms: round(sorted[sorted.length - 1]!, 2),
     }
-    return { collected: true, data }
+
+    // 이름이 아니라 pid 로 확인한 경우, 트레이스가 다른 이름을 알고 있다는 사실을 숨기지 않는다.
+    const stale = staleNameReason(resolved, ctx.packageName)
+    return stale === null ? { collected: true, data } : { collected: true, data, partialReason: stale }
   },
 }

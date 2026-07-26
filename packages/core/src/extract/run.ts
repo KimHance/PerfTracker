@@ -3,7 +3,12 @@ import { join } from 'node:path'
 import type { ProcessRunner } from '../adb/process.js'
 import { frameCollector } from '../collectors/frame.js'
 import { COLLECTORS } from '../collectors/registry.js'
-import type { Collector } from '../collectors/types.js'
+import type {
+  BaseExtractContext,
+  CaptureFacts,
+  Collector,
+  ExtractOutcome,
+} from '../collectors/types.js'
 import { SchemaValidationError, SessionStateError } from '../errors.js'
 import { TraceProcessor } from '../perfetto/traceProcessor/client.js'
 import { ensureTraceProcessor } from '../perfetto/traceProcessor/locate.js'
@@ -18,7 +23,8 @@ import {
   SCHEMA_VERSION,
 } from '../schema/result.js'
 import { type CaptureManifest, parseVersionedJson, readCaptureManifest } from '../session/manifest.js'
-import type { ActiveSession } from '../session/state.js'
+import { type ActiveSession, readActiveSession } from '../session/state.js'
+import { computeOverhead } from './overhead.js'
 
 export const BUFFER_STATS_SQL =
   "select json_group_array(json_object('name', name, 'value', value)) as j from stats " +
@@ -62,27 +68,73 @@ async function runCollector(
   collector: Collector<unknown>,
   tp: TraceProcessor | null,
   manifest: CaptureManifest,
+  capture: CaptureFacts,
 ): Promise<MetricResult<unknown>> {
-  if (tp === null) return metric('failed', collector.source, { code: 'trace_missing' })
-
+  // 지원 판정을 트레이스 유무보다 **먼저** 본다. "이 기기가 이 메트릭을 못 낸다" 는
+  // "이 run 에 트레이스가 없다" 보다 강하고 안정적인 사실이다.
   const support = collector.supports(manifest.env)
   if (!support.supported) return metric('unsupported', collector.source, support.reason)
 
+  const base: BaseExtractContext = {
+    packageName: manifest.target_app.package,
+    env: manifest.env,
+    capture,
+  }
+
   try {
-    const outcome = await collector.extract({
-      tp,
-      packageName: manifest.target_app.package,
-      env: manifest.env,
-    })
-    return outcome.collected
-      ? metric('collected', collector.source, null, outcome.data)
-      : metric('partial', collector.source, outcome.reason)
+    let outcome: ExtractOutcome<unknown>
+    if (collector.needsTrace) {
+      // 트레이스가 필요 없는 collector 까지 trace_missing 으로 죽이지 않는다 —
+      // startup 은 `am start -W` 가 낸 값이라 트레이스 유무와 무관하다.
+      if (tp === null) return metric('failed', collector.source, { code: 'trace_missing' })
+      outcome = await collector.extract({ ...base, tp })
+    } else {
+      outcome = await collector.extract(base)
+    }
+
+    if (outcome.collected) {
+      return outcome.partialReason !== undefined
+        ? metric('partial', collector.source, outcome.partialReason, outcome.data)
+        : metric('collected', collector.source, null, outcome.data)
+    }
+    return metric(outcome.status ?? 'partial', collector.source, outcome.reason)
   } catch (e) {
     return metric('failed', collector.source, {
       code: 'query_failed',
       detail: { message: (e as Error).message },
     })
   }
+}
+
+/**
+ * 측정 창 위반 횟수. **`stop` 을 거친 run 에서만 매니페스트가 정본이다.**
+ *
+ * 세션이 도는 동안의 위반은 활성 세션 포인터에 쌓이고(`recordAdbViolation` — 창은 프로세스
+ * 메모리 안에 있으므로 프로세스를 넘나드는 카운터는 파일에 있어야 한다), 그 값을 매니페스트로
+ * 옮기는 것은 `stop` 이다. 그 전까지 매니페스트의 이 자리는 비어 있다(`start` 가 null 을 쓴다).
+ *
+ * **여기서 `0` 을 내는 것이 최악의 선택이다.** 이 값은 "이 세션 데이터가 오염됐는가" 를
+ * 나타내는 바로 그 필드라 `0` 은 소비자에게 **검증된 청정**으로 읽힌다.
+ * 거짓 청정 신호는 값을 안 내는 것보다 나쁘다.
+ *
+ * 그래서 진행 중인 세션에서는 포인터를 직접 읽는다:
+ *   - 포인터가 **이 run 의 것**이면(같은 serial + 같은 세션 id) 거기 쌓인 값이
+ *     읽는 시점까지의 사실이다. 세션이 아직 열려 있으므로 최종값은 아니다 — 더 늘 수 있다.
+ *   - 포인터가 없거나 다른 세션의 것이면(`--force` 로 버려진 세션, 다른 호스트에서 만든
+ *     run 디렉토리 등) 셀 방법이 아예 없다. 그때는 `0` 이 아니라 **null** 이다.
+ *     기기에 물어보는 길은 없다 — 그 행위 자체가 이 도구가 금지하는 것이다.
+ */
+async function countAdbCommands(
+  state: SessionState,
+  session: StoredSession,
+  manifest: CaptureManifest,
+  home?: string,
+): Promise<number | null> {
+  if (state !== 'running') return manifest.adb_commands_during_session
+
+  const pointer = await readActiveSession(session.serial, home)
+  if (pointer === null || pointer.id !== session.id) return null
+  return pointer.adbCommandsDuringSession ?? 0
 }
 
 /**
@@ -96,6 +148,8 @@ export async function extractRun(
     offline?: boolean
     runner?: ProcessRunner
     toolVersion?: string
+    /** 활성 세션 포인터를 찾을 홈. 테스트가 주입한다 (기본값은 `~/.perftracker`). */
+    home?: string
   } = {},
 ): Promise<Result> {
   const sessionFile = join(runDir, 'session.json')
@@ -117,13 +171,19 @@ export async function extractRun(
 
   const sessionState: SessionState = session.state ?? 'completed'
   const startedAt = new Date(session.startedAt)
-  const endedAt = session.endedAt !== undefined ? new Date(session.endedAt) : startedAt
+  // `endedAt` 은 `stop` 이 쓴다. 없으면 이 세션은 아직 끝나지 않았다는 뜻이다.
+  // 옛 코드는 그 자리에 `startedAt` 을 넣었고, 그 결과 "0ms 동안 돈 세션" 이라는
+  // 없던 사실이 만들어졌다 (`ended_at` 은 아직 오지 않은 시각이었다).
+  const endedAt = session.endedAt !== undefined ? new Date(session.endedAt) : null
+  const adbCommands = await countAdbCommands(sessionState, session, manifest, opts.home)
 
   const tracePath = manifest.artifacts.trace !== null ? join(runDir, manifest.artifacts.trace) : null
   const traceReady = tracePath !== null && (await exists(tracePath))
 
   let tp: TraceProcessor | null = null
-  let bufferOverrun = false
+  // null 로 시작한다 — 아직 아무것도 확인하지 않았다. 여기서 false 로 시작하면
+  // 트레이스가 없어 쿼리조차 못 한 run 이 "버퍼는 안 넘쳤다" 고 말하게 된다.
+  let bufferOverrun: boolean | null = null
 
   if (traceReady) {
     const binPath = await ensureTraceProcessor({
@@ -133,11 +193,20 @@ export async function extractRun(
     tp = new TraceProcessor(binPath, tracePath, opts.runner)
   }
 
-  // 레지스트리를 순회한다 — M2 는 collector 를 배열에 넣기만 하면 되고, 한 메트릭이 터져도
+  // capture 단계에서만 알 수 있는 사실. `session.json` 이 이미 갖고 있으므로
+  // capture.json 의 버전을 올릴 이유가 없다.
+  const capture: CaptureFacts = {
+    startup: session.startup ?? null,
+    launchRequested: session.options.launch,
+    // 이 필드가 없던 시절의 session.json 은 undefined 다 — 그것은 "pid 를 모른다" 와 같다.
+    appPid: session.appPid ?? null,
+  }
+
+  // 레지스트리를 순회한다 — collector 를 배열에 넣기만 하면 되고, 한 메트릭이 터져도
   // 나머지는 정상 산출된다.
   const metrics: Record<string, MetricResult<unknown>> = {}
   for (const collector of COLLECTORS) {
-    metrics[collector.id] = await runCollector(collector, tp, manifest)
+    metrics[collector.id] = await runCollector(collector, tp, manifest, capture)
   }
 
   if (tp !== null) {
@@ -146,9 +215,17 @@ export async function extractRun(
       const stats = await tp.queryJson<{ name: string; value: number }[]>(BUFFER_STATS_SQL)
       bufferOverrun = stats.length > 0
     } catch {
-      bufferOverrun = false
+      // 쿼리가 터진 것은 "안 넘쳤다" 가 아니라 "확인하지 못했다" 다. null 로 남긴다.
+      bufferOverrun = null
     }
   }
+
+  // 오버헤드는 부가 정보다. 못 재는 것이 result.json 전체를 못 내는 이유가 되면 안 되므로
+  // computeOverhead 자체가 절대 던지지 않는다. 트레이스가 없으면 재려는 시도조차 안 한다.
+  const overhead =
+    tp !== null
+      ? await computeOverhead(tp)
+      : { cpuTimeMs: null, cpuSharePct: null, peakRssKb: null }
 
   // 렌더 프로세스는 트레이스를 파싱해야 알 수 있어 capture 단계에서는 null 이었다.
   const frameData = FrameDataSchema.safeParse(metrics[frameCollector.id]?.data)
@@ -161,8 +238,8 @@ export async function extractRun(
       name: session.name,
       state: sessionState,
       started_at: startedAt.toISOString(),
-      ended_at: endedAt.toISOString(),
-      duration_ms: endedAt.getTime() - startedAt.getTime(),
+      ended_at: endedAt?.toISOString() ?? null,
+      duration_ms: endedAt !== null ? endedAt.getTime() - startedAt.getTime() : null,
       options: session.options,
     },
     device: {
@@ -172,16 +249,18 @@ export async function extractRun(
       state_after: manifest.device.state_after,
     },
     // frame 이 렌더 프로세스를 특정했으면 여기서 채운다 — 손에 쥐고도 안 쓰던 값이다.
+    // frame 이 값을 못 냈어도 pid 는 캡처 때 받아 둔 것이 있을 수 있다. 이름은 그렇지 않다 —
+    // 렌더 프로세스가 어느 것인지는 트레이스를 봐야만 알 수 있으므로 null 로 남긴다.
     target_app: frameData.success
       ? { ...manifest.target_app, render_process: frameData.data.process, pid: frameData.data.pid }
-      : manifest.target_app,
+      : { ...manifest.target_app, pid: manifest.target_app.pid ?? capture.appPid },
     // 키는 collector.id 다. 스키마가 frame 을 알고 나머지는 MetricResult 모양으로 검증한다.
     metrics: metrics as Result['metrics'],
     measurement_overhead: {
-      tracing_processes_cpu_time_ms: null,
-      tracing_processes_cpu_share_pct: null,
-      tracing_processes_peak_rss_kb: null,
-      adb_commands_during_session: manifest.adb_commands_during_session,
+      tracing_processes_cpu_time_ms: overhead.cpuTimeMs,
+      tracing_processes_cpu_share_pct: overhead.cpuSharePct,
+      tracing_processes_peak_rss_kb: overhead.peakRssKb,
+      adb_commands_during_session: adbCommands,
       trace_buffer_overrun: bufferOverrun,
     },
     references: REFERENCES,
@@ -190,8 +269,15 @@ export async function extractRun(
         ? [
             ...manifest.warnings,
             {
+              // 경고와 필드가 서로 다른 말을 하면 안 된다. 이 세션의
+              // adb_commands_during_session 은 **최종값이 아니다** — 진행 중 누적이거나,
+              // 셀 수 없으면 null 이다. 필드만 읽는 소비자를 위해 같은 사실이 스키마의
+              // .describe() 에도 있다 (z.toJSONSchema 는 주석을 못 본다).
               code: 'session_still_running',
-              message: '아직 stop 하지 않은 세션입니다 — 이 결과는 회수 전 부분 상태입니다.',
+              message:
+                '아직 stop 하지 않은 세션입니다 — 이 결과는 회수 전 부분 상태이고, ' +
+                'measurement_overhead.adb_commands_during_session 은 최종값이 아닙니다 ' +
+                '(지금까지의 누적이거나, 셀 수 없으면 null).',
             },
           ]
         : manifest.warnings,

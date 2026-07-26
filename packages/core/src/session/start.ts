@@ -2,7 +2,8 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { AdbClient } from '../adb/client.js'
 import { shellQuote } from '../adb/shell.js'
-import { collectTraceConfigBlocks, unsupportedReasons } from '../collectors/registry.js'
+import { collectTraceConfigBlocks, supportedCollectors, unsupportedReasons } from '../collectors/registry.js'
+import type { AmStartResult } from '../collectors/types.js'
 import { probeDevice } from '../device/probe.js'
 import { collectDeviceStatic } from '../device/spec.js'
 import { collectDeviceState } from '../device/state.js'
@@ -28,19 +29,73 @@ import {
   writeRunSession,
 } from './state.js'
 
-export function parseAmStart(text: string): { totalTimeMs: number | null; launchState: string | null } {
+/**
+ * `am start -W` 의 출력.
+ *
+ * `Status:` 를 함께 읽는 이유: 이 명령은 TotalTime 을 **못 내는 경우가 정상 흐름에 있다.**
+ * 실측(에뮬레이터 API 35, 콜드 스타트 12~15초짜리 앱)에서 자주 나온 답이 이것이다:
+ *
+ *     Status: timeout
+ *     LaunchState: UNKNOWN (-1)
+ *     Activity: ...
+ *     WaitTime: 11062
+ *
+ * ActivityManager 가 실행 완료 보고를 기다리다 포기한 것이고, 그때 TotalTime 은 아예 찍히지
+ * 않는다. `Status` 를 버리면 남는 것은 "TotalTime 이 없다" 뿐이라, 도구는 그 이유를 추측할 수
+ * 밖에 없다 — 이 프로젝트에서 추측은 사실 자리에 오면 안 된다.
+ */
+export function parseAmStart(text: string): AmStartResult {
   const total = /^TotalTime:\s*(\d+)/m.exec(text)?.[1]
+  const wait = /^WaitTime:\s*(\d+)/m.exec(text)?.[1]
   const launchState = /^LaunchState:\s*(\w+)/m.exec(text)?.[1]
+  const status = /^Status:\s*(\w+)/m.exec(text)?.[1]
   return {
     totalTimeMs: total !== undefined ? Number(total) : null,
     launchState: launchState ?? null,
+    status: status ?? null,
+    waitTimeMs: wait !== undefined ? Number(wait) : null,
   }
+}
+
+/**
+ * `am start -W` 와 `pidof` 를 한 셸 호출로 합칠 때 두 출력을 가르는 표시.
+ *
+ * 왜 합치는가: 트레이스는 `--detach` 시점에 이미 기록을 시작하고 측정 창 래치는 그보다 뒤에
+ * 무장한다. 그 사이의 adb 왕복은 트레이스 안에서 일어나는 일이므로 개수 자체가 비용이다.
+ * 기기 쪽 작업량은 똑같으니 왕복만 2회 → 1회로 줄인 것은 순수 이득이다.
+ *
+ * 왜 표시를 넣는가: 두 출력을 이어 붙이면 `pidof` 의 숫자 한 줄이 `am start` 출력의 일부처럼
+ * 보일 수 있고, 반대로 `am start` 가 낸 줄을 pid 로 읽을 수도 있다. 경계를 추측하지 않는다.
+ * 이 문자열은 `am start` 도 `pidof` 도 절대 찍지 않는다.
+ */
+export const AM_START_PIDOF_MARKER = '__perftracker_pidof__'
+
+/** 합친 호출의 출력을 두 조각으로 가른다. 표시가 없으면 pid 쪽은 비어 있다 — 지어내지 않는다. */
+export function splitAmStartPidof(text: string): { amStart: string; pidof: string } {
+  const at = text.indexOf(AM_START_PIDOF_MARKER)
+  if (at < 0) return { amStart: text, pidof: '' }
+  return { amStart: text.slice(0, at), pidof: text.slice(at + AM_START_PIDOF_MARKER.length) }
+}
+
+/**
+ * `pidof <package>` 의 출력. 못 찾으면 아무것도 안 찍고 exit 1 이므로 빈 문자열이 온다.
+ * 같은 이름의 프로세스가 여럿이면 공백으로 이어 찍는데, 그중 어느 것이든 그 앱의 프로세스다.
+ */
+export function parsePidof(text: string): number | null {
+  const first = text.trim().split(/\s+/)[0]
+  if (first === undefined || !/^\d+$/.test(first)) return null
+  return Number(first)
 }
 
 /** 관측된 사실만 담는다. "느립니다" 같은 평가는 들어가지 않는다. */
 export function buildWarnings(
   stateBefore: DeviceState,
-  options: { video: boolean; launchUnverified?: boolean },
+  options: {
+    video: boolean
+    launchTimeUnmeasured?: boolean
+    /** `am start -W` 의 `Status:` 원문. 있으면 경고가 추측 대신 그것을 인용한다. */
+    amStartStatus?: string | null
+  },
 ): Warning[] {
   const warnings: Warning[] = []
 
@@ -59,11 +114,20 @@ export function buildWarnings(
       message: 'screenrecord 오버헤드가 섞인 세션임',
     })
   }
-  if (options.launchUnverified === true) {
+  // 옛 코드는 `app_launch_unverified` 와 "force-stop 된 앱이 다시 실행되지 않았을 수 있음" 이었다.
+  // 실측한 실패 사례에서 앱은 실제로 실행됐고(pid 확보, 프레임 수집됨) `am start -W` 만
+  // `Status: timeout` 을 냈다 — 경고가 관측하지 않은 원인을 지어내고 있었다.
+  // 이 경고가 아는 것은 하나다: **이 세션에서 시작 시간을 못 쟀다.**
+  if (options.launchTimeUnmeasured === true) {
+    const status =
+      options.amStartStatus != null && options.amStartStatus.length > 0
+        ? ` (Status: ${options.amStartStatus})`
+        : ''
     warnings.push({
-      code: 'app_launch_unverified',
+      code: 'app_launch_time_unmeasured',
       message:
-        'am start 가 TotalTime 을 보고하지 않았음 — force-stop 된 앱이 다시 실행되지 않았을 수 있음',
+        `am start -W 가 TotalTime 을 보고하지 않아 앱 시작 시간을 재지 못했음${status} — ` +
+        `앱 실행 여부는 이 경고가 말하지 않음 (target_app.pid 와 metrics 참고)`,
     })
   }
   return warnings
@@ -168,8 +232,18 @@ export async function startSession(
   const remotePath = remoteTracePath(perfettoKey)
   const blocks = collectTraceConfigBlocks(env)
   if (blocks.length === 0) {
+    // "수집 가능한 항목이 없습니다" 는 사실이 아니다 — startup 은 트레이스 없이도 수집된다.
+    // 거부 자체는 맞다(start 는 트레이스 세션을 여는 명령이다). 이유를 정확히 말한다.
+    const traceFree = supportedCollectors(env)
+      .filter((c) => !c.needsTrace)
+      .map((c) => c.id)
     throw new SessionStateError(
-      `이 기기에서 수집 가능한 항목이 없습니다.\n  ${unsupportedReasons(env).join('\n  ')}`,
+      `이 기기에서는 트레이스로 수집 가능한 항목이 없어 세션을 시작할 수 없습니다.\n  ` +
+        unsupportedReasons(env).join('\n  ') +
+        (traceFree.length > 0
+          ? `\n트레이스 없이도 수집되는 항목(${traceFree.join(', ')})은 있지만, ` +
+            `start 는 트레이스 세션을 여는 명령이라 그것만으로는 시작하지 않습니다.`
+          : ''),
     )
   }
   await startDetachedSession(ctx.adb, {
@@ -178,11 +252,30 @@ export async function startSession(
     configText: buildTraceConfig({ dataSourceBlocks: blocks, durationMs: DEFAULT_MAX_DURATION_MS }),
   })
 
-  // 4) 런처 액티비티를 콜드 실행하고 시작 시간을 잰다.
+  // 4) 런처 액티비티를 콜드 실행하고, 같은 호출에서 그 프로세스의 pid 까지 받아 온다.
+  //
+  // pid 가 왜 필요한가: `linux.process_stats` 는 프로세스 이름을 최초 관측 시 한 번만 확정하고,
+  // zygote 가 fork 한 앱은 `Process.setArgV0()` 전에 잠깐 `zygote64` 라는 이름을 갖는다.
+  // 그 창에 폴링이 걸리면 트레이스는 앱을 영원히 `zygote64` 로 알고, 이름으로는 다시 찾을
+  // 방법이 없다 (`collectors/appProcess.ts`). `--launch` 는 force-stop 후 재실행이라
+  // 앱 프로세스가 **항상** 갓 fork 된 상태이므로 이 경합은 예외가 아니다.
+  //
+  // 왜 한 호출인가: 트레이스는 3) 의 `--detach` 에서 이미 기록을 시작했고 측정 창 래치는
+  // 5) 에서야 무장한다. 그 사이의 adb 왕복은 트레이스 안에서 일어나는 일이라 개수가 곧 비용이다.
+  // 기기 쪽 작업량은 그대로이므로 왕복만 2회 → 1회로 줄였다.
+  // `pidof` 실패는 삼킨다 — pid 는 있으면 좋은 것이지 세션의 전제가 아니다.
+  // (합친 호출의 종료 코드는 `pidof` 의 것이고, `raw` 는 종료 코드로 던지지 않는다.)
   let startup: ActiveSession['startup'] = null
+  let appPid: number | null = null
   if (opts.launch && app.launcher_activity !== null) {
-    const r = await ctx.adb.raw(['shell', `am start -W -n ${shellQuote(`${app.package}/${app.launcher_activity}`)}`])
-    startup = parseAmStart(r.stdout)
+    const component = shellQuote(`${app.package}/${app.launcher_activity}`)
+    const r = await ctx.adb.raw([
+      'shell',
+      `am start -W -n ${component}; echo ${AM_START_PIDOF_MARKER}; pidof ${shellQuote(app.package)}`,
+    ])
+    const parts = splitAmStartPidof(r.stdout)
+    startup = parseAmStart(parts.amStart)
+    appPid = parsePidof(parts.pidof)
   }
 
   const session: ActiveSession = {
@@ -198,6 +291,7 @@ export async function startSession(
     configuredDurationMs: DEFAULT_MAX_DURATION_MS,
     options: { launch: opts.launch, video: opts.video },
     startup,
+    appPid,
   }
 
   await writeCaptureManifest(runDir, {
@@ -212,9 +306,12 @@ export async function startSession(
     env,
     warnings: buildWarnings(before.state, {
       video: opts.video,
-      launchUnverified: opts.launch && startup?.totalTimeMs == null,
+      launchTimeUnmeasured: opts.launch && startup?.totalTimeMs == null,
+      amStartStatus: startup?.status ?? null,
     }),
-    adb_commands_during_session: 0,
+    // 아직 세어 본 적이 없다. 0 은 "세어 봤더니 없었다" 는 뜻이라 여기 오면 거짓이다 —
+    // 실제 누적은 측정 창이 열린 뒤 활성 세션 포인터에 쌓이고 stop 이 이 자리로 옮긴다.
+    adb_commands_during_session: null,
     artifacts: { trace: null, video: null, raw: rawFiles },
   })
   await writeRunSession(runDir, session, { state: 'running' })

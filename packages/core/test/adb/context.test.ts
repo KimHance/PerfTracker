@@ -123,8 +123,34 @@ describe('측정 창은 프로세스를 넘어 살아 있다 (I4)', () => {
     const result = await extractRun(session.runDir, {
       traceProcessorPath: process.execPath,
       runner: new FakeProcessRunner(),
+      home,
     })
     expect(result.measurement_overhead.adb_commands_during_session).toBe(2)
+  })
+
+  /**
+   * M4. 위와 같은 상황인데 `stop` 만 없다. 매니페스트에는 `start` 가 쓴 0 밖에 없고,
+   * 실제 위반 두 건은 활성 세션 포인터에만 있다. 그 0 을 그대로 실어 내면 이 도구는
+   * **오염된 세션을 청정이라고 말하게 된다** — 값을 안 내는 것보다 나쁜 결과다.
+   */
+  it('stop 하지 않은 세션에서도 위반 횟수가 0 으로 둔갑하지 않는다', async () => {
+    const { session, home } = await startedSession()
+
+    for (const cmd of ['pm list packages -3', 'dumpsys gfxinfo']) {
+      const violating = await contextLike(new FakeProcessRunner(), home)
+      await expect(violating.adb.shell(cmd)).rejects.toThrow(MeasurementWindowViolationError)
+    }
+
+    // stop 을 부르지 않는다 — 세션이 도는 도중에 extract 를 돌린 사용자의 상황이다.
+    const result = await extractRun(session.runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+      home,
+    })
+
+    expect(result.session.state).toBe('running')
+    expect(result.measurement_overhead.adb_commands_during_session).toBe(2)
+    expect(result.warnings.map((w) => w.code)).toContain('session_still_running')
   })
 })
 
