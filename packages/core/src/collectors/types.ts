@@ -20,14 +20,20 @@ export interface CaptureFacts {
   launchRequested: boolean
 }
 
-/** 트레이스를 읽지 않는 collector 의 컨텍스트. `tp` 가 **아예 없다** — 있으면 쓰게 된다. */
-export interface CaptureOnlyContext {
+/**
+ * 모든 collector 가 받는 기본 컨텍스트 — 트레이스를 읽든 안 읽든 공통이다.
+ * `ExtractContext` 는 여기에 `tp` 를 얹은 것뿐이고, 트레이스가 필요 없는 collector
+ * (`CaptureCollector`) 는 이 기본형을 그대로 받는다. `tp` 가 없다고 "capture 전용"
+ * 컨텍스트인 것은 아니다 — 두 종류 collector 가 공유하는 바닥이라서 이 자리에 있다.
+ */
+export interface BaseExtractContext {
   packageName: string
   env: CollectorEnv
   capture: CaptureFacts
 }
 
-export interface ExtractContext extends CaptureOnlyContext {
+/** 트레이스를 읽는 collector 의 컨텍스트. 기본 컨텍스트에 `tp` 를 더한 것. */
+export interface ExtractContext extends BaseExtractContext {
   tp: TraceProcessor
 }
 
@@ -71,7 +77,7 @@ export interface TraceCollector<T> extends CollectorBase {
  */
 export interface CaptureCollector<T> extends CollectorBase {
   needsTrace: false
-  extract(ctx: CaptureOnlyContext): Promise<ExtractOutcome<T>>
+  extract(ctx: BaseExtractContext): Promise<ExtractOutcome<T>>
 }
 
 /**

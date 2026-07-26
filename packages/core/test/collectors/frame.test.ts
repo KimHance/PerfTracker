@@ -7,9 +7,16 @@ import {
   selectRenderProcess,
 } from '../../src/collectors/frame.js'
 import { FRAME_PROCESS_SQL, frameDurationsSql } from '../../src/collectors/frame.js'
+import type { CaptureFacts } from '../../src/collectors/types.js'
 import { buildTraceConfig } from '../../src/perfetto/config.js'
 import { TraceProcessor } from '../../src/perfetto/traceProcessor/client.js'
 import { FakeProcessRunner } from '../support/fakeProcessRunner.js'
+
+/**
+ * frame 은 `capture` 를 전혀 읽지 않는다 — 이 필드는 `ExtractContext` 가 요구하는 값을
+ * 채우기 위한 픽스처일 뿐이다. `--launch` 없이 시작한 세션과 같은 모양을 쓴다.
+ */
+const NO_CAPTURE: CaptureFacts = { startup: null, launchRequested: false }
 
 describe('buildFrameBuckets', () => {
   it('스펙이 정한 101개 버킷을 만든다', () => {
@@ -205,7 +212,7 @@ describe('frameCollector', () => {
       tp,
       packageName: pkg,
       env: { sdkInt: 36, dataSources: ['android.surfaceflinger.frametimeline'] },
-      capture: { startup: null, launchRequested: false },
+      capture: NO_CAPTURE,
     })
 
     expect(outcome.collected).toBe(true)
@@ -230,7 +237,7 @@ describe('frameCollector', () => {
         tp,
         packageName: 'com.x',
         env: { sdkInt: 36, dataSources: ['android.surfaceflinger.frametimeline'] },
-        capture: { startup: null, launchRequested: false },
+        capture: NO_CAPTURE,
       }),
     ).resolves.toEqual({
       collected: false,
@@ -253,7 +260,7 @@ describe('frameCollector', () => {
         tp,
         packageName: pkg,
         env: { sdkInt: 36, dataSources: ['android.surfaceflinger.frametimeline'] },
-        capture: { startup: null, launchRequested: false },
+        capture: NO_CAPTURE,
       }),
     ).resolves.toEqual({ collected: false, reason: { code: 'no_frames', detail: { process: pkg } } })
   })

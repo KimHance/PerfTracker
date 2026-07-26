@@ -20,14 +20,18 @@ export const FRAMETIMELINE_BLOCK =
   'data_sources { config { name: "android.surfaceflinger.frametimeline" } }'
 
 /**
- * 소비자 셋이 공유한다.
- *   - frame  : frametimeline 은 프레임 타이밍만 주고 process 테이블의 이름을 안 채운다
- *   - memory : 앱의 `mem.rss` 계열
- *   - overhead: `traced` / `traced_probes` 의 `runtime.*` 와 `mem.rss`
+ * 소비자 셋이 공유한다: **frame**, **memory**, **overhead**.
+ *   - frame  : frametimeline 은 프레임 타이밍만 주고 process 테이블의 이름을 안 채운다 —
+ *     이 블록이 그 이름을 채운다.
+ *   - memory : 앱의 `mem.rss` 계열.
+ *   - overhead: `traced` / `traced_probes` 의 `runtime.*` 와 `mem.rss`.
  *
- * `record_process_runtime: true` 가 있어야 trace_processor 가 프로세스마다
- * `runtime.user_ns` / `runtime.kernel_ns` 카운터를 만든다. 이것이 M1 에서 빠져 있어서
- * `measurement_overhead` 의 CPU 필드가 null 이었다.
+ * `record_process_runtime: true` 는 overhead 계산 전용이다 — 있어야 trace_processor 가
+ * 프로세스마다 `runtime.user_ns` / `runtime.kernel_ns` 카운터를 만든다. 이것이 M1 에서
+ * 빠져 있어서 `measurement_overhead` 의 CPU 필드가 null 이었다. 이 파일이 소스 하나당
+ * 블록 하나를 강제하므로, frame 만 등록된 세션(overhead/memory collector 가 아직 없거나
+ * 미지원인 기기)도 이 필드를 그대로 들고 나간다 — memory/overhead 를 위해 frame 이 대신
+ * 짊어지는 비용이고, 의도한 것이다.
  *
  * `scan_all_processes_on_start: true` 는 세션 시작 시점의 전체 스냅샷을 남긴다. 폴링은
  * 매 주기마다 /proc 전체를 훑으므로(실측: 실기기 트레이스에 953개 프로세스) 대상 앱을

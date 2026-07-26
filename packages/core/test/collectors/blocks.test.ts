@@ -65,3 +65,53 @@ describe('데이터소스 블록', () => {
     expect(ANDROID_LOG_BLOCK).toContain(`min_prio: ${ANDROID_LOG_MIN_PRIO}`)
   })
 })
+
+/**
+ * 위 `.toContain` 검사들은 "이 필드가 있다" 는 의도만 표현하고 "이게 전부다" 는 말하지 않는다
+ * — 그래서 `record_process_runtime: true` 가 아무 테스트도 건드리지 않고 조용히 추가됐었다.
+ * 여기서는 블록 텍스트 전체를 고정한다. 앞으로 누가 공유 블록에 필드를 더하거나 빼면
+ * 이 테스트가 먼저 깨져서, "frame 전용 세션이 오늘부터 다른 바이트를 기기로 보낸다" 는 사실이
+ * 눈에 보이는 diff 로 드러난다.
+ */
+describe('데이터소스 블록 — 전체 텍스트 고정', () => {
+  it('FRAMETIMELINE_BLOCK', () => {
+    expect(FRAMETIMELINE_BLOCK).toBe(
+      'data_sources { config { name: "android.surfaceflinger.frametimeline" } }',
+    )
+  })
+
+  it('PROCESS_STATS_BLOCK', () => {
+    expect(PROCESS_STATS_BLOCK).toBe(
+      'data_sources { config { name: "linux.process_stats" process_stats_config { ' +
+        'proc_stats_poll_ms: 1000 scan_all_processes_on_start: true ' +
+        'record_process_runtime: true } } }',
+    )
+  })
+
+  it('SYS_STATS_BLOCK', () => {
+    expect(SYS_STATS_BLOCK).toBe(
+      'data_sources { config { name: "linux.sys_stats" sys_stats_config { ' +
+        'stat_period_ms: 1000 stat_counters: STAT_CPU_TIMES meminfo_period_ms: 1000 ' +
+        'meminfo_counters: MEMINFO_MEM_TOTAL meminfo_counters: MEMINFO_MEM_FREE ' +
+        'meminfo_counters: MEMINFO_MEM_AVAILABLE meminfo_counters: MEMINFO_BUFFERS ' +
+        'meminfo_counters: MEMINFO_CACHED meminfo_counters: MEMINFO_SWAP_CACHED ' +
+        'meminfo_counters: MEMINFO_SWAP_TOTAL meminfo_counters: MEMINFO_SWAP_FREE } } }',
+    )
+  })
+
+  it('FTRACE_POWER_BLOCK', () => {
+    expect(FTRACE_POWER_BLOCK).toBe(
+      'data_sources { config { name: "linux.ftrace" ftrace_config { ' +
+        'ftrace_events: "power/cpu_frequency" ftrace_events: "power/cpu_idle" ' +
+        'ftrace_events: "power/suspend_resume" } } }',
+    )
+  })
+
+  it('ANDROID_LOG_BLOCK', () => {
+    expect(ANDROID_LOG_BLOCK).toBe(
+      'data_sources { config { name: "android.log" android_log_config { ' +
+        'log_ids: LID_DEFAULT log_ids: LID_SYSTEM log_ids: LID_CRASH ' +
+        'min_prio: PRIO_WARN } } }',
+    )
+  })
+})

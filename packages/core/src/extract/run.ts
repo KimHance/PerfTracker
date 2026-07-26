@@ -4,8 +4,8 @@ import type { ProcessRunner } from '../adb/process.js'
 import { frameCollector } from '../collectors/frame.js'
 import { COLLECTORS } from '../collectors/registry.js'
 import type {
+  BaseExtractContext,
   CaptureFacts,
-  CaptureOnlyContext,
   Collector,
   ExtractOutcome,
 } from '../collectors/types.js'
@@ -74,7 +74,7 @@ async function runCollector(
   const support = collector.supports(manifest.env)
   if (!support.supported) return metric('unsupported', collector.source, support.reason)
 
-  const base: CaptureOnlyContext = {
+  const base: BaseExtractContext = {
     packageName: manifest.target_app.package,
     env: manifest.env,
     capture,
