@@ -63,6 +63,12 @@ export const METRIC_REASON_CODES = [
    * 두 가지 뜻이 겹친다 — 정말 아무것도 안 찍혔거나, traced_probes 가 logd 를 못 읽었거나.
    */
   'no_log_entries',
+  /**
+   * 크래시/ANR 배열이 상한(200건)에 닿아 잘렸다. 그 뒤에 더 있었는지는 알 수 없다.
+   * 개수(`total` / `by_priority`)는 잘리지 않는다 — 그쪽은 SQL 이 세어 온 값이다.
+   * detail: limit
+   */
+  'log_events_truncated',
 ] as const
 
 export type MetricReasonCode = (typeof METRIC_REASON_CODES)[number]
@@ -108,6 +114,9 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
     `트레이스에 로그 항목이 없습니다 (문턱 ${String(d['min_prio'])}). ` +
     `실제로 아무것도 기록되지 않았거나, traced_probes 가 logd 를 읽지 못했을 수 있습니다 ` +
     `(SELinux 가 logdr 소켓을 막는 에뮬레이터 이미지에서 관측된 적이 있습니다).`,
+  log_events_truncated: (d) =>
+    `크래시/ANR 목록이 상한 ${String(d['limit'])}건에서 잘렸습니다 — ` +
+    `그 뒤에 더 있었는지는 이 결과로 알 수 없습니다. 우선순위별 개수는 잘리지 않았습니다.`,
 }
 
 /** 코드 → 한국어 문장. 모르는 코드는 조용히 비우지 않고 코드 자체를 남긴다. */

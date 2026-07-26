@@ -167,26 +167,61 @@ export const LogEventSchema = z.object({
 })
 export type LogEvent = z.infer<typeof LogEventSchema>
 
+/**
+ * 이 metric 의 모든 숫자는 **기기 전역**이다. 그 사실이 지금까지 소스 주석에만 있었는데,
+ * `perftracker schema` 는 `z.toJSONSchema(ResultSchema)` 라 주석을 보지 못한다 —
+ * 스키마만 읽는 CI 와 LLM 에게는 `crashes` 가 대상 앱의 크래시로 보였다.
+ * 범위가 한정된 숫자의 한정 조건은 주석이 아니라 `.describe()` 에 있어야 한다.
+ */
+const LOG_SCOPE =
+  '이 값은 **기기 전역**이며 대상 앱만의 값이 아니다 — android.log 데이터소스는 logd 전체를 ' +
+  '받고 프로세스로 거르지 않는다. '
+const LOG_EVENT_SCOPE =
+  '원문을 그대로 실으므로 누구 것인지는 tag/message 로 직접 읽어야 한다. ' +
+  `crashes 와 anrs 를 합쳐 최대 ${'200'}건까지만 담는다(ts 오름차순). ` +
+  '상한에 닿으면 status 가 partial 이 되고 reason_code 가 log_events_truncated 로 그 사실을 ' +
+  '말한다 — 그 뒤에 더 있었는지는 이 결과로 알 수 없다. 개수(total/by_priority)는 잘리지 않는다.'
+
 export const LogDataSchema = z.object({
-  /**
-   * 이 세션이 로그를 받은 최소 우선순위. 개수는 이 문턱 아래에서만 의미가 있다 —
-   * "W 118건" 은 무엇을 걸렀는지 없이는 읽을 수 없는 숫자다.
-   */
-  min_prio: z.string(),
-  total: z.number().int().nonnegative(),
-  by_priority: z.object({
-    warn: z.number().int().nonnegative(),
-    error: z.number().int().nonnegative(),
-    fatal: z.number().int().nonnegative(),
-  }),
-  /**
-   * 세션 동안 **기기 전역에서** 관측된 크래시와 ANR. 대상 앱만이 아니다.
-   * 크래시(`AndroidRuntime`)와 ANR(`ActivityManager` = system_server)은 앱이 아니라 시스템이
-   * 찍는다 — 앱 프로세스로 필터링하면 정작 중요한 줄이 사라진다.
-   * 원문을 그대로 실어서 누구 것인지 사람이 볼 수 있게 한다.
-   */
-  crashes: z.array(LogEventSchema),
-  anrs: z.array(LogEventSchema),
+  min_prio: z
+    .string()
+    .describe(
+      '이 세션이 logd 에서 받은 최소 우선순위(문턱). 아래 개수는 전부 이 문턱 이상만 센 값이라 ' +
+        '문턱 없이는 읽을 수 없다 — "W 118건" 은 무엇을 걸렀는지 모르면 의미가 없는 숫자다.',
+    ),
+  total: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      `트레이스에 담긴 로그 줄 수. ${LOG_SCOPE}` +
+        'min_prio 문턱 이상만 세며, 트레이스 버퍼가 넘쳤다면 그만큼 적다' +
+        '(measurement_overhead.trace_buffer_overrun 참고).',
+    ),
+  by_priority: z
+    .object({
+      warn: z.number().int().nonnegative(),
+      error: z.number().int().nonnegative(),
+      fatal: z.number().int().nonnegative(),
+    })
+    .describe(
+      `우선순위별 로그 줄 수. ${LOG_SCOPE}` +
+        'total 과 합이 다를 수 있다 — total 은 문턱보다 낮은 우선순위가 섞여 와도 전부 센다.',
+    ),
+  crashes: z
+    .array(LogEventSchema)
+    .describe(
+      `세션 동안 관측된 크래시(AndroidRuntime 의 FATAL EXCEPTION, libc 의 Fatal signal). ${LOG_SCOPE}` +
+        '크래시는 앱이 아니라 시스템이 찍으므로 앱 프로세스로 거르면 정작 그 줄이 사라진다. ' +
+        LOG_EVENT_SCOPE,
+    ),
+  anrs: z
+    .array(LogEventSchema)
+    .describe(
+      `세션 동안 관측된 ANR(ActivityManager 의 "ANR in ..."). ${LOG_SCOPE}` +
+        'ANR 은 system_server 가 찍는다. ' +
+        LOG_EVENT_SCOPE,
+    ),
 })
 export type LogData = z.infer<typeof LogDataSchema>
 
@@ -276,7 +311,8 @@ export const MeasurementOverheadSchema = z.object({
         'linux.process_stats 의 runtime.user_ns / runtime.kernel_ns 차이에서 나온다. ' +
         '커널이 clock tick 단위로만 보고하므로 해상도는 10ms 다 — 짧은 세션에서 0 이 나오는 것은 ' +
         '"측정 못 함"이 아니라 "10ms 미만"이라는 뜻이다. ' +
-        'perfetto CLI 프로세스는 --detach 직후 종료해서 이 합계에 잡히지 않는다. ' +
+        'perfetto CLI 프로세스도 세는 대상에 들어 있지만, 실측한 트레이스에서는 --detach 직후 ' +
+        '종료해 process_stats 스캔에 잡히지 않았다 — 보장이 아니라 관측이며, 잡히면 합계에 들어간다. ' +
         'null 은 트레이스에 해당 카운터가 없었다는 뜻이다(record_process_runtime 이 꺼진 옛 캡처).',
     ),
   tracing_processes_cpu_share_pct: z
@@ -292,7 +328,10 @@ export const MeasurementOverheadSchema = z.object({
     .describe(
       '트레이싱 프로세스들의 mem.rss 최댓값을 **프로세스별로 구해 더한 값**(kB). ' +
         'process_stats 표본의 타임스탬프가 프로세스마다 정확히 같지 않아 "동시 최대"를 ' +
-        '정확히 낼 수 없으므로, 이 값은 진짜 동시 최대의 상계다. 과소평가하지 않는 쪽을 골랐다.',
+        '정확히 낼 수 없으므로, 이 값은 진짜 동시 최대의 상계다. 과소평가하지 않는 쪽을 골랐다. ' +
+        '다만 각 프로세스의 최댓값 자체는 **1초 주기 표본의 최댓값**이다(proc_stats_poll_ms: 1000) — ' +
+        '표본과 표본 사이에 스쳐 간 순간 최고점은 이 값에 나타나지 않으므로, ' +
+        '이 상계가 모든 순간을 덮는다는 뜻은 아니다.',
     ),
   // 이 주의사항은 반드시 스키마에 실려야 한다. `perftracker schema` 는 CI 와 LLM 을 위한
   // 계약으로 팔리는데, 이 필드를 가장 잘못 읽기 쉬운 소비자가 바로 그들이다.

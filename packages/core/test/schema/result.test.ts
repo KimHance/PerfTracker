@@ -188,6 +188,65 @@ describe('resultJsonSchema', () => {
     }
   })
 
+  it('perfetto CLI 가 안 잡히는 것을 보장이 아니라 관측으로 적는다', () => {
+    // B-3. perfetto 는 TRACING_PROCESS_NAMES 에 들어 있으므로, 잡히면 세어진다.
+    // "잡히지 않는다" 는 우리가 지킬 수 있는 약속이 아니라 지금까지의 관측이다.
+    const overhead = props(resultJsonSchema())['measurement_overhead']
+    const d = (props(overhead)['tracing_processes_cpu_time_ms'] as { description?: string })
+      .description!
+
+    expect(d).toContain('perfetto')
+    expect(d).not.toMatch(/잡히지 않는다\./)
+    expect(d).toMatch(/관측|실측/)
+  })
+
+  it('peak RSS 가 1초 표본의 최댓값이라는 사실까지 적는다', () => {
+    // B-4. 프로세스별 최댓값을 더한 것이 상계라는 설명만으로는 부족하다 —
+    // 각 최댓값 자체가 1초 주기 표본의 최댓값이라 표본 사이의 순간 최고점은 안 보인다.
+    const overhead = props(resultJsonSchema())['measurement_overhead']
+    const d = (props(overhead)['tracing_processes_peak_rss_kb'] as { description?: string })
+      .description!
+
+    expect(d).toContain('상계')
+    expect(d).toMatch(/1초|1,000ms|1000ms/)
+  })
+
+  /**
+   * B-1/B-2. `resultJsonSchema` 는 `z.toJSONSchema` 라 **소스 주석을 못 본다.**
+   * log 의 숫자들이 기기 전역이라는 사실이 `//` 주석에만 있으면, 스키마만 읽는 CI 와 LLM 은
+   * `crashes` 를 대상 앱의 크래시로 읽는다. 그 오독이 이 필드의 기본값이 되면 안 된다.
+   */
+  const logProps = (): Record<string, any> => {
+    // data 는 nullable 이라 anyOf 로 나온다 — object 쪽 가지를 찾아 들어간다.
+    const data = props(props(props(resultJsonSchema())['metrics'])['log'])['data'] as {
+      anyOf?: Record<string, any>[]
+    }
+    const object = data.anyOf?.find((b) => b['type'] === 'object') ?? data
+    return props(object)
+  }
+
+  it('log 의 모든 숫자 필드가 기기 전역임을 스키마에서 말한다', () => {
+    for (const field of ['total', 'crashes', 'anrs']) {
+      const f = logProps()[field] as { description?: string }
+      expect(f.description, `${field} 설명 없음`).toBeDefined()
+      expect(f.description, `${field} 가 범위를 안 밝힘`).toContain('기기 전역')
+    }
+    const byPriority = logProps()['by_priority'] as { description?: string }
+    expect(byPriority.description).toContain('기기 전역')
+  })
+
+  it('log 의 min_prio 가 개수의 전제임을 스키마에서 말한다', () => {
+    expect((logProps()['min_prio'] as { description?: string }).description).toContain('문턱')
+  })
+
+  it('crashes/anrs 가 잘릴 수 있다는 사실을 스키마에 싣는다', () => {
+    for (const field of ['crashes', 'anrs']) {
+      const f = logProps()[field] as { description?: string }
+      expect(f.description, `${field} 가 상한을 안 밝힘`).toContain('200')
+      expect(f.description).toContain('log_events_truncated')
+    }
+  })
+
   it('JSON 으로 직렬화된다 (perftracker schema 가 그대로 출력한다)', () => {
     expect(() => JSON.parse(JSON.stringify(resultJsonSchema()))).not.toThrow()
   })

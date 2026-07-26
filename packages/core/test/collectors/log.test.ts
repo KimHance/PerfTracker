@@ -6,6 +6,7 @@ import {
   LOG_EVENT_SQL,
   type LogCountRow,
   logCollector,
+  MAX_LOG_EVENTS,
 } from '../../src/collectors/log.js'
 import type { ExtractContext } from '../../src/collectors/types.js'
 
@@ -136,6 +137,40 @@ describe('logCollector.extract', () => {
       collected: false,
       reason: { code: 'no_log_entries', detail: { min_prio: ANDROID_LOG_MIN_PRIO } },
     })
+  })
+
+  /**
+   * B-2. SQL 이 `limit 200` 이라 크래시 폭풍에서는 배열이 잘린다 — 그 상한이 실제로 걸리는
+   * 상황이 바로 이 상한을 만든 상황이다. 짧은 배열을 전부인 것처럼 내보내면 안 된다.
+   */
+  it('이벤트 상한에 닿으면 잘렸을 수 있다는 사실을 사유로 남긴다', async () => {
+    const events = Array.from({ length: MAX_LOG_EVENTS }, () => ({
+      tag: 'AndroidRuntime',
+      msg: 'FATAL EXCEPTION: main',
+    }))
+    const outcome = await logCollector.extract(
+      ctx({ [LOG_COUNT_SQL]: COUNTS, [LOG_EVENT_SQL]: events }),
+    )
+    expect(outcome.collected).toBe(true)
+    if (!outcome.collected) return
+    expect(outcome.data.crashes).toHaveLength(MAX_LOG_EVENTS)
+    expect(outcome.partialReason).toEqual({
+      code: 'log_events_truncated',
+      detail: { limit: MAX_LOG_EVENTS },
+    })
+  })
+
+  it('상한에 닿지 않으면 잘림을 말하지 않는다', async () => {
+    const events = Array.from({ length: MAX_LOG_EVENTS - 1 }, () => ({
+      tag: 'AndroidRuntime',
+      msg: 'FATAL EXCEPTION: main',
+    }))
+    const outcome = await logCollector.extract(
+      ctx({ [LOG_COUNT_SQL]: COUNTS, [LOG_EVENT_SQL]: events }),
+    )
+    expect(outcome.collected).toBe(true)
+    if (!outcome.collected) return
+    expect(outcome.partialReason).toBeUndefined()
   })
 
   it('이벤트 쿼리가 터져도 개수는 살리고 partial 로 남긴다', async () => {

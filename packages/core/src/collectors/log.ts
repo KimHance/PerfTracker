@@ -17,8 +17,14 @@ const PRIO_FATAL = 7
 
 /** 메시지 원문을 무한정 싣지 않는다. 한 줄이 스택트레이스 전체인 경우가 있다. */
 const MAX_MESSAGE_CHARS = 500
-/** 크래시 폭풍이 result.json 을 수십 MB 로 만들지 않도록. */
-const MAX_EVENTS = 200
+/**
+ * 크래시 폭풍이 result.json 을 수십 MB 로 만들지 않도록.
+ *
+ * 이 상한이 실제로 걸리는 상황이 곧 이 상한을 만든 상황이므로, 걸렸을 때 짧아진 배열을
+ * 전부인 것처럼 내보내지 않는다 — `log_events_truncated` 로 말한다. 값은 `LogDataSchema` 의
+ * `.describe()` 에도 실린다 (`z.toJSONSchema` 는 주석을 못 본다).
+ */
+export const MAX_LOG_EVENTS = 200
 
 export interface LogCountRow {
   prio: number
@@ -45,7 +51,7 @@ export const LOG_EVENT_SQL =
   "(tag = 'AndroidRuntime' and msg like 'FATAL EXCEPTION%') or " +
   "(tag = 'libc' and msg like 'Fatal signal %') or " +
   "(tag = 'ActivityManager' and msg like 'ANR in %') " +
-  `order by ts limit ${MAX_EVENTS})`
+  `order by ts limit ${MAX_LOG_EVENTS})`
 
 /**
  * 태그와 메시지 접두어를 **둘 다** 본다.
@@ -98,8 +104,12 @@ export const logCollector: TraceCollector<LogData> = {
     const crashes: LogEvent[] = []
     const anrs: LogEvent[] = []
     let eventFailure: string | null = null
+    let truncated = false
     try {
-      for (const row of await ctx.tp.queryJson<LogEventRow[]>(LOG_EVENT_SQL)) {
+      const rows = await ctx.tp.queryJson<LogEventRow[]>(LOG_EVENT_SQL)
+      // 상한만큼 받아 왔다 = 그 뒤에 더 있었는지 알 수 없다. SQL 의 limit 이 여기서 끝났다.
+      truncated = rows.length >= MAX_LOG_EVENTS
+      for (const row of rows) {
         const kind = classifyLogEvent(row)
         if (kind === 'crash') crashes.push({ tag: row.tag, message: row.msg })
         else if (kind === 'anr') anrs.push({ tag: row.tag, message: row.msg })
@@ -122,12 +132,16 @@ export const logCollector: TraceCollector<LogData> = {
       anrs,
     }
 
-    return eventFailure === null
-      ? { collected: true, data }
-      : {
-          collected: true,
-          data,
-          partialReason: { code: 'query_failed', detail: { message: eventFailure } },
-        }
+    // 사유는 하나만 실린다. 쿼리 실패가 먼저다 — 그쪽은 배열이 잘린 것이 아니라 비어 있다.
+    if (eventFailure !== null) {
+      return {
+        collected: true,
+        data,
+        partialReason: { code: 'query_failed', detail: { message: eventFailure } },
+      }
+    }
+    return truncated
+      ? { collected: true, data, partialReason: { code: 'log_events_truncated', detail: { limit: MAX_LOG_EVENTS } } }
+      : { collected: true, data }
   },
 }
