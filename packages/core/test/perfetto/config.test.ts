@@ -115,6 +115,17 @@ describe('assertLowOverheadConfig', () => {
     expect(() => assertLowOverheadConfig(bad)).toThrow(/1000ms/)
   })
 
+  /**
+   * 여기에도 화이트리스트(`stat|meminfo|vmstat`)가 있어서 목록 밖의 주기 키는 어떤 값이든
+   * 검사 없이 통과했다 — ftrace 블랙리스트가 만든 것과 같은 종류의 구멍이다.
+   */
+  it('처음 보는 주기 키도 하한을 받는다 — 목록에 없다고 통과시키지 않는다', () => {
+    for (const line of ['thermal_period_ms: 250', 'drain_period_ms: 100', 'battery_poll_ms: 500']) {
+      const bad = `write_into_file: true\nflush_period_ms: 30000\nfile_write_period_ms: 30000\n${line}\n`
+      expect(() => assertLowOverheadConfig(bad), line).toThrow(/1000ms/)
+    }
+  })
+
   it('file_write_period_ms 가 없으면 거부한다', () => {
     expect(() => assertLowOverheadConfig('write_into_file: true\nflush_period_ms: 30000\n')).toThrow(
       /file_write_period_ms/,

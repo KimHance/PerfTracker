@@ -49,9 +49,9 @@ export const PROCESS_STATS_BLOCK =
  * cpu(사용률) 와 memory(시스템 메모리) 가 공유한다.
  *
  * 주기 키 이름이 `stat_period_ms` / `meminfo_period_ms` 라서 `assertLowOverheadConfig` 의
- * 화이트리스트에 걸려 1000ms 하한 검사를 실제로 받는다 — 의도한 것이다.
- * `cpufreq_period_ms`(sysfs 폴링)는 **쓰지 않는다.** 그 키는 화이트리스트 밖이라 검사 없이
- * 통과하고, 스펙이 지정한 주파수 출처는 ftrace `power/cpu_frequency` 다.
+ * 1000ms 하한 검사를 실제로 받는다 — 의도한 것이다.
+ * `cpufreq_period_ms`(sysfs 폴링)는 **쓰지 않는다.** 스펙이 지정한 주파수 출처는 ftrace
+ * `power/cpu_frequency` 이고, 같은 값을 두 경로로 받을 이유가 없다.
  */
 export const SYS_STATS_BLOCK =
   'data_sources { config { name: "linux.sys_stats" sys_stats_config { ' +
@@ -75,8 +75,9 @@ export const SYS_STATS_BLOCK =
  * 대상 앱이 돌던 코어에 청구한다 — 원칙 1 위반이다.
  * 필요해지면 **그것을 읽는 collector 와 같은 커밋에** `ALLOWED_FTRACE_EVENTS` 와 함께 넣는다.
  *
- * `drain_period_ms` 를 일부러 지정하지 않는다 — 그 키는 `assertLowOverheadConfig` 의
- * 주기 화이트리스트 밖이라 어떤 값을 넣어도 검사를 통과해 버린다. perfetto 기본값을 쓴다.
+ * `drain_period_ms` 를 일부러 지정하지 않고 perfetto 기본값을 쓴다. (예전에는 "그 키가
+ * `assertLowOverheadConfig` 의 주기 화이트리스트 밖이라 어떤 값이든 통과한다" 는 것이 이유의
+ * 절반이었는데, 그 화이트리스트는 이제 없다 — `*_period_ms` 는 전부 1000ms 하한을 받는다.)
  */
 export const FTRACE_POWER_BLOCK =
   'data_sources { config { name: "linux.ftrace" ftrace_config { ' +

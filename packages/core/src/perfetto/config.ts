@@ -88,11 +88,23 @@ export function assertLowOverheadConfig(text: string): void {
     )
   }
 
-  for (const m of text.matchAll(/(\w*poll_ms|\w*period_ms):\s*(\d+)/g)) {
-    const key = m[1]!
-    if (!key.endsWith('poll_ms') && !/^(stat|meminfo|vmstat)_period_ms$/.test(key)) continue
+  // `*_poll_ms` / `*_period_ms` 로 끝나는 키는 **전부** 하한을 받는다.
+  //
+  // 예전에는 여기에도 화이트리스트(`stat|meminfo|vmstat`)가 있어서, 목록에 없는 주기 키는
+  // 어떤 값이든 검사 없이 통과했다 — `thermal_period_ms: 250` 같은 설정이 원칙 1 의 강제
+  // 장치를 그냥 지나갔다는 뜻이다. ftrace 이벤트에서 블랙리스트가 만든 것과 같은 종류의
+  // 구멍이라 같이 막는다. 지금 쓰는 값은 전부 1000 / 30000 이라 이 강화로 달라지는 config 는
+  // 없고, 앞으로 추가되는 데이터소스가 자동으로 검사를 받는다.
+  //
+  // 여전히 안 잡히는 것: 키 이름이 이 두 접미사로 끝나지 않는 주기 설정
+  // (예: android.power 의 `battery_poll_ms` 는 잡히지만 `pull_frequency_ms` 는 안 잡힌다).
+  // 그런 데이터소스를 들일 때 이 정규식도 함께 넓혀야 한다.
+  for (const m of text.matchAll(/(\w*(?:poll|period)_ms):\s*(\d+)/g)) {
     if (Number(m[2]) < MIN_POLL_PERIOD_MS) {
-      throw new PerfettoSessionError(`${key} 가 ${m[2]}ms 입니다 — 폴링 주기는 1000ms 이상이어야 합니다.`)
+      throw new PerfettoSessionError(
+        `${m[1]} 가 ${m[2]}ms 입니다 — 주기는 1000ms 이상이어야 합니다. ` +
+          `짧은 주기는 세션 내내 대상 앱과 CPU 를 다툽니다.`,
+      )
     }
   }
 
