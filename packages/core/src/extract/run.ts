@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import type { ProcessRunner } from '../adb/process.js'
 import { frameCollector } from '../collectors/frame.js'
 import { COLLECTORS } from '../collectors/registry.js'
+import { parseSnapshotRawPath, type SnapshotPair, snapshotText } from '../collectors/snapshots.js'
 import type {
   BaseExtractContext,
   CaptureFacts,
@@ -29,6 +30,34 @@ import { computeOverhead } from './overhead.js'
 export const BUFFER_STATS_SQL =
   "select json_group_array(json_object('name', name, 'value', value)) as j from stats " +
   "where name like 'traced_buf%' and value > 0 and severity in ('error','data_loss')"
+
+/**
+ * `capture.json` 의 `artifacts.raw` 를 훑어 key → {before, after} 를 만든다.
+ *
+ * **collector 의 선언을 보지 않는다.** 그래서 `dumpsys thermalservice` 처럼
+ * `collectDeviceState()` 가 예전부터 찍어 오던 원문도 그대로 들어오고,
+ * M3 이전 run 디렉토리가 형식 버전을 올리지 않고도 전부 열린다.
+ *
+ * 파일을 못 읽으면 그 자리는 null 이다 — run 디렉토리가 옮겨졌거나, 아직 stop 하지 않아
+ * `_after` 가 없는 경우다. 둘 다 "모른다" 이지 "0" 이 아니다.
+ */
+export async function readSnapshots(
+  runDir: string,
+  rawFiles: string[],
+): Promise<Record<string, SnapshotPair>> {
+  const out: Record<string, SnapshotPair> = {}
+  for (const rel of rawFiles) {
+    const parsed = parseSnapshotRawPath(rel)
+    if (parsed === null) continue
+    const pair = (out[parsed.key] ??= { before: null, after: null })
+    try {
+      pair[parsed.phase] = snapshotText(await readFile(join(runDir, rel), 'utf8'))
+    } catch {
+      // 매니페스트에 적혀 있어도 파일이 없을 수 있다. 그건 "모른다" 다.
+    }
+  }
+  return out
+}
 
 /**
  * run 디렉토리의 session.json. `start` 는 `state: 'running'` 을 쓰고 `stop` 이 그것을 덮는다.
@@ -77,6 +106,7 @@ async function runCollector(
 
   const base: BaseExtractContext = {
     packageName: manifest.target_app.package,
+    appUid: manifest.target_app.uid,
     env: manifest.env,
     capture,
   }
@@ -200,6 +230,7 @@ export async function extractRun(
     launchRequested: session.options.launch,
     // 이 필드가 없던 시절의 session.json 은 undefined 다 — 그것은 "pid 를 모른다" 와 같다.
     appPid: session.appPid ?? null,
+    snapshots: await readSnapshots(runDir, manifest.artifacts.raw),
   }
 
   // 레지스트리를 순회한다 — collector 를 배열에 넣기만 하면 되고, 한 메트릭이 터져도

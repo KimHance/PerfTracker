@@ -117,8 +117,9 @@ function ctx(answers: Record<string, unknown>): ExtractContext {
   return {
     tp: new FakeTp(answers) as unknown as ExtractContext['tp'],
     packageName: 'com.foo.bar',
+    appUid: null,
     env: { sdkInt: 35, dataSources: ['linux.sys_stats', 'linux.ftrace'] },
-    capture: { startup: null, launchRequested: false, appPid: null },
+    capture: { startup: null, launchRequested: false, appPid: null, snapshots: {} },
   }
 }
 

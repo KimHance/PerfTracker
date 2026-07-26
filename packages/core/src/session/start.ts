@@ -2,11 +2,16 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { AdbClient } from '../adb/client.js'
 import { shellQuote } from '../adb/shell.js'
-import { collectTraceConfigBlocks, supportedCollectors, unsupportedReasons } from '../collectors/registry.js'
+import {
+  collectSnapshotSpecs,
+  collectTraceConfigBlocks,
+  supportedCollectors,
+  unsupportedReasons,
+} from '../collectors/registry.js'
 import type { AmStartResult } from '../collectors/types.js'
 import { probeDevice } from '../device/probe.js'
 import { collectDeviceStatic } from '../device/spec.js'
-import { collectDeviceState } from '../device/state.js'
+import { collectDeviceState, runSnapshots } from '../device/state.js'
 import { SessionStateError } from '../errors.js'
 import { buildTraceConfig, DEFAULT_MAX_DURATION_MS } from '../perfetto/config.js'
 import {
@@ -212,11 +217,14 @@ export async function startSession(
   const runDir = resolve(opts.outDir, runDirName(opts.now, name, id))
   await mkdir(join(runDir, 'raw'), { recursive: true })
 
-  // 1) 기기 스펙과 시작 스냅샷 — 측정 창을 열기 전에 끝낸다.
+  // 1) 기기 스펙과 시작 스냅샷 — 측정 창을 열기 전에, 그리고 **트레이스를 켜기 전에** 끝낸다.
+  //    트레이스를 켠 뒤에 dumpsys 를 부르면 그 작업이 트레이스 안에 기록되어
+  //    CPU/Log/overhead 숫자에 섞인다. 창 밖이라는 것만으로는 부족하다.
   const deviceStatic = await collectDeviceStatic(ctx.adb)
   const before = await collectDeviceState(ctx.adb, opts.now)
+  const beforeSnapshots = await runSnapshots(ctx.adb, collectSnapshotSpecs(env))
   const rawFiles: string[] = []
-  for (const [key, text] of Object.entries(before.raw)) {
+  for (const [key, text] of Object.entries({ ...before.raw, ...beforeSnapshots })) {
     const rel = join('raw', `${key}_before.txt`)
     await writeFile(join(runDir, rel), text, 'utf8')
     rawFiles.push(rel)

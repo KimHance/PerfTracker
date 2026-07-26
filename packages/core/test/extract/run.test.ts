@@ -1,11 +1,11 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { CPU_TIMES_SQL } from '../../src/collectors/cpu.js'
 import { FRAME_PROCESS_SQL, frameDurationsSql } from '../../src/collectors/frame.js'
 import { SessionStateError } from '../../src/errors.js'
-import { BUFFER_STATS_SQL, extractRun } from '../../src/extract/run.js'
+import { BUFFER_STATS_SQL, extractRun, readSnapshots } from '../../src/extract/run.js'
 import { TRACING_OVERHEAD_SQL } from '../../src/extract/overhead.js'
 import { writeCaptureManifest } from '../../src/session/manifest.js'
 import { type ActiveSession, writeActiveSession, writeRunSession } from '../../src/session/state.js'
@@ -489,6 +489,54 @@ describe('extractRun', () => {
 
     expect(result.metrics.frame.status).toBe('collected')
     expect(result.measurement_overhead.tracing_processes_cpu_time_ms).toBeNull()
+  })
+})
+
+describe('readSnapshots', () => {
+  it('artifacts.raw 의 전/후 파일을 key 로 묶는다', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pt-snap-'))
+    mkdirSync(join(dir, 'raw'))
+    writeFileSync(join(dir, 'raw', 'thermalservice_before.txt'), 'Thermal Status: 0\n')
+    writeFileSync(join(dir, 'raw', 'thermalservice_after.txt'), 'Thermal Status: 1\n')
+
+    const snaps = await readSnapshots(dir, [
+      'raw/thermalservice_before.txt',
+      'raw/thermalservice_after.txt',
+    ])
+    expect(snaps['thermalservice']).toEqual({
+      before: 'Thermal Status: 0\n',
+      after: 'Thermal Status: 1\n',
+    })
+  })
+
+  /** stop 을 안 거친 run 이 그렇다. after 를 0 이나 '' 로 채우면 거짓 청정 신호가 된다. */
+  it('after 파일이 없으면 after 는 null 이고 before 는 살아 있다', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pt-snap-'))
+    mkdirSync(join(dir, 'raw'))
+    writeFileSync(join(dir, 'raw', 'netstats_before.txt'), 'x\n')
+
+    expect(await readSnapshots(dir, ['raw/netstats_before.txt'])).toEqual({
+      netstats: { before: 'x\n', after: null },
+    })
+  })
+
+  /** tryShell 이 실패를 빈 문자열로 흡수하므로 빈 파일은 "명령이 실패했다" 는 뜻이다. */
+  it('빈 파일은 null 이다', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pt-snap-'))
+    mkdirSync(join(dir, 'raw'))
+    writeFileSync(join(dir, 'raw', 'netstats_before.txt'), '')
+    expect((await readSnapshots(dir, ['raw/netstats_before.txt']))['netstats']?.before).toBeNull()
+  })
+
+  it('매니페스트에 있는데 디스크에 없는 파일은 null 로 남고 던지지 않는다', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pt-snap-'))
+    expect(await readSnapshots(dir, ['raw/netstats_before.txt'])).toEqual({
+      netstats: { before: null, after: null },
+    })
+  })
+
+  it('트레이스 같은 비-스냅샷 항목은 무시한다', async () => {
+    expect(await readSnapshots('/nonexistent', ['trace.perfetto-trace', 'video.mp4'])).toEqual({})
   })
 })
 

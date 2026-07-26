@@ -2,7 +2,8 @@ import { existsSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AdbClient } from '../adb/client.js'
-import { collectDeviceState } from '../device/state.js'
+import { collectSnapshotSpecs } from '../collectors/registry.js'
+import { collectDeviceState, runSnapshots } from '../device/state.js'
 import { SessionStateError } from '../errors.js'
 import {
   isSessionDetached,
@@ -91,9 +92,14 @@ export async function stopSession(
     state = 'aborted'
   }
 
+  // 트레이서가 이미 멈춘 뒤이므로 이 명령들도 트레이스에 남지 않는다.
+  // `manifest.env` 를 쓰는 것이 중요하다 — stop 은 `probeDevice` 를 다시 부르지 않는다.
+  // 다시 부르면 기기 접촉이 하나 늘고, 그 사이 기기가 바뀌었다면 before/after 가
+  // 서로 다른 명세로 찍힌다. 캡처 당시의 env 가 정본이다.
   const after = await collectDeviceState(ctx.adb, now)
+  const afterSnapshots = await runSnapshots(ctx.adb, collectSnapshotSpecs(manifest.env))
   const rawFiles = [...manifest.artifacts.raw]
-  for (const [key, text] of Object.entries(after.raw)) {
+  for (const [key, text] of Object.entries({ ...after.raw, ...afterSnapshots })) {
     const rel = join('raw', `${key}_after.txt`)
     await writeFile(join(session.runDir, rel), text, 'utf8')
     rawFiles.push(rel)

@@ -4,6 +4,7 @@ import { cpuCollector } from './cpu.js'
 import { frameCollector } from './frame.js'
 import { logCollector } from './log.js'
 import { memoryCollector } from './memory.js'
+import { mergeSnapshotSpecs, type SnapshotSpec } from './snapshots.js'
 import { startupCollector } from './startup.js'
 import type { Collector, CollectorEnv } from './types.js'
 
@@ -32,6 +33,14 @@ export function supportedCollectors(env: CollectorEnv): Collector<unknown>[] {
  */
 export function collectTraceConfigBlocks(env: CollectorEnv): string[] {
   return mergeTraceConfigBlocks(supportedCollectors(env).flatMap((c) => c.traceConfigBlocks()))
+}
+
+/**
+ * 지원되는 collector 들이 요청한 스냅샷 명령을 합친다.
+ * `collectTraceConfigBlocks` 와 완전히 대칭이고, 규칙은 `mergeSnapshotSpecs` 에 있다.
+ */
+export function collectSnapshotSpecs(env: CollectorEnv): SnapshotSpec[] {
+  return mergeSnapshotSpecs(supportedCollectors(env).flatMap((c) => c.captureSnapshots?.() ?? []))
 }
 
 /**

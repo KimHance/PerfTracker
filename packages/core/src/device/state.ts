@@ -1,4 +1,5 @@
 import type { AdbClient } from '../adb/client.js'
+import type { SnapshotSpec } from '../collectors/snapshots.js'
 import type { DeviceState } from '../schema/result.js'
 
 const SETTINGS_COMMAND =
@@ -108,4 +109,25 @@ export async function collectDeviceState(
     },
     raw,
   }
+}
+
+/**
+ * 선언된 스냅샷 명령들을 각 1회 실행한다. `collectDeviceState` 와 같은 정책이다 —
+ * 개별 명령의 실패는 빈 문자열로 흡수하고, 명령 하나가 없는 기기 때문에 세션을 죽이지 않는다.
+ *
+ * **반드시 측정 창 밖에서만 불린다.** start 는 창을 열기 전(그리고 트레이스를 켜기 전),
+ * stop 은 창을 닫고 트레이서를 멈춘 뒤다. 창 안에서 불리면 `AdbClient` 의 래치가
+ * `MeasurementWindowViolationError` 를 던진다 — 이 함수가 그 규칙을 스스로 검사하지 않는
+ * 이유는 검사가 이미 단일 관문(`AdbClient`)에 있기 때문이다.
+ *
+ * 명령을 한 셸 호출로 합치지 않는다: 이 호출들은 트레이스 밖에서 일어나므로 왕복 횟수가
+ * 측정에 청구되지 않는다. 합치면 출력 경계를 가르는 파싱만 늘고 얻는 것이 없다.
+ */
+export async function runSnapshots(
+  adb: AdbClient,
+  specs: SnapshotSpec[],
+): Promise<Record<string, string>> {
+  const out: Record<string, string> = {}
+  for (const spec of specs) out[spec.key] = await adb.tryShell(spec.command)
+  return out
 }

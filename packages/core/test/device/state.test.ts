@@ -10,6 +10,7 @@ import {
   parseNetworkFromIpRoute,
   parseSettingsLine,
   parseThermalZones,
+  runSnapshots,
 } from '../../src/device/state.js'
 import { FakeProcessRunner } from '../support/fakeProcessRunner.js'
 
@@ -152,5 +153,50 @@ describe('collectDeviceState', () => {
     expect(state.battery_level).toBe(68)
     expect(state.thermal_zones).toEqual([])
     expect(state.network).toBeNull()
+  })
+})
+
+describe('runSnapshots', () => {
+  it('명세마다 정확히 한 번씩, 선언된 순서대로 셸 명령을 낸다', async () => {
+    const runner = new FakeProcessRunner()
+      .on('shell dumpsys netstats', { stdout: 'netstats output\n' })
+      .on('shell pm list packages -U', { stdout: 'package:com.foo uid:10208\n' })
+    const adb = new AdbClient({ adbPath: '/fake/adb', runner })
+
+    const out = await runSnapshots(adb, [
+      { key: 'netstats', command: 'dumpsys netstats' },
+      { key: 'packages', command: 'pm list packages -U' },
+    ])
+
+    expect(out).toEqual({
+      netstats: 'netstats output\n',
+      packages: 'package:com.foo uid:10208\n',
+    })
+    // 두 명령을 한 셸 호출로 합치면 key → 원문 대응이 사라진다. 왕복은 창 밖이라 공짜다.
+    expect(runner.commands).toEqual(['shell dumpsys netstats', 'shell pm list packages -U'])
+  })
+
+  /**
+   * `collectDeviceState` 와 같은 정책이다. 여기서 `tryShell` 대신 던지는 `shell` 을 쓰면
+   * 명령 하나가 없는 기기에서 **세션 자체가 시작되지 않는다.**
+   */
+  it('실패한 명령은 빈 문자열로 흡수하고 던지지 않는다', async () => {
+    const runner = new FakeProcessRunner().on('shell dumpsys netstats', {
+      code: 1,
+      stderr: 'Can’t find service: netstats',
+    })
+    const adb = new AdbClient({ adbPath: '/fake/adb', runner })
+
+    await expect(runSnapshots(adb, [{ key: 'netstats', command: 'dumpsys netstats' }])).resolves.toEqual({
+      netstats: '',
+    })
+  })
+
+  it('빈 명세는 기기를 건드리지 않는다', async () => {
+    const runner = new FakeProcessRunner()
+    const adb = new AdbClient({ adbPath: '/fake/adb', runner })
+
+    expect(await runSnapshots(adb, [])).toEqual({})
+    expect(runner.commands).toEqual([])
   })
 })

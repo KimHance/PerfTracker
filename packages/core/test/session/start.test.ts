@@ -244,6 +244,28 @@ describe('startSession — 오케스트레이션 불변식', () => {
     expect(first.runDir).not.toBe(second.runDir)
   })
 
+  /**
+   * M3 이 `collectSnapshotSpecs()` 를 start 경로에 끼워 넣었다. **아직 아무 collector 도
+   * `captureSnapshots()` 를 선언하지 않았으므로 기기로 나가는 명령은 M2 와 한 개도 다르지
+   * 않아야 한다.** 목록을 통째로 고정하는 이유는, 개수만 세면 하나가 늘고 하나가 사라진
+   * 경우를 못 잡기 때문이다.
+   *
+   * Task 4 가 network collector 를 등록하면서 이 단언을 "새 명령이 --detach 보다 앞에
+   * 나간다" 는 순서 단언으로 교체한다.
+   */
+  it('선언된 스냅샷이 없으면 기기로 나가는 dumpsys 가 M2 와 정확히 같다', async () => {
+    const h = start({ launch: true })
+    await h.result
+
+    expect(h.runner.commands.filter((c) => c.includes('dumpsys'))).toEqual([
+      // collectDeviceStatic
+      `-s ${SERIAL} shell dumpsys display`,
+      // collectDeviceState
+      `-s ${SERIAL} shell dumpsys battery`,
+      `-s ${SERIAL} shell dumpsys thermalservice`,
+    ])
+  })
+
   it('트레이스를 먼저 켜고 나서 앱을 실행한다 — 콜드 스타트가 트레이스 안에 들어가야 한다', async () => {
     const h = start({ launch: true })
     await h.result
