@@ -480,6 +480,27 @@ describe('resultJsonSchema', () => {
   })
 
   /**
+   * M-7. 옛 문구는 "순서는 기기가 보고한 순서" 였는데 **거짓이었다.** 실제 규칙은
+   * "HAL 절 순서 먼저, cached 전용을 뒤에" 이고, 실기기 원문은 `Cached temperatures:` 를
+   * **먼저** 찍는다 — 그 첫 항목 `PA1THM` 이 결과에서는 마지막이다
+   * (`thermal.test.ts` 가 그 순서를 실기기 픽스처로 고정한다).
+   *
+   * 순서에 의미가 있다고 믿은 소비자는 "첫 항목이 기기가 가장 먼저 보고한 센서" 로 읽는다.
+   * 깨지는 조건: 옛 단정이 돌아오거나, 실제 규칙이 사라지면 실패한다.
+   */
+  it('zones 의 순서 규칙을 사실대로 말한다 — "기기가 보고한 순서" 라고 하지 않는다', () => {
+    const d = (metricDataProps('thermal')['zones'] as { description: string }).description
+
+    expect(d).toMatch(/순서는 "기기가 보고한 순서" 가 아니다/)
+    expect(d).toContain('Current temperatures from HAL')
+    expect(d).toContain('Cached temperatures')
+    // 근거가 함께 있어야 한다 — 규칙만 있으면 소비자가 무게를 못 잰다.
+    expect(d).toContain('PA1THM')
+    // 정렬하지 않는다는 기존 보장은 살아 있어야 한다.
+    expect(d).toMatch(/변화량 크기로 정렬하지는 \*\*않는다\*\*/)
+  })
+
+  /**
    * 실기기 대조에서 나온 사실: `Cached` 전용 존 하나가 4세션 8개 덤프 내내 27.0°C 로
    * 고정이었고 같은 기간 HAL 존은 30.8~41.6°C 로 움직였다. 그 존의 `delta_c` 0 은
    * "온도가 안 변했다" 가 아니라 "이 값이 갱신되지 않았다" 일 수 있다.

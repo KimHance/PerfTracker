@@ -77,7 +77,12 @@ export const thermalCollector: CaptureCollector<ThermalData> = {
     const beforeKeys = new Set(beforeZones.map((z) => thermalZoneKey(z)))
 
     // before 의 순서를 지키고, after 에만 있는 존을 뒤에 붙인다. 델타 크기로 정렬하지 않는다 —
-    // 어느 센서가 중요한지는 이 도구가 말하지 않는 종류의 것이고, 정렬은 기기 순서도 지운다.
+    // 어느 센서가 중요한지는 이 도구가 말하지 않는 종류의 것이다.
+    //
+    // **"기기가 준 순서" 가 아니다.** `mergeThermalReadings` 가 HAL 절을 먼저 훑고 cached
+    // 전용을 뒤에 붙이므로, 원문이 `Cached temperatures:` 를 먼저 찍는 실기기에서는 원문
+    // 순서와 다르다 (원문 첫 항목 `PA1THM` 이 여기서는 마지막이다). 스키마의
+    // `.describe()` 가 그 규칙을 그대로 말한다 — 소비자는 순서가 아니라 name/type 으로 찾는다.
     const zones: ThermalZoneReading[] = beforeZones.map((b) => {
       const a = afterByKey.get(thermalZoneKey(b))
       return {

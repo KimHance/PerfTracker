@@ -113,7 +113,13 @@ describe('thermalCollector.extract', () => {
       after_c: 27,
       delta_c: 0,
     })
-    // 존 순서는 기기가 준 순서다 — 델타 크기로 정렬하지 않는다 (D10).
+    /**
+     * 순서 규칙: **HAL 절 순서가 먼저, cached 전용이 뒤.** 델타 크기로 정렬하지 않는다(D10).
+     *
+     * 이 단언이 M-7 의 증거다. 픽스처(실기기 원문 그대로)는 `Cached temperatures:` 를
+     * **먼저** 찍고 그 첫 항목이 `PA1THM` 인데, 결과의 **마지막**이 `PA1THM` 이다.
+     * 즉 "순서는 기기가 보고한 순서" 라는 옛 스키마 문구는 거짓이었다.
+     */
     expect(d.zones.map((z) => z.name)).toEqual([
       'AP',
       'BAT',

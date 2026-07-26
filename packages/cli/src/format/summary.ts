@@ -187,17 +187,33 @@ export function formatSummary(result: Result): string {
       ),
     )
 
-    // 기기가 준 순서 그대로. 델타 크기로 정렬하지 않는다 — 어느 센서가 중요한지는
-    // 이 도구가 말하지 않는 종류의 것이고, 정렬은 "기기 순서" 라는 사실도 지운다.
-    const shown = t.zones.slice(0, ZONE_PREVIEW).map((z) => {
+    // `zones` 가 온 순서 그대로 앞에서부터 자른다. 델타 크기로 정렬하지 않는다 —
+    // 어느 센서가 중요한지는 이 도구가 말하지 않는 종류의 것이다.
+    // (그 순서는 "기기가 준 순서" 가 아니라 HAL 절 먼저, cached 전용이 뒤다.
+    //  스키마의 zones 설명에 규칙이 있다. 여기서 다시 정렬하면 그 규칙마저 지운다.)
+    const preview = t.zones.slice(0, ZONE_PREVIEW)
+    const shown = preview.map((z) => {
       const from = z.before_c === null ? 'n/a' : z.before_c.toFixed(1)
       const to = z.after_c === null ? 'n/a' : z.after_c.toFixed(1)
-      const d = z.delta_c === null ? '' : ` (${signed(z.delta_c)})`
-      return `${z.name} ${from}→${to}${d}`
+      // `cached` 만 표시한다. `hal` 은 기본값이라 붙이면 모든 줄이 길어지고 얻는 것이 없다.
+      const notes = [
+        z.delta_c === null ? null : signed(z.delta_c),
+        z.source === 'cached' ? 'cached' : null,
+      ].filter((v): v is string => v !== null)
+      return `${z.name} ${from}→${to}${notes.length > 0 ? ` (${notes.join(', ')})` : ''}`
     })
     const rest = t.zones.length - shown.length
+    // Network 줄이 uid 한정을 터미널까지 들고 가는 것과 같은 이유다. `cached` 존의 delta 0 을
+    // "안 변했다" 로 읽는 것이 정확히 이 숫자의 오독이고, 요약만 보는 사람이 가장 많다.
+    // 실기기에서는 HAL 존이 먼저 정렬되므로 cached 전용 존은 대개 "외 N개" 로 접히지만,
+    // 그건 그 기기 계열의 관측이지 보장이 아니다 — HAL 이 존을 적게 주면 미리보기에 들어온다.
+    // 표시 비용은 그때만 든다: cached 존이 안 보이면 이 문구는 아예 붙지 않는다.
+    const cachedNote = preview.some((z) => z.source === 'cached')
+      ? ' · cached = 갱신이 올 때만 바뀌는 값 (delta 0 이 "안 변했다" 가 아닐 수 있음)'
+      : ''
     lines.push(
-      `          ${'zones'.padEnd(STATUS_WIDTH)} ${shown.join(' · ')}${rest > 0 ? ` · 외 ${num(rest)}개` : ''}`,
+      `          ${'zones'.padEnd(STATUS_WIDTH)} ${shown.join(' · ')}` +
+        `${rest > 0 ? ` · 외 ${num(rest)}개` : ''}${cachedNote}`,
     )
     if (thermal.reason !== null) lines.push(`          [${thermal.reason_code}] ${thermal.reason}`)
   } else {

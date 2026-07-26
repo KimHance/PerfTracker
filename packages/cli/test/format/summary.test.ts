@@ -522,6 +522,35 @@ describe('formatSummary — Thermal 줄', () => {
     expect(out).not.toContain('PA1THM 27')
   })
 
+  /**
+   * M-4. Network 줄은 uid 한정을 터미널까지 들고 가는데 Thermal 줄은 `source` 를 버렸다.
+   * `cached` 존의 delta 0 을 "안 변했다" 로 읽는 것이 정확히 이 숫자의 오독이고
+   * (실기기 `PA1THM` 은 약 3시간 4세션 8덤프 내내 27.0°C 고정이었다),
+   * 요약만 보는 사람이 가장 많다.
+   *
+   * 표시 비용은 **cached 존이 미리보기에 들어올 때만** 든다. 실기기에서는 HAL 존이 먼저
+   * 정렬되어 대개 "외 N개" 로 접히지만 그건 관측이지 보장이 아니다 — HAL 이 존을 적게 주면
+   * 미리보기에 들어온다.
+   */
+  it('미리보기에 cached 존이 오면 그 사실과 뜻을 함께 쓴다', () => {
+    // HAL 존이 둘뿐이라 cached 전용 존이 미리보기 안으로 들어오는 기기.
+    const zones = [...realZones().slice(0, 2), realZones()[7]!]
+    const out = formatSummary(withThermal({ zones }))
+
+    // `signed` 는 0 에 부호를 붙이지 않는다 — 0 은 오르지도 내리지도 않은 값이다.
+    expect(out).toContain('PA1THM 27.0→27.0 (0.0, cached)')
+    // 단어만 붙이면 장식이다 — 그 뜻이 오독을 막는다.
+    expect(out).toMatch(/갱신이 올 때만 바뀌는 값/)
+  })
+
+  /** 대가가 있는 표시다. cached 존이 안 보이면 한 글자도 붙지 않아야 한다. */
+  it('미리보기가 전부 hal 이면 아무것도 붙이지 않는다 — 없는 줄을 길게 만들지 않는다', () => {
+    // 기본 realZones() 의 앞 3개는 전부 hal 이고 PA1THM 은 "외 5개" 로 접힌다.
+    const out = formatSummary(withThermal())
+    expect(out).not.toContain('cached')
+    expect(out).toMatch(/AP 31\.1→36\.2 \(\+5\.1\) · BAT/)
+  })
+
   /** 깨지는 조건: after 가 없는 존에 0 을 쓰면 실패한다. null 은 "없다" 지 0 이 아니다. */
   it('after 가 없는 존은 "n/a" 로 쓴다 — 0 이 아니다', () => {
     const zones = realZones()
