@@ -34,6 +34,13 @@ export const SCHEMA_VERSION = '1.1.0'
  * 목록을 계약으로 만들면 새 collector 가 생길 때마다 조용히 거짓이 된다.
  *
  * 이 배열의 모든 값이 실재하는 `MetricReasonCode` 인지는 테스트가 고정한다.
+ *
+ * **`snapshot_unavailable` 은 이 목록에서 유일하게 양쪽에 걸친 코드다.** network 는 시작
+ * 스냅샷이 없으면 값을 통째로 못 내지만(`network.ts` — 누적 카운터는 한쪽만으로 뜻이 없다),
+ * thermal 은 **종료** 스냅샷만 없을 때 시작 스냅샷의 값을 낸 채 같은 코드를 `partialReason`
+ * 으로 붙인다(`thermal.ts`) — `stop` 전 세션을 extract 하면 **반드시** 지나가는 길이다.
+ * 그래서 이 코드만 보고 `data` 유무를 추론하면 틀린다. 목록을 계약으로 만들지 않은 이유가
+ * 바로 이런 것이고, describe 문구가 그 사실을 소비자에게 직접 말한다.
  */
 const DATA_NULL_PARTIAL_CODES = [
   'render_process_not_found',
@@ -77,6 +84,12 @@ export const MetricStatusSchema = z
       "판정은 반드시 `data !== null`(또는 `status === 'collected'`)로 하고 이 목록으로 하지 말 것. " +
       '스냅샷 계열(snapshot_unavailable / snapshot_unparsable)이 특히 흔하다: 이 도구가 ' +
       '스냅샷을 찍기 전에 만들어진 옛 run 을 재산출하면 thermal / network 가 반드시 그 길을 지난다.\n' +
+      '**`snapshot_unavailable` 은 위 목록에서 유일하게 양쪽에 걸친 코드다.** network 는 시작 ' +
+      '스냅샷이 없으면 값을 통째로 내지 못하지만(data null), thermal 은 **종료** 스냅샷만 ' +
+      '없을 때 시작 스냅샷의 값을 낸 채 같은 코드를 붙인다(data non-null) — 아직 stop 하지 ' +
+      '않은 세션을 extract 하면 반드시 지나가는 길이다. ' +
+      '**이 코드로 data 유무를 추론하지 말 것.** 목록을 계약으로 만들지 않은 이유가 이런 ' +
+      '것이며, 이 코드가 그 산 증거다.\n' +
       '- unsupported: 이 기기가 이 메트릭을 낼 수 없다 (sdk 하한 미달, 데이터소스 미등록). ' +
       'data 는 null 이다.\n' +
       '- failed: 예외 상황 전용이다 — 트레이스 원본이 없거나(trace_missing) ' +

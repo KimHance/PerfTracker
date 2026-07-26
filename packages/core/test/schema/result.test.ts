@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { COLLECTORS } from '../../src/collectors/registry.js'
+import { thermalCollector } from '../../src/collectors/thermal.js'
 import { resultJsonSchema } from '../../src/schema/jsonSchema.js'
 import { REFERENCES } from '../../src/schema/references.js'
 import { METRIC_REASON_CODES } from '../../src/schema/reasons.js'
@@ -634,6 +635,55 @@ describe('resultJsonSchema', () => {
     // (`no_meminfo_samples` / `cpu_freq_unavailable` 은 값이 나온 뒤 붙는 사유다.)
     expect(listed).not.toContain('no_meminfo_samples')
     expect(listed).not.toContain('cpu_freq_unavailable')
+  })
+
+  /**
+   * M-2. 바로 위 테스트가 "partialReason 전용 코드는 목록에 오면 안 된다" 를 지키는데,
+   * `snapshot_unavailable` 은 **둘 다**다: network 는 data-null 로, thermal 은
+   * partialReason(값 있음)으로 같은 코드를 낸다. 목록 안에서 유일하게 양쪽에 걸친 코드다.
+   *
+   * 그 사실을 문서가 말하지 않으면, 목록을 읽은 소비자는
+   * `reason_code === 'snapshot_unavailable'` 을 "data 는 null" 로 읽는다 —
+   * 그리고 **아직 stop 하지 않은 세션의 thermal 이 정확히 그 코드를 값과 함께 낸다.**
+   *
+   * 문구만 고정하면 문구가 코드보다 오래 살아 거짓이 될 수 있으므로, 실제 collector 를
+   * 돌려 그 경로가 아직 존재하는지 함께 확인한다.
+   */
+  it('양쪽에 걸친 코드가 있다는 사실을 문서가 말하고, 그 경로가 실재한다', async () => {
+    const d = (props(props(resultJsonSchema())['metrics'])['thermal'] as Record<string, any>)[
+      'properties'
+    ]['status']['description'] as string
+
+    // (1) 그 경로가 실재한다: after 스냅샷만 없으면 thermal 은 **값을 낸 채** 이 코드를 붙인다.
+    const out = await thermalCollector.extract({
+      packageName: 'com.foo',
+      appUid: null,
+      env: { sdkInt: 36, dataSources: [] },
+      capture: {
+        startup: null,
+        launchRequested: false,
+        appPid: null,
+        snapshots: {
+          thermalservice: {
+            before:
+              'Thermal Status: 0\nHAL Ready: true\nCurrent temperatures from HAL:\n' +
+              '\tTemperature{mValue=30.8, mType=3, mName=AP, mStatus=0}\n',
+            after: null,
+          },
+        },
+      },
+    })
+    expect(out.collected, 'thermal 이 after 없이도 값을 내는 경로가 사라졌다').toBe(true)
+    expect(out.collected && out.partialReason?.code).toBe('snapshot_unavailable')
+    expect(out.collected && out.data).not.toBeNull()
+
+    // (2) 그런데 같은 코드가 data-null 목록에도 있다.
+    const listed = (/이 버전에서 (.+?) 이다\./s.exec(d)?.[1] ?? '').split(',').map((s) => s.trim())
+    expect(listed).toContain('snapshot_unavailable')
+
+    // (3) 그러므로 문서가 그 겹침을 직접 말해야 한다 — 코드로 data 유무를 추론할 수 없다고.
+    expect(d).toMatch(/유일하게 양쪽에 걸친/)
+    expect(d).toMatch(/data 유무를 추론하지 말/)
   })
 
   it('frame 만 required 다 — 1.0.0 문서가 계속 유효해야 한다', () => {
