@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Result } from '@perftracker/core'
 import { formatSummary } from '../../src/format/summary.js'
 
-function result(overrides: Partial<Result['metrics']['frame']> = {}): Result {
+function result(overrides: Partial<Result['metrics']> = {}): Result {
   const state = {
     captured_at: '2026-07-25T14:32:10.000Z',
     battery_level: 68,
@@ -71,22 +71,83 @@ function result(overrides: Partial<Result['metrics']['frame']> = {}): Result {
         reason_code: null,
         reason: null,
         data: {
-          process: 'com.nhn.android.webtoon',
+          process: 'com.foo.bar',
           pid: 24193,
           total_frames: 1412,
-          buckets: [],
+          buckets: [{ from_ms: 0, to_ms: 5, count: 812 }],
           within_16_67ms_ratio: 0.874,
           percentiles: { p50: 9.2, p90: 21.4, p95: 28.1, p99: 96.3 },
           mean_ms: 12.8,
           max_ms: 312.4,
         },
-        ...overrides,
       },
+      startup: {
+        status: 'collected',
+        source: 'am start -W: TotalTime / LaunchState',
+        reason_code: null,
+        reason: null,
+        data: { total_time_ms: 1842, launch_state: 'COLD' },
+      },
+      cpu: {
+        status: 'collected',
+        source: 'perfetto: linux.sys_stats cpu.times.* + ftrace power/cpu_frequency',
+        reason_code: null,
+        reason: null,
+        data: {
+          sampled_ms: 42000,
+          samples: 42,
+          total_busy_pct: 23.1,
+          per_core: [
+            { cpu: 0, busy_pct: 31.2 },
+            { cpu: 1, busy_pct: 15 },
+          ],
+          frequency: [
+            { cpu: 0, samples: 716, min_khz: 300000, max_khz: 2400000, avg_khz: 1820000 },
+          ],
+        },
+      },
+      memory: {
+        status: 'collected',
+        source: 'perfetto: linux.process_stats mem.rss + linux.sys_stats meminfo',
+        reason_code: null,
+        reason: null,
+        data: {
+          process: 'com.foo.bar',
+          pid: 24193,
+          samples: 42,
+          rss: { min_kb: 300000, max_kb: 498688, avg_kb: 421888 },
+          rss_anon: null,
+          rss_file: null,
+          rss_watermark_peak_kb: 512000,
+          system: {
+            mem_total_kb: 11380228,
+            mem_available: { min_kb: 3000000, max_kb: 3600000, avg_kb: 3420160 },
+            mem_free: { min_kb: 100000, max_kb: 200000, avg_kb: 150000 },
+            cached: { min_kb: 800000, max_kb: 900000, avg_kb: 850000 },
+            swap_total_kb: 6000000,
+            swap_free: { min_kb: 1000000, max_kb: 2000000, avg_kb: 1500000 },
+          },
+        },
+      },
+      log: {
+        status: 'collected',
+        source: 'perfetto: android.log (device-wide, min_prio=PRIO_WARN)',
+        reason_code: null,
+        reason: null,
+        data: {
+          min_prio: 'PRIO_WARN',
+          total: 142,
+          by_priority: { warn: 118, error: 23, fatal: 1 },
+          crashes: [],
+          anrs: [],
+        },
+      },
+      ...overrides,
     },
     measurement_overhead: {
-      tracing_processes_cpu_time_ms: null,
-      tracing_processes_cpu_share_pct: null,
-      tracing_processes_peak_rss_kb: null,
+      tracing_processes_cpu_time_ms: 412,
+      tracing_processes_cpu_share_pct: 0.7,
+      tracing_processes_peak_rss_kb: 18432,
       adb_commands_during_session: 0,
       trace_buffer_overrun: false,
     },
@@ -124,10 +185,13 @@ describe('formatSummary', () => {
   it('미수집 항목은 사유와 함께 보여준다', () => {
     const out = formatSummary(
       result({
-        status: 'unsupported',
-        reason_code: 'sdk_too_low',
-        reason: 'Android 12 이상이 필요합니다 (기기 sdk_int=30, 최소 sdk_int=31).',
-        data: null,
+        frame: {
+          status: 'unsupported',
+          source: 'perfetto: actual_frame_timeline_slice.dur',
+          reason_code: 'sdk_too_low',
+          reason: 'Android 12 이상이 필요합니다 (기기 sdk_int=30, 최소 sdk_int=31).',
+          data: null,
+        },
       }),
     )
     expect(out).toContain('unsupported')
@@ -137,10 +201,13 @@ describe('formatSummary', () => {
   it('미수집 항목은 기계용 코드도 함께 보여준다', () => {
     const out = formatSummary(
       result({
-        status: 'partial',
-        reason_code: 'render_process_not_found',
-        reason: '대상 앱(com.x)의 렌더 프로세스를 트레이스에서 찾지 못했습니다.',
-        data: null,
+        frame: {
+          status: 'partial',
+          source: 'perfetto: actual_frame_timeline_slice.dur',
+          reason_code: 'render_process_not_found',
+          reason: '대상 앱(com.x)의 렌더 프로세스를 트레이스에서 찾지 못했습니다.',
+          data: null,
+        },
       }),
     )
     expect(out).toContain('[render_process_not_found]')
@@ -152,5 +219,100 @@ describe('formatSummary', () => {
 
   it('관측된 경고를 Notes 로 보여준다', () => {
     expect(formatSummary(result())).toContain('USB 충전 중이었음')
+  })
+})
+
+describe('formatSummary — M2 메트릭', () => {
+  it('Startup 을 TotalTime 과 LaunchState 로 보여준다', () => {
+    expect(formatSummary(result())).toContain('Startup   collected     TotalTime 1,842ms · COLD')
+  })
+
+  it('CPU 는 사용률과 주파수를 한 줄에 함께 보여준다', () => {
+    const out = formatSummary(result())
+    expect(out).toContain('CPU       collected')
+    expect(out).toContain('total busy 23.1%')
+    expect(out).toContain('cpu0 1,820MHz')
+  })
+
+  it('주파수가 없으면 사용률 옆에 n/a 를 쓰고 사유를 남긴다', () => {
+    const out = formatSummary(
+      result({
+        cpu: {
+          status: 'partial',
+          source: 'perfetto: linux.sys_stats cpu.times.* + ftrace power/cpu_frequency',
+          reason_code: 'cpu_freq_unavailable',
+          reason: 'ftrace power/cpu_frequency 이벤트가 없어 주파수를 함께 내지 못했습니다 — 사용률만 있는 값입니다.',
+          data: {
+            sampled_ms: 42000,
+            samples: 42,
+            total_busy_pct: 23.1,
+            per_core: [{ cpu: 0, busy_pct: 31.2 }],
+            frequency: null,
+          },
+        },
+      }),
+    )
+    expect(out).toContain('CPU       partial')
+    expect(out).toContain('freq n/a')
+    expect(out).toContain('[cpu_freq_unavailable]')
+  })
+
+  it('Memory 를 MB 로 보여준다', () => {
+    const out = formatSummary(result())
+    expect(out).toContain('RSS avg 412MB · peak 487MB')
+    expect(out).toContain('system avail avg 3,340MB')
+  })
+
+  it('Log 를 크래시·ANR·우선순위 개수로 보여준다', () => {
+    expect(formatSummary(result())).toContain('crash 0 · ANR 0 · E 23 · W 118')
+  })
+
+  it('수집되지 않은 항목은 상태와 사유 코드를 같은 자리에 보여준다', () => {
+    const out = formatSummary(
+      result({
+        log: {
+          status: 'partial',
+          source: 'perfetto: android.log (device-wide, min_prio=PRIO_WARN)',
+          reason_code: 'no_log_entries',
+          reason: '트레이스에 로그 항목이 없습니다 (문턱 PRIO_WARN).',
+          data: null,
+        },
+      }),
+    )
+    expect(out).toContain('Log       partial       [no_log_entries]')
+  })
+
+  it('메트릭 키 자체가 없는 1.0.0 결과에서도 죽지 않는다', () => {
+    const r = result()
+    const metrics = { frame: r.metrics.frame } as Result['metrics']
+    const out = formatSummary({ ...r, metrics })
+    expect(out).toContain('Frame     collected')
+    expect(out).toContain('Startup   not-collected')
+  })
+
+  it('Overhead 를 측정값으로 보여준다', () => {
+    expect(formatSummary(result())).toContain(
+      'Overhead  tracing procs 0.7% CPU (412ms) · 18MB RSS · buffer overrun: no',
+    )
+  })
+
+  it('오버헤드가 null 이면 숫자를 지어내지 않고 not measured 라고 쓴다', () => {
+    const r = result()
+    const out = formatSummary({
+      ...r,
+      measurement_overhead: {
+        ...r.measurement_overhead,
+        tracing_processes_cpu_time_ms: null,
+        tracing_processes_cpu_share_pct: null,
+        tracing_processes_peak_rss_kb: null,
+      },
+    })
+    expect(out).toContain('Overhead  tracing procs not measured · buffer overrun: no')
+  })
+
+  it('구글 기준선을 터미널에 쓰지 않는다 — references 에만 둔다', () => {
+    const out = formatSummary(result())
+    expect(out).not.toContain('5,000ms')
+    expect(out).not.toContain('5000ms')
   })
 })

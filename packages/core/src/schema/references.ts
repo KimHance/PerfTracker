@@ -21,4 +21,28 @@ export const REFERENCES: Reference[] = [
     source: 'Android Vitals — frozen frames',
     url: 'https://developer.android.com/topic/performance/vitals/frozen',
   },
+  {
+    metric: 'startup',
+    name: 'excessive cold startup time',
+    value: 5000,
+    unit: 'ms',
+    source: 'Android Vitals — app startup time',
+    url: 'https://developer.android.com/topic/performance/vitals/launch-time',
+  },
+  {
+    metric: 'startup',
+    name: 'excessive warm startup time',
+    value: 2000,
+    unit: 'ms',
+    source: 'Android Vitals — app startup time',
+    url: 'https://developer.android.com/topic/performance/vitals/launch-time',
+  },
+  {
+    metric: 'startup',
+    name: 'excessive hot startup time',
+    value: 1500,
+    unit: 'ms',
+    source: 'Android Vitals — app startup time',
+    url: 'https://developer.android.com/topic/performance/vitals/launch-time',
+  },
 ]

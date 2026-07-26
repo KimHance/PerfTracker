@@ -132,6 +132,18 @@ describe('REFERENCES', () => {
     expect(REFERENCES.length).toBeGreaterThan(0)
     for (const ref of REFERENCES) expect(ref.url).toMatch(/^https:\/\//)
   })
+
+  it('references 는 출처 URL 이 있는 항목만 담는다 — 근거 없는 기준선은 곧 판정이다', () => {
+    for (const ref of REFERENCES) {
+      expect(ref.url.startsWith('https://')).toBe(true)
+      expect(ref.source.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('startup 기준선 세 개가 들어 있다', () => {
+    const startup = REFERENCES.filter((r) => r.metric === 'startup')
+    expect(startup.map((r) => r.value).sort((a, b) => a - b)).toEqual([1500, 2000, 5000])
+  })
 })
 
 describe('resultJsonSchema', () => {
@@ -178,5 +190,17 @@ describe('resultJsonSchema', () => {
 
   it('JSON 으로 직렬화된다 (perftracker schema 가 그대로 출력한다)', () => {
     expect(() => JSON.parse(JSON.stringify(resultJsonSchema()))).not.toThrow()
+  })
+
+  it('다섯 메트릭이 모두 JSON Schema 에 실린다 — catchall 로 뭉개지지 않는다', () => {
+    const metrics = props(props(resultJsonSchema())['metrics'])
+    for (const id of ['frame', 'startup', 'cpu', 'memory', 'log']) {
+      expect(metrics[id], `${id} 가 스키마에 없음`).toBeDefined()
+    }
+  })
+
+  it('frame 만 required 다 — 1.0.0 문서가 계속 유효해야 한다', () => {
+    const metrics = props(resultJsonSchema())['metrics'] as { required?: string[] }
+    expect(metrics.required).toEqual(['frame'])
   })
 })
