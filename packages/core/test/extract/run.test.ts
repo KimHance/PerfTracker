@@ -596,7 +596,10 @@ describe('extractRun', () => {
       runner: new FakeProcessRunner(),
     })
 
-    expect(result.metrics.network?.status).toBe('collected')
+    // 픽스처의 이 uid 는 패키지 둘이 공유한다 — 값은 다 나오지만 그 숫자는 둘의 합이고,
+    // 그 사실은 `status` 로도 나가야 한다 (collectors/network.ts 의 attributionReason).
+    expect(result.metrics.network?.status).toBe('partial')
+    expect(result.metrics.network?.reason_code).toBe('uid_shared_by_multiple_packages')
     expect(result.metrics.network?.data).toEqual({
       uid: APP_UID,
       rx_bytes: 5000,

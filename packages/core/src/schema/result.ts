@@ -555,10 +555,23 @@ export const NetworkDataSchema = z.object({
     .nullable()
     .describe(
       '`pm list packages -U` 스냅샷에서 **이 uid 를 쓰는 것으로 관측된 패키지 전부**(시스템 포함). ' +
-        '항목이 1개면 위 숫자는 그 패키지만의 것이고, 2개 이상이면 그 패키지들의 합이며 ' +
-        '분리할 수 없다. 실측 근거: 어느 에뮬레이터에서 uid 1000 을 11개 패키지가 공유했다. ' +
-        '**null 은 그 스냅샷을 읽지 못했다는 뜻이다 — 빈 배열([])이 아니다.** ' +
-        '[] 는 "조회했고 이 uid 를 쓰는 패키지가 목록에 없었다" 이다. ' +
+        '**이 배열의 길이가 위 숫자들의 귀속 범위다.** ' +
+        '1개 → 위 숫자는 그 패키지만의 것이다 (그때만 이 메트릭의 status 가 collected 다). ' +
+        '2개 이상 → 그 패키지들의 **합계**이고 대상 앱 몫만 떼어 낼 수 없다 ' +
+        '(mAppUidStatsMap 의 키가 uid 뿐이다). 그때 status 는 partial 이고 ' +
+        'reason_code 는 uid_shared_by_multiple_packages 다. ' +
+        '실측 근거: 실기기(sdk 36)에서 uid 1000 을 **86개** 패키지가 공유했다. ' +
+        '**null 과 [] 는 다른 사실이다.** ' +
+        'null = **열거하지 못했다** — 스냅샷이 없거나, 이 uid 가 속한 안드로이드 user 를 ' +
+        '그 목록이 한 줄도 열거하지 않았다. 후자는 삼성 시큐어 폴더(실측 user 150) 같은 경우로, ' +
+        '`pm list packages -U` 가 그 user 에 대해 SecurityException 을 stderr 로 내고 ' +
+        '**종료 코드 0** 으로 끝나 목록이 조용히 불완전해진다. ' +
+        '그런 uid 의 패키지명을 이 도구는 **알 수 없다**. ' +
+        '[] = **열거했는데 이 uid 를 쓰는 패키지가 목록에 없었다** (대상 패키지 자신도 없다). ' +
+        '어느 쪽이든 status 는 partial 이고 reason_code 가 어느 갈래인지 말한다 ' +
+        '(uid_packages_not_enumerable / uid_not_in_package_list). ' +
+        '**단, reason_code 자리는 하나뿐이라 netstats_uid_duplicated 가 겹치면 그쪽이 먼저 실린다** — ' +
+        '귀속 범위를 판단할 때는 reason_code 가 아니라 **이 배열**을 보라. ' +
         '부계정(secondary user)의 같은 앱은 다른 uid(user*100000 + appId)를 받으며 여기 포함되지 않는다.',
     ),
 })

@@ -163,6 +163,58 @@ export function parsePackageUids(text: string, uid: number): string[] {
   return out
 }
 
+/**
+ * 안드로이드 uid 규칙: `uid = userId * 100000 + appId`. 기본 사용자는 0, 삼성 시큐어 폴더는
+ * 실측 150 이었다. 음수 uid(실기기의 `-253`)는 이 규칙 밖이므로 물어보지 않는다.
+ */
+const ANDROID_USER_ID_STRIDE = 100_000
+
+export function androidUserIdOf(uid: number): number {
+  return Math.floor(uid / ANDROID_USER_ID_STRIDE)
+}
+
+/** `pm list packages -U` 원문이 실제로 **열거한** 안드로이드 user id 들 (오름차순). */
+export function enumeratedUserIds(text: string): number[] {
+  const ids = new Set<number>()
+  for (const m of text.matchAll(/^package:\S+\s+uid:(\d+)/gm)) {
+    ids.add(androidUserIdOf(Number(m[1])))
+  }
+  return [...ids].sort((a, b) => a - b)
+}
+
+/**
+ * 이 uid 를 쓰는 패키지 — 그리고 **못 찾은 것이 부재인지 열거 실패인지**.
+ *
+ * 왜 이 구분이 필요한가: `pm list packages -U` 는 셸 권한이 닿지 않는 안드로이드 user 를
+ * 열거하지 못한다. 실기기(SM-S901N)에서 확인한 그대로 —
+ *
+ *     $ adb shell "pm list packages -U"
+ *     Error: java.lang.SecurityException: Shell does not have permission to access user 150
+ *     package:com.android.settings uid:1000
+ *     ... (정상 632줄)
+ *
+ * 오류는 **stderr 로만** 나가고 stdout 은 깨끗하며 **종료 코드는 0** 이다. 즉 `tryShell` 은
+ * 성공한 줄 알고, 목록은 조용히 불완전해진다. 그런데 `dumpsys netstats` 에는 user 150 의
+ * uid 행이 실재한다(실측 18개). 그 uid 로 이 목록을 뒤지면 아무것도 안 나온다.
+ *
+ * 그때 `[]` 를 내면 "이 uid 를 쓰는 패키지가 없다" 는 거짓이 된다. 사실은 "이 셸로는 그
+ * user 를 열거할 수 없었다" 이고, **도구는 그것을 알 수 있다** — 자기가 읽은 목록에 그
+ * user 의 패키지가 하나도 없다는 것을 보면 된다. 스스로 확인할 수 있는 것을 확인한다.
+ *
+ * `[]` 를 아예 없애지는 않는다: 열거된 user 안에서 못 찾은 uid 는 진짜로 패키지가 없다
+ * (커널·격리 uid). 그 갈래까지 null 로 뭉개면 "확인하지 못했다" 는 없던 사실이 된다.
+ */
+export function lookupSharedUidPackages(
+  text: string,
+  uid: number,
+): { packages: string[] } | { packages: null; userIds: number[] } {
+  const found = parsePackageUids(text, uid)
+  if (found.length > 0) return { packages: found }
+
+  const userIds = enumeratedUserIds(text)
+  return userIds.includes(androidUserIdOf(uid)) ? { packages: [] } : { packages: null, userIds }
+}
+
 const COUNTERS = ['rx_bytes', 'rx_packets', 'tx_bytes', 'tx_packets'] as const
 
 export const networkCollector: CaptureCollector<NetworkData> = {
@@ -325,20 +377,22 @@ export const networkCollector: CaptureCollector<NetworkData> = {
 
     const packages = ctx.capture.snapshots[PACKAGES_KEY]
     const packagesText = packages?.before ?? packages?.after
+    const lookup = packagesText != null ? lookupSharedUidPackages(packagesText, uid) : null
     const data: NetworkData = {
       uid,
       ...delta,
-      // 못 읽었으면 [] 가 아니라 null 이다. [] 는 "조회했고 없었다" 이고,
-      // 이 uid 를 쓰는 패키지가 하나도 없다는 것은 그 자체로 이상 신호다.
-      shared_uid_packages: packagesText != null ? parsePackageUids(packagesText, uid) : null,
+      // 못 읽었으면 [] 가 아니라 null 이다. [] 는 "열거했고 없었다" 이고,
+      // null 은 "열거하지 못했다" 다.
+      shared_uid_packages: lookup?.packages ?? null,
     }
 
-    const partialReason = duplicateReason(uid, before, after)
+    const partialReason =
+      duplicateReason(uid, before, after) ?? attributionReason(uid, ctx.packageName, lookup)
     return partialReason === null ? { collected: true, data } : { collected: true, data, partialReason }
   },
 }
 
-/** 사유는 하나만 실린다. 시작 스냅샷의 충돌을 먼저 말한다 — 델타의 기준이 그쪽이다. */
+/** 시작 스냅샷의 충돌을 먼저 말한다 — 델타의 기준이 그쪽이다. */
 function duplicateReason(
   uid: number,
   before: AppUidStatsDump,
@@ -349,6 +403,57 @@ function duplicateReason(
   }
   if (after.conflictingUids.includes(uid)) {
     return { code: 'netstats_uid_duplicated', detail: { uid, phase: 'after' } }
+  }
+  return null
+}
+
+/**
+ * **이 숫자를 대상 앱 하나에 귀속시킬 수 있는가.** 못 하면 값은 다 싣되 `partial` 로 낸다.
+ *
+ * 왜 `status` 로도 말하는가: 이 저장소는 이미 같은 이유로 `NETWORK_SCOPE` 한정 문장을 네
+ * 필드 전부의 `.describe()` 에 복사해 뒀다 — "한 필드만 읽는 소비자도 그 한정에 도달해야
+ * 한다". `status` 는 그 필드들보다 먼저 읽히고, CI 게이트는 대개 `status === 'collected'`
+ * 하나로 만들어진다. 실기기에서 uid 1000 을 **86개 패키지가 공유하는데** 그것을 사유 없는
+ * `collected` 로 내면, `rx_bytes` 만 보는 소비자에게 "이 앱이 1.7MB 를 썼다" 가 된다.
+ *
+ * 판정이 아니다: 값이 크다/작다, 맞다/틀리다를 말하지 않는다. **이 숫자가 무엇의 합인지**만
+ * 말하고 그것은 관측된 사실이다. 값은 하나도 빼지 않고 그대로 싣는다.
+ *
+ * 사유 자리는 하나뿐이라 순서가 곧 계약이다:
+ *   1. `netstats_uid_duplicated` — 값 **자체**가 어느 쪽인지 모른다 (여기보다 앞, 위 함수)
+ *   2. `uid_packages_not_enumerable` — 무엇의 합인지 **알 수 없다**
+ *   3. `uid_not_in_package_list` — 열거했는데 대상 패키지조차 이 uid 에 없다
+ *   4. `uid_shared_by_multiple_packages` — 무엇의 합인지 알고, 여럿이다
+ * 2~4 는 서로 배타적이므로 실제로 겹치는 것은 1 뿐이다. 1 이 실려도 공유 사실은
+ * `shared_uid_packages` 배열에 그대로 남고 `status` 는 어느 쪽이든 `partial` 이다.
+ */
+function attributionReason(
+  uid: number,
+  packageName: string,
+  lookup: ReturnType<typeof lookupSharedUidPackages> | null,
+): MetricReason | null {
+  if (lookup === null) {
+    return { code: 'uid_packages_not_enumerable', detail: { uid, packages_snapshot: false } }
+  }
+  if (lookup.packages === null) {
+    return {
+      code: 'uid_packages_not_enumerable',
+      detail: {
+        uid,
+        packages_snapshot: true,
+        uid_user_id: androidUserIdOf(uid),
+        enumerated_user_ids: lookup.userIds,
+      },
+    }
+  }
+  if (lookup.packages.length === 0) {
+    return { code: 'uid_not_in_package_list', detail: { uid, package: packageName } }
+  }
+  if (lookup.packages.length > 1) {
+    return {
+      code: 'uid_shared_by_multiple_packages',
+      detail: { uid, package_count: lookup.packages.length },
+    }
   }
   return null
 }

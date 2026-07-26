@@ -551,7 +551,15 @@ describe('resultJsonSchema', () => {
 
     const shared = (metricDataProps('network')['shared_uid_packages'] as { description: string })
       .description
-    expect(shared).toMatch(/null 은 그 스냅샷을 읽지 못했다는 뜻이다/)
+    // null 과 [] 가 다른 사실이라는 것, 그리고 null 의 두 갈래.
+    expect(shared).toMatch(/null 과 \[\] 는 다른 사실이다/)
+    expect(shared).toMatch(/열거하지 못했다/)
+    // 배열 길이와 status 의 관계. 이것을 말하지 않으면 소비자는 `status === 'collected'`
+    // 하나로 게이트를 만들고, 86개 패키지의 합계가 그 게이트를 조용히 통과한다.
+    expect(shared).toContain('status')
+    expect(shared).toContain('uid_shared_by_multiple_packages')
+    // 사유 자리가 하나뿐이라는 것 — 귀속 판단의 정본이 reason_code 가 아니라 이 배열이라는 것.
+    expect(shared).toMatch(/reason_code 가 아니라 \*\*이 배열\*\*/)
   })
 
   /**
