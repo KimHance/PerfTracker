@@ -89,7 +89,7 @@ export const thermalCollector: CaptureCollector<ThermalData> = {
         delta_c: a !== undefined ? round(a.celsius - b.celsius, 2) : null,
         status_before: b.status,
         status_after: a?.status ?? null,
-        source: b.source,
+        source: mergedSource(b.source, a?.source),
       }
     })
     for (const a of afterZones) {
@@ -120,6 +120,30 @@ export const thermalCollector: CaptureCollector<ThermalData> = {
     const partialReason = thermalPartialReason(pair.after, zones)
     return partialReason === null ? { collected: true, data } : { collected: true, data, partialReason }
   },
+}
+
+/**
+ * 존 하나의 출처. **전/후 어느 한쪽이라도 `cached` 면 그 존은 `cached` 다.**
+ *
+ * 왜 before 것 하나로 라벨링하면 안 되는가: `thermalZoneKey` 는 (type, name) 쌍이고
+ * **일부러 `source` 를 담지 않는다.** 키에 넣으면 HAL 이 이번 덤프에 안 준 센서가
+ * before/after 에서 서로 다른 키가 되어 존 하나가 항목 두 개로 갈라지고,
+ * "센서 집합이 달라졌다" 는 없던 사실까지 만들어진다 — M3 가 방금 없앤 결함 그대로다.
+ *
+ * 그래서 키는 그대로 두고 **라벨을 여기서 보수적으로 고른다.** HAL 이 before 에는 주고
+ * after 에는 안 준 센서는 `after_c` 가 Cached 값인데, before 의 `hal` 을 그대로 실으면
+ * 스키마가 `cached` 존에 붙여 둔 경고("이 값은 갱신이 올 때만 바뀌므로 delta 0 이
+ * '안 변했다' 가 아닐 수 있다")가 **그 존에 적용되지 않는다.** 값 하나라도 그럴 수 있으면
+ * 그 경고는 적용되어야 한다.
+ *
+ * 실기기 8개 덤프에서는 멤버십이 전부 동일해 관측된 적 없는 경로지만, 논리적으로 열려 있다.
+ * (after 에만 있는 존은 before 가 없으므로 그쪽 값 하나로 라벨링하는 것이 정확하다.)
+ */
+function mergedSource(
+  before: 'hal' | 'cached',
+  after: 'hal' | 'cached' | undefined,
+): 'hal' | 'cached' {
+  return before === 'cached' || after === 'cached' ? 'cached' : 'hal'
 }
 
 /** 정적인 값이라 before 를 우선하고, 없으면 after 를 본다. 둘 다 없으면 null. */

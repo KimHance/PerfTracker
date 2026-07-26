@@ -500,6 +500,24 @@ describe('resultJsonSchema', () => {
     expect(delta).toMatch(/음수가 정상/)
   })
 
+  /**
+   * M-3. 존 하나가 값 **두 개**를 담는데 `source` 는 하나다. 그 하나가 무엇을 뜻하는지가
+   * 스키마에 없으면, 소비자는 `source: 'hal'` 을 "두 값 다 HAL 이 준 값" 으로도
+   * "before 가 HAL 이었다" 로도 읽을 수 있고 두 해석의 결론이 정반대다.
+   *
+   * 깨지는 조건: 규칙 문장이 사라지거나, collector 가 `source: b.source` 로 돌아가면
+   * (그건 `thermal.test.ts` 쪽이 잡는다) 이 문장이 거짓이 된다.
+   */
+  it('source 가 값 두 개를 덮는 라벨이라는 것과 그 결정 규칙을 스키마에서 말한다', () => {
+    const zoneProps = props((metricDataProps('thermal')['zones'] as { items: unknown }).items)
+    const source = (zoneProps['source'] as { description: string }).description
+
+    expect(source).toMatch(/before_c \/ after_c/)
+    expect(source).toMatch(/어느 한쪽이라도/)
+    // `hal` 이 무엇을 보장하는지까지 말해야 한다 — 보장의 범위가 이 필드의 쓸모다.
+    expect(source).toMatch(/두 값 모두 HAL/)
+  })
+
   it('network 의 숫자가 무엇의 합계인지를 스키마에서 말한다', () => {
     const rx = (metricDataProps('network')['rx_bytes'] as { description: string }).description
     expect(rx).toContain('uid 단위')

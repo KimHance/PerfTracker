@@ -261,3 +261,90 @@ describe('thermalCollector.extract', () => {
     expect(collected(out).data.zones.every((z) => z.delta_c === 0)).toBe(true)
   })
 })
+
+/**
+ * M-3. 존 하나가 값 **두 개**(before_c / after_c)를 담는데 `source` 는 하나다.
+ * 옛 코드는 `source: b.source` — before 쪽 출처 하나로 존 전체를 라벨링했다.
+ *
+ * 그래서 HAL 이 before 에는 주고 after 에는 안 준 센서는 `after_c` 가 Cached 값인데
+ * `source: 'hal'` 로 실렸고, 스키마가 `cached` 존에 붙여 둔 경고 — "이 값은 갱신이 올 때만
+ * 바뀌므로 delta 0 이 '안 변했다' 가 아닐 수 있다" — 가 **그 존에 적용되지 않았다.**
+ * 실기기 8개 덤프에서는 멤버십이 전부 같아 관측된 적 없지만 논리적으로 열려 있는 길이다.
+ *
+ * 고치는 자리가 `thermalZoneKey` 가 **아니라는** 것이 요점이다. 키에 `source` 를 넣으면
+ * 같은 센서가 before/after 에서 다른 키가 되어 존 하나가 항목 둘로 갈라지고,
+ * "센서 집합이 달라졌다" 는 없던 사실까지 만들어진다 — M3 가 방금 없앤 결함 그대로다.
+ */
+describe('thermalCollector.extract — 전/후 출처가 갈리는 존 (M-3)', () => {
+  const dump = (cached: string[], hal: string[]): string =>
+    [
+      'IsStatusOverride: false',
+      'Thermal Status: 0',
+      'Cached temperatures:',
+      ...cached.map((l) => `\t${l}`),
+      'HAL Ready: true',
+      'Current temperatures from HAL:',
+      ...hal.map((l) => `\t${l}`),
+      'Current cooling devices from HAL:',
+      '',
+    ].join('\n')
+
+  const AP = (v: string): string => `Temperature{mValue=${v}, mType=0, mName=AP, mStatus=0}`
+
+  it('HAL 이 after 에 그 센서를 안 주면 cached 로 싣는다 — 경고가 적용되어야 한다', async () => {
+    const out = await thermalCollector.extract(
+      ctx({
+        thermalservice: {
+          before: dump([AP('30.0')], [AP('31.0')]),
+          // HAL 절이 비었고 Cached 에만 남았다. after_c 는 갱신되지 않았을 수 있는 값이다.
+          after: dump([AP('27.0')], []),
+        },
+      }),
+    )
+    expect(collected(out).data.zones[0]).toMatchObject({
+      name: 'AP',
+      before_c: 31,
+      after_c: 27,
+      source: 'cached',
+    })
+  })
+
+  it('before 만 cached 여도 cached 다 — 어느 쪽이 갱신 안 됐는지는 말하지 않는다', async () => {
+    const out = await thermalCollector.extract(
+      ctx({
+        thermalservice: {
+          before: dump([AP('27.0')], []),
+          after: dump([AP('30.0')], [AP('31.0')]),
+        },
+      }),
+    )
+    expect(collected(out).data.zones[0]).toMatchObject({ before_c: 27, after_c: 31, source: 'cached' })
+  })
+
+  /** 대조군. 두 값 다 HAL 이 직접 준 것이면 그때만 `hal` 이다. */
+  it('전후 둘 다 HAL 이 준 값이면 hal 이다', async () => {
+    const out = await thermalCollector.extract(
+      ctx({
+        thermalservice: {
+          before: dump([AP('30.0')], [AP('31.0')]),
+          after: dump([AP('30.0')], [AP('33.0')]),
+        },
+      }),
+    )
+    expect(collected(out).data.zones[0]).toMatchObject({ before_c: 31, after_c: 33, source: 'hal' })
+  })
+
+  /** 존이 갈라지지 않았다는 것도 함께 본다 — 키에 source 를 넣었다면 여기서 2개가 된다. */
+  it('출처가 갈려도 존은 하나다 — zones_changed 라는 없던 사실을 만들지 않는다', async () => {
+    const out = await thermalCollector.extract(
+      ctx({
+        thermalservice: {
+          before: dump([AP('30.0')], [AP('31.0')]),
+          after: dump([AP('27.0')], []),
+        },
+      }),
+    )
+    expect(collected(out).data.zones).toHaveLength(1)
+    expect(collected(out).partialReason).toBeUndefined()
+  })
+})
