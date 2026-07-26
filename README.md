@@ -259,3 +259,28 @@ npm run test:device   # 실기기가 꽂혀 있어야 함
 새 메트릭을 붙이려면 `Collector` 를 하나 만들어 `collectors/registry.ts` 의
 `COLLECTORS` 에 넣으면 됩니다. `start` 가 TraceConfig 블록을 모으고 `extract` 가
 `metrics[collector.id]` 를 채우는 것은 그 배열을 순회해서 일어납니다.
+
+## 검증 환경
+
+| 항목 | M0+M1 | M2 |
+|---|---|---|
+| 실기기 (SM-S931N, Android 16 / sdk 36) | ✅ | 미검증 |
+| 에뮬레이터 (Medium_Phone_15, API 35, 4코어) | — | ✅ |
+
+에뮬레이터에서 **검증되지 않은** 항목:
+
+- **CPU 주파수 값** — 에뮬레이터의 `cpuinfo_max_freq` 가 `2` 다. `power/cpu_frequency` 이벤트는
+  뜨지만 값이 kHz 가 아니므로 크기에 대한 검증은 실기기에서만 가능하다.
+- **로그 수집** — 이 이미지의 SELinux 가 `traced_probes` 의 `logdr` 소켓 접근을 막아
+  `android.log` 가 항상 비어 있다. 크래시·ANR 분류는 유닛 테스트로만 덮여 있다.
+- **프레임 타임라인** — 에뮬레이터 런처 조작으로는 `actual_frame_timeline_slice` 가 채워지지
+  않았다. Frame 메트릭의 실제 수집은 실기기(M1)에서만 확인됐다.
+- **big.LITTLE 코어별 거동** — 에뮬레이터는 4코어가 모두 같은 클러스터다.
+- **Thermal / GPU** — 물리 센서가 없다 (M3 범위).
+
+추가로 관측된 사실: 이 에뮬레이터에서 `--launch` 로 앱을 트레이스 도중에 콜드 스타트시키면,
+`linux.process_stats` 가 그 새 프로세스를 항상 잡지는 못한다 (실측 성공률 낮음 — 프로세스는
+세션 내내 살아 있었는데도 트레이스의 `process` 테이블에는 없었던 경우가 반복 관측됨). 대상
+프로세스가 없으면 memory collector 는 `partial` / `process_not_in_trace` 를 정직하게
+보고한다 — 0 을 채워 내지 않는다. 이 특성은 M2 완료 기준에 포함되지 않았고 최초에는
+발견되지 않았던 사실이라, 코드나 테스트를 바꾸지 않고 이 절에 사실로만 남긴다.

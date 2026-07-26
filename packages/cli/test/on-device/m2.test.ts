@@ -1,0 +1,124 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import {
+  createAdbContext,
+  type CpuData,
+  extractRun,
+  type MemoryData,
+  probeDevice,
+  readActiveSession,
+} from '@perftracker/core'
+import { runStart } from '../../src/commands/start.js'
+import { runStop } from '../../src/commands/stop.js'
+import { createContext } from '../../src/context.js'
+
+/**
+ * 실기기 또는 에뮬레이터가 필요하다. `npm run test:device` 로만 실행된다.
+ *
+ * **에뮬레이터에서 정직하게 검증되지 않는 것은 여기서 단언하지 않는다.** 목록과 이유는
+ * docs/superpowers/plans/2026-07-26-perftracker-m2.md 의 Task 8 에 있다. 요약하면:
+ * 주파수 값(에뮬은 cpuinfo_max_freq=2), android.log 개수(SELinux 가 logdr 를 막음),
+ * frame 수집 성공(에뮬 런처는 frametimeline 을 안 채움), runtime.* 이 0 보다 큰 것(10ms 해상도).
+ */
+describe('M2 기기 통합', () => {
+  it('M2 가 요구하는 데이터소스가 이 기기에 등록되어 있다', async () => {
+    const ctx = await createAdbContext({})
+    const probe = await probeDevice(ctx.adb)
+
+    for (const name of [
+      'android.surfaceflinger.frametimeline',
+      'linux.process_stats',
+      'linux.sys_stats',
+      'linux.ftrace',
+      'android.log',
+    ]) {
+      expect(probe.dataSources, `${name} 미등록`).toContain(name)
+    }
+  })
+
+  it('start → stop 이 M2 메트릭 다섯 개를 모두 내놓는다', async () => {
+    const out = mkdtempSync(join(tmpdir(), 'pt-m2-'))
+    const ctx = await createContext({})
+
+    await runStart(ctx, { name: 'm2', launch: true, video: false, out, force: true })
+    const active = await readActiveSession(ctx.serial)
+    expect(active).not.toBeNull()
+
+    // 폴링 주기가 1초라 delta 를 내려면 표본이 여러 개 필요하다.
+    await new Promise((r) => setTimeout(r, 15_000))
+
+    const summary = await runStop(await createContext({}), { offline: false })
+    expect(await readActiveSession(ctx.serial)).toBeNull()
+
+    // 요약에 다섯 항목의 자리가 모두 있어야 한다 — 값이든 사유든.
+    for (const label of ['Frame', 'Startup', 'CPU', 'Memory', 'Log', 'Overhead']) {
+      expect(summary, `${label} 줄 없음`).toContain(label)
+    }
+
+    // 원본이 남아 있으므로 기기 없이 재산출된다.
+    const result = await extractRun(active!.runDir, {})
+    expect(result.schema_version).toBe('1.1.0')
+    expect(result.measurement_overhead.adb_commands_during_session).toBe(0)
+
+    // --- 에뮬레이터에서도 정직하게 참인 단언들 ---
+
+    // Startup: --launch 로 시작했으므로 skipped 가 아니어야 한다.
+    expect(result.metrics.startup?.status).not.toBe('skipped')
+
+    // CPU: 사용률은 나와야 한다. 주파수 값은 보지 않는다 (에뮬은 kHz 가 아니다).
+    const cpu = result.metrics.cpu
+    expect(cpu?.status, `cpu: ${cpu?.reason ?? ''}`).toMatch(/^(collected|partial)$/)
+    const cpuData = cpu?.data as CpuData
+    expect(cpuData.samples).toBeGreaterThanOrEqual(2)
+    expect(cpuData.total_busy_pct).toBeGreaterThanOrEqual(0)
+    expect(cpuData.total_busy_pct).toBeLessThanOrEqual(100)
+    expect(cpuData.per_core.length).toBeGreaterThan(0)
+    for (const core of cpuData.per_core) {
+      expect(core.busy_pct).toBeGreaterThanOrEqual(0)
+      expect(core.busy_pct).toBeLessThanOrEqual(100)
+    }
+
+    // Memory: 앱 RSS 와 시스템 메모리 둘 다 나와야 한다.
+    const memory = result.metrics.memory
+    expect(memory?.status, `memory: ${memory?.reason ?? ''}`).toBe('collected')
+    const memData = memory?.data as MemoryData
+    expect(memData.rss.max_kb).toBeGreaterThan(0)
+    expect(memData.system).not.toBeNull()
+    expect(memData.system!.mem_total_kb).toBeGreaterThan(0)
+
+    // Overhead: 두 필드가 null 이 아니어야 한다. 크기는 보지 않는다 —
+    // runtime.* 는 10ms 단위라 짧은 세션에서 0 이 정당하다.
+    const o = result.measurement_overhead
+    expect(o.tracing_processes_cpu_time_ms).not.toBeNull()
+    expect(o.tracing_processes_cpu_time_ms).toBeGreaterThanOrEqual(0)
+    expect(o.tracing_processes_peak_rss_kb).not.toBeNull()
+    expect(o.tracing_processes_peak_rss_kb).toBeGreaterThan(0)
+    expect(o.tracing_processes_cpu_share_pct).not.toBeNull()
+    expect(o.tracing_processes_cpu_share_pct).toBeLessThan(100)
+
+    // Log: 이 에뮬레이터 이미지는 SELinux 가 logdr 를 막아 항상 비어 있다.
+    // 그래서 "개수가 맞다" 가 아니라 "빈 것을 0 이라고 우기지 않는다" 를 검증한다.
+    const log = result.metrics.log
+    expect(log?.status).toMatch(/^(collected|partial)$/)
+    if (log?.data === null) {
+      expect(log.reason_code).toBe('no_log_entries')
+    }
+  })
+
+  it('--launch 없이 시작하면 startup 이 skipped 다', async () => {
+    const out = mkdtempSync(join(tmpdir(), 'pt-m2-nolaunch-'))
+    const ctx = await createContext({})
+
+    await runStart(ctx, { name: 'm2-nolaunch', launch: false, video: false, out, force: true })
+    const active = await readActiveSession(ctx.serial)
+
+    await new Promise((r) => setTimeout(r, 5_000))
+    await runStop(await createContext({}), { offline: false })
+
+    const result = await extractRun(active!.runDir, {})
+    expect(result.metrics.startup?.status).toBe('skipped')
+    expect(result.metrics.startup?.reason_code).toBe('launch_not_requested')
+  })
+})
