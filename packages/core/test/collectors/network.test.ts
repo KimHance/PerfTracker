@@ -299,17 +299,41 @@ describe('networkCollector.extract', () => {
           key: 'netstats',
           section: 'mAppUidStatsMap',
           phase: 'before',
+          // 절은 찾았다 — 다른 것은 머리글이다. 이 둘은 소비자에게 다른 신호다.
+          found: true,
           header: 'uid rxPackets rxBytes txPackets txBytes',
         },
       },
     })
   })
 
-  it('절 자체가 없으면(구버전 출력) snapshot_unparsable 이다', async () => {
+  /**
+   * M-5. `snapshot_unparsable` 은 **절 자체가 없음**과 **머리글이 다름**을 같은 코드로 낸다.
+   * 옛 detail 에서 그 둘을 가르는 단서는 `header` 키의 **부재**뿐이었고, 그 규칙은
+   * `reasons.ts` 의 코드 설명에도 `renderReason` 출력에도 없었다 — 소비자가 추론해야 했다.
+   *
+   * 대응이 갈리므로 추론에 맡길 자리가 아니다: 절이 없는 것은 "이 안드로이드 버전·벤더
+   * 출력에는 그 절이 없다"(= 이 기기에서는 낼 수 없다) 일 수 있고, 머리글이 다른 것은
+   * "형식이 바뀌었다"(= 파서를 고쳐야 한다) 다.
+   */
+  it('절 자체가 없으면 found: false 로 명시한다 — 머리글이 다른 것과 다른 사실이다', async () => {
     const out = await networkCollector.extract(
       withSnapshots({ netstats: { before: 'Active interfaces:\n', after: NETSTATS_AFTER } }),
     )
-    expect(out).toMatchObject({ collected: false, reason: { code: 'snapshot_unparsable' } })
+    expect(out).toEqual({
+      collected: false,
+      reason: {
+        code: 'snapshot_unparsable',
+        detail: {
+          key: 'netstats',
+          section: 'mAppUidStatsMap',
+          phase: 'before',
+          found: false,
+        },
+      },
+    })
+    // 절을 못 찾았으면 머리글도 없다 — 없는 것을 지어내지 않는다.
+    expect(out.collected === false && out.reason.detail).not.toHaveProperty('header')
   })
 
   /** 종료 스냅샷만 형식이 다른 경우도 phase 로 구분된다 — 어느 쪽을 못 읽었는지가 사실이다. */
@@ -368,6 +392,8 @@ describe('networkCollector.extract', () => {
           key: 'netstats',
           section: 'mAppUidStatsMap',
           phase: 'before',
+          // 절도 머리글도 찾았다. 없는 것은 행뿐이다 — 세 갈래가 detail 로 전부 갈린다.
+          found: true,
           rows: 0,
           // 형식을 진단할 수 있도록 머리 다음 줄 원문을 그대로 남긴다.
           first_line: '    uid=10388 rxBytes=1200000 rxPackets=1119 txBytes=431000 txPackets=871',

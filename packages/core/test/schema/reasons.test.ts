@@ -55,6 +55,64 @@ describe('insufficient_samples 렌더러', () => {
   })
 })
 
+/**
+ * M-5. 한 코드가 세 사실을 내는데 사람용 문장이 그중 둘을 같은 말로 뭉치고 있었다.
+ * `detail.found` 를 명시했으니 문장도 갈라야 한다 — 갈리지 않으면 `detail` 을 읽지 않는
+ * 사람(터미널 요약을 보는 사람이 그렇다)에게는 여전히 같은 말이다.
+ */
+describe('snapshot_unparsable 렌더러 — 세 갈래', () => {
+  const render = (detail: Record<string, unknown>): string =>
+    renderReason({ code: 'snapshot_unparsable', detail })!
+
+  it('절 자체가 없으면 "절이 없다" 고 말한다 — 형식이 달랐다고 말하지 않는다', () => {
+    const text = render({ key: 'netstats', section: 'mAppUidStatsMap', phase: 'before', found: false })
+    expect(text).toContain('절이 없습니다')
+    // 그 안드로이드 버전에 아예 없을 수 있다는 것이 소비자가 알아야 할 대응 정보다.
+    expect(text).toMatch(/안드로이드 버전|벤더/)
+    // 읽은 줄이 없는데 있는 척하지 않는다.
+    expect(text).not.toContain('읽은 줄')
+  })
+
+  it('머리글이 다르면 읽은 줄을 그대로 인용한다', () => {
+    const text = render({
+      key: 'netstats',
+      section: 'mAppUidStatsMap',
+      phase: 'before',
+      found: true,
+      header: 'uid rxPackets rxBytes txPackets txBytes',
+    })
+    expect(text).toContain('읽은 줄')
+    expect(text).toContain('uid rxPackets rxBytes txPackets txBytes')
+    expect(text).not.toContain('절이 없습니다')
+  })
+
+  it('머리는 맞고 행이 0개면 원인을 단정하지 않는다', () => {
+    const text = render({
+      key: 'netstats',
+      section: 'mAppUidStatsMap',
+      phase: 'before',
+      found: true,
+      header: 'uid rxBytes rxPackets txBytes txPackets',
+      rows: 0,
+      first_line: '    uid=10388 rxBytes=1200000',
+    })
+    expect(text).toMatch(/구분하지 못합니다/)
+    expect(text).toContain('uid=10388 rxBytes=1200000')
+    expect(text).not.toContain('절이 없습니다')
+  })
+
+  /** 세 문장이 서로 달라야 한다 — 같으면 `found` 를 detail 에만 싣고 말은 안 한 것이다. */
+  it('세 갈래의 문장이 서로 다르다', () => {
+    const base = { key: 'netstats', section: 'mAppUidStatsMap', phase: 'before' }
+    const texts = [
+      render({ ...base, found: false }),
+      render({ ...base, found: true, header: 'x y z' }),
+      render({ ...base, found: true, header: 'uid rxBytes rxPackets txBytes txPackets', rows: 0 }),
+    ]
+    expect(new Set(texts).size).toBe(3)
+  })
+})
+
 describe('sdk_too_low 렌더러', () => {
   /**
    * 이 테스트가 존재하는 이유: 옛 렌더러는 "Android 12" 를 하드코딩했다. 하한이 29 인

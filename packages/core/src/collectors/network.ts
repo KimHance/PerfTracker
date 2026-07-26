@@ -219,6 +219,12 @@ export const networkCollector: CaptureCollector<NetworkData> = {
               key: NETSTATS_KEY,
               section: 'mAppUidStatsMap',
               phase,
+              // 이 한 코드가 두 사실을 낸다: **절 자체가 없다**(구버전/벤더 출력)와
+              // **절은 있는데 머리글이 다르다**(컬럼 순서 드리프트). 소비자의 대응이 다르다 —
+              // 앞엣것은 "이 안드로이드 버전에는 그 절이 없다", 뒤엣것은 "형식이 바뀌었다".
+              // 옛 detail 은 `header` 키의 **부재**로만 갈렸고 그 규칙은 어디에도 없었다.
+              // 명시하면 소비자가 추론 없이 가른다.
+              found: dump.found,
               ...(dump.header !== null ? { header: dump.header } : {}),
             },
           },
@@ -240,6 +246,9 @@ export const networkCollector: CaptureCollector<NetworkData> = {
               key: NETSTATS_KEY,
               section: 'mAppUidStatsMap',
               phase,
+              // 같은 코드의 세 갈래를 detail 이 전부 명시한다: found=false(절 없음) /
+              // found=true + header(머리글 다름) / found=true + rows=0(머리는 맞고 행이 없음).
+              found: true,
               header: dump.header,
               rows: 0,
               ...(dump.firstLine !== null ? { first_line: dump.firstLine } : {}),
