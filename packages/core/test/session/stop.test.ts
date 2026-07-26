@@ -93,6 +93,102 @@ describe('stopSession — 정상 경로', () => {
     }
   })
 
+  /**
+   * 원칙 1 의 트립와이어, **stop 쪽.** start 는 이것을 두 겹으로 갖고 있었는데
+   * (`start.test.ts` 의 "명령 전체 목록" + "스냅샷은 트레이스를 켜기 전에") stop 은 둘 다
+   * 없었다. 리뷰어가 변이로 확증했다: `collectDeviceState` + `runSnapshots` 두 줄을
+   * `isSessionDetached` / `stopDetachedSession` **앞**으로 옮겨도 651개가 전부 통과했다.
+   *
+   * 그 배치에서 무엇이 깨지는가: `dumpsys netstats` / `pm list packages -U` /
+   * `dumpsys thermalservice` / `dumpsys battery` 가 **아직 도는 트레이서 안에서** 실행되고,
+   * 그 비용이 `metrics.cpu` · `metrics.log` · `measurement_overhead` 에 그대로 섞인다.
+   * **온-디바이스 테스트도 이것을 못 잡는다** — 측정 창은 이미 닫혀 있으므로
+   * `adb_commands_during_session` 은 여전히 0 이다.
+   *
+   * `dumpsys` 로 거르지 않고 **목록 전체**를 고정하는 이유는 start 쪽과 같다:
+   * M3 이 늘린 명령 중 하나가 `pm list packages -U` 라 그 필터에 애초에 걸리지 않았다.
+   * 개수만 세는 것도 안 된다 — 하나가 늘고 하나가 사라진 경우를 못 잡는다.
+   *
+   * M4 가 Power 로 `dumpsys batterystats` 를 더하면 이 목록이 먼저 깨진다. 그때
+   * **어디에 넣었는지**(트레이서 정지 뒤인지)가 다음 두 테스트의 질문이다.
+   */
+  it('기기로 나가는 명령 전체가 이 목록과 정확히 같다', async () => {
+    const { session, home } = await startedSession()
+    const runner = stoppableDevice(session)
+
+    await stopSession({ adb: clientFor(runner), serial: SERIAL }, session, LATER, home)
+
+    expect(runner.commands).toEqual([
+      // 1) 트레이서를 먼저 멈춘다.
+      `-s ${SERIAL} shell perfetto --is_detached=${session.perfettoKey}`,
+      `-s ${SERIAL} shell perfetto --attach=${session.perfettoKey} --stop`,
+      // 2) 원본을 회수하고 기기 쪽을 지운다.
+      `-s ${SERIAL} pull ${session.remoteTracePath} ${join(session.runDir, 'trace.perfetto-trace')}`,
+      `-s ${SERIAL} shell rm -f ${session.remoteTracePath}`,
+      // 3) collectDeviceState — 여기부터가 종료 스냅샷이다.
+      `-s ${SERIAL} shell dumpsys battery`,
+      `-s ${SERIAL} shell dumpsys thermalservice`,
+      `-s ${SERIAL} shell echo "brightness=$(settings get system screen_brightness) low_power=$(settings get global low_power) anim=$(settings get global animator_duration_scale)"`,
+      `-s ${SERIAL} shell grep MemAvailable /proc/meminfo`,
+      `-s ${SERIAL} shell ip route get 8.8.8.8`,
+      // 4) collectSnapshotSpecs — M3 이 늘린 둘. network collector 가 읽는다.
+      `-s ${SERIAL} shell dumpsys netstats`,
+      `-s ${SERIAL} shell pm list packages -U`,
+    ])
+  })
+
+  /**
+   * `stop.ts` 의 주석이 단언하는 바로 그것: "트레이서가 이미 멈춘 뒤이므로 이 명령들도
+   * 트레이스에 남지 않는다." 그 문장을 지키는 장치가 이 테스트다.
+   *
+   * 창 밖이라는 것만으로는 부족하다 — 창은 `stopSession` 첫 줄에서 이미 닫혔고,
+   * 트레이서는 그것과 무관하게 `--attach --stop` 까지 돈다. 두 사건은 다른 사건이다.
+   */
+  it('종료 스냅샷 명령은 트레이서를 멈춘 뒤에 나간다', async () => {
+    const { session, home } = await startedSession()
+    const runner = stoppableDevice(session)
+
+    await stopSession({ adb: clientFor(runner), serial: SERIAL }, session, LATER, home)
+
+    const stopped = runner.commands.indexOf(
+      `-s ${SERIAL} shell perfetto --attach=${session.perfettoKey} --stop`,
+    )
+    expect(stopped, '트레이서를 멈추는 명령이 아예 없다').toBeGreaterThanOrEqual(0)
+
+    for (const snapshot of [
+      'shell dumpsys battery',
+      'shell dumpsys thermalservice',
+      'shell dumpsys netstats',
+      'shell pm list packages -U',
+    ]) {
+      const at = runner.commands.findIndex((c) => c.endsWith(snapshot))
+      expect(at, `${snapshot} 가 나가지 않았다`).toBeGreaterThanOrEqual(0)
+      expect(at, `${snapshot} 가 트레이서가 도는 동안 나갔다`).toBeGreaterThan(stopped)
+    }
+  })
+
+  /**
+   * 같은 계열의 **두 번째** 자기 주장. `NetworkDataSchema.rx_bytes` 의 `.describe()` 가
+   * 소비자에게 이렇게 공시한다: "종료 스냅샷은 트레이스를 회수한 **뒤**에 찍히므로 회수에
+   * 걸린 시간이 포함된다(트레이스가 클수록 길어진다)." 그 문장을 근거로 스키마는
+   * `state_after.captured_at` 으로 처리량을 계산하지 말라고까지 말한다.
+   *
+   * 스냅샷을 회수 **앞**으로 옮기면 그 공시가 통째로 거짓이 되는데, 그 배치를 지키는 것은
+   * 지금까지 아무것도 없었다. 값이 아니라 **순서**가 계약인 자리다.
+   */
+  it('종료 스냅샷은 트레이스를 회수한 뒤에 찍힌다 — 스키마가 그렇게 공시한다', async () => {
+    const { session, home } = await startedSession()
+    const runner = stoppableDevice(session)
+
+    await stopSession({ adb: clientFor(runner), serial: SERIAL }, session, LATER, home)
+
+    const pull = runner.commands.findIndex((c) => c.startsWith(`-s ${SERIAL} pull `))
+    const netstats = runner.commands.findIndex((c) => c.endsWith('shell dumpsys netstats'))
+
+    expect(pull).toBeGreaterThanOrEqual(0)
+    expect(netstats).toBeGreaterThan(pull)
+  })
+
   it('세션이 사라지고 기기에도 트레이스가 없으면 aborted 로 남긴다', async () => {
     const { session, home } = await startedSession()
     const runner = stoppableDevice(session, { detached: false, probe: 'absent' })

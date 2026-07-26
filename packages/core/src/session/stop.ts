@@ -100,6 +100,14 @@ export async function stopSession(
   }
 
   // 트레이서가 이미 멈춘 뒤이므로 이 명령들도 트레이스에 남지 않는다.
+  //
+  // **이 배치는 주석이 아니라 테스트가 지킨다** (`test/session/stop.test.ts`):
+  // 기기로 나가는 명령 전체 목록을 순서까지 고정한 것 하나, 이 명령들이 `--attach --stop`
+  // 뒤에 나가는지 보는 것 하나, 트레이스 회수(`pull`) 뒤에 나가는지 보는 것 하나.
+  // 세 번째가 필요한 이유는 `NetworkDataSchema.rx_bytes` 의 `.describe()` 가 소비자에게
+  // "종료 스냅샷은 트레이스를 회수한 뒤에 찍힌다" 고 공시하기 때문이다 — 이 두 줄을 위로
+  // 올리면 그 공시가 거짓이 되고, 측정 창은 이미 닫혀 있으므로
+  // `adb_commands_during_session` 은 여전히 0 이라 온-디바이스 테스트도 그것을 못 잡는다.
   const after = await collectDeviceState(ctx.adb, now)
   const afterSnapshots = await runSnapshots(ctx.adb, snapshotSpecs)
   const rawFiles = [...manifest.artifacts.raw]
