@@ -44,6 +44,13 @@ export async function stopSession(
   ctx.adb.window.close()
 
   const manifest = await readCaptureManifest(session.runDir)
+  // 스냅샷 명세를 **기기를 건드리기 전에** 확정한다. `mergeSnapshotSpecs` 는 key 충돌에
+  // 던지는데, 그 평가가 트레이스 회수·삭제 뒤에 있으면 기기의 트레이스를 이미 지운 상태에서
+  // 던지게 된다 — 정본이 사라진 뒤의 실패다. 순수 계산이라 앞으로 올리는 데 비용이 없다.
+  // `manifest.env` 를 쓰는 것이 중요하다: stop 은 `probeDevice` 를 다시 부르지 않는다.
+  // 다시 부르면 기기 접촉이 하나 늘고, 그 사이 기기가 바뀌었다면 before/after 가
+  // 서로 다른 명세로 찍힌다. 캡처 당시의 env 가 정본이다.
+  const snapshotSpecs = collectSnapshotSpecs(manifest.env)
   let state: 'completed' | 'aborted' = 'completed'
   let traceRelative: string | null = null
 
@@ -93,11 +100,8 @@ export async function stopSession(
   }
 
   // 트레이서가 이미 멈춘 뒤이므로 이 명령들도 트레이스에 남지 않는다.
-  // `manifest.env` 를 쓰는 것이 중요하다 — stop 은 `probeDevice` 를 다시 부르지 않는다.
-  // 다시 부르면 기기 접촉이 하나 늘고, 그 사이 기기가 바뀌었다면 before/after 가
-  // 서로 다른 명세로 찍힌다. 캡처 당시의 env 가 정본이다.
   const after = await collectDeviceState(ctx.adb, now)
-  const afterSnapshots = await runSnapshots(ctx.adb, collectSnapshotSpecs(manifest.env))
+  const afterSnapshots = await runSnapshots(ctx.adb, snapshotSpecs)
   const rawFiles = [...manifest.artifacts.raw]
   for (const [key, text] of Object.entries({ ...after.raw, ...afterSnapshots })) {
     const rel = join('raw', `${key}_after.txt`)

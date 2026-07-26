@@ -4,6 +4,7 @@ import { cpuCollector } from './cpu.js'
 import { frameCollector } from './frame.js'
 import { logCollector } from './log.js'
 import { memoryCollector } from './memory.js'
+import { networkCollector } from './network.js'
 import { mergeSnapshotSpecs, type SnapshotSpec } from './snapshots.js'
 import { startupCollector } from './startup.js'
 import { thermalCollector } from './thermal.js'
@@ -21,6 +22,7 @@ export const COLLECTORS: Collector<unknown>[] = [
   memoryCollector,
   logCollector,
   thermalCollector,
+  networkCollector,
 ]
 
 /** 이 기기에서 실제로 뭔가를 낼 수 있는 collector 들. */

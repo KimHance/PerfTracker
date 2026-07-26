@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { MeasurementWindowViolationError, SessionStateError } from '../../src/errors.js'
@@ -64,6 +64,33 @@ describe('stopSession — 정상 경로', () => {
     // stop 자신이 창을 닫은 뒤 보낸 명령들은 카운터에 잡히지 않는다.
     expect(manifestOf(session.runDir).adb_commands_during_session).toBe(1)
     expect(adb.window.isOpen).toBe(false)
+  })
+
+  /**
+   * 이 단언이 지키는 배선: `stopSession` 이 `runSnapshots(ctx.adb, snapshotSpecs)` 를 실제로
+   * 부른다는 것. 그 한 줄을 지우면 `raw/netstats_after.txt` / `raw/packages_after.txt` 가
+   * 사라지고 (thermalservice 는 `collectDeviceState` 가 따로 찍으므로 살아남는다)
+   * extract 의 network collector 는 영원히 `snapshot_unavailable` 만 낸다.
+   * TypeScript 는 이 배선을 지키지 못한다 — 지우는 것도 `{}` 로 무력화하는 것도 타입이 맞는다.
+   *
+   * `stoppableDevice` 는 두 명령에 응답을 등록하지 않으므로 `FakeProcessRunner` 가 exit 127 을
+   * 내고 `tryShell` 이 그것을 빈 문자열로 흡수한다 → **빈 파일이 쓰이고 등재된다.**
+   * 그것이 정상 동작이다: 명령 하나가 세션을 죽이지 않고, `snapshotText` 가 빈 원문을 null 로
+   * 접어 collector 가 `snapshot_unavailable` 로 정직하게 말한다.
+   */
+  it('종료 스냅샷도 raw/ 에 저장되고 등재된다 — before/after 가 짝을 이룬다', async () => {
+    const { session, home } = await startedSession()
+
+    await stopSession({ adb: clientFor(stoppableDevice(session)), serial: SERIAL }, session, LATER, home)
+
+    const manifest = manifestOf(session.runDir)
+    for (const key of ['netstats', 'packages', 'thermalservice']) {
+      for (const phase of ['before', 'after']) {
+        const rel = join('raw', `${key}_${phase}.txt`)
+        expect(manifest.artifacts.raw, rel).toContain(rel)
+        expect(existsSync(join(session.runDir, rel)), rel).toBe(true)
+      }
+    }
   })
 
   it('세션이 사라지고 기기에도 트레이스가 없으면 aborted 로 남긴다', async () => {

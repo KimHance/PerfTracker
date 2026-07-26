@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { frameCollector } from '../../src/collectors/frame.js'
+import { networkCollector } from '../../src/collectors/network.js'
 import {
   COLLECTORS,
+  collectSnapshotSpecs,
   collectTraceConfigBlocks,
   supportedCollectors,
   unsupportedReasons,
@@ -33,8 +35,9 @@ describe('COLLECTORS 레지스트리', () => {
     expect(COLLECTORS).toContain(startupCollector)
   })
 
-  it('thermal 이 등록되어 있다 — 배열에 없으면 extract 가 아예 부르지 않는다', () => {
+  it('thermal 과 network 가 등록되어 있다 — 배열에 없으면 extract 가 아예 부르지 않는다', () => {
     expect(COLLECTORS).toContain(thermalCollector)
+    expect(COLLECTORS).toContain(networkCollector)
   })
 })
 
@@ -108,6 +111,14 @@ describe('supportedCollectors / unsupportedReasons', () => {
     expect(ids).not.toContain('frame')
   })
 
+  it('sdk 33 기기에서 network 는 미지원이고 thermal 은 지원된다', () => {
+    const env = { sdkInt: 33, dataSources: [] }
+    const ids = supportedCollectors(env).map((c) => c.id)
+    expect(ids).toContain('thermal')
+    expect(ids).not.toContain('network')
+    expect(unsupportedReasons(env).find((r) => r.startsWith('network:'))).toContain('Android 14')
+  })
+
   it('미지원 항목만 사유와 함께 한국어로 낸다', () => {
     const reasons = unsupportedReasons(OLD)
     expect(reasons.length).toBe(COLLECTORS.length - supportedCollectors(OLD).length)
@@ -119,5 +130,28 @@ describe('supportedCollectors / unsupportedReasons', () => {
 
   it('전부 지원되면 사유가 하나도 없다', () => {
     expect(unsupportedReasons(OK)).toEqual([])
+  })
+})
+
+describe('collectSnapshotSpecs', () => {
+  /**
+   * G4. 미지원 기기에 명령이 나가면 원칙 1 의 취지가 무너진다 —
+   * 읽지 않을 데이터를 위해 기기를 건드리는 것이기 때문이다.
+   */
+  it('network 가 미지원인 기기에는 그 스냅샷 명령이 하나도 나가지 않는다', () => {
+    expect(collectSnapshotSpecs({ sdkInt: 33, dataSources: [] })).toEqual([])
+    expect(collectSnapshotSpecs({ sdkInt: 34, dataSources: [] }).map((s) => s.key)).toEqual([
+      'netstats',
+      'packages',
+    ])
+  })
+
+  /**
+   * D3. `dumpsys thermalservice` 는 `collectDeviceState()` 가 이미 찍는다. thermal collector 가
+   * 그것을 다시 선언하면 같은 명령이 세션당 두 번 나가고, `mergeSnapshotSpecs` 가 던진다.
+   */
+  it('thermal 은 스냅샷을 하나도 선언하지 않는다 — 원문은 이미 찍히고 있다', () => {
+    expect(collectSnapshotSpecs({ sdkInt: 33, dataSources: [] })).toEqual([])
+    expect(collectSnapshotSpecs(OK).map((s) => s.key)).not.toContain('thermalservice')
   })
 })

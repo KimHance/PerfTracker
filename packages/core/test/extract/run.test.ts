@@ -1,7 +1,9 @@
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import type { NetworkData, ThermalData } from '../../src/schema/result.js'
 import { CPU_TIMES_SQL } from '../../src/collectors/cpu.js'
 import { FRAME_PROCESS_SQL, frameDurationsSql } from '../../src/collectors/frame.js'
 import { SessionStateError } from '../../src/errors.js'
@@ -12,6 +14,24 @@ import { type ActiveSession, writeActiveSession, writeRunSession } from '../../s
 import { FakeProcessRunner } from '../support/fakeProcessRunner.js'
 
 const PKG = 'com.nhn.android.webtoon'
+/** `makeRun` 의 `target_app.uid`. 픽스처의 uid 를 여기에 맞춰야 배선이 실제로 이어진다. */
+const APP_UID = 10359
+
+const fixture = (n: string): string =>
+  readFileSync(fileURLToPath(new URL(`../fixtures/${n}`, import.meta.url)), 'utf8')
+
+const THERMAL = fixture('dumpsys-thermalservice.txt')
+/** AP 를 41.6 으로 올린 "종료" 스냅샷. 두 절에 다 있으므로 `replaceAll` 이어야 한다. */
+const THERMAL_AFTER = THERMAL.replaceAll(
+  'mValue=37.1, mType=0, mName=AP',
+  'mValue=41.6, mType=0, mName=AP',
+)
+const NETSTATS = fixture('dumpsys-netstats.txt').replaceAll('10388', String(APP_UID))
+const NETSTATS_AFTER = NETSTATS.replaceAll(
+  `${APP_UID} 1200000 1119 431000 871`,
+  `${APP_UID} 1205000 1129 432000 876`,
+)
+const PACKAGES = fixture('pm-list-packages-u.txt').replaceAll('10388', String(APP_UID))
 
 function deviceState() {
   return {
@@ -38,12 +58,28 @@ async function makeRun(
     adbCommandsDuringSession?: number
     launch?: boolean
     appPid?: number | null
+    /** `raw/<key>.txt` 로 쓰고 `artifacts.raw` 에 등재할 원문들. 키에 `_before`/`_after` 포함. */
+    raw?: Record<string, string>
+    appUid?: number | null
   } = {},
 ): Promise<string> {
   const runDir = mkdtempSync(join(tmpdir(), 'pt-extract-'))
   const trace = overrides.trace === undefined ? 'trace.perfetto-trace' : overrides.trace
   if (trace) writeFileSync(join(runDir, trace), 'fake')
   const endedAt = overrides.endedAt === undefined ? '2026-07-25T14:32:52.735Z' : overrides.endedAt
+
+  // 기본값은 예전 그대로 — 디스크에 없는 파일 하나만 등재된 상태다 (readSnapshots 가 null 로 접는다).
+  const rawFiles: string[] = []
+  if (overrides.raw === undefined) {
+    rawFiles.push('raw/battery_before.txt')
+  } else {
+    mkdirSync(join(runDir, 'raw'), { recursive: true })
+    for (const [name, text] of Object.entries(overrides.raw)) {
+      const rel = join('raw', `${name}.txt`)
+      writeFileSync(join(runDir, rel), text)
+      rawFiles.push(rel)
+    }
+  }
 
   await writeRunSession(
     runDir,
@@ -101,7 +137,7 @@ async function makeRun(
       label_source: 'apk_resources',
       version_name: '2.46.0',
       version_code: 24600400,
-      uid: 10359,
+      uid: overrides.appUid === undefined ? APP_UID : overrides.appUid,
       install_source: 'com.android.vending',
       launcher_activity: 'com.naver.webtoon.splash.SplashActivity',
       render_process: null,
@@ -113,7 +149,7 @@ async function makeRun(
     },
     warnings: [{ code: 'charging_during_session', message: 'USB 충전 중이었음' }],
     adb_commands_during_session: overrides.adbCommandsDuringSession ?? 0,
-    artifacts: { trace, video: null, raw: ['raw/battery_before.txt'] },
+    artifacts: { trace, video: null, raw: rawFiles },
   })
 
   return runDir
@@ -475,6 +511,92 @@ describe('extractRun', () => {
       expect(result.target_app.pid).toBe(6037)
       expect(result.target_app.render_process).toBeNull()
     })
+  })
+
+  /**
+   * D3 의 핵심 약속: `capture.json` 의 형식 버전을 올리지 않았으므로 M3 이전 run 이 그대로
+   * 열린다. 그리고 그 run 에서 **thermal 은 나오고 network 는 정직하게 안 나온다.**
+   * 이 테스트가 깨지면 `runs/` 의 실기기 세션 4개가 죽었다는 뜻이다.
+   *
+   * 동시에 이것이 `extractRun` → `capture.snapshots` **배선**의 유일한 단언이다.
+   * `snapshots: await readSnapshots(...)` 를 `snapshots: {}` 로 바꿔도 TypeScript 는
+   * 아무 말도 하지 않는다 — required 필드라 **삭제**만 막힐 뿐이다.
+   * 그러면 thermal 이 `collected` 에서 `partial`/`snapshot_unavailable` 로 떨어져 여기서 잡힌다.
+   */
+  it('M3 이전 run(netstats 없음)을 재산출하면 thermal 은 나오고 network 는 snapshot_unavailable 이다', async () => {
+    const runDir = await makeRun({
+      trace: null,
+      raw: { thermalservice_before: THERMAL, thermalservice_after: THERMAL_AFTER },
+    })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
+
+    expect(result.metrics.thermal?.status).toBe('collected')
+    const thermal = result.metrics.thermal?.data as ThermalData
+    expect(thermal.zones).toHaveLength(8)
+    expect(thermal.zones.find((z) => z.name === 'AP')).toMatchObject({ delta_c: 4.5 })
+
+    expect(result.metrics.network?.status).toBe('partial')
+    expect(result.metrics.network?.reason_code).toBe('snapshot_unavailable')
+    // **0 이 아니다.** 조회조차 못 한 것에 0 을 내면 "트래픽이 없었다" 가 된다.
+    expect(result.metrics.network?.data).toBeNull()
+
+    // 형식 버전을 올리지 않았다는 것 자체가 계약이다.
+    const manifest = JSON.parse(readFileSync(join(runDir, 'capture.json'), 'utf8')) as {
+      version: number
+    }
+    expect(manifest.version).toBe(1)
+  })
+
+  /**
+   * `BaseExtractContext.appUid` 배선의 유일한 단언. `appUid: manifest.target_app.uid` 를
+   * `appUid: null` 로 바꿔도 컴파일은 통과하고, network 는 조용히 `app_uid_unknown` 이 된다.
+   * uid 가 결과의 숫자에 실제로 쓰였다는 것을 `data.uid` 로 확인한다.
+   */
+  it('netstats/packages 원본이 있으면 network 가 uid 델타를 낸다 — uid 는 매니페스트에서 온다', async () => {
+    const runDir = await makeRun({
+      trace: null,
+      raw: {
+        netstats_before: NETSTATS,
+        netstats_after: NETSTATS_AFTER,
+        packages_before: PACKAGES,
+        packages_after: PACKAGES,
+      },
+    })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
+
+    expect(result.metrics.network?.status).toBe('collected')
+    expect(result.metrics.network?.data).toEqual({
+      uid: APP_UID,
+      rx_bytes: 5000,
+      tx_bytes: 1000,
+      rx_packets: 10,
+      tx_packets: 5,
+      shared_uid_packages: ['com.nhn.android.webtoon', 'com.example.sibling'],
+    } satisfies NetworkData)
+  })
+
+  it('매니페스트에 uid 가 없으면 network 는 app_uid_unknown 이다', async () => {
+    const runDir = await makeRun({
+      trace: null,
+      appUid: null,
+      raw: { netstats_before: NETSTATS, netstats_after: NETSTATS_AFTER },
+    })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
+
+    expect(result.metrics.network?.reason_code).toBe('app_uid_unknown')
+    expect(result.metrics.network?.data).toBeNull()
   })
 
   it('오버헤드 쿼리가 터져도 result.json 은 나온다', async () => {

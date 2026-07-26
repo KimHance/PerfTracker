@@ -111,6 +111,30 @@ export const METRIC_REASON_CODES = [
    * 못 내는 자리는 null 로 둔다. detail: only_before, only_after
    */
   'thermal_zones_changed',
+  /**
+   * `target_app.uid` 가 null 이라 per-uid 카운터를 조회할 대상이 없다.
+   * (`pm list packages -U` 가 uid 를 주지 않은 경우.) detail: package
+   */
+  'app_uid_unknown',
+  /**
+   * 스냅샷에 그 uid 의 행이 없다. 세션 동안 트래픽이 전혀 없었거나 맵에 등재되지 않은 것이다.
+   * **0 으로 채워 내지 않는다** — 관측한 0 과 조회하지 못한 것은 다른 사실이다.
+   * detail: uid, in_before, in_after
+   */
+  'uid_not_in_netstats',
+  /**
+   * 누적 카운터의 after 가 before 보다 작다 (세션 중 재부팅, 앱 재설치로 uid 항목 리셋).
+   * 0 으로 뭉개지 않고 사유로 낸다 — CPU collector 가 음수 delta 를 버리는 규칙과 같은 정신이다.
+   * detail: counter, before, after
+   */
+  'counter_went_backwards',
+  /**
+   * BPF 맵 순회가 재시작되어 같은 uid 가 **서로 다른 값으로** 두 번 찍혔다 (AOSP b/220084230).
+   * 값은 마지막 행으로 냈지만 어느 쪽이 맞는지 알 수 없다는 사실을 남긴다.
+   * 같은 값으로 두 번 찍힌 경우는 해가 없으므로 이 사유를 달지 않는다.
+   * detail: uid, phase
+   */
+  'netstats_uid_duplicated',
 ] as const
 
 export type MetricReasonCode = (typeof METRIC_REASON_CODES)[number]
@@ -217,6 +241,21 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
       `낼 수 있는 존은 그대로 냈고, 못 낸 자리는 null 입니다.`
     )
   },
+  app_uid_unknown: (d) =>
+    `대상 앱(${String(d['package'])})의 uid 를 알지 못해 네트워크 사용량을 낼 수 없습니다 — ` +
+    `이 값은 uid 단위로만 집계됩니다.`,
+  uid_not_in_netstats: (d) =>
+    `uid ${String(d['uid'])} 의 행이 netstats 스냅샷에 없습니다 ` +
+    `(시작: ${d['in_before'] === true ? '있음' : '없음'} / 종료: ${d['in_after'] === true ? '있음' : '없음'}) — ` +
+    `부팅 이후 이 uid 로 오간 트래픽이 없었을 수 있습니다. 0 으로 채우지 않았습니다.`,
+  counter_went_backwards: (d) =>
+    `누적 카운터 ${String(d['counter'])} 가 세션 구간에서 감소했습니다 ` +
+    `(${String(d['before'])} → ${String(d['after'])}) — 세션 중 재부팅이나 카운터 리셋이 있었을 수 ` +
+    `있습니다. 음수 차이를 0 으로 뭉개지 않았습니다.`,
+  netstats_uid_duplicated: (d) =>
+    `netstats ${d['phase'] === 'after' ? '종료' : '시작'} 스냅샷에서 uid ${String(d['uid'])} 행이 ` +
+    `서로 다른 값으로 두 번 나왔습니다 (BPF 맵 순회 재시작, AOSP b/220084230) — ` +
+    `마지막 행을 썼지만 어느 쪽이 맞는지는 이 결과로 알 수 없습니다.`,
 }
 
 /** 코드 → 한국어 문장. 모르는 코드는 조용히 비우지 않고 코드 자체를 남긴다. */

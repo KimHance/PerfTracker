@@ -398,6 +398,66 @@ export const ThermalDataSchema = z.object({
 })
 export type ThermalData = z.infer<typeof ThermalDataSchema>
 
+/**
+ * 이 숫자가 **무엇의 합계인지** 가 `.describe()` 에 없으면, `rx_bytes` 는 "이 앱이 받은
+ * 바이트" 로 읽힌다. 실제로는 그보다 넓고(같은 uid 의 다른 패키지, loopback), 동시에
+ * 좁다(방화벽이 버린 송신은 안 센다). `z.toJSONSchema` 는 주석을 보지 못하므로
+ * 그 한정이 반드시 여기 있어야 한다.
+ */
+const NETWORK_SCOPE =
+  '**uid 단위 값이며 패키지 단위가 아니다** — 같은 uid 를 공유하는 다른 패키지(sharedUserId)의 ' +
+  '트래픽이 섞이고, 분리할 방법이 없다(맵의 키가 uid 뿐이다). 어느 패키지들이 이 uid 를 ' +
+  '쓰는지는 shared_uid_packages 에 있다. ' +
+  '**IP 계층의 바이트다** — L2/이더넷 헤더는 빠지고 IP+TCP/UDP 헤더는 들어간다. ' +
+  '**loopback 을 포함한 모든 인터페이스의 합계이며 wifi / mobile 로 나뉘지 않는다** ' +
+  '(`mAppUidStatsMap` 에 인터페이스 차원이 없다). loopback 통신은 송신과 수신 양쪽에서 ' +
+  '두 번 세어진다. 1500바이트를 넘는 큰 패킷(GSO)은 커널이 휴리스틱으로 되계산하므로 ' +
+  '고throughput 구간의 값은 정확한 wire 바이트가 아니라 근사치다. ' +
+  '방화벽/데이터세이버가 버린 **송신** 패킷은 세지 않고, 버려진 **수신** 패킷은 센다. ' +
+  'VPN(TUN) 이 켜져 있으면 같은 트래픽이 앱 uid 와 VPN 앱 uid 양쪽에서 세어진다. '
+
+const NETWORK_INTERVAL =
+  '**델타 구간은 세션 구간보다 조금 넓다.** 시작 스냅샷은 `am force-stop` 과 트레이스 시작과 ' +
+  '`am start -W` 보다 **앞**에서 찍히므로 앱의 콜드 스타트 준비 구간이 포함되고, 종료 ' +
+  '스냅샷은 트레이스를 회수한 **뒤**에 찍히므로 회수에 걸린 시간이 포함된다(트레이스가 클수록 ' +
+  '길어진다). 정확한 두 시점은 device.state_before.captured_at / state_after.captured_at 이다. '
+
+export const NetworkDataSchema = z.object({
+  uid: z.number().int().describe('이 값이 집계된 리눅스 uid. target_app.uid 와 같다.'),
+  rx_bytes: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      `세션 전/후 스냅샷 사이에 이 uid 가 **받은** 바이트. ${NETWORK_SCOPE}${NETWORK_INTERVAL}` +
+        '**0 은 "관측된 바이트가 없었다" 는 뜻이지 "조회하지 못했다" 가 아니다** — ' +
+        '조회하지 못한 경우 이 메트릭은 data 가 통째로 null 이고 reason_code 가 그 이유를 말한다.',
+    ),
+  tx_bytes: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(`같은 구간에 이 uid 가 **보낸** 바이트. ${NETWORK_SCOPE}`),
+  rx_packets: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe('같은 구간의 수신 패킷 수. GSO 구간에서는 커널이 되계산한 추정 개수다.'),
+  tx_packets: z.number().int().nonnegative().describe('같은 구간의 송신 패킷 수. 위와 같다.'),
+  shared_uid_packages: z
+    .array(z.string())
+    .nullable()
+    .describe(
+      '`pm list packages -U` 스냅샷에서 **이 uid 를 쓰는 것으로 관측된 패키지 전부**(시스템 포함). ' +
+        '항목이 1개면 위 숫자는 그 패키지만의 것이고, 2개 이상이면 그 패키지들의 합이며 ' +
+        '분리할 수 없다. 실측 근거: 어느 에뮬레이터에서 uid 1000 을 11개 패키지가 공유했다. ' +
+        '**null 은 그 스냅샷을 읽지 못했다는 뜻이다 — 빈 배열([])이 아니다.** ' +
+        '[] 는 "조회했고 이 uid 를 쓰는 패키지가 목록에 없었다" 이다. ' +
+        '부계정(secondary user)의 같은 앱은 다른 uid(user*100000 + appId)를 받으며 여기 포함되지 않는다.',
+    ),
+})
+export type NetworkData = z.infer<typeof NetworkDataSchema>
+
 export const CpuClusterSchema = z.object({
   cpus: z.array(z.number().int()),
   max_freq_khz: z.number().int().nullable(),
@@ -668,6 +728,7 @@ export const ResultSchema = z.object({
       memory: metricResultSchema(MemoryDataSchema).optional(),
       log: metricResultSchema(LogDataSchema).optional(),
       thermal: metricResultSchema(ThermalDataSchema).optional(),
+      network: metricResultSchema(NetworkDataSchema).optional(),
     })
     .catchall(metricResultSchema(z.unknown())),
   measurement_overhead: MeasurementOverheadSchema,

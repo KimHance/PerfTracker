@@ -1,0 +1,6 @@
+package:com.android.settings uid:1000
+package:com.android.systemui uid:1000
+package:com.nhn.android.webtoon uid:10388
+package:com.example.other uid:10134
+package:com.example.sibling uid:10388
+package:com.android.shell uid:2000
