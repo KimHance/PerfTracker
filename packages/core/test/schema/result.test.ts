@@ -182,6 +182,63 @@ describe('resultJsonSchema', () => {
     expect(field.description).toContain('pidof')
   })
 
+  /**
+   * M4. `stop` 하지 않은 run 에 extract 를 돌리면 이 값은 최종값이 아니고, 셀 수 없으면
+   * null 이다. 그 사실이 소스 주석에만 있으면 스키마만 읽는 CI 는 null 을 만나 터지거나
+   * (더 나쁘게) `?? 0` 으로 접어 오염 가능성이 있는 세션을 청정으로 판정한다.
+   */
+  it('stop 전에는 이 값이 최종값이 아니고 null 일 수 있다는 것을 스키마에서 말한다', () => {
+    const overhead = props(resultJsonSchema())['measurement_overhead']
+    const field = props(overhead)['adb_commands_during_session'] as { description?: string }
+
+    expect(field.description).toContain('running')
+    expect(field.description).toMatch(/최종값이 아니다/)
+    // null 과 0 이 다른 사실이라는 것을 스키마가 직접 말해야 한다.
+    expect(field.description).toMatch(/null 은 0 이 아니다/)
+    // 그리고 M2 에서 들어간 `--launch` 공시는 그대로 살아 있어야 한다.
+    expect(field.description).toContain('am start -W')
+    expect(field.description).toContain('pidof')
+  })
+
+  it('adb_commands_during_session 이 실제로 null 을 허용한다 — 설명만이 아니라 타입도', () => {
+    const overhead = props(resultJsonSchema())['measurement_overhead']
+    expect(JSON.stringify(props(overhead)['adb_commands_during_session'])).toContain('null')
+  })
+
+  it('끝나지 않은 세션의 종료 시각과 길이가 null 임을 스키마에서 말한다', () => {
+    const session = props(props(resultJsonSchema())['session'])
+    for (const field of ['ended_at', 'duration_ms']) {
+      const f = session[field] as { description?: string }
+      expect(f.description, `${field} 설명 없음`).toBeDefined()
+      expect(JSON.stringify(session[field]), `${field} 가 null 을 안 받음`).toContain('null')
+    }
+    expect((session['duration_ms'] as { description: string }).description).toMatch(/0 과 혼동/)
+  })
+
+  it('확인하지 못한 것을 false 로 내지 않는다는 사실이 스키마에 있다', () => {
+    // 같은 계열. 트레이스가 없으면 버퍼 통계를 볼 수조차 없는데 옛 값은 false 였다.
+    const overhead = props(resultJsonSchema())['measurement_overhead']
+    const f = props(overhead)['trace_buffer_overrun'] as { description?: string }
+
+    expect(f.description).toBeDefined()
+    expect(f.description).toMatch(/null 은 확인하지 못했다는 뜻이다/)
+    expect(JSON.stringify(props(overhead)['trace_buffer_overrun'])).toContain('null')
+  })
+
+  it('진행 중인 세션의 결과(널 네 개)가 스키마를 통과한다', () => {
+    const r = minimalResult()
+    const running = {
+      ...r,
+      session: { ...r.session, state: 'running' as const, ended_at: null, duration_ms: null },
+      measurement_overhead: {
+        ...r.measurement_overhead,
+        adb_commands_during_session: null,
+        trace_buffer_overrun: null,
+      },
+    }
+    expect(() => ResultSchema.parse(running)).not.toThrow()
+  })
+
   it('오버헤드 세 필드의 주의사항을 스키마에 실어 보낸다 — 가장 오해하기 쉬운 숫자들이다', () => {
     const overhead = props(resultJsonSchema())['measurement_overhead']
     for (const [field, phrase] of [

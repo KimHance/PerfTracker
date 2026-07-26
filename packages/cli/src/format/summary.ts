@@ -27,6 +27,19 @@ function valueLine(label: string, status: string, body: string): string {
   return `${label.padEnd(LABEL_WIDTH)}${status.padEnd(STATUS_WIDTH)} ${body}`
 }
 
+/** 아직 stop 하지 않은 세션은 길이가 0 인 것이 아니라 **끝나지 않은** 것이다. */
+function duration(ms: number | null): string {
+  return ms === null ? 'n/a (stop 전)' : `${(ms / 1000).toFixed(1)}s`
+}
+
+/**
+ * null 은 "셀 수 없었다" 다 (stop 전이고 활성 세션 포인터도 없다).
+ * 0 으로 찍으면 "세어 봤더니 위반이 없었다" 가 되어 정확히 반대 뜻이 된다.
+ */
+function adbCalls(n: number | null): string {
+  return n === null ? 'n/a (셀 수 없음)' : String(n)
+}
+
 /** 숫자와 수집 상태만 보여준다. 좋다/나쁘다를 색이나 문구로 칠하지 않는다. */
 export function formatSummary(result: Result): string {
   const d = result.device.static
@@ -42,8 +55,10 @@ export function formatSummary(result: Result): string {
       `${app.version_code !== null ? ` (${app.version_code})` : ''}`,
     // "adb calls during session: 0" 을 글자 그대로 읽으면 "아무도 기기를 안 건드렸다" 가 되는데
     // 그건 사실이 아니다. 이 카운터는 perftracker 를 통과한 호출만 센다. 라벨이 그걸 말한다.
-    `Duration  ${(result.session.duration_ms / 1000).toFixed(1)}s · ` +
-      `perftracker adb calls during session: ${result.measurement_overhead.adb_commands_during_session}`,
+    // 둘 다 null 일 수 있다 — 아직 stop 하지 않은 세션이다. 그때 0 을 찍으면 "0ms 동안
+    // 돌았고 위반도 없었다" 라는, 어느 쪽도 사실이 아닌 문장이 된다.
+    `Duration  ${duration(result.session.duration_ms)} · ` +
+      `perftracker adb calls during session: ${adbCalls(result.measurement_overhead.adb_commands_during_session)}`,
     '',
   ]
 
@@ -137,7 +152,10 @@ export function formatSummary(result: Result): string {
       ? `${o.tracing_processes_cpu_share_pct}% CPU (${num(o.tracing_processes_cpu_time_ms)}ms)` +
         `${o.tracing_processes_peak_rss_kb !== null ? ` · ${mb(o.tracing_processes_peak_rss_kb)} RSS` : ''}`
       : 'not measured'
-  lines.push('', `Overhead  tracing procs ${overhead} · buffer overrun: ${o.trace_buffer_overrun ? 'yes' : 'no'}`)
+  // null 은 "확인 못 함" 이다. no 로 찍으면 "확인해 봤더니 안 넘쳤다" 가 된다.
+  const overrun =
+    o.trace_buffer_overrun === null ? 'n/a (확인 못 함)' : o.trace_buffer_overrun ? 'yes' : 'no'
+  lines.push('', `Overhead  tracing procs ${overhead} · buffer overrun: ${overrun}`)
 
   for (const w of result.warnings) lines.push(`Notes     ${w.message}`)
 

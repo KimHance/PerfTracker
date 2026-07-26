@@ -177,6 +177,34 @@ describe('formatSummary', () => {
     expect(formatSummary(result())).toContain('perftracker adb calls during session: 0')
   })
 
+  /**
+   * M4. 아직 stop 하지 않은 세션이다. 여기서 `0.0s` 와 `0` 을 찍으면 요약이
+   * "0ms 동안 돌았고 위반도 없었다" 라고 말하게 되는데, 어느 쪽도 사실이 아니다.
+   */
+  it('stop 전 세션의 길이와 위반 횟수를 0 으로 찍지 않는다', () => {
+    const r = result()
+    const out = formatSummary({
+      ...r,
+      session: { ...r.session, state: 'running', ended_at: null, duration_ms: null },
+      measurement_overhead: { ...r.measurement_overhead, adb_commands_during_session: null },
+    })
+
+    expect(out).toContain('Duration  n/a (stop 전)')
+    expect(out).toContain('perftracker adb calls during session: n/a (셀 수 없음)')
+    expect(out).not.toContain('Duration  0.0s')
+  })
+
+  it('stop 전이라도 셀 수 있었던 위반 횟수는 숫자로 보여준다', () => {
+    const r = result()
+    const out = formatSummary({
+      ...r,
+      session: { ...r.session, state: 'running', ended_at: null, duration_ms: null },
+      measurement_overhead: { ...r.measurement_overhead, adb_commands_during_session: 2 },
+    })
+
+    expect(out).toContain('perftracker adb calls during session: 2')
+  })
+
   it('프레임 예산이 패널 주사율이 아니라 고정 기준임을 밝힌다', () => {
     // Device 줄에 @120Hz 가 있는데 Frame 줄의 ≤16.67ms 가 그와 연관된 값으로 읽히면 안 된다.
     expect(formatSummary(result())).toContain('≤16.67ms (60fps ref)')
@@ -352,6 +380,18 @@ describe('formatSummary — M2 메트릭', () => {
       },
     })
     expect(out).toContain('Overhead  tracing procs not measured · buffer overrun: no')
+  })
+
+  it('버퍼 오버런을 확인 못 했으면 no 라고 쓰지 않는다', () => {
+    // no 는 "확인해 봤더니 안 넘쳤다" 로 읽힌다. 트레이스가 없으면 본 적조차 없다.
+    const r = result()
+    const out = formatSummary({
+      ...r,
+      measurement_overhead: { ...r.measurement_overhead, trace_buffer_overrun: null },
+    })
+
+    expect(out).toContain('buffer overrun: n/a (확인 못 함)')
+    expect(out).not.toContain('buffer overrun: no')
   })
 
   it('구글 기준선을 터미널에 쓰지 않는다 — references 에만 둔다', () => {

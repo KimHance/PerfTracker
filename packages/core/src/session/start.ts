@@ -309,7 +309,9 @@ export async function startSession(
       launchTimeUnmeasured: opts.launch && startup?.totalTimeMs == null,
       amStartStatus: startup?.status ?? null,
     }),
-    adb_commands_during_session: 0,
+    // 아직 세어 본 적이 없다. 0 은 "세어 봤더니 없었다" 는 뜻이라 여기 오면 거짓이다 —
+    // 실제 누적은 측정 창이 열린 뒤 활성 세션 포인터에 쌓이고 stop 이 이 자리로 옮긴다.
+    adb_commands_during_session: null,
     artifacts: { trace: null, video: null, raw: rawFiles },
   })
   await writeRunSession(runDir, session, { state: 'running' })

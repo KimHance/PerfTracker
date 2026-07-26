@@ -221,7 +221,10 @@ describe('startSession — 오케스트레이션 불변식', () => {
       readFileSync(join(session.runDir, 'capture.json'), 'utf8'),
     ) as CaptureManifest
     expect(manifest.artifacts.trace).toBeNull()
-    expect(manifest.adb_commands_during_session).toBe(0)
+    // 위반 횟수는 `stop` 이 포인터에서 거둬 오는 값이다. start 는 세어 본 적이 없으므로
+    // 0 을 쓰면 안 된다 — 이 필드에서 0 은 "세어 봤더니 없었다" 라는 강한 주장이다.
+    // 트레이스가 아직 null 인 것과 같은 이유로 여기도 null 이다.
+    expect(manifest.adb_commands_during_session).toBeNull()
   })
 
   it('run 디렉토리를 절대 경로로 저장한다 — start 와 stop 사이의 cd 를 견딘다', async () => {

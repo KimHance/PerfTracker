@@ -8,7 +8,7 @@ import { SessionStateError } from '../../src/errors.js'
 import { BUFFER_STATS_SQL, extractRun } from '../../src/extract/run.js'
 import { TRACING_OVERHEAD_SQL } from '../../src/extract/overhead.js'
 import { writeCaptureManifest } from '../../src/session/manifest.js'
-import { writeRunSession } from '../../src/session/state.js'
+import { type ActiveSession, writeActiveSession, writeRunSession } from '../../src/session/state.js'
 import { FakeProcessRunner } from '../support/fakeProcessRunner.js'
 
 const PKG = 'com.nhn.android.webtoon'
@@ -260,12 +260,14 @@ describe('extractRun', () => {
     const result = await extractRun(runDir, {
       traceProcessorPath: process.execPath,
       runner: new FakeProcessRunner(),
+      home: mkdtempSync(join(tmpdir(), 'pt-home-')),
     })
 
     expect(result.session.state).toBe('running')
     expect(result.metrics.frame.status).toBe('failed')
     expect(result.warnings.map((w) => w.code)).toContain('session_still_running')
-    expect(result.session.duration_ms).toBe(0)
+    // 끝나지 않은 세션의 길이는 0 이 아니라 "모른다" 다 — 아래 M4 블록 참고.
+    expect(result.session.duration_ms).toBeNull()
   })
 
   it('session.json 의 version 이 다르면 조용히 잘못 읽지 않고 거부한다', async () => {
@@ -308,6 +310,35 @@ describe('extractRun', () => {
     })
 
     expect(result.measurement_overhead.adb_commands_during_session).toBe(3)
+  })
+
+  /**
+   * 같은 계열의 거짓 청정 신호. `false` 는 "넘치지 않았다" 로 읽히는데, 트레이스가 없으면
+   * 우리는 **본 적조차 없다**. stop 하지 않은 세션과 aborted 세션이 정확히 이 경우다.
+   */
+  it('트레이스가 없으면 버퍼가 안 넘쳤다고 말하지 않는다', async () => {
+    const runDir = await makeRun({ trace: null })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
+
+    expect(result.measurement_overhead.trace_buffer_overrun).toBeNull()
+  })
+
+  it('버퍼 통계 쿼리가 터지면 false 가 아니라 null 이다 — 못 본 것은 청정이 아니다', async () => {
+    const runDir = await makeRun()
+    const trace = join(runDir, 'trace.perfetto-trace')
+    const broken = runner(trace).on(`query ${trace} ${BUFFER_STATS_SQL}`, {
+      code: 1,
+      stderr: 'no such table: stats',
+    })
+
+    const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: broken })
+
+    expect(result.metrics.frame.status).toBe('collected')
+    expect(result.measurement_overhead.trace_buffer_overrun).toBeNull()
   })
 
   it('버퍼 오버런을 사실로 기록한다', async () => {
@@ -458,5 +489,118 @@ describe('extractRun', () => {
 
     expect(result.metrics.frame.status).toBe('collected')
     expect(result.measurement_overhead.tracing_processes_cpu_time_ms).toBeNull()
+  })
+})
+
+/**
+ * M4. `stop` 을 거치지 않은 run 의 매니페스트에는 `start` 가 쓴 자리표시자 0 만 있다.
+ * `adb_commands_during_session` 은 "이 세션 데이터가 오염됐는가" 를 나타내는 바로 그 필드라,
+ * 0 은 소비자에게 **검증된 청정**으로 읽힌다. 실제 누적은 활성 세션 포인터에 있다.
+ */
+describe('아직 stop 하지 않은 run 에 extract 를 돌렸을 때', () => {
+  const RUN_ID = 'a3f9c1'
+
+  function pointerFor(runDir: string, overrides: Partial<ActiveSession> = {}): ActiveSession {
+    return {
+      version: 1,
+      id: RUN_ID,
+      name: '홈 스크롤',
+      serial: 'S1',
+      packageName: PKG,
+      runDir,
+      perfettoKey: `perftracker_${RUN_ID}`,
+      remoteTracePath: `/data/misc/perfetto-traces/perftracker_${RUN_ID}.pftrace`,
+      startedAt: '2026-07-25T14:32:10.000Z',
+      configuredDurationMs: 1_800_000,
+      options: { launch: true, video: false },
+      startup: null,
+      ...overrides,
+    }
+  }
+
+  /** 세션이 도는 중인 run 디렉토리 + (원하면) 그 세션의 활성 포인터. */
+  async function runningRun(
+    pointer?: Partial<ActiveSession>,
+  ): Promise<{ runDir: string; home: string }> {
+    const runDir = await makeRun({ trace: null, state: 'running', endedAt: null })
+    const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
+    if (pointer !== undefined) await writeActiveSession(pointerFor(runDir, pointer), home)
+    return { runDir, home }
+  }
+
+  const extract = (runDir: string, home: string) =>
+    extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+      home,
+    })
+
+  it('포인터에 쌓인 위반 횟수를 싣는다 — start 가 쓴 0 이 아니라', async () => {
+    const { runDir, home } = await runningRun({ adbCommandsDuringSession: 2 })
+
+    const result = await extract(runDir, home)
+
+    expect(result.measurement_overhead.adb_commands_during_session).toBe(2)
+  })
+
+  it('포인터가 없으면 0 이 아니라 null 이다 — 셀 수 없는 것은 청정이 아니다', async () => {
+    const { runDir, home } = await runningRun()
+
+    const result = await extract(runDir, home)
+
+    expect(result.measurement_overhead.adb_commands_during_session).toBeNull()
+  })
+
+  it('포인터가 다른 세션의 것이면 그 숫자를 빌려 쓰지 않는다', async () => {
+    const { runDir, home } = await runningRun({ id: 'ffffff', adbCommandsDuringSession: 7 })
+
+    const result = await extract(runDir, home)
+
+    expect(result.measurement_overhead.adb_commands_during_session).toBeNull()
+  })
+
+  it('위반이 없던 세션의 0 은 그대로 0 이다 — 포인터가 그렇게 말한다', async () => {
+    const { runDir, home } = await runningRun({ adbCommandsDuringSession: 0 })
+
+    const result = await extract(runDir, home)
+
+    expect(result.measurement_overhead.adb_commands_during_session).toBe(0)
+  })
+
+  it('끝나지 않은 세션의 종료 시각과 길이를 지어내지 않는다', async () => {
+    // 옛 동작은 endedAt 이 없으면 startedAt 을 종료 시각 자리에 넣어 "0ms 짜리 세션" 을 만들었다.
+    const { runDir, home } = await runningRun({ adbCommandsDuringSession: 0 })
+
+    const result = await extract(runDir, home)
+
+    expect(result.session.state).toBe('running')
+    expect(result.session.ended_at).toBeNull()
+    expect(result.session.duration_ms).toBeNull()
+    expect(result.session.started_at).toBe('2026-07-25T14:32:10.000Z')
+  })
+
+  it('경고와 필드가 서로 다른 말을 하지 않는다', async () => {
+    const { runDir, home } = await runningRun({ adbCommandsDuringSession: 2 })
+
+    const result = await extract(runDir, home)
+
+    const note = result.warnings.find((w) => w.code === 'session_still_running')
+    expect(note).toBeDefined()
+    // 경고는 이 값이 최종값이 아님을 말해야 한다 — 필드만 읽는 소비자를 위해 스키마에도 있다.
+    expect(note!.message).toContain('adb_commands_during_session')
+  })
+
+  it('stop 한 run 은 남아 있는 포인터가 아니라 매니페스트를 정본으로 쓴다', async () => {
+    const runDir = await makeRun({ adbCommandsDuringSession: 3 })
+    const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
+    await writeActiveSession(pointerFor(runDir, { adbCommandsDuringSession: 99 }), home)
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: runner(join(runDir, 'trace.perfetto-trace')),
+      home,
+    })
+
+    expect(result.measurement_overhead.adb_commands_during_session).toBe(3)
   })
 })

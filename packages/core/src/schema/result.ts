@@ -356,8 +356,27 @@ export const SessionInfoSchema = z.object({
   // 그런 결과를 'completed' 로 둔갑시키지 않고 있는 그대로 남긴다.
   state: z.enum(['running', 'completed', 'aborted', 'failed']),
   started_at: z.string(),
-  ended_at: z.string(),
-  duration_ms: z.number().int(),
+  // 이 둘이 nullable 인 이유는 state 와 같은 자리에서 나온다. `stop` 이 종료 시각을 쓰기
+  // 전까지 이 run 에는 종료 시각이 **없다.** 옛 동작은 그 자리에 started_at 을 넣어
+  // "0ms 짜리 세션" 이라는 없던 사실을 만들었다 — 아직 오지 않은 시각을 지어낸 것이다.
+  ended_at: z
+    .string()
+    .nullable()
+    .describe(
+      '세션이 끝난 시각(= stop 이 원본 회수를 시작한 시각). ' +
+        '**null 은 아직 끝나지 않았다는 뜻이다** — state 가 running 인 결과가 그렇다. ' +
+        '이 자리에 started_at 이 오는 일은 없다.',
+    ),
+  duration_ms: z
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      'ended_at − started_at (ms). **null 은 세션이 아직 끝나지 않아 길이를 잴 수 없다는 ' +
+        '뜻이다**(state 가 running). 0 과 혼동하면 안 된다 — 0 은 "길이가 0 인 세션" 이다. ' +
+        '진행 중인 세션의 경과 시간이 필요하면 started_at 과 지금 시각으로 직접 구하라. ' +
+        '이 도구는 그것을 세션의 길이라고 부르지 않는다.',
+    ),
   options: z.object({ launch: z.boolean(), video: z.boolean() }),
 })
 export type SessionInfo = z.infer<typeof SessionInfoSchema>
@@ -404,6 +423,7 @@ export const MeasurementOverheadSchema = z.object({
     .number()
     .int()
     .nonnegative()
+    .nullable()
     .describe(
       '**측정 창이 열린 동안** perftracker 를 통해 시도되어 차단된 adb 호출 수. ' +
         '0 이 아니면 그 세션 데이터는 오염된 것이다. ' +
@@ -417,9 +437,30 @@ export const MeasurementOverheadSchema = z.object({
         '(2) 다른 프로세스: 0 은 perftracker 가 아무것도 보내지 않았다는 뜻이지 ' +
         '아무도 기기를 건드리지 않았다는 뜻이 아니다. 다른 터미널에서 직접 실행한 adb 는 ' +
         '이 도구를 거치지 않으므로 잡히지 않으며, 도구가 그것을 관측하려면 세션 중에 기기에 ' +
-        '물어야 하고 그 행위 자체가 이 도구가 금지하는 것이다.',
+        '물어야 하고 그 행위 자체가 이 도구가 금지하는 것이다.\n' +
+        '(3) **아직 stop 하지 않은 세션**(session.state 가 running): 이 카운터의 정본은 stop 이 ' +
+        '남기는 값인데 그것이 아직 없다. 그래서 이 값은 활성 세션 포인터에 그때까지 쌓인 ' +
+        '누적치이며, **읽은 시점까지의 사실이지 최종값이 아니다 — 세션이 계속 도는 동안 더 늘 수 ' +
+        '있다.** stop 한 뒤 다시 extract 하면 최종값이 나온다. 포인터마저 없으면(--force 로 버려진 ' +
+        '세션, 포인터를 만든 홈이 아닌 곳에서 연 run 디렉토리 등) 셀 방법이 없어 **null** 이다 — ' +
+        '기기에 물어보는 길은 없다. **null 은 0 이 아니다**: 0 은 "세어 봤더니 없었다", ' +
+        'null 은 "셀 수 없었다" 이다. null 을 0 으로 접어 읽으면 오염됐을지 모르는 세션이 ' +
+        '청정으로 둔갑한다. state 가 running 인 결과에는 같은 사실을 말하는 ' +
+        'session_still_running 경고도 함께 실린다.',
     ),
-  trace_buffer_overrun: z.boolean(),
+  // 이 필드에도 같은 함정이 있었다: 확인하지 못한 것을 `false` 로 냈다.
+  trace_buffer_overrun: z
+    .boolean()
+    .nullable()
+    .describe(
+      '트레이스 버퍼가 넘쳐 데이터가 잘렸는지. trace_processor 의 stats 에서 ' +
+        'traced_buf* 의 error/data_loss 항목을 세어 판단한다. ' +
+        'true 면 이 결과의 모든 숫자가 그만큼 적다 — 특히 metrics.log 의 개수가 그렇다.\n' +
+        '**null 은 확인하지 못했다는 뜻이다** — false 가 아니다. 두 경로가 있다: ' +
+        '(1) 트레이스 원본이 이 run 에 없다(아직 stop 하지 않은 세션, 또는 트레이스를 잃은 ' +
+        'aborted 세션 — artifacts.trace 가 null 이다), (2) stats 쿼리 자체가 실패했다. ' +
+        'null 을 false 로 접어 읽으면 확인한 적 없는 세션이 "버퍼 정상" 으로 둔갑한다.',
+    ),
 })
 export type MeasurementOverhead = z.infer<typeof MeasurementOverheadSchema>
 

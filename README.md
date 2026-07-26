@@ -38,6 +38,11 @@ adb 로 붙어서 Perfetto 트레이스를 기기에 남기고, 그것을 호스
 (이 카운터가 세는 것은 **이 도구를 통과한** 호출뿐입니다. 자세한 한계는
 [아래](#measurement_overhead)에 적어 두었습니다.)
 
+횟수는 창이 열려 있는 동안 활성 세션 포인터에 쌓이고 `stop` 이 그것을 거둡니다.
+그래서 아직 `stop` 하지 않은 세션에 `extract` 를 돌리면 이 값은 **최종값이 아닙니다** —
+그때까지의 누적이거나, 포인터마저 없으면 `null`(= 셀 수 없었다)입니다.
+`null` 을 0 으로 접어 읽지 마세요.
+
 이 제약이 설계 전체를 결정합니다:
 
 - 트레이스는 Perfetto `--detach` 세션으로 남깁니다. 도구가 아무것도 붙잡고 있지 않아도
@@ -154,7 +159,7 @@ npx perftracker schema > result.schema.json
 | 필드 | 무엇인가 |
 | --- | --- |
 | `schema_version` | 이 파일 형식의 버전 |
-| `session` | id, 이름, `state`, 시작/종료 시각, 길이 |
+| `session` | id, 이름, `state`, 시작/종료 시각, 길이 (아래 참고) |
 | `device` | 기기 스펙(`static`)과 세션 전후 상태(`state_before` / `state_after`) |
 | `target_app` | 패키지, 라벨, 버전, 렌더 프로세스와 pid |
 | `metrics` | 메트릭들. 키가 곧 수집기 id (`frame` / `startup` / `cpu` / `memory` / `log`) |
@@ -162,6 +167,13 @@ npx perftracker schema > result.schema.json
 | `references` | 구글 공개 기준치. **비교에 쓰이지 않고 기록만 된다** |
 | `warnings` | 관측된 사건 (평가 아님) |
 | `artifacts` | 원본 파일들의 상대 경로 |
+
+> **아직 `stop` 하지 않은 세션에 `extract` 를 돌린 결과**(`session.state === "running"`)에는
+> 아직 존재하지 않는 사실이 있습니다. 그 자리는 그럴듯한 숫자가 아니라 `null` 입니다:
+> `session.ended_at` 과 `session.duration_ms`(세션이 안 끝났으니 길이가 없습니다 — 0 이 아닙니다),
+> 그리고 `device.state_after`. `measurement_overhead` 의 두 필드도 `null` 일 수 있습니다
+> (아래). `warnings` 에는 `session_still_running` 이 함께 실립니다.
+> `stop` 한 뒤 같은 run 디렉토리로 `extract` 를 다시 돌리면 전부 채워집니다.
 
 ### 메트릭 하나의 모양
 
@@ -250,8 +262,15 @@ npx perftracker schema > result.schema.json
     (예: `adb shell input swipe`)는 이 도구를 거치지 않으므로 여기 잡히지 않습니다.
     도구는 자기가 보내지 않은 트래픽을 관측할 수 없습니다 — 관측하려면 세션 중에 기기에
     물어봐야 하고, 그게 곧 이 도구가 금지하는 행위이기 때문입니다.
+  - **아직 `stop` 하지 않은 세션.** 이 카운터의 정본은 `stop` 이 남깁니다. 그 전에
+    `extract` 를 돌리면 활성 세션 포인터에 그때까지 쌓인 누적치가 실리는데, **읽은 시점까지의
+    사실이지 최종값이 아닙니다** — 세션이 도는 동안 더 늘 수 있습니다. 포인터마저 없으면
+    (`--force` 로 버려진 세션 등) 셀 방법이 없어 **`null`** 입니다.
+    `null` 은 0 이 아닙니다: 0 은 "세어 봤더니 없었다", `null` 은 "셀 수 없었다" 입니다.
 - `trace_buffer_overrun` — 트레이스 버퍼가 넘쳐 데이터가 잘렸는지. 잘린 데이터를
   정상인 척 내보내지 않기 위해 사실로 기록합니다.
+  **`null` 은 확인하지 못했다는 뜻입니다**(`false` 가 아닙니다) — 이 run 에 트레이스 원본이
+  없거나(아직 `stop` 전, 또는 트레이스를 잃은 `aborted` 세션) 통계 쿼리 자체가 실패한 경우입니다.
 - `tracing_processes_*` — 트레이싱 **프로세스들**(`traced` / `traced_probes` / `perfetto`)이
   쓴 CPU 시간과 RSS 입니다. M2 에서 채워집니다.
 
