@@ -162,7 +162,7 @@ npx perftracker schema > result.schema.json
 | `session` | id, 이름, `state`, 시작/종료 시각, 길이 (아래 참고) |
 | `device` | 기기 스펙(`static`)과 세션 전후 상태(`state_before` / `state_after`) |
 | `target_app` | 패키지, 라벨, 버전, 렌더 프로세스와 pid |
-| `metrics` | 메트릭들. 키가 곧 수집기 id (`frame` / `startup` / `cpu` / `memory` / `log`) |
+| `metrics` | 메트릭들. 키가 곧 수집기 id (`frame` / `startup` / `cpu` / `memory` / `log` / `thermal` / `network`) |
 | `measurement_overhead` | 이 측정이 기기에 개입한 정도의 **하한** (아래 참고) |
 | `references` | 구글 공개 기준치. **비교에 쓰이지 않고 기록만 된다** |
 | `warnings` | 관측된 사건 (평가 아님) |
@@ -237,6 +237,96 @@ npx perftracker schema > result.schema.json
 - `within_16_67ms_ratio` 는 16.67ms 이하 프레임의 비율입니다. 판정이 아니라 비율입니다.
 - 종료 이벤트를 못 받은 미완결 프레임(`dur = -1`)은 집계에서 **제외**됩니다.
 
+### `metrics.thermal`
+
+세션 **시작 직전**과 **종료 직후**에 찍은 `dumpsys thermalservice` 두 스냅샷의 차이입니다.
+**추가 adb 호출이 없습니다** — 이 원문은 도구가 처음부터 매 세션 찍어 왔고, M3 은 이미
+디스크에 있던 것을 메트릭으로 승격시켰을 뿐입니다.
+
+```json
+{
+  "status": "collected",
+  "source": "dumpsys thermalservice: 세션 시작 직전 / 종료 직후 스냅샷의 센서별 온도 차이",
+  "data": {
+    "zones": [
+      { "name": "AP", "type": 0, "before_c": 31.1, "after_c": 36.2, "delta_c": 5.1,
+        "status_before": 0, "status_after": 0, "source": "hal" }
+    ],
+    "device_status_before": 0, "device_status_after": 0,
+    "status_override_before": false, "status_override_after": false,
+    "hal_ready_before": true, "hal_ready_after": true,
+    "headroom_thresholds": [null, 0.8666667, 0.93333334, 1.0, 1.1333333, 1.4333333, 2.4333334]
+  }
+}
+```
+
+읽을 때 반드시 알아야 할 것:
+
+- **기기 전역이지 대상 앱의 온도가 아닙니다.** 같은 시간에 돈 다른 앱, 화면 밝기, USB 충전이
+  전부 섞입니다. 이 도구는 adb 로 붙으므로 거의 항상 충전 중입니다 (`warnings` 의
+  `charging_during_session` 이 그 사실을 말합니다).
+- **`delta_c` 는 부호 있는 값이고 음수가 정상입니다.** 실기기 4세션 중 **2세션에서 내려갔습니다**
+  (32.1→30.8, 32.1→31.9). "발열량" 으로 읽지 마세요.
+- **전/후 두 점이므로 구간 중 최고 온도는 알 수 없습니다.** 원리적으로 그렇습니다 — 알려면
+  세션 중에 기기를 폴링해야 하고, 그것이 이 도구가 하지 않는 일입니다.
+- **`name` 은 벤더 임의 문자열입니다** (`AP` / `SKIN` / `PATHM` / `test temperature sensor`).
+  CPU 온도인지 피부 온도인지는 `type` 으로 판별하세요 (0=CPU, 1=GPU, 2=BATTERY, 3=SKIN,
+  4=USB_PORT, 5=POWER_AMPLIFIER, ...). 이름은 유일하지도 않습니다 — 한 기기에 `PATHM` 과
+  `PA1THM` 이 **둘 다** 있습니다. 존의 동일성 키는 `(type, name)` 입니다.
+- **`source` 를 함께 읽으세요.** `hal` 은 덤프 시점에 HAL 에 직접 물은 값이고, `cached` 는
+  프레임워크가 콜백으로 들고 있던 값입니다. **`cached` 존의 `delta_c` 는 온도 변화가
+  아닐 수 있습니다** — 콜백이 안 오면 같은 숫자가 그대로 남습니다. 실측: 어느 실기기의
+  cached 전용 존 `PA1THM` 은 약 3시간에 걸친 8개 덤프에서 계속 27.0°C 였고, 같은 기간
+  HAL 이 주는 `AP` 는 30.8~41.6°C 로 움직였습니다. **이 도구는 "안 변했다" 와
+  "갱신되지 않았다" 를 구분하지 못합니다.**
+- **값이 정확히 `0.0` 인 센서가 실기기에 있습니다** (`SUBBAT` / `SUBBATRAW`). 그것이 실제
+  0°C 인지 이 기기에 그 센서가 없다는 뜻인지 **이 도구는 판별하지 않습니다.**
+- `headroom_thresholds` 는 기기가 스스로 보고한 배열입니다. **이 도구는 headroom 을
+  산출하지 않으므로** 위의 섭씨 온도와 직접 비교할 수 없습니다 (headroom 은 앱 프로세스 안에서
+  `PowerManager.getThermalHeadroom()` 으로만 얻습니다). 원문의 `NaN` 은 `null` 로 실립니다.
+- 에뮬레이터에서는 값이 **합성**입니다. Android 에뮬레이터의 thermal HAL 은 예제 구현이라
+  상수를 돌려줍니다 (존 1개, `test temperature sensor`, 30.8°C 고정).
+
+### `metrics.network`
+
+세션 전/후 `dumpsys netstats` 의 `mAppUidStatsMap` 표에서 대상 앱 uid 행의 차이입니다.
+**Android 14(sdk 34) 이상에서만 나옵니다** — 그 아래에서는 같은 내용이 다른 명령에 있고
+이 도구는 그 분기를 하지 않습니다 (`unsupported` / `sdk_too_low`).
+
+```json
+{
+  "status": "collected",
+  "source": "dumpsys netstats mAppUidStatsMap: 세션 전/후 스냅샷의 uid 행 델타",
+  "data": {
+    "uid": 10388,
+    "rx_bytes": 1258291, "tx_bytes": 441344,
+    "rx_packets": 1119, "tx_packets": 871,
+    "shared_uid_packages": ["com.nhn.android.webtoon"]
+  }
+}
+```
+
+이 숫자가 **무엇이 아닌지**:
+
+- **패키지 단위가 아니라 uid 단위입니다.** 같은 uid 를 쓰는 다른 패키지의 트래픽이 섞이고
+  분리할 수 없습니다 (맵의 키가 uid 뿐입니다). `shared_uid_packages` 가 몇 개인지 보세요 —
+  1개면 그 패키지만의 값입니다. **`null` 은 확인하지 못했다는 뜻이고 `[]` 와 다릅니다**
+  (`[]` 는 "조회했고 이 uid 를 쓰는 패키지가 목록에 없었다" 입니다).
+- **IP 계층의 바이트입니다.** 이더넷 헤더는 빠지고 IP+TCP/UDP 헤더는 들어갑니다.
+- **loopback 을 포함한 모든 인터페이스의 합계이고 wifi / mobile 로 나뉘지 않습니다.**
+  loopback 통신은 송신·수신 양쪽에서 두 번 세어집니다.
+- 1500바이트를 넘는 큰 패킷은 커널이 휴리스틱으로 되계산하므로 고throughput 구간의 값은
+  정확한 wire 바이트가 아니라 **근사치**입니다.
+- 방화벽/데이터세이버가 버린 **송신** 패킷은 안 세고, 버려진 **수신** 패킷은 셉니다.
+- VPN(TUN)이 켜져 있으면 같은 트래픽이 앱 uid 와 VPN 앱 uid 양쪽에서 세어집니다.
+- **델타 구간은 세션 구간보다 조금 넓습니다.** 시작 스냅샷은 앱을 띄우기 전에, 종료 스냅샷은
+  트레이스를 회수한 뒤에 찍힙니다. 정확한 두 시점은 `device.state_before.captured_at` 과
+  `device.state_after.captured_at` 입니다.
+- **`0` 은 "관측된 바이트가 없었다" 이지 "조회하지 못했다" 가 아닙니다.** 조회하지 못한
+  세션은 `data` 가 통째로 `null` 이고 `reason_code` 가 이유를 말합니다.
+- 누적 원값은 싣지 않습니다. 감사가 필요하면 `raw/netstats_{before,after}.txt` 원문이
+  `artifacts.raw` 에 등재되어 있습니다.
+
 ### `measurement_overhead`
 
 ```json
@@ -291,6 +381,16 @@ npx perftracker schema > result.schema.json
 
 **이 값들은 아무것과도 비교되지 않습니다.** "구글이 이렇게 말했다" 는 사실을 옆에 놓아둘 뿐입니다.
 판정이 필요하면 이 값을 읽어서 소비하는 쪽에서 하세요.
+
+`network` 의 50MB/day 는 **모바일 네트워크**의 **백그라운드** **하루** 합계 기준입니다.
+이 도구가 재는 것은 수십 초짜리 **포그라운드** 세션의 **전 인터페이스(loopback 포함) 합계**라
+**차원이 세 축 모두 다릅니다.** 그래서 `unit` 이 `MB` 가 아니라 `MB/day` 이고 `name` 에
+`background` 와 `mobile` 이 남아 있습니다. 이 도구는 어떤 비교도 하지 않습니다.
+
+`thermal` 에는 기준선이 **없습니다.** 온도에 대한 구글의 공개 수치 기준을 찾지 못했고
+(CDD 에도 해당 요구사항 ID 가 없습니다), **출처 URL 이 없는 값은 이 배열에 넣지 않습니다.**
+ADPF 의 headroom 휴리스틱(0.85 / 0.95 / 1.0)은 출처가 있지만 **이 도구가 산출하지 않는 값**의
+기준선이라 실으면 소비자를 오도합니다.
 
 ---
 

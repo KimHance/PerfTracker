@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { COLLECTORS } from '../../src/collectors/registry.js'
 import { resultJsonSchema } from '../../src/schema/jsonSchema.js'
 import { REFERENCES } from '../../src/schema/references.js'
 import { METRIC_REASON_CODES } from '../../src/schema/reasons.js'
@@ -196,6 +197,40 @@ describe('REFERENCES', () => {
   it('startup 기준선 세 개가 들어 있다', () => {
     const startup = REFERENCES.filter((r) => r.metric === 'startup')
     expect(startup.map((r) => r.value).sort((a, b) => a - b)).toEqual([1500, 2000, 5000])
+  })
+
+  /**
+   * 깨지는 조건: `metric` 에 collector id 가 아닌 값(오타, 없어진 id)이 들어오면 실패한다.
+   * 소비자는 `references` 를 `metrics` 의 키로 조인하는 것 말고 쓸 방법이 없다.
+   */
+  it('metric 이 실제 collector id 다 — 소비자가 매칭할 수 있어야 한다', () => {
+    const ids = new Set(COLLECTORS.map((c) => c.id))
+    for (const r of REFERENCES) expect(ids.has(r.metric), `${r.metric} 은 collector id 가 아니다`).toBe(true)
+  })
+
+  /**
+   * 깨지는 조건: `unit` 이 `'MB'` 로 바뀌거나 `name` 에서 `background` 가 빠지면 실패한다.
+   * 원문(Android Vitals) 은 "**mobile** network usage ... 50 MB per day while running in the
+   * **background**" 다. 이 도구가 재는 것은 수십 초짜리 **포그라운드** 세션의
+   * **전 인터페이스(loopback 포함) 합계**라 시간·인터페이스 두 축 모두 차원이 다르다.
+   * 단위나 이름에서 그 한정이 사라지는 순간 소비자가 "18MB < 50MB 니까 괜찮다" 로 읽는다 —
+   * 이 프로젝트가 정확히 피하려는 것이다.
+   */
+  it('네트워크 기준선이 시간(/day)·상태(background)·인터페이스(mobile) 한정을 전부 들고 있다', () => {
+    const net = REFERENCES.filter((r) => r.metric === 'network')
+    expect(net).toHaveLength(1)
+    expect(net[0]!.unit).toContain('/day')
+    expect(net[0]!.name).toContain('background')
+    expect(net[0]!.name).toContain('mobile')
+  })
+
+  /**
+   * 깨지는 조건: 누군가 출처 없는 온도 기준선(예: ADPF 의 headroom 휴리스틱 0.85/0.95/1.0)을
+   * 넣으면 실패한다. 그 값들은 출처가 있지만 **이 도구가 산출하지 않는 값**의 기준선이라
+   * 여기 실으면 소비자를 오도한다.
+   */
+  it('thermal 기준선은 없다 — 출처 있는 구글 수치를 찾지 못했다', () => {
+    expect(REFERENCES.filter((r) => r.metric === 'thermal')).toEqual([])
   })
 })
 

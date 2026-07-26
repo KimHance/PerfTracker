@@ -1,8 +1,27 @@
 import { z } from 'zod'
 import { METRIC_REASON_CODES, type MetricReasonCode } from './reasons.js'
 
-// 1.1.0 — metrics 에 startup / cpu / memory / log 를 optional 로 추가 (필드 추가는 minor).
-// 1.0.0 문서는 여전히 이 스키마를 통과한다. required 로 올리면 그것이 깨지고, 그건 major 다.
+// 1.1.0 — M2 가 metrics 에 startup / cpu / memory / log 를, M3 가 thermal / network 를
+// optional 로 더했다. 1.0.0 문서(frame 하나만 있는)는 여전히 이 스키마를 통과한다.
+//
+// **M3 에서도 1.1.0 그대로 간다.** 1.1.0 은 아직 출시된 적이 없다 (M2 가 병합됐을 뿐
+// 릴리스가 없다). 미출시 버전 안에서의 확장은 버전 사유가 아니다 — 지금 1.2.0 을 찍으면
+// "1.1.0 이라는 더 좁은 계약이 세상에 존재했다" 는 없던 역사를 만든다.
+//
+// **출시 후의 규칙 (M4 가 이 표를 그대로 쓴다):**
+//   metrics 에 새 키를 .optional() 로 추가        → minor  (옛 문서가 통과한다)
+//   metrics 에 새 키를 required 로 추가           → major  (옛 문서가 깨진다)
+//   reason_code enum 값 추가                      → minor  (계약이 넓어질 뿐이다)
+//   reason_code enum 값 삭제·개명                 → major  (매칭하던 소비자가 깨진다)
+//   기존 객체에 optional 필드 추가                → minor
+//   기존 객체에 required 필드 추가                → major
+//   references[] 항목 추가                        → 버전 사유 아님 (스키마가 아니라 값이다)
+//   non-null 필드를 nullable 로 넓히기            → major  (보장을 받던 소비자가 깨진다)
+//
+// 그래서 새 metrics 키는 **항상 optional 로** 넣는다 — required 로 넣는 순간 major 가 된다.
+// M3 가 한 것은 위 표의 minor 항목들(새 키 2개, reason_code 9개 추가, thermal_zones 에
+// type/status/source 를 optional 로 추가)과 "버전 사유 아님"(references 1건)뿐이다.
+// 출시 후였다면 1.2.0 이었을 것이고, 미출시이므로 1.1.0 그대로다.
 export const SCHEMA_VERSION = '1.1.0'
 
 /**
