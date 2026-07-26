@@ -2,9 +2,11 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { CPU_TIMES_SQL } from '../../src/collectors/cpu.js'
 import { FRAME_PROCESS_SQL, frameDurationsSql } from '../../src/collectors/frame.js'
 import { SessionStateError } from '../../src/errors.js'
 import { BUFFER_STATS_SQL, extractRun } from '../../src/extract/run.js'
+import { TRACING_OVERHEAD_SQL } from '../../src/extract/overhead.js'
 import { writeCaptureManifest } from '../../src/session/manifest.js'
 import { writeRunSession } from '../../src/session/state.js'
 import { FakeProcessRunner } from '../support/fakeProcessRunner.js'
@@ -124,6 +126,17 @@ function runner(tracePath: string): FakeProcessRunner {
       stdout: '"j"\n"[8000000,20000000,4000000,900000000]"\n',
     })
     .on(`query ${tracePath} ${BUFFER_STATS_SQL}`, { stdout: '"j"\n"[]"\n' })
+    .on(`query ${tracePath} ${TRACING_OVERHEAD_SQL}`, {
+      stdout:
+        '"j"\n"[{"process":"/system/bin/traced","counter":"mem.rss","first":3346432,"last":3477504},' +
+        '{"process":"/system/bin/traced","counter":"runtime.user_ns","first":0,"last":40000000},' +
+        '{"process":"/system/bin/traced","counter":"runtime.kernel_ns","first":0,"last":110000000}]"\n',
+    })
+    .on(`query ${tracePath} ${CPU_TIMES_SQL}`, {
+      stdout:
+        '"j"\n"[{"cpu":0,"counter":"cpu.times.idle_ns","first":0,"last":11010000000,' +
+        '"first_ts":0,"last_ts":11055000000,"samples":13}]"\n',
+    })
 }
 
 describe('extractRun', () => {
@@ -343,5 +356,46 @@ describe('extractRun', () => {
     expect(result.metrics.startup?.status).toBe('skipped')
     expect(result.metrics.startup?.reason_code).toBe('launch_not_requested')
     expect(result.metrics.startup?.data).toBeNull()
+  })
+
+  it('measurement_overhead 의 CPU·RSS 를 실제로 채운다', async () => {
+    const runDir = await makeRun()
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: runner(join(runDir, 'trace.perfetto-trace')),
+    })
+
+    const o = result.measurement_overhead
+    expect(o.tracing_processes_cpu_time_ms).toBe(150)
+    expect(o.tracing_processes_peak_rss_kb).toBe(3396)
+    expect(o.tracing_processes_cpu_share_pct).toBe(1.36)
+  })
+
+  it('트레이스가 없으면 오버헤드는 null 로 남는다 — 0 이 아니라 "안 쟀다"', async () => {
+    const runDir = await makeRun({ trace: null })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
+
+    expect(result.measurement_overhead.tracing_processes_cpu_time_ms).toBeNull()
+    expect(result.measurement_overhead.tracing_processes_cpu_share_pct).toBeNull()
+    expect(result.measurement_overhead.tracing_processes_peak_rss_kb).toBeNull()
+  })
+
+  it('오버헤드 쿼리가 터져도 result.json 은 나온다', async () => {
+    const runDir = await makeRun()
+    const trace = join(runDir, 'trace.perfetto-trace')
+    const broken = runner(trace).on(`query ${trace} ${TRACING_OVERHEAD_SQL}`, {
+      code: 1,
+      stderr: 'no such table: counter',
+    })
+
+    const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: broken })
+
+    expect(result.metrics.frame.status).toBe('collected')
+    expect(result.measurement_overhead.tracing_processes_cpu_time_ms).toBeNull()
   })
 })

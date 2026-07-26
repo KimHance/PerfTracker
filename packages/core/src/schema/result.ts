@@ -248,9 +248,32 @@ export type SessionInfo = z.infer<typeof SessionInfoSchema>
 
 /** "부하를 안 준다"를 말로 하지 않고 숫자로 남기는 자리. */
 export const MeasurementOverheadSchema = z.object({
-  tracing_processes_cpu_time_ms: z.number().nullable(),
-  tracing_processes_cpu_share_pct: z.number().nullable(),
-  tracing_processes_peak_rss_kb: z.number().nullable(),
+  tracing_processes_cpu_time_ms: z
+    .number()
+    .nullable()
+    .describe(
+      'traced / traced_probes 가 세션 구간에서 쓴 user+kernel CPU 시간의 합(ms). ' +
+        'linux.process_stats 의 runtime.user_ns / runtime.kernel_ns 차이에서 나온다. ' +
+        '커널이 clock tick 단위로만 보고하므로 해상도는 10ms 다 — 짧은 세션에서 0 이 나오는 것은 ' +
+        '"측정 못 함"이 아니라 "10ms 미만"이라는 뜻이다. ' +
+        'perfetto CLI 프로세스는 --detach 직후 종료해서 이 합계에 잡히지 않는다. ' +
+        'null 은 트레이스에 해당 카운터가 없었다는 뜻이다(record_process_runtime 이 꺼진 옛 캡처).',
+    ),
+  tracing_processes_cpu_share_pct: z
+    .number()
+    .nullable()
+    .describe(
+      '위 CPU 시간을 같은 구간의 기기 전체 CPU 시간(모든 코어 합)으로 나눈 백분율. ' +
+        'linux.sys_stats 의 cpu.times.* 가 없으면 분모를 알 수 없어 null 이다.',
+    ),
+  tracing_processes_peak_rss_kb: z
+    .number()
+    .nullable()
+    .describe(
+      '트레이싱 프로세스들의 mem.rss 최댓값을 **프로세스별로 구해 더한 값**(kB). ' +
+        'process_stats 표본의 타임스탬프가 프로세스마다 정확히 같지 않아 "동시 최대"를 ' +
+        '정확히 낼 수 없으므로, 이 값은 진짜 동시 최대의 상계다. 과소평가하지 않는 쪽을 골랐다.',
+    ),
   // 이 주의사항은 반드시 스키마에 실려야 한다. `perftracker schema` 는 CI 와 LLM 을 위한
   // 계약으로 팔리는데, 이 필드를 가장 잘못 읽기 쉬운 소비자가 바로 그들이다.
   adb_commands_during_session: z

@@ -24,6 +24,7 @@ import {
 } from '../schema/result.js'
 import { type CaptureManifest, parseVersionedJson, readCaptureManifest } from '../session/manifest.js'
 import type { ActiveSession } from '../session/state.js'
+import { computeOverhead } from './overhead.js'
 
 export const BUFFER_STATS_SQL =
   "select json_group_array(json_object('name', name, 'value', value)) as j from stats " +
@@ -177,6 +178,13 @@ export async function extractRun(
     }
   }
 
+  // 오버헤드는 부가 정보다. 못 재는 것이 result.json 전체를 못 내는 이유가 되면 안 되므로
+  // computeOverhead 자체가 절대 던지지 않는다. 트레이스가 없으면 재려는 시도조차 안 한다.
+  const overhead =
+    tp !== null
+      ? await computeOverhead(tp)
+      : { cpuTimeMs: null, cpuSharePct: null, peakRssKb: null }
+
   // 렌더 프로세스는 트레이스를 파싱해야 알 수 있어 capture 단계에서는 null 이었다.
   const frameData = FrameDataSchema.safeParse(metrics[frameCollector.id]?.data)
 
@@ -205,9 +213,9 @@ export async function extractRun(
     // 키는 collector.id 다. 스키마가 frame 을 알고 나머지는 MetricResult 모양으로 검증한다.
     metrics: metrics as Result['metrics'],
     measurement_overhead: {
-      tracing_processes_cpu_time_ms: null,
-      tracing_processes_cpu_share_pct: null,
-      tracing_processes_peak_rss_kb: null,
+      tracing_processes_cpu_time_ms: overhead.cpuTimeMs,
+      tracing_processes_cpu_share_pct: overhead.cpuSharePct,
+      tracing_processes_peak_rss_kb: overhead.peakRssKb,
       adb_commands_during_session: manifest.adb_commands_during_session,
       trace_buffer_overrun: bufferOverrun,
     },

@@ -164,6 +164,18 @@ describe('resultJsonSchema', () => {
     expect(field.description).toMatch(/역은 성립하지 않는다/)
   })
 
+  it('오버헤드 세 필드의 주의사항을 스키마에 실어 보낸다 — 가장 오해하기 쉬운 숫자들이다', () => {
+    const overhead = props(resultJsonSchema())['measurement_overhead']
+    for (const [field, phrase] of [
+      ['tracing_processes_cpu_time_ms', '10ms'],
+      ['tracing_processes_cpu_share_pct', 'cpu.times'],
+      ['tracing_processes_peak_rss_kb', '상계'],
+    ] as const) {
+      const f = props(overhead)[field] as { description?: string }
+      expect(f.description, `${field} 설명 없음`).toContain(phrase)
+    }
+  })
+
   it('JSON 으로 직렬화된다 (perftracker schema 가 그대로 출력한다)', () => {
     expect(() => JSON.parse(JSON.stringify(resultJsonSchema()))).not.toThrow()
   })
