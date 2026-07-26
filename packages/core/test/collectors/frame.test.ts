@@ -205,6 +205,7 @@ describe('frameCollector', () => {
       tp,
       packageName: pkg,
       env: { sdkInt: 36, dataSources: ['android.surfaceflinger.frametimeline'] },
+      capture: { startup: null, launchRequested: false },
     })
 
     expect(outcome.collected).toBe(true)
@@ -229,6 +230,7 @@ describe('frameCollector', () => {
         tp,
         packageName: 'com.x',
         env: { sdkInt: 36, dataSources: ['android.surfaceflinger.frametimeline'] },
+        capture: { startup: null, launchRequested: false },
       }),
     ).resolves.toEqual({
       collected: false,
@@ -251,6 +253,7 @@ describe('frameCollector', () => {
         tp,
         packageName: pkg,
         env: { sdkInt: 36, dataSources: ['android.surfaceflinger.frametimeline'] },
+        capture: { startup: null, launchRequested: false },
       }),
     ).resolves.toEqual({ collected: false, reason: { code: 'no_frames', detail: { process: pkg } } })
   })

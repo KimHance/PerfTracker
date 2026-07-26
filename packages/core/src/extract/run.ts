@@ -3,7 +3,12 @@ import { join } from 'node:path'
 import type { ProcessRunner } from '../adb/process.js'
 import { frameCollector } from '../collectors/frame.js'
 import { COLLECTORS } from '../collectors/registry.js'
-import type { Collector } from '../collectors/types.js'
+import type {
+  CaptureFacts,
+  CaptureOnlyContext,
+  Collector,
+  ExtractOutcome,
+} from '../collectors/types.js'
 import { SchemaValidationError, SessionStateError } from '../errors.js'
 import { TraceProcessor } from '../perfetto/traceProcessor/client.js'
 import { ensureTraceProcessor } from '../perfetto/traceProcessor/locate.js'
@@ -62,21 +67,36 @@ async function runCollector(
   collector: Collector<unknown>,
   tp: TraceProcessor | null,
   manifest: CaptureManifest,
+  capture: CaptureFacts,
 ): Promise<MetricResult<unknown>> {
-  if (tp === null) return metric('failed', collector.source, { code: 'trace_missing' })
-
+  // 지원 판정을 트레이스 유무보다 **먼저** 본다. "이 기기가 이 메트릭을 못 낸다" 는
+  // "이 run 에 트레이스가 없다" 보다 강하고 안정적인 사실이다.
   const support = collector.supports(manifest.env)
   if (!support.supported) return metric('unsupported', collector.source, support.reason)
 
+  const base: CaptureOnlyContext = {
+    packageName: manifest.target_app.package,
+    env: manifest.env,
+    capture,
+  }
+
   try {
-    const outcome = await collector.extract({
-      tp,
-      packageName: manifest.target_app.package,
-      env: manifest.env,
-    })
-    return outcome.collected
-      ? metric('collected', collector.source, null, outcome.data)
-      : metric('partial', collector.source, outcome.reason)
+    let outcome: ExtractOutcome<unknown>
+    if (collector.needsTrace) {
+      // 트레이스가 필요 없는 collector 까지 trace_missing 으로 죽이지 않는다 —
+      // startup 은 `am start -W` 가 낸 값이라 트레이스 유무와 무관하다.
+      if (tp === null) return metric('failed', collector.source, { code: 'trace_missing' })
+      outcome = await collector.extract({ ...base, tp })
+    } else {
+      outcome = await collector.extract(base)
+    }
+
+    if (outcome.collected) {
+      return outcome.partialReason !== undefined
+        ? metric('partial', collector.source, outcome.partialReason, outcome.data)
+        : metric('collected', collector.source, null, outcome.data)
+    }
+    return metric(outcome.status ?? 'partial', collector.source, outcome.reason)
   } catch (e) {
     return metric('failed', collector.source, {
       code: 'query_failed',
@@ -133,11 +153,18 @@ export async function extractRun(
     tp = new TraceProcessor(binPath, tracePath, opts.runner)
   }
 
-  // 레지스트리를 순회한다 — M2 는 collector 를 배열에 넣기만 하면 되고, 한 메트릭이 터져도
+  // capture 단계에서만 알 수 있는 사실. `session.json` 이 이미 갖고 있으므로
+  // capture.json 의 버전을 올릴 이유가 없다.
+  const capture: CaptureFacts = {
+    startup: session.startup ?? null,
+    launchRequested: session.options.launch,
+  }
+
+  // 레지스트리를 순회한다 — collector 를 배열에 넣기만 하면 되고, 한 메트릭이 터져도
   // 나머지는 정상 산출된다.
   const metrics: Record<string, MetricResult<unknown>> = {}
   for (const collector of COLLECTORS) {
-    metrics[collector.id] = await runCollector(collector, tp, manifest)
+    metrics[collector.id] = await runCollector(collector, tp, manifest, capture)
   }
 
   if (tp !== null) {
