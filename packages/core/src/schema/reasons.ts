@@ -71,6 +71,13 @@ export const METRIC_REASON_CODES = [
   /** 프로세스는 찾았지만 mem.rss 표본이 없다. detail: process */
   'no_rss_samples',
   /**
+   * 프로세스는 찾았지만 `runtime.user_ns` / `runtime.kernel_ns` 카운터가 없다.
+   * `record_process_runtime: true` 가 없던 시절의 캡처가 이 길을 지난다.
+   * `no_cpu_samples`(기기 전역 표본 없음)와 다른 사실이다 — 이쪽은 그 프로세스만의 문제다.
+   * detail: process, pid
+   */
+  'no_app_cpu_samples',
+  /**
    * 트레이스가 그 프로세스를 아직 zygote 이름으로 알고 있어, 캡처 때 받아 둔 pid 로 대상 앱을
    * 특정했다. 값은 정상이고 보고하는 이름은 패키지명이다. detail: package, pid, trace_name
    */
@@ -272,6 +279,10 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
   process_not_in_trace: (d) =>
     `대상 앱(${String(d['package'])})의 프로세스가 트레이스에 없습니다 — 세션 동안 실행되지 않았을 수 있습니다.`,
   no_rss_samples: (d) => `프로세스(${String(d['process'])})의 메모리 표본을 찾지 못했습니다.`,
+  no_app_cpu_samples: (d) =>
+    `대상 앱 프로세스(${String(d['process'])}, pid ${String(d['pid'])})의 CPU 시간 카운터가 ` +
+    `트레이스에 없습니다 — process_stats 의 record_process_runtime 이 꺼진 채로 찍힌 캡처일 수 ` +
+    `있습니다. 기기 전역 값은 그대로 실었고 앱 단위 값만 내지 못했습니다 (0 으로 채우지 않았습니다).`,
   process_name_stale_in_trace: (d) =>
     `트레이스는 이 프로세스(pid ${String(d['pid'])})를 "${String(d['trace_name'])}" 이라는 이름으로 기록했습니다 — ` +
     `zygote 가 fork 한 직후 이름이 확정되기 전에 관측된 것입니다. ` +

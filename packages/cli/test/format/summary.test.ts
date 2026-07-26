@@ -94,16 +94,27 @@ function result(overrides: Partial<Result['metrics']> = {}): Result {
         reason_code: null,
         reason: null,
         data: {
-          sampled_ms: 42000,
-          samples: 42,
-          total_busy_pct: 23.1,
-          per_core: [
+          device_sampled_ms: 42000,
+          device_samples: 42,
+          device_total_busy_pct: 23.1,
+          device_per_core: [
             { cpu: 0, busy_pct: 31.2 },
             { cpu: 1, busy_pct: 15 },
           ],
-          frequency: [
+          device_frequency: [
             { cpu: 0, samples: 716, min_khz: 300000, max_khz: 2400000, avg_khz: 1820000 },
           ],
+          app: {
+            process: 'com.foo.bar',
+            pid: 24193,
+            samples: 42,
+            sampled_ms: 42000,
+            user_ms: 5710,
+            kernel_ms: 2920,
+            total_ms: 8630,
+            share_of_device_cpu_pct: 1.85,
+            other_processes: [],
+          },
         },
       },
       memory: {
@@ -136,10 +147,11 @@ function result(overrides: Partial<Result['metrics']> = {}): Result {
         reason: null,
         data: {
           min_prio: 'PRIO_WARN',
-          total: 142,
-          by_priority: { warn: 118, error: 23, fatal: 1 },
-          crashes: [],
-          anrs: [],
+          app: { process: 'com.foo.bar', pid: 24193, total: 37, by_priority: { warn: 24, error: 13, fatal: 0 } },
+          device_total: 1507,
+          device_by_priority: { warn: 1095, error: 412, fatal: 0 },
+          device_crashes: [],
+          device_anrs: [],
         },
       },
       ...overrides,
@@ -276,10 +288,10 @@ describe('formatSummary — M2 메트릭', () => {
     expect(formatSummary(result())).toContain('Startup   collected     TotalTime 1,842ms · COLD')
   })
 
-  it('CPU 는 사용률과 주파수를 한 줄에 함께 보여준다', () => {
+  it('CPU 는 기기 전역 사용률과 주파수를 같은 줄에 함께 보여준다', () => {
     const out = formatSummary(result())
     expect(out).toContain('CPU       collected')
-    expect(out).toContain('total busy 23.1%')
+    expect(out).toContain('busy 23.1%')
     expect(out).toContain('cpu0 1,820MHz')
   })
 
@@ -292,11 +304,12 @@ describe('formatSummary — M2 메트릭', () => {
           reason_code: 'cpu_freq_unavailable',
           reason: 'ftrace power/cpu_frequency 이벤트가 없어 주파수를 함께 내지 못했습니다 — 사용률만 있는 값입니다.',
           data: {
-            sampled_ms: 42000,
-            samples: 42,
-            total_busy_pct: 23.1,
-            per_core: [{ cpu: 0, busy_pct: 31.2 }],
-            frequency: null,
+            device_sampled_ms: 42000,
+            device_samples: 42,
+            device_total_busy_pct: 23.1,
+            device_per_core: [{ cpu: 0, busy_pct: 31.2 }],
+            device_frequency: null,
+            app: null,
           },
         },
       }),
@@ -312,8 +325,50 @@ describe('formatSummary — M2 메트릭', () => {
     expect(out).toContain('system avail avg 3,340MB')
   })
 
-  it('Log 를 크래시·ANR·우선순위 개수로 보여준다', () => {
-    expect(formatSummary(result())).toContain('crash 0 · ANR 0 · E 23 · W 118')
+  /**
+   * **앱 줄과 기기 전역 줄이 각각 자기 범위를 말해야 한다.** 예전 요약은 기기 전역 개수
+   * 하나만 찍었고, 그것이 "이 앱이 에러 412개를 냈다" 로 읽히는 것이 이 변경의 이유다.
+   */
+  it('Log 를 앱 단위와 기기 전역으로 갈라 보여준다', () => {
+    const out = formatSummary(result())
+    expect(out).toContain('app 37줄 (E 13 · W 24) · com.foo.bar (pid 24193)')
+    expect(out).toContain('device        1,507줄 (E 412 · W 1,095) · crash 0 · ANR 0 (기기 전역, PRIO_WARN)')
+  })
+
+  it('CPU 를 앱 단위와 기기 전역으로 갈라 보여주고 분모를 말한다', () => {
+    const out = formatSummary(result())
+    expect(out).toContain('app 8,630ms (user 5,710 · kernel 2,920) · 기기 전체 CPU 시간의 1.85%')
+    expect(out).toContain('device        busy 23.1% · per-core 31.2%/15.0%')
+    expect(out).toContain('(기기 전역)')
+  })
+
+  /**
+   * `app: null` 은 "0" 이 아니다. 터미널에 0 을 찍으면 이 변경이 없애려던 오독이
+   * 그대로 남는다 — 그 자리를 값이 아니라 사유로 채운다.
+   */
+  it('앱 단위 값을 못 냈으면 0 이 아니라 사유를 가리킨다', () => {
+    const out = formatSummary(
+      result({
+        cpu: {
+          status: 'partial',
+          source: 'perfetto: linux.sys_stats cpu.times.*',
+          reason_code: 'process_not_in_trace',
+          reason: '대상 앱의 프로세스가 트레이스에 없습니다.',
+          data: {
+            device_sampled_ms: 42000,
+            device_samples: 42,
+            device_total_busy_pct: 23.1,
+            device_per_core: [{ cpu: 0, busy_pct: 31.2 }],
+            device_frequency: null,
+            app: null,
+          },
+        },
+      }),
+    )
+    expect(out).toContain('CPU       partial       app n/a (아래 사유 참고)')
+    expect(out).not.toMatch(/app 0ms/)
+    // 기기 전역 값은 그대로 살아 있다 — 앱을 못 찾은 것이 맥락까지 지울 이유는 아니다.
+    expect(out).toContain('busy 23.1%')
   })
 
   it('크래시/ANR 을 못 셌으면 0 이라고 찍지 않는다', () => {
@@ -327,10 +382,11 @@ describe('formatSummary — M2 메트릭', () => {
           reason: '트레이스 쿼리에 실패했습니다: no such table',
           data: {
             min_prio: 'PRIO_WARN',
-            total: 142,
-            by_priority: { warn: 118, error: 23, fatal: 1 },
-            crashes: null,
-            anrs: null,
+            app: { process: 'com.foo.bar', pid: 24193, total: 37, by_priority: { warn: 24, error: 13, fatal: 0 } },
+            device_total: 1507,
+            device_by_priority: { warn: 1095, error: 412, fatal: 0 },
+            device_crashes: null,
+            device_anrs: null,
           },
         },
       }),

@@ -54,6 +54,17 @@ function sharedNames(packages: string[]): string {
   )
 }
 
+/**
+ * 대표 프로세스 말고 관측된 앱 프로세스가 더 있으면 그 사실만 남긴다.
+ * **합계를 찍지 않는다** — 그 집합은 완전하지 않고(트레이스의 프로세스 이름은 낡을 수 있다),
+ * 합계를 찍는 순간 요약이 "이 앱의 CPU 는 이만큼" 이라고 말하게 된다. 자세한 것은
+ * `AppCpuSchema.other_processes` 의 설명에 있다.
+ */
+function otherProcs(app: NonNullable<CpuData['app']>): string {
+  const n = app.other_processes.length
+  return n === 0 ? '' : ` · 이 앱의 다른 프로세스 ${num(n)}개는 result.json 의 other_processes 에 (합산 안 됨)`
+}
+
 const LABEL_WIDTH = 10
 const STATUS_WIDTH = 13
 
@@ -150,15 +161,34 @@ export function formatSummary(result: Result): string {
   const cpu = result.metrics.cpu
   if (cpu?.data != null) {
     const c = cpu.data as CpuData
-    const cores = c.per_core.map((p) => `${p.busy_pct.toFixed(1)}%`).join('/')
+    const cores = c.device_per_core.map((p) => `${p.busy_pct.toFixed(1)}%`).join('/')
     // 스펙: 사용률과 주파수는 함께 봐야 한다. 주파수가 없으면 그 자리에 n/a 를 남긴다 —
     // 빈칸으로 두면 "주파수는 원래 안 보여주는 도구" 로 읽힌다.
     const freq =
-      c.frequency === null
+      c.device_frequency === null
         ? 'freq n/a'
-        : c.frequency.map((f) => `cpu${f.cpu} ${mhz(f.avg_khz)}`).join(' · ')
+        : c.device_frequency.map((f) => `cpu${f.cpu} ${mhz(f.avg_khz)}`).join(' · ')
+    // **앱 줄이 먼저다.** 이 도구의 질문은 "이 앱이 얼마나 썼나" 이고, 기기 전역 사용률은
+    // 그 옆에 두고 읽는 맥락이다. null 은 "못 냈다" 이지 0 이 아니다 — 사유는 아래에 붙는다.
+    const a = c.app
     lines.push(
-      valueLine('CPU', cpu.status, `total busy ${c.total_busy_pct.toFixed(1)}% · per-core ${cores} · ${freq}`),
+      valueLine(
+        'CPU',
+        cpu.status,
+        a === null
+          ? 'app n/a (아래 사유 참고)'
+          : `app ${num(a.total_ms)}ms (user ${num(a.user_ms)} · kernel ${num(a.kernel_ms)}) · ` +
+            `기기 전체 CPU 시간의 ${a.share_of_device_cpu_pct.toFixed(2)}%`,
+      ),
+    )
+    if (a !== null) {
+      lines.push(`          ${'process'.padEnd(STATUS_WIDTH)} ${a.process} (pid ${a.pid})${otherProcs(a)}`)
+    }
+    // 기기 전역이라는 한정을 터미널까지 들고 간다. 두 줄이 나란히 놓이면 위 숫자와 같은
+    // 범위로 읽히기 때문이고, 그 오독이 이 변경 전까지 이 줄이 하던 일 그 자체다.
+    lines.push(
+      `          ${'device'.padEnd(STATUS_WIDTH)} busy ${c.device_total_busy_pct.toFixed(1)}% · ` +
+        `per-core ${cores} · ${freq} (기기 전역)`,
     )
     if (cpu.reason !== null) lines.push(`          ${`[${cpu.reason_code}]`} ${cpu.reason}`)
   } else {
@@ -183,13 +213,32 @@ export function formatSummary(result: Result): string {
     const l = log.data as LogData
     // null 은 "못 셌다" 다. 0 으로 찍으면 "재 봤더니 크래시가 없었다" 가 되어 정반대 뜻이 된다.
     const events = (v: LogEvent[] | null): string => (v === null ? 'n/a' : String(v.length))
+    // 앱 줄이 먼저다 (CPU 와 같은 이유). null 은 "못 냈다" 이지 "0건" 이 아니다 —
+    // 그 둘을 같은 글자로 찍으면 이 변경이 없애려던 오독이 터미널에 그대로 남는다.
     lines.push(
       valueLine(
         'Log',
         log.status,
-        `crash ${events(l.crashes)} · ANR ${events(l.anrs)} · E ${num(l.by_priority.error)} · W ${num(l.by_priority.warn)} (device-wide, ${l.min_prio})`,
+        l.app === null
+          ? 'app n/a (아래 사유 참고)'
+          : `app ${num(l.app.total)}줄 (E ${num(l.app.by_priority.error)} · ` +
+            `W ${num(l.app.by_priority.warn)}) · ${l.app.process} (pid ${l.app.pid})`,
       ),
     )
+    lines.push(
+      `          ${'device'.padEnd(STATUS_WIDTH)} ${num(l.device_total)}줄 ` +
+        `(E ${num(l.device_by_priority.error)} · W ${num(l.device_by_priority.warn)}) · ` +
+        `crash ${events(l.device_crashes)} · ANR ${events(l.device_anrs)} (기기 전역, ${l.min_prio})`,
+    )
+    // 크래시/ANR 이 기기 전역인 것은 실수가 아니라 필요다 — ANR 은 system_server 가 찍으므로
+    // 앱 pid 로 걸렀다면 하나도 안 남는다. 목록이 비어 있지 않을 때만 그 사실을 말한다.
+    const hasEvents = (l.device_crashes?.length ?? 0) + (l.device_anrs?.length ?? 0) > 0
+    if (hasEvents) {
+      lines.push(
+        `          ${''.padEnd(STATUS_WIDTH)} crash/ANR 은 앱으로 거르지 않습니다 ` +
+          '(ANR 은 system_server 가 기록). 각 항목의 pid 로 직접 대조하세요.',
+      )
+    }
     if (log.reason !== null) lines.push(`          ${`[${log.reason_code}]`} ${log.reason}`)
   } else {
     lines.push(statusLine('Log', log))

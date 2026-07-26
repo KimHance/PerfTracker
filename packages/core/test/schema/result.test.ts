@@ -1,10 +1,17 @@
 import { describe, expect, it } from 'vitest'
+import { CPU_TIMES_SQL, cpuCollector, type CpuTimeRow } from '../../src/collectors/cpu.js'
 import { COLLECTORS } from '../../src/collectors/registry.js'
 import { thermalCollector } from '../../src/collectors/thermal.js'
 import { resultJsonSchema } from '../../src/schema/jsonSchema.js'
 import { REFERENCES } from '../../src/schema/references.js'
 import { METRIC_REASON_CODES } from '../../src/schema/reasons.js'
 import { ResultSchema, SCHEMA_VERSION } from '../../src/schema/result.js'
+
+/** cpu 가 값을 내려면 코어 하나에 표본 둘과 움직인 카운터가 있으면 된다. */
+const STRADDLE_CPU_ROWS: CpuTimeRow[] = [
+  { cpu: 0, counter: 'cpu.times.idle_ns', first: 0, last: 800_000_000, first_ts: 0, last_ts: 1_000_000_000, samples: 2 },
+  { cpu: 0, counter: 'cpu.times.user_ns', first: 0, last: 200_000_000, first_ts: 0, last_ts: 1_000_000_000, samples: 2 },
+]
 
 function minimalResult() {
   const state = {
@@ -377,14 +384,36 @@ describe('resultJsonSchema', () => {
     return props(object)
   }
 
-  it('log 의 모든 숫자 필드가 기기 전역임을 스키마에서 말한다', () => {
-    for (const field of ['total', 'crashes', 'anrs']) {
+  /**
+   * 이름에 `device_` 가 붙었어도 `.describe()` 의 한정을 지우지 않는다 — 접두어가 무슨
+   * 뜻인지는 이름만으로 알 수 없고, 그것이 이 두 방어선을 함께 두는 이유다.
+   */
+  it('log 의 device_* 필드가 기기 전역임을 스키마에서 말한다', () => {
+    for (const field of ['device_total', 'device_crashes', 'device_anrs', 'device_by_priority']) {
       const f = logProps()[field] as { description?: string }
       expect(f.description, `${field} 설명 없음`).toBeDefined()
       expect(f.description, `${field} 가 범위를 안 밝힘`).toContain('기기 전역')
     }
-    const byPriority = logProps()['by_priority'] as { description?: string }
-    expect(byPriority.description).toContain('기기 전역')
+  })
+
+  /**
+   * **범위가 필드 이름에서 드러나야 한다.** `.describe()` 에만 적으면 필드명만 보는 소비자가
+   * 오해한다 — 옛 `total` 이 정확히 그랬다. 앱 단위 값이 옆에 생긴 지금은 더 위험하다.
+   */
+  it('log 의 기기 전역 숫자에는 옛 이름이 남아 있지 않다', () => {
+    const keys = Object.keys(logProps())
+    // 옛 이름은 앱 단위 값과 구분되지 않는다. 같은 이름으로 다른 것을 뜻하게 두지 않는다.
+    expect(keys).not.toContain('total')
+    expect(keys).not.toContain('by_priority')
+    expect(keys).not.toContain('crashes')
+    expect(keys).not.toContain('anrs')
+    expect(keys).toContain('app')
+  })
+
+  it('log 의 app 이 null 일 때의 뜻을 스키마가 말한다 — 0 이 아니다', () => {
+    const app = logProps()['app'] as { description?: string }
+    expect(app.description).toBeDefined()
+    expect(app.description).toContain('null 은 0 이 아니라')
   })
 
   it('log 의 min_prio 가 개수의 전제임을 스키마에서 말한다', () => {
@@ -392,22 +421,22 @@ describe('resultJsonSchema', () => {
   })
 
   it('crashes/anrs 가 잘릴 수 있다는 사실을 스키마에 싣는다', () => {
-    for (const field of ['crashes', 'anrs']) {
+    for (const field of ['device_crashes', 'device_anrs']) {
       const f = logProps()[field] as { description?: string }
       expect(f.description, `${field} 가 상한을 안 밝힘`).toContain('200')
       expect(f.description).toContain('log_events_truncated')
     }
   })
 
-  it('log 의 total 과 by_priority 가 서로 반대되는 말을 하지 않는다', () => {
+  it('log 의 device_total 과 device_by_priority 가 서로 반대되는 말을 하지 않는다', () => {
     // 출판되는 스키마 안에서 두 문장이 충돌했다: total 은 "문턱 이상만 센다" 고 하고
     // by_priority 는 "total 은 문턱보다 낮은 것도 전부 센다" 고 했다. 코드는 후자다.
-    const total = (logProps()['total'] as { description: string }).description
-    const byPriority = (logProps()['by_priority'] as { description: string }).description
+    const total = (logProps()['device_total'] as { description: string }).description
+    const byPriority = (logProps()['device_by_priority'] as { description: string }).description
 
     expect(total).not.toMatch(/문턱 이상만/)
     expect(total).toContain('전부')
-    expect(byPriority).toContain('total')
+    expect(byPriority).toContain('device_total')
   })
 
   /**
@@ -706,12 +735,33 @@ describe('resultJsonSchema', () => {
     expect(out.collected && out.partialReason?.code).toBe('snapshot_unavailable')
     expect(out.collected && out.data).not.toBeNull()
 
+    // (1-b) 두 번째 경로: cpu 는 앱 프로세스를 못 찾아도 **기기 전역 값을 낸 채**
+    // `process_not_in_trace` 를 붙인다. memory 는 같은 코드로 data 를 통째로 안 낸다.
+    const cpuOut = await cpuCollector.extract({
+      packageName: 'com.foo',
+      appUid: null,
+      env: { sdkInt: 36, dataSources: ['linux.sys_stats'] },
+      capture: { startup: null, launchRequested: false, appPid: null, snapshots: {} },
+      tp: {
+        async queryJson(sql: string) {
+          if (sql === CPU_TIMES_SQL) return STRADDLE_CPU_ROWS
+          return []
+        },
+      } as never,
+    })
+    expect(cpuOut.collected, 'cpu 가 앱 없이도 기기 전역 값을 내는 경로가 사라졌다').toBe(true)
+    expect(cpuOut.collected && cpuOut.partialReason?.code).toBe('process_not_in_trace')
+    expect(cpuOut.collected && cpuOut.data).not.toBeNull()
+
     // (2) 그런데 같은 코드가 data-null 목록에도 있다.
     const listed = (/이 버전에서 (.+?) 이다\./s.exec(d)?.[1] ?? '').split(',').map((s) => s.trim())
     expect(listed).toContain('snapshot_unavailable')
+    expect(listed).toContain('process_not_in_trace')
 
     // (3) 그러므로 문서가 그 겹침을 직접 말해야 한다 — 코드로 data 유무를 추론할 수 없다고.
-    expect(d).toMatch(/유일하게 양쪽에 걸친/)
+    // 코드를 **이름으로** 요구한다: "셋 있다" 같은 개수 문장은 목록이 늘어도 통과한다.
+    expect(d).toMatch(/양쪽에 걸친다/)
+    expect(d).toContain('`process_not_in_trace`(memory 는 null')
     expect(d).toMatch(/data 유무를 추론하지 말/)
   })
 

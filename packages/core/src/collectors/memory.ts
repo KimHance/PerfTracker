@@ -1,6 +1,10 @@
-import { sqlQuote } from '../perfetto/traceProcessor/client.js'
 import type { MemoryData, MemoryStat, SystemMemory } from '../schema/result.js'
-import { type AppProcessCandidate, resolveAppProcess, staleNameReason } from './appProcess.js'
+import {
+  type AppProcessCandidate,
+  appProcessSql,
+  resolveAppProcess,
+  staleNameReason,
+} from './appProcess.js'
 import { PROCESS_STATS_BLOCK, SYS_STATS_BLOCK } from './blocks.js'
 import { bytesToKb } from './num.js'
 import type {
@@ -21,26 +25,6 @@ export interface CounterStatRow {
   max: number
   avg: number
   samples: number
-}
-
-/**
- * 후보를 좁혀서 가져온다. `glob` 을 쓰는 이유: 패키지명에 `.` 이 흔한데 `like` 에서는 `_` 가
- * 와일드카드라 `com.foo_bar` 가 `com.fooXbar` 를 잡는다. glob 은 `.` 도 `_` 도 리터럴이다.
- * (`*` 와 `?` 와 `[` 는 패키지명에 나올 수 없다.)
- *
- * `appPid` 가 있으면 pid 조건도 함께 건다 — 이름이 `zygote64` 로 굳은 프로세스는 이름
- * 조건으로는 절대 후보에 들어오지 못하기 때문이다 (`collectors/appProcess.ts` 참고).
- * pid 는 숫자라 인터폴레이션이 안전하다.
- */
-export function appProcessSql(packageName: string, appPid: number | null): string {
-  const exact = sqlQuote(packageName)
-  const sub = sqlQuote(`${packageName}:*`)
-  const byPid = appPid !== null ? ` or p.pid = ${Math.trunc(appPid)}` : ''
-  return (
-    "select json_group_array(json_object('upid', upid, 'pid', pid, 'name', name)) as j from (" +
-    `select p.upid as upid, p.pid as pid, p.name as name from process p ` +
-    `where p.name = ${exact} or p.name glob ${sub}${byPid} order by p.pid)`
-  )
 }
 
 /** upid 는 숫자라 인터폴레이션이 안전하다 (frame.ts 의 `frameDurationsSql` 과 같은 규칙). */

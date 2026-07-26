@@ -212,7 +212,7 @@ npx perftracker schema > result.schema.json
   CI 매칭은 반드시 이걸로 하세요. (예: `sdk_too_low`, `render_process_not_found`,
   `no_frames`, `trace_missing`, `data_source_not_registered`, `query_failed`)
 
-  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **33개**입니다
+  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **34개**입니다
   > (`1.0.0` 은 6개였습니다). 그중 `process_name_stale_in_trace` 는 `1.0.0` 부터 있던
   > `metrics.frame` 에도 실립니다. 이 숫자는 테스트가 `METRIC_REASON_CODES` 와 대조해
   > 고정하므로 코드보다 낡을 수 없습니다.
@@ -235,6 +235,12 @@ npx perftracker schema > result.schema.json
    를 함께 싣습니다 → 거부됩니다.
 2. **`reason_code` 가 닫힌 enum 입니다.** 예전 스키마는 21개였고 지금 산출물은
    `snapshot_unavailable` 같은 값을 냅니다 → 거부됩니다.
+3. **`metrics.cpu` 와 `metrics.log` 의 필드 이름이 바뀌었습니다.** 기기 전역 값에
+   `device_` 접두어가 붙었고(`total_busy_pct` → `device_total_busy_pct`,
+   `log.total` → `log.device_total` 등) 앱 단위 값이 `app` 아래에 새로 생겼습니다.
+   **이름을 바꾼 것은 의도입니다** — `log.total` 을 앱 단위로 바꾸면서 이름을 그대로 두면
+   같은 이름이 다른 것을 뜻하게 되고, 그것을 소비자가 알아챌 방법이 없습니다.
+   옛 이름을 읽던 코드는 `undefined` 를 받으므로 조용히 틀리지 않고 즉시 드러납니다.
 
 `1.0.0` 스키마를 고정한 CI 도 같은 이유로 거부합니다. 어느 쪽이든 답은 하나입니다 —
 
@@ -268,6 +274,83 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   60fps 예산 부근을 1ms 로 조밀하게 보고 꼬리로 갈수록 폭을 넓힙니다.
 - `within_16_67ms_ratio` 는 16.67ms 이하 프레임의 비율입니다. 판정이 아니라 비율입니다.
 - 종료 이벤트를 못 받은 미완결 프레임(`dur = -1`)은 집계에서 **제외**됩니다.
+
+### `metrics.cpu`
+
+**앱 단위 값과 기기 전역 값이 함께 들어 있고, 필드 이름이 그 범위를 말합니다.**
+`app` 아래는 대상 앱 프로세스의 것이고 `device_` 로 시작하는 것은 기기 전체의 것입니다.
+
+```json
+{
+  "device_sampled_ms": 59218,
+  "device_samples": 61,
+  "device_total_busy_pct": 14.18,
+  "device_per_core": [ { "cpu": 0, "busy_pct": 20.61 }, "...7개 더" ],
+  "device_frequency": [ { "cpu": 0, "samples": 2215, "min_khz": 614400, "max_khz": 1785600, "avg_khz": 1029397.4 }, "..." ],
+  "app": {
+    "process": "com.nhn.android.webtoon",
+    "pid": 24193,
+    "samples": 61,
+    "sampled_ms": 59206,
+    "user_ms": 5710,
+    "kernel_ms": 2920,
+    "total_ms": 8630,
+    "share_of_device_cpu_pct": 1.85,
+    "other_processes": [ { "process": "com.nhn.android.webtoon", "pid": 24328, "user_ms": 0, "kernel_ms": 10, "total_ms": 10 } ]
+  }
+}
+```
+
+- `app.total_ms` 는 **CPU 시간**이지 벽시계 시간이 아닙니다. `linux.process_stats` 의
+  `runtime.user_ns` / `runtime.kernel_ns` 가 세션 구간에서 늘어난 양이고, 이것은
+  `/proc/<pid>/stat` 의 utime/stime 입니다. **데이터소스를 새로 켜지 않았습니다** —
+  이 카운터는 `measurement_overhead` 가 자기 자신(`traced`)에게 이미 쓰던 것입니다.
+- **`share_of_device_cpu_pct` 의 분모는 같은 구간 기기 전체의 CPU 시간(모든 코어 합, idle 포함)
+  입니다.** 벽시계가 아닙니다. 8코어 기기에서 코어 하나를 내내 100% 쓰면 이 값은 약 12.5% 입니다.
+  같은 분모를 `measurement_overhead.tracing_processes_cpu_share_pct` 가 쓰므로 두 백분율을
+  서로 비교할 수 있습니다. "기기가 실제로 한 일 중 이 앱의 몫" 이 필요하면
+  `device_total_busy_pct` 로 나누세요 (위 예: 1.85 / 14.18 = 약 13%).
+- **해상도는 10ms 입니다** (USER_HZ=100). 짧은 세션의 `0` 은 "안 썼다" 가 아니라 "10ms 미만" 입니다.
+  그리고 첫 폴링 표본 **이전**의 CPU 시간은 들어 있지 않으므로 이 값은 하한입니다.
+- **`other_processes` 는 합산되어 있지 않습니다.** 합치려면 이 앱의 프로세스 집합이 완전해야
+  하는데 트레이스의 프로세스 이름은 완전하지 않습니다 — 아래 "트레이스가 앱을 다른 이름으로
+  아는 경우" 를 보세요. 실측에서 **이름이 패키지명과 정확히 같은 프로세스는 8.63초를 쓴 본체가
+  아니라 10ms 를 쓴 자식**이었습니다.
+- **`app` 이 `null` 이면 그것은 `0` 이 아니라 "내지 못했다" 입니다.** `reason_code` 가
+  갈래를 말합니다 (`process_not_in_trace` / `no_app_cpu_samples` / `counter_went_backwards` /
+  `query_failed`). 그때도 `device_*` 값은 그대로 나옵니다.
+
+### `metrics.log`
+
+**개수는 앱 단위와 기기 전역이 나뉘고, 크래시·ANR 목록은 일부러 기기 전역입니다.**
+
+```json
+{
+  "min_prio": "PRIO_WARN",
+  "app": { "process": "com.nhn.android.webtoon", "pid": 24193, "total": 37, "by_priority": { "warn": 24, "error": 13, "fatal": 0 } },
+  "device_total": 1507,
+  "device_by_priority": { "warn": 1095, "error": 412, "fatal": 0 },
+  "device_crashes": [],
+  "device_anrs": []
+}
+```
+
+- `app` 은 `android_logs` 를 utid → thread → **upid** 로 걸러 센 것입니다. pid 가 아니라
+  upid 인 이유는 pid 가 재사용될 수 있기 때문입니다.
+- **차이가 큽니다.** 같은 세션에서 기기 전역은 W 1,095 / E 412 인데 대상 앱만은
+  W 24 / E 13 이었습니다 — **45배 / 32배**. 예전에는 기기 전역 값만 있었고 이름이
+  `total` / `by_priority` 라서 "이 앱이 에러 412개를 냈다" 로 읽혔습니다.
+- **`device_crashes` / `device_anrs` 는 앱으로 거르지 않습니다. 그것이 의도입니다.**
+  실측(SM-S901N / Android 16): 이 트레이스의 `ActivityManager` 태그 16줄은 **전부
+  `system_server`(pid 2414)가 찍었습니다.** ANR 은 앱이 아니라 system_server 가 기록하므로
+  앱 pid 로 걸렀다면 **ANR 이 하나도 남지 않았을 것입니다.**
+  대신 각 항목이 **찍은 프로세스의 `pid` / `process`** 를 함께 싣습니다 — 대상 앱 것만 보려면
+  `data.app.pid` 와 비교해 직접 거르세요. 어느 앱의 ANR 인지는 `message` 의
+  `"ANR in <패키지>"` 로 읽습니다 (항목의 pid 는 기록자이지 멈춘 앱이 아닙니다).
+- `app.total` 이 **`0`** 인 것과 `app` 이 **`null`** 인 것은 다릅니다. `0` 은 관측입니다 —
+  그 값이 나오는 시점에 기기 전역 개수가 이미 0 이 아니었으므로(0 이면 메트릭 전체가
+  `no_log_entries` 로 값을 내지 않습니다) 로그 경로가 살아 있었다는 것이 확인된 상태입니다.
+  `null` 은 앱 프로세스를 **특정하지 못했다**는 뜻입니다.
 
 ### `metrics.thermal`
 
@@ -515,7 +598,7 @@ npm run test:device   # 실기기가 꽂혀 있어야 함
 - **온도가 실제로 움직입니다.** 아무 조작 없이 앱만 띄워 둔 세션에서:
   - 14.3초 세션 — AP 31.1→32.3 (**+1.2**), PATHM +0.4, SKIN +0.2, 나머지 0
   - 122.3초 세션 — AP 31.2→33.5 (**+2.3**), PATHM +0.1, SKIN +0.1, USB +0.1
-    (같은 세션의 `cpu.total_busy_pct` 는 8.74 — 유휴에 가깝습니다)
+    (같은 세션의 `cpu.device_total_busy_pct` 는 8.74 — 유휴에 가깝습니다)
   - 즉 **세션이 길수록 AP 가 더 오릅니다.** 다만 이것은 부하 곡선이 아니라 유휴 드리프트
     입니다 — 아래 "확인하지 못한 것" 을 보세요.
   - 에뮬레이터의 thermal HAL 은 AOSP 예제 구현이라 상수를 돌려줍니다 (존 1개,
@@ -625,7 +708,7 @@ Complete
 > 그 둘입니다 — 온-디바이스 스펙은 두 갈래를 다 허용하므로 통과 자체는 근거가 안 됩니다).
 > 즉 이 사유는 앱·기기의 콜드 스타트 속도에 달린 것이지 도구의 결함이 아닙니다.
 
-### 트레이스가 앱을 `zygote64` 로 아는 경우
+### 트레이스가 앱을 다른 이름으로 아는 경우 (`zygote64` / `<pre-initialized>`)
 
 `--launch` 로 앱을 트레이스 도중에 콜드 스타트시키면, 새로 fork 된 프로세스의 이름이
 트레이스에 **`zygote64` 로 고정되는 경우가 있습니다.** `linux.process_stats` 는 프로세스를
@@ -638,9 +721,21 @@ fork 된 상태이므로 이것은 예외 상황이 아닙니다.
 perftracker 는 `am start -W` 직후(측정 창이 열리기 **전**) `pidof` 로 앱의 pid 를 받아 두고,
 트레이스 이름이 맞지 않으면 그 pid 로 대상 앱을 특정합니다. 그때:
 
-- `frame` / `memory` 의 `process` 는 **패키지명**입니다 — 확인되지 않은 이름(`zygote64`)이
-  결과에 실리는 일은 없습니다.
-- 두 메트릭의 `status` 는 `partial`, `reason_code` 는 `process_name_stale_in_trace` 입니다.
+- `frame` / `memory` / `cpu` / `log` 의 `process` 는 **패키지명**입니다 — 확인되지 않은
+  이름이 결과에 실리는 일은 없습니다. **네 메트릭이 같은 규칙(`resolveAppProcess`)을 쓰므로
+  같은 프로세스를 가리킵니다.**
+- 네 메트릭의 `status` 는 `partial`, `reason_code` 는 `process_name_stale_in_trace` 입니다.
   값은 정상이고, "이름이 아니라 pid 로 확인했다" 는 사실을 그 코드가 말합니다.
 - pid 조차 없으면(= `--launch` 없이 시작했고 이름도 안 맞음) 추측하지 않습니다 —
   `render_process_not_found` / `process_not_in_trace` 로 값을 내지 않습니다.
+
+**실기기에서 두 가지 이름을 모두 봤습니다** — 같은 기기(SM-S901N / Android 16)의 같은 앱이
+한 세션에서는 `<pre-initialized>`, 다른 세션에서는 `zygote64` 로 기록됐습니다. 이름을 목록으로
+막는 방어가 왜 성립하지 않는지가 여기 있습니다.
+
+**이것이 CPU 를 합산하지 않는 이유이기도 합니다.** 두 세션 모두에서 트레이스 이름이 패키지명과
+**정확히 같은** 프로세스가 따로 있었는데, 그것은 앱 본체가 아니라 본체가 fork 한 거의 놀고 있는
+자식이었습니다 (한 세션은 8,630ms 대 10ms, 다른 세션은 9,560ms 대 0ms). 이름으로 모은 후보를
+전부 더해 "이 앱의 CPU" 라고 부르면, 그 집합이 완전하다는 확인되지 않은 주장을 사실로 만드는
+것이 됩니다. 그래서 대표 하나만 `app` 에 싣고 나머지는 `app.other_processes` 에 각자 pid 를
+달고 남깁니다.
