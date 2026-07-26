@@ -1,0 +1,49 @@
+Active interfaces:
+  iface=wlan0 ident=[{type=WIFI, subType=COMBINED, networkId="wifi"}]
+Xt stats:
+  ident=[{type=WIFI, networkId="wifi"}]
+    NetworkStatsHistory: bucketDuration=3600
+      st=1785060000 rb=23595993 rp=18470 tb=1158041 tp=9826 op=0
+
+InterfaceMapHelper:
+  BPF map status:
+    IfaceIndexNameMap: OK
+  BPF map content:
+    IfaceIndexNameMap:
+      ifaceIndex=15 ifaceName=eth0
+      ifaceIndex=1 ifaceName=lo
+      ifaceIndex=16 ifaceName=wlan0
+
+BPF map status:
+  mCookieTagMap: OK
+  mUidCounterSetMap: OK
+  mAppUidStatsMap: OK
+  mStatsMapA: OK
+  mStatsMapB: OK
+  mIfaceStatsMap: OK
+
+BPF map content:
+  mCookieTagMap:
+    cookie=483 tag=0x1 uid=10200
+    cookie=4132 tag=0xfffffe01 uid=1073
+  mUidCounterSetMap:
+    uid=1073 set=1
+    uid=10388 set=1
+  mAppUidStatsMap:
+    uid rxBytes rxPackets txBytes txPackets
+    10134 59692 187 28550 187
+    10388 1200000 1119 431000 871
+    1000 29814 180 200 3
+    10388 1200000 1119 431000 871
+    1051 0 0 1088 18
+  mStatsMapA:
+    ifaceIndex ifaceName tag_hex uid_int cnt_set rxBytes rxPackets txBytes txPackets
+  mStatsMapB:
+    ifaceIndex ifaceName tag_hex uid_int cnt_set rxBytes rxPackets txBytes txPackets
+    1 lo 0x0 10388 1 3200 80 4800 80
+  mIfaceStatsMap:
+    ifaceIndex ifaceName rxBytes rxPackets txBytes txPackets
+    1 lo 408126 8104 408126 8104
+    16 wlan0 122540486 91583 3882350 45794
+
+SkDestroyListener logs:

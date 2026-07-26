@@ -43,8 +43,9 @@ function ctx(answers: Record<string, unknown>, appPid: number | null = null): Ex
   return {
     tp: new FakeTp(answers) as unknown as ExtractContext['tp'],
     packageName: PKG,
+    appUid: null,
     env: { sdkInt: 35, dataSources: ['linux.process_stats', 'linux.sys_stats'] },
-    capture: { startup: null, launchRequested: false, appPid },
+    capture: { startup: null, launchRequested: false, appPid, snapshots: {} },
   }
 }
 

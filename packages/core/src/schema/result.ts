@@ -1,9 +1,68 @@
 import { z } from 'zod'
 import { METRIC_REASON_CODES, type MetricReasonCode } from './reasons.js'
 
-// 1.1.0 — metrics 에 startup / cpu / memory / log 를 optional 로 추가 (필드 추가는 minor).
-// 1.0.0 문서는 여전히 이 스키마를 통과한다. required 로 올리면 그것이 깨지고, 그건 major 다.
+// 1.1.0 — M2 가 metrics 에 startup / cpu / memory / log 를, M3 가 thermal / network 를
+// optional 로 더했다. 1.0.0 문서(frame 하나만 있는)는 여전히 이 스키마를 통과한다.
+//
+// **M3 에서도 1.1.0 그대로 간다.** 1.1.0 은 아직 출시된 적이 없다 (M2 가 병합됐을 뿐
+// 릴리스가 없다). 미출시 버전 안에서의 확장은 버전 사유가 아니다 — 지금 1.2.0 을 찍으면
+// "1.1.0 이라는 더 좁은 계약이 세상에 존재했다" 는 없던 역사를 만든다.
+//
+// **출시 후의 규칙 (M4 가 이 표를 그대로 쓴다):**
+//   metrics 에 새 키를 .optional() 로 추가        → minor  (옛 문서가 통과한다)
+//   metrics 에 새 키를 required 로 추가           → major  (옛 문서가 깨진다)
+//   reason_code enum 값 추가                      → minor  (계약이 넓어질 뿐이다)
+//   reason_code enum 값 삭제·개명                 → major  (매칭하던 소비자가 깨진다)
+//   기존 객체에 optional 필드 추가                → minor
+//   기존 객체에 required 필드 추가                → major
+//   references[] 항목 추가                        → 버전 사유 아님 (스키마가 아니라 값이다)
+//   non-null 필드를 nullable 로 넓히기            → major  (보장을 받던 소비자가 깨진다)
+//
+// 그래서 새 metrics 키는 **항상 optional 로** 넣는다 — required 로 넣는 순간 major 가 된다.
+// M3 가 한 것은 위 표의 minor 항목들(새 키 2개, reason_code 9개 추가, thermal_zones 에
+// type/status/source 를 optional 로 추가)과 "버전 사유 아님"(references 1건)뿐이다.
+// 출시 후였다면 1.2.0 이었을 것이고, 미출시이므로 1.1.0 그대로다.
 export const SCHEMA_VERSION = '1.1.0'
+
+/**
+ * `partial` 이면서 `data` 가 **null** 인 결과를 내는 사유 코드들 — 즉 "값이 아예 안 나왔다".
+ *
+ * 소스 진실은 각 collector 의 `{ collected: false, reason }` 분기다 (거기서 `status` 를
+ * 따로 주지 않으면 `partial` 이 된다). 여기 손으로 옮겨 적는 이유는 `z.toJSONSchema()` 가
+ * 런타임이라 코드를 훑지 못하기 때문이고, **그래서 이 목록은 낡을 수 있다.**
+ * 그 사실을 describe 문구가 직접 말하고, 소비자에게는 `data !== null` 로 판정하라고 시킨다 —
+ * 목록을 계약으로 만들면 새 collector 가 생길 때마다 조용히 거짓이 된다.
+ *
+ * 이 배열의 모든 값이 실재하는 `MetricReasonCode` 인지는 테스트가 고정한다.
+ *
+ * **`snapshot_unavailable` 은 이 목록에서 유일하게 양쪽에 걸친 코드다.** network 는 시작
+ * 스냅샷이 없으면 값을 통째로 못 내지만(`network.ts` — 누적 카운터는 한쪽만으로 뜻이 없다),
+ * thermal 은 **종료** 스냅샷만 없을 때 시작 스냅샷의 값을 낸 채 같은 코드를 `partialReason`
+ * 으로 붙인다(`thermal.ts`) — `stop` 전 세션을 extract 하면 **반드시** 지나가는 길이다.
+ * 그래서 이 코드만 보고 `data` 유무를 추론하면 틀린다. 목록을 계약으로 만들지 않은 이유가
+ * 바로 이런 것이고, describe 문구가 그 사실을 소비자에게 직접 말한다.
+ */
+const DATA_NULL_PARTIAL_CODES = [
+  'render_process_not_found',
+  'no_frames',
+  'frame_duration_out_of_range',
+  'no_cpu_samples',
+  'insufficient_samples',
+  'cpu_counters_did_not_advance',
+  'cpu_counters_not_monotonic',
+  'process_not_in_trace',
+  'no_rss_samples',
+  'no_log_entries',
+  'launch_time_unreported',
+  'launch_wait_timed_out',
+  'snapshot_unavailable',
+  'snapshot_unparsable',
+  'no_thermal_zones',
+  'thermal_hal_not_ready',
+  'app_uid_unknown',
+  'uid_not_in_netstats',
+  'counter_went_backwards',
+] as const satisfies readonly MetricReasonCode[]
 
 /**
  * 수집 실패와 미지원을 null 로 뭉뚱그리지 않기 위한 상태 구분.
@@ -20,9 +79,17 @@ export const MetricStatusSchema = z
       '- partial: **두 가지를 겸한다.** (a) 값은 나왔지만 일부가 빠졌다(예: CPU 사용률은 ' +
       '있고 주파수가 없다) — 이때 data 는 non-null 이다. (b) **값이 아예 나오지 않았다** — ' +
       '이때 `data` 는 **null** 이다. 둘 다 reason_code 가 어느 쪽인지 말한다. ' +
-      'data 가 null 인 partial 은 render_process_not_found, no_frames, no_cpu_samples, ' +
-      'insufficient_samples, process_not_in_trace, no_rss_samples, no_log_entries, ' +
-      'launch_time_unreported, launch_wait_timed_out 등에서 나온다.\n' +
+      `data 가 null 인 partial 을 내는 reason_code 는 이 버전에서 ${DATA_NULL_PARTIAL_CODES.join(', ')} ` +
+      '이다. **이 목록은 참고용이고 계약이 아니다** — 새 collector 가 생기면 늘어난다. ' +
+      "판정은 반드시 `data !== null`(또는 `status === 'collected'`)로 하고 이 목록으로 하지 말 것. " +
+      '스냅샷 계열(snapshot_unavailable / snapshot_unparsable)이 특히 흔하다: 이 도구가 ' +
+      '스냅샷을 찍기 전에 만들어진 옛 run 을 재산출하면 thermal / network 가 반드시 그 길을 지난다.\n' +
+      '**`snapshot_unavailable` 은 위 목록에서 유일하게 양쪽에 걸친 코드다.** network 는 시작 ' +
+      '스냅샷이 없으면 값을 통째로 내지 못하지만(data null), thermal 은 **종료** 스냅샷만 ' +
+      '없을 때 시작 스냅샷의 값을 낸 채 같은 코드를 붙인다(data non-null) — 아직 stop 하지 ' +
+      '않은 세션을 extract 하면 반드시 지나가는 길이다. ' +
+      '**이 코드로 data 유무를 추론하지 말 것.** 목록을 계약으로 만들지 않은 이유가 이런 ' +
+      '것이며, 이 코드가 그 산 증거다.\n' +
       '- unsupported: 이 기기가 이 메트릭을 낼 수 없다 (sdk 하한 미달, 데이터소스 미등록). ' +
       'data 는 null 이다.\n' +
       '- failed: 예외 상황 전용이다 — 트레이스 원본이 없거나(trace_missing) ' +
@@ -286,6 +353,217 @@ export const LogDataSchema = z.object({
 })
 export type LogData = z.infer<typeof LogDataSchema>
 
+/**
+ * 이 메트릭의 모든 숫자는 **기기 전역**이다. 그 사실이 `.describe()` 에 없으면
+ * `perftracker schema` 만 읽는 CI 와 LLM 에게는 "이 앱이 기기를 얼마나 데웠는가" 로 보인다.
+ * `z.toJSONSchema` 는 런타임이라 이 주석을 보지 못한다.
+ */
+const THERMAL_SCOPE =
+  '**이 값은 기기 전역이며 대상 앱의 온도가 아니다** — 같은 시간에 돈 다른 앱, 화면 밝기, ' +
+  'USB 충전(이 도구는 adb 로 붙으므로 거의 항상 충전 중이다)이 전부 섞인다. '
+
+export const ThermalZoneReadingSchema = z.object({
+  name: z
+    .string()
+    .describe(
+      '센서 이름. **벤더가 정하는 임의 문자열이다** — 이 값으로 CPU/피부 온도를 판별하지 말 것. ' +
+        '판별은 type 으로 한다.',
+    ),
+  type: z
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      '`android.hardware.thermal` 의 TemperatureType 표준 enum: 0=CPU, 1=GPU, 2=BATTERY, ' +
+        '3=SKIN, 4=USB_PORT, 5=POWER_AMPLIFIER, 6=BCL_VOLTAGE, 7=BCL_CURRENT, ' +
+        '8=BCL_PERCENTAGE, 9=NPU. 기기가 안 주면 null.',
+    ),
+  before_c: z
+    .number()
+    .nullable()
+    .describe('세션 시작 스냅샷의 온도(°C). **null 은 그 센서가 시작 시점에 없었다는 뜻이다.**'),
+  after_c: z
+    .number()
+    .nullable()
+    .describe(
+      '세션 종료 스냅샷의 온도(°C). **null 은 두 가지다** — 그 센서가 종료 시점에 없었거나, ' +
+        '종료 스냅샷 자체가 없다(아직 stop 하지 않은 세션). 어느 쪽인지는 reason_code 가 말한다. ' +
+        '0 과 혼동하면 안 된다: 이 기기들은 실제로 0.0°C 를 보고하는 센서를 갖고 있다.',
+    ),
+  delta_c: z
+    .number()
+    .nullable()
+    .describe(
+      'after_c − before_c. **부호 있는 값이고, 음수가 정상이다** — 실기기 4세션 중 2세션에서 ' +
+        'AP 온도가 내려갔다(32.1→30.8, 32.1→31.9). 이 값을 "상승량" 이나 "발열" 로 읽으면 안 된다. ' +
+        '어느 한쪽이 null 이면 null 이다. ' +
+        '**source 가 `cached` 인 존에서는 이 값이 온도 변화가 아닐 수 있다** — 그 값은 갱신이 ' +
+        '올 때만 바뀌고, 안 오면 몇 시간이고 같은 숫자가 남는다. source 설명을 반드시 함께 읽을 것.',
+    ),
+  status_before: z
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      '시작 시점 이 센서의 throttling 단계(`mStatus`, THERMAL_STATUS_*: 0=NONE … 6=SHUTDOWN).',
+    ),
+  status_after: z.number().int().nullable().describe('종료 시점 이 센서의 throttling 단계.'),
+  source: z
+    .enum(['hal', 'cached'])
+    .describe(
+      '이 값이 dumpsys 의 어느 절에서 왔는지. `hal` = `Current temperatures from HAL`(덤프 시점에 ' +
+        'HAL 에 직접 물은 값, 우선한다), `cached` = `Cached temperatures`(프레임워크가 콜백으로 ' +
+        '들고 있던 값). HAL 이 이번에 안 준 센서가 cached 에만 남아 있는 경우가 실기기에서 ' +
+        '관측되므로 버리지 않고 싣되, 출처를 함께 싣는다.\n' +
+        '**이 항목은 값 두 개(before_c / after_c)를 담으므로 출처도 둘일 수 있다. 어느 한쪽이라도 ' +
+        '`cached` 면 이 필드는 `cached` 다** — 아래 경고가 두 값 중 하나에만 해당하더라도 ' +
+        '그 존에는 적용되어야 하기 때문이다. 즉 `hal` 은 "두 값 모두 HAL 이 직접 준 값" 이라는 ' +
+        '뜻이고, `cached` 는 "적어도 한쪽이 갱신되지 않았을 수 있다" 는 뜻이다. ' +
+        '어느 쪽이 그랬는지는 이 결과가 말하지 않는다.\n' +
+        '**`cached` 인 존의 delta_c 를 온도 변화로 읽으면 안 된다.** 이 값은 HAL 이 콜백을 ' +
+        '보낼 때만 갱신되고, 갱신이 오지 않으면 같은 숫자가 그대로 남는다. ' +
+        '실측 근거: 어느 실기기(Android 16)의 cached 전용 존 `PA1THM` 은 약 3시간에 걸친 ' +
+        '4세션의 전/후 덤프 8개에서 소수점까지 계속 27.0°C 였고, 같은 기간 HAL 이 주는 `AP` 는 ' +
+        '30.8~41.6°C 로 움직였다. 그래서 `cached` 존의 delta_c 0 은 "온도가 안 변했다" 가 아니라 ' +
+        '"이 값이 갱신되지 않았다" 일 수 있고, **이 도구는 둘을 구분하지 못한다.**',
+    ),
+})
+export type ThermalZoneReading = z.infer<typeof ThermalZoneReadingSchema>
+
+export const ThermalDataSchema = z.object({
+  zones: z
+    .array(ThermalZoneReadingSchema)
+    .describe(
+      `세션 전/후 스냅샷에서 관측된 센서들. ${THERMAL_SCOPE}` +
+        '존 하나당 정확히 한 항목이다(전에는 같은 존이 두 절에서 두 번 실렸다).\n' +
+        '**순서는 "기기가 보고한 순서" 가 아니다.** 규칙은 이것이다: ' +
+        '시작 스냅샷의 `Current temperatures from HAL` 절 순서를 먼저 싣고, 그 절에 없던 센서를 ' +
+        '`Cached temperatures` 절 순서로 뒤에 붙이며, 시작 스냅샷에 없고 종료 스냅샷에만 있던 ' +
+        '센서가 맨 뒤에 온다. ' +
+        '실기기 원문은 `Cached temperatures:` 를 **먼저** 찍고 그 첫 항목이 `PA1THM` 인데, ' +
+        '이 배열에서는 `PA1THM` 이 **마지막**이다 — 원문 순서로 읽으면 안 된다. ' +
+        '다만 변화량 크기로 정렬하지는 **않는다**: 어느 센서가 중요한지는 이 도구가 말하지 않는다. ' +
+        '순서에 의미를 두지 말고 `name` 과 `type` 으로 찾으라.\n' +
+        '**전/후 두 점이므로 구간 중 최고 온도는 이 결과에 없다** — 원리적으로 알 수 없다. ' +
+        '값이 정확히 0.0 인 존이 실기기에서 관측된다(SUBBAT / SUBBATRAW). ' +
+        '"실제 0°C" 인지 "이 기기에 그 센서가 없다" 인지 이 도구는 판별하지 않는다.',
+    ),
+  device_status_before: z
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      '시작 시점 기기 전체의 throttling 단계 (`dumpsys thermalservice` 의 `Thermal Status:`). ' +
+        'THERMAL_STATUS_*: 0=NONE, 1=LIGHT, 2=MODERATE, 3=SEVERE, 4=CRITICAL, 5=EMERGENCY, 6=SHUTDOWN.',
+    ),
+  device_status_after: z
+    .number()
+    .int()
+    .nullable()
+    .describe('종료 시점 기기 전체의 throttling 단계.'),
+  status_override_before: z
+    .boolean()
+    .nullable()
+    .describe(
+      '시작 시점의 `IsStatusOverride`. true 면 기기의 throttling 단계가 실제 온도가 아니라 ' +
+        '강제 설정된 값이라는 뜻이다 — 그때 device_status_* 는 관측이 아니다.',
+    ),
+  status_override_after: z.boolean().nullable().describe('종료 시점의 `IsStatusOverride`.'),
+  hal_ready_before: z.boolean().nullable().describe('시작 시점의 `HAL Ready`.'),
+  hal_ready_after: z.boolean().nullable().describe('종료 시점의 `HAL Ready`.'),
+  headroom_thresholds: z
+    .array(z.number().nullable())
+    .nullable()
+    .describe(
+      '기기가 보고한 thermal headroom 임계 배열(`Temperature headroom thresholds:`). ' +
+        '인덱스가 THERMAL_STATUS_* 0..6 이고, 원문의 `NaN` 은 **null** 로 실린다(JSON 에 NaN 이 없다). ' +
+        '**이 도구는 headroom 을 산출하지 않는다** — headroom 은 앱 프로세스 안에서 ' +
+        '`PowerManager.getThermalHeadroom()` 으로만 얻을 수 있고 이 도구는 앱에 코드를 넣지 않는다. ' +
+        '그래서 이 배열은 위의 섭씨 온도와 **직접 비교할 수 없다**. 기기가 스스로 보고한 사실로만 싣는다. ' +
+        'null 은 이 기기가 그 절을 안 찍었다는 뜻이다.',
+    ),
+})
+export type ThermalData = z.infer<typeof ThermalDataSchema>
+
+/**
+ * 이 숫자가 **무엇의 합계인지** 가 `.describe()` 에 없으면, `rx_bytes` 는 "이 앱이 받은
+ * 바이트" 로 읽힌다. 실제로는 그보다 넓고(같은 uid 의 다른 패키지, loopback), 동시에
+ * 좁다(방화벽이 버린 송신은 안 센다). `z.toJSONSchema` 는 주석을 보지 못하므로
+ * 그 한정이 반드시 여기 있어야 한다.
+ */
+const NETWORK_SCOPE =
+  '**uid 단위 값이며 패키지 단위가 아니다** — 같은 uid 를 공유하는 다른 패키지(sharedUserId)의 ' +
+  '트래픽이 섞이고, 분리할 방법이 없다(맵의 키가 uid 뿐이다). 어느 패키지들이 이 uid 를 ' +
+  '쓰는지는 shared_uid_packages 에 있다. ' +
+  '**IP 계층의 바이트다** — L2/이더넷 헤더는 빠지고 IP+TCP/UDP 헤더는 들어간다. ' +
+  '**loopback 을 포함한 모든 인터페이스의 합계이며 wifi / mobile 로 나뉘지 않는다** ' +
+  '(`mAppUidStatsMap` 에 인터페이스 차원이 없다). loopback 통신은 송신과 수신 양쪽에서 ' +
+  '두 번 세어진다. 1500바이트를 넘는 큰 패킷(GSO)은 커널이 휴리스틱으로 되계산하므로 ' +
+  '고throughput 구간의 값은 정확한 wire 바이트가 아니라 근사치다. ' +
+  '방화벽/데이터세이버가 버린 **송신** 패킷은 세지 않고, 버려진 **수신** 패킷은 센다. ' +
+  'VPN(TUN) 이 켜져 있으면 같은 트래픽이 앱 uid 와 VPN 앱 uid 양쪽에서 세어진다. '
+
+const NETWORK_INTERVAL =
+  '**델타 구간은 세션 구간보다 조금 넓다.** 시작 스냅샷은 `am force-stop` 과 트레이스 시작과 ' +
+  '`am start -W` 보다 **앞**에서 찍히므로 앱의 콜드 스타트 준비 구간이 포함되고, 종료 ' +
+  '스냅샷은 트레이스를 회수한 **뒤**에 찍히므로 회수에 걸린 시간이 포함된다(트레이스가 클수록 ' +
+  '길어진다). ' +
+  // 이 문단은 한때 "정확한 두 시점은 state_*.captured_at 이다" 라고 끝났는데 **거짓이었고
+  // 바로 앞 문장과 모순이었다.** state_after.captured_at 은 stop 진입 시각이라 트레이스
+  // 회수보다 **앞**이고, netstats 종료 스냅샷은 회수가 끝난 **뒤**에 나간다. 그 문장을 믿고
+  // 처리량을 계산하면 분자는 회수 구간을 포함하고 분모는 제외한다.
+  '**device.state_*.captured_at 은 이 구간의 근사일 뿐 스냅샷을 찍은 시각이 아니다.** ' +
+  '두 값은 각각 start / stop 이 시작할 때 찍은 시계다. 특히 state_after.captured_at 은 ' +
+  '**트레이스 회수 전**의 시각이라 종료 스냅샷보다 앞선다(실측: 트레이스 0.3~2.1MB 인 ' +
+  '4세션에서 0.5~0.7초, 트레이스가 클수록 커진다). ' +
+  '그래서 이 바이트를 그 두 시각의 차로 나눠 **처리량(bytes/s)을 계산하면 안 된다** — ' +
+  '분자는 회수 구간을 포함하는데 분모는 제외한다. 스냅샷 시각이 필요하면 ' +
+  'artifacts.raw 의 raw/netstats_{before,after}.txt 파일 mtime 이 그것에 더 가깝다. '
+
+export const NetworkDataSchema = z.object({
+  uid: z.number().int().describe('이 값이 집계된 리눅스 uid. target_app.uid 와 같다.'),
+  rx_bytes: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      `세션 전/후 스냅샷 사이에 이 uid 가 **받은** 바이트. ${NETWORK_SCOPE}${NETWORK_INTERVAL}` +
+        '**0 은 "관측된 바이트가 없었다" 는 뜻이지 "조회하지 못했다" 가 아니다** — ' +
+        '조회하지 못한 경우 이 메트릭은 data 가 통째로 null 이고 reason_code 가 그 이유를 말한다.',
+    ),
+  tx_bytes: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(`같은 구간에 이 uid 가 **보낸** 바이트. ${NETWORK_SCOPE}`),
+  // 패킷 필드만 읽는 소비자도 uid 단위라는 한정에 도달해야 한다. 바이트 필드에만 SCOPE 를
+  // 싣고 여기 안 실으면, `rx_packets` 만 보는 쪽은 이 숫자가 패키지 단위인 줄 안다.
+  rx_packets: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      `같은 구간의 수신 패킷 수. GSO 구간에서는 커널이 되계산한 **추정** 개수다. ${NETWORK_SCOPE}`,
+    ),
+  tx_packets: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(`같은 구간의 송신 패킷 수. 추정이라는 점까지 위와 같다. ${NETWORK_SCOPE}`),
+  shared_uid_packages: z
+    .array(z.string())
+    .nullable()
+    .describe(
+      '`pm list packages -U` 스냅샷에서 **이 uid 를 쓰는 것으로 관측된 패키지 전부**(시스템 포함). ' +
+        '항목이 1개면 위 숫자는 그 패키지만의 것이고, 2개 이상이면 그 패키지들의 합이며 ' +
+        '분리할 수 없다. 실측 근거: 어느 에뮬레이터에서 uid 1000 을 11개 패키지가 공유했다. ' +
+        '**null 은 그 스냅샷을 읽지 못했다는 뜻이다 — 빈 배열([])이 아니다.** ' +
+        '[] 는 "조회했고 이 uid 를 쓰는 패키지가 목록에 없었다" 이다. ' +
+        '부계정(secondary user)의 같은 앱은 다른 uid(user*100000 + appId)를 받으며 여기 포함되지 않는다.',
+    ),
+})
+export type NetworkData = z.infer<typeof NetworkDataSchema>
+
 export const CpuClusterSchema = z.object({
   cpus: z.array(z.number().int()),
   max_freq_khz: z.number().int().nullable(),
@@ -331,7 +609,71 @@ export const DeviceStateSchema = z.object({
   network: z.string().nullable(),
   mem_available_kb: z.number().int().nullable(),
   animator_duration_scale: z.number().nullable(),
-  thermal_zones: z.array(z.object({ name: z.string(), celsius: z.number() })),
+  thermal_zones: z
+    .array(
+      z.object({
+        name: z
+          .string()
+          .describe(
+            '센서 이름. **벤더가 정하는 임의 문자열이다**(`AP` / `SKIN` / ' +
+              '`test temperature sensor`). 이 값으로 CPU 온도인지 피부 온도인지 판별하지 말 것 — ' +
+              '그 판별은 type 으로 한다. 유일성도 보장되지 않는다: 한 실기기에 `PATHM` 과 ' +
+              '`PA1THM` 이 **둘 다** 있고 한 글자 차이의 서로 다른 센서다. ' +
+              '이 도구가 존을 동일시하는 키는 이름이 아니라 (type, name) 쌍이다.',
+          ),
+        celsius: z.number(),
+        type: z
+          .number()
+          .int()
+          .nullable()
+          .optional()
+          .describe(
+            '`android.hardware.thermal` 의 TemperatureType 표준 enum: ' +
+              '0=CPU, 1=GPU, 2=BATTERY, 3=SKIN, 4=USB_PORT, 5=POWER_AMPLIFIER, ' +
+              '6=BCL_VOLTAGE, 7=BCL_CURRENT, 8=BCL_PERCENTAGE, 9=NPU. ' +
+              '기기가 안 주면 null. **이 필드가 아예 없는 문서는 M3 이전에 산출된 것이다.**',
+          ),
+        status: z
+          .number()
+          .int()
+          .nullable()
+          .optional()
+          .describe(
+            '이 센서 기준의 throttling 단계(`mStatus`, THERMAL_STATUS_*: 0=NONE … 6=SHUTDOWN). ' +
+              '기기 전체의 단계가 아니라 이 센서의 것이다. ' +
+              '**이 필드가 아예 없는 문서는 M3 이전에 산출된 것이다.**',
+          ),
+        source: z
+          .enum(['hal', 'cached'])
+          .optional()
+          .describe(
+            '이 값이 온 절. `hal` = `Current temperatures from HAL`, ' +
+              '`cached` = `Cached temperatures`(프레임워크가 콜백으로 들고 있던 값). ' +
+              '**`cached` 는 갱신이 올 때만 바뀌므로 오래된 값일 수 있다** — 실기기에서 ' +
+              'cached 전용 존 하나가 약 3시간 동안 같은 값이었다. ' +
+              '자세한 것은 metrics.thermal 의 zones[].source 설명에 있다. ' +
+              '**이 필드가 아예 없는 문서는 M3 이전에 산출된 것이다.**',
+          ),
+      }),
+    )
+    .describe(
+      '`dumpsys thermalservice` 가 이 시점에 보고한 센서별 온도. ' +
+        '**기기 전역이며 대상 앱의 온도가 아니다** — 다른 앱, 화면 밝기, USB 충전이 전부 섞인다. ' +
+        '`Current temperatures from HAL` 을 우선하고 거기 없는 센서는 `Cached temperatures` 에서 ' +
+        '가져온다.\n' +
+        '**존 하나당 한 항목이라는 보장은 `type`/`source` 필드를 가진 문서에만 적용된다.** ' +
+        'M3 이전의 파서는 두 절을 구분 없이 긁어 같은 존을 두 번 실었다(실기기 8존이 15항목). ' +
+        '이 결과는 `raw/thermalservice_{before,after}.txt` 원문이 run 디렉토리에 남아 있으면 ' +
+        'extract 가 그 원문에서 이 배열을 **다시 만들어** 중복을 없앤다 — 같은 방식의 선례가 ' +
+        '`target_app.render_process` 다(capture 때 몰랐던 것을 extract 가 더 나은 근거로 채운다). ' +
+        '원문이 없으면 capture.json 에 기록된 값을 그대로 옮기며, 그 값에는 중복이 남아 있을 수 ' +
+        '있다. 그래서 **`type`/`source` 가 없는 항목이 보이면 중복을 의심해야 한다.** ' +
+        '`capture.json` 쪽 값은 그대로 두므로 두 파일의 이 필드가 다를 수 있다.\n' +
+        '값이 정확히 `0.0` 인 존이 실기기에서 관측된다(SUBBAT / SUBBATRAW). ' +
+        '이 도구는 그것이 "실제 0°C" 인지 "이 기기에 그 센서가 없다" 인지 **판별하지 않는다** — ' +
+        '기기가 보고한 값을 그대로 싣는다. ' +
+        '세션 구간의 변화량은 metrics.thermal 에 있다.',
+    ),
 })
 export type DeviceState = z.infer<typeof DeviceStateSchema>
 
@@ -512,6 +854,8 @@ export const ResultSchema = z.object({
       cpu: metricResultSchema(CpuDataSchema).optional(),
       memory: metricResultSchema(MemoryDataSchema).optional(),
       log: metricResultSchema(LogDataSchema).optional(),
+      thermal: metricResultSchema(ThermalDataSchema).optional(),
+      network: metricResultSchema(NetworkDataSchema).optional(),
     })
     .catchall(metricResultSchema(z.unknown())),
   measurement_overhead: MeasurementOverheadSchema,

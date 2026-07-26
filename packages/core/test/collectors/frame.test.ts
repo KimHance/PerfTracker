@@ -10,7 +10,12 @@ import { FakeProcessRunner } from '../support/fakeProcessRunner.js'
  * `--launch` 없이 시작한 세션. 그런 세션에는 앱의 pid 를 알 기회가 없으므로 `appPid` 는 null 이다
  * (그리고 그때는 앱이 트레이스 시작 전부터 떠 있어 이름이 이미 확정돼 있다).
  */
-const NO_CAPTURE: CaptureFacts = { startup: null, launchRequested: false, appPid: null }
+const NO_CAPTURE: CaptureFacts = {
+  startup: null,
+  launchRequested: false,
+  appPid: null,
+  snapshots: {},
+}
 
 describe('buildFrameBuckets', () => {
   it('스펙이 정한 101개 버킷을 만든다', () => {
@@ -152,6 +157,7 @@ describe('frameCollector', () => {
     const outcome = await frameCollector.extract({
       tp,
       packageName: pkg,
+      appUid: null,
       env: { sdkInt: 36, dataSources: ['android.surfaceflinger.frametimeline'] },
       capture: NO_CAPTURE,
     })
@@ -177,6 +183,7 @@ describe('frameCollector', () => {
       frameCollector.extract({
         tp,
         packageName: 'com.x',
+        appUid: null,
         env: { sdkInt: 36, dataSources: ['android.surfaceflinger.frametimeline'] },
         capture: NO_CAPTURE,
       }),
@@ -200,6 +207,7 @@ describe('frameCollector', () => {
       frameCollector.extract({
         tp,
         packageName: pkg,
+        appUid: null,
         env: { sdkInt: 36, dataSources: ['android.surfaceflinger.frametimeline'] },
         capture: NO_CAPTURE,
       }),
@@ -227,6 +235,7 @@ describe('frameCollector', () => {
       frameCollector.extract({
         tp,
         packageName: pkg,
+        appUid: null,
         env: { sdkInt: 36, dataSources: ['android.surfaceflinger.frametimeline'] },
         capture: NO_CAPTURE,
       }),
@@ -259,6 +268,7 @@ describe('frameCollector', () => {
     startup: { totalTimeMs: 12457, launchState: 'COLD' },
     launchRequested: true,
     appPid: 6037,
+    snapshots: {},
   }
 
   it('트레이스 이름이 zygote64 로 굳어도 캡처한 pid 로 앱을 찾고, 그 이름을 쓰지 않는다', async () => {
@@ -266,6 +276,7 @@ describe('frameCollector', () => {
     const outcome = await frameCollector.extract({
       tp: new TraceProcessor('/bin/tp', '/t.pftrace', zygoteRunner()),
       packageName: pkg,
+      appUid: null,
       env: { sdkInt: 35, dataSources: ['android.surfaceflinger.frametimeline'] },
       capture: LAUNCHED,
     })
@@ -289,6 +300,7 @@ describe('frameCollector', () => {
     const outcome = await frameCollector.extract({
       tp: new TraceProcessor('/bin/tp', '/t.pftrace', zygoteRunner()),
       packageName: pkg,
+      appUid: null,
       env: { sdkInt: 35, dataSources: ['android.surfaceflinger.frametimeline'] },
       capture: NO_CAPTURE,
     })

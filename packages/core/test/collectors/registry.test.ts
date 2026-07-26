@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { frameCollector } from '../../src/collectors/frame.js'
+import { networkCollector } from '../../src/collectors/network.js'
 import {
   COLLECTORS,
+  collectSnapshotSpecs,
   collectTraceConfigBlocks,
   supportedCollectors,
   unsupportedReasons,
 } from '../../src/collectors/registry.js'
 import { startupCollector } from '../../src/collectors/startup.js'
+import { thermalCollector } from '../../src/collectors/thermal.js'
 import { buildTraceConfig } from '../../src/perfetto/config.js'
 
 const OK = {
@@ -30,6 +33,11 @@ describe('COLLECTORS 레지스트리', () => {
   it('frame 과 startup 이 등록되어 있다', () => {
     expect(COLLECTORS).toContain(frameCollector)
     expect(COLLECTORS).toContain(startupCollector)
+  })
+
+  it('thermal 과 network 가 등록되어 있다 — 배열에 없으면 extract 가 아예 부르지 않는다', () => {
+    expect(COLLECTORS).toContain(thermalCollector)
+    expect(COLLECTORS).toContain(networkCollector)
   })
 })
 
@@ -60,13 +68,55 @@ describe('collectTraceConfigBlocks', () => {
     expect(config.split('name: "linux.process_stats"').length - 1).toBe(1)
     expect(config.split('name: "linux.sys_stats"').length - 1).toBe(1)
   })
+
+  /**
+   * D9. M3 는 데이터소스도 ftrace 이벤트도 늘리지 않는다. 이 단언이 깨진다는 것은
+   * 누가 새 데이터소스를 켰다는 뜻이고, 그때 "그것을 읽는 collector 가 어디 있나" 라는
+   * 질문이 반드시 따라와야 한다. 개수가 아니라 **이름 집합**으로 고정하는 이유는,
+   * 개수만 세면 하나가 늘고 하나가 사라진 경우를 못 잡기 때문이다.
+   */
+  it('M3 collector 들이 TraceConfig 를 한 블록도 늘리지 않는다', () => {
+    const names = collectTraceConfigBlocks(OK).map((b) => /name:\s*"([^"]+)"/.exec(b)?.[1])
+    expect(new Set(names)).toEqual(
+      new Set([
+        'android.surfaceflinger.frametimeline',
+        'linux.process_stats',
+        'linux.sys_stats',
+        'linux.ftrace',
+        'android.log',
+      ]),
+    )
+    expect(() =>
+      buildTraceConfig({ dataSourceBlocks: collectTraceConfigBlocks(OK) }),
+    ).not.toThrow()
+  })
 })
 
 describe('supportedCollectors / unsupportedReasons', () => {
   it('지원 여부로 거른다', () => {
     expect(supportedCollectors(OK)).toHaveLength(COLLECTORS.length)
     // startup 은 어디서나 지원된다 — 구형 기기에서도 목록이 비지 않는다.
-    expect(supportedCollectors(OLD)).toEqual([startupCollector])
+    // thermal 은 sdk 29 하한이라 sdk 30 인 이 기기에서도 지원된다.
+    expect(supportedCollectors(OLD)).toEqual([startupCollector, thermalCollector])
+  })
+
+  it('sdk 28 기기에서는 thermal 이 미지원이고 사유가 Android 10 을 말한다', () => {
+    const reasons = unsupportedReasons({ sdkInt: 28, dataSources: [] })
+    expect(reasons.find((r) => r.startsWith('thermal:'))).toContain('Android 10')
+  })
+
+  it('sdk 29 기기에서 thermal 은 지원된다 — frame(31)이 안 되는 기기에서도', () => {
+    const ids = supportedCollectors({ sdkInt: 29, dataSources: [] }).map((c) => c.id)
+    expect(ids).toContain('thermal')
+    expect(ids).not.toContain('frame')
+  })
+
+  it('sdk 33 기기에서 network 는 미지원이고 thermal 은 지원된다', () => {
+    const env = { sdkInt: 33, dataSources: [] }
+    const ids = supportedCollectors(env).map((c) => c.id)
+    expect(ids).toContain('thermal')
+    expect(ids).not.toContain('network')
+    expect(unsupportedReasons(env).find((r) => r.startsWith('network:'))).toContain('Android 14')
   })
 
   it('미지원 항목만 사유와 함께 한국어로 낸다', () => {
@@ -80,5 +130,28 @@ describe('supportedCollectors / unsupportedReasons', () => {
 
   it('전부 지원되면 사유가 하나도 없다', () => {
     expect(unsupportedReasons(OK)).toEqual([])
+  })
+})
+
+describe('collectSnapshotSpecs', () => {
+  /**
+   * G4. 미지원 기기에 명령이 나가면 원칙 1 의 취지가 무너진다 —
+   * 읽지 않을 데이터를 위해 기기를 건드리는 것이기 때문이다.
+   */
+  it('network 가 미지원인 기기에는 그 스냅샷 명령이 하나도 나가지 않는다', () => {
+    expect(collectSnapshotSpecs({ sdkInt: 33, dataSources: [] })).toEqual([])
+    expect(collectSnapshotSpecs({ sdkInt: 34, dataSources: [] }).map((s) => s.key)).toEqual([
+      'netstats',
+      'packages',
+    ])
+  })
+
+  /**
+   * D3. `dumpsys thermalservice` 는 `collectDeviceState()` 가 이미 찍는다. thermal collector 가
+   * 그것을 다시 선언하면 같은 명령이 세션당 두 번 나가고, `mergeSnapshotSpecs` 가 던진다.
+   */
+  it('thermal 은 스냅샷을 하나도 선언하지 않는다 — 원문은 이미 찍히고 있다', () => {
+    expect(collectSnapshotSpecs({ sdkInt: 33, dataSources: [] })).toEqual([])
+    expect(collectSnapshotSpecs(OK).map((s) => s.key)).not.toContain('thermalservice')
   })
 })

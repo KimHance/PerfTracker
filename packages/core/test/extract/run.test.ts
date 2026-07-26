@@ -1,19 +1,61 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import type { NetworkData, ThermalData } from '../../src/schema/result.js'
 import { CPU_TIMES_SQL } from '../../src/collectors/cpu.js'
 import { FRAME_PROCESS_SQL, frameDurationsSql } from '../../src/collectors/frame.js'
 import { SessionStateError } from '../../src/errors.js'
-import { BUFFER_STATS_SQL, extractRun } from '../../src/extract/run.js'
+import { BUFFER_STATS_SQL, extractRun, readSnapshots } from '../../src/extract/run.js'
 import { TRACING_OVERHEAD_SQL } from '../../src/extract/overhead.js'
 import { writeCaptureManifest } from '../../src/session/manifest.js'
 import { type ActiveSession, writeActiveSession, writeRunSession } from '../../src/session/state.js'
 import { FakeProcessRunner } from '../support/fakeProcessRunner.js'
 
 const PKG = 'com.nhn.android.webtoon'
+/** `makeRun` 의 `target_app.uid`. 픽스처의 uid 를 여기에 맞춰야 배선이 실제로 이어진다. */
+const APP_UID = 10359
 
-function deviceState() {
+const fixture = (n: string): string =>
+  readFileSync(fileURLToPath(new URL(`../fixtures/${n}`, import.meta.url)), 'utf8')
+
+const THERMAL = fixture('dumpsys-thermalservice.txt')
+/** AP 를 41.6 으로 올린 "종료" 스냅샷. 두 절에 다 있으므로 `replaceAll` 이어야 한다. */
+const THERMAL_AFTER = THERMAL.replaceAll(
+  'mValue=37.1, mType=0, mName=AP',
+  'mValue=41.6, mType=0, mName=AP',
+)
+const NETSTATS = fixture('dumpsys-netstats.txt').replaceAll('10388', String(APP_UID))
+const NETSTATS_AFTER = NETSTATS.replaceAll(
+  `${APP_UID} 1200000 1119 431000 871`,
+  `${APP_UID} 1205000 1129 432000 876`,
+)
+const PACKAGES = fixture('pm-list-packages-u.txt').replaceAll('10388', String(APP_UID))
+
+/**
+ * M3 이전 파서가 만들던 모양 — 두 절을 구분 없이 긁어 같은 존이 두 번 실린다.
+ * 실기기 `capture.json` 이 실제로 이렇게 생겼다(8존이 15항목). `type`/`status`/`source` 도 없다.
+ */
+const LEGACY_DUP_ZONES = [
+  { name: 'PA1THM', celsius: 27.0 },
+  { name: 'SUBBAT', celsius: 0 },
+  { name: 'SUBBATRAW', celsius: 0 },
+  { name: 'AP', celsius: 37.1 },
+  { name: 'BAT', celsius: 34.8 },
+  { name: 'USB', celsius: 32.4 },
+  { name: 'SKIN', celsius: 35.4 },
+  { name: 'PATHM', celsius: 37.2 },
+  { name: 'AP', celsius: 37.1 },
+  { name: 'BAT', celsius: 34.8 },
+  { name: 'PATHM', celsius: 37.2 },
+  { name: 'SKIN', celsius: 35.4 },
+  { name: 'SUBBAT', celsius: 0 },
+  { name: 'SUBBATRAW', celsius: 0 },
+  { name: 'USB', celsius: 32.4 },
+]
+
+function deviceState(thermalZones: { name: string; celsius: number }[] = [{ name: 'AP', celsius: 37.1 }]) {
   return {
     captured_at: '2026-07-25T14:32:10.000Z',
     battery_level: 68,
@@ -25,7 +67,7 @@ function deviceState() {
     network: 'wifi',
     mem_available_kb: 3511516,
     animator_duration_scale: 1,
-    thermal_zones: [{ name: 'AP', celsius: 37.1 }],
+    thermal_zones: thermalZones,
   }
 }
 
@@ -38,12 +80,30 @@ async function makeRun(
     adbCommandsDuringSession?: number
     launch?: boolean
     appPid?: number | null
+    /** `raw/<key>.txt` 로 쓰고 `artifacts.raw` 에 등재할 원문들. 키에 `_before`/`_after` 포함. */
+    raw?: Record<string, string>
+    appUid?: number | null
+    /** `capture.json` 의 `device.state_*.thermal_zones` 에 넣을 값. */
+    thermalZones?: { name: string; celsius: number }[]
   } = {},
 ): Promise<string> {
   const runDir = mkdtempSync(join(tmpdir(), 'pt-extract-'))
   const trace = overrides.trace === undefined ? 'trace.perfetto-trace' : overrides.trace
   if (trace) writeFileSync(join(runDir, trace), 'fake')
   const endedAt = overrides.endedAt === undefined ? '2026-07-25T14:32:52.735Z' : overrides.endedAt
+
+  // 기본값은 예전 그대로 — 디스크에 없는 파일 하나만 등재된 상태다 (readSnapshots 가 null 로 접는다).
+  const rawFiles: string[] = []
+  if (overrides.raw === undefined) {
+    rawFiles.push('raw/battery_before.txt')
+  } else {
+    mkdirSync(join(runDir, 'raw'), { recursive: true })
+    for (const [name, text] of Object.entries(overrides.raw)) {
+      const rel = join('raw', `${name}.txt`)
+      writeFileSync(join(runDir, rel), text)
+      rawFiles.push(rel)
+    }
+  }
 
   await writeRunSession(
     runDir,
@@ -92,8 +152,8 @@ async function makeRun(
           supported_refresh_rates_hz: [60, 120],
         },
       },
-      state_before: deviceState(),
-      state_after: deviceState(),
+      state_before: deviceState(overrides.thermalZones),
+      state_after: deviceState(overrides.thermalZones),
     },
     target_app: {
       package: PKG,
@@ -101,7 +161,7 @@ async function makeRun(
       label_source: 'apk_resources',
       version_name: '2.46.0',
       version_code: 24600400,
-      uid: 10359,
+      uid: overrides.appUid === undefined ? APP_UID : overrides.appUid,
       install_source: 'com.android.vending',
       launcher_activity: 'com.naver.webtoon.splash.SplashActivity',
       render_process: null,
@@ -113,7 +173,7 @@ async function makeRun(
     },
     warnings: [{ code: 'charging_during_session', message: 'USB 충전 중이었음' }],
     adb_commands_during_session: overrides.adbCommandsDuringSession ?? 0,
-    artifacts: { trace, video: null, raw: ['raw/battery_before.txt'] },
+    artifacts: { trace, video: null, raw: rawFiles },
   })
 
   return runDir
@@ -477,6 +537,154 @@ describe('extractRun', () => {
     })
   })
 
+  /**
+   * D3 의 핵심 약속: `capture.json` 의 형식 버전을 올리지 않았으므로 M3 이전 run 이 그대로
+   * 열린다. 그리고 그 run 에서 **thermal 은 나오고 network 는 정직하게 안 나온다.**
+   * 이 테스트가 깨지면 `runs/` 의 실기기 세션 4개가 죽었다는 뜻이다.
+   *
+   * 동시에 이것이 `extractRun` → `capture.snapshots` **배선**의 유일한 단언이다.
+   * `snapshots: await readSnapshots(...)` 를 `snapshots: {}` 로 바꿔도 TypeScript 는
+   * 아무 말도 하지 않는다 — required 필드라 **삭제**만 막힐 뿐이다.
+   * 그러면 thermal 이 `collected` 에서 `partial`/`snapshot_unavailable` 로 떨어져 여기서 잡힌다.
+   */
+  it('M3 이전 run(netstats 없음)을 재산출하면 thermal 은 나오고 network 는 snapshot_unavailable 이다', async () => {
+    const runDir = await makeRun({
+      trace: null,
+      raw: { thermalservice_before: THERMAL, thermalservice_after: THERMAL_AFTER },
+    })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
+
+    expect(result.metrics.thermal?.status).toBe('collected')
+    const thermal = result.metrics.thermal?.data as ThermalData
+    expect(thermal.zones).toHaveLength(8)
+    expect(thermal.zones.find((z) => z.name === 'AP')).toMatchObject({ delta_c: 4.5 })
+
+    expect(result.metrics.network?.status).toBe('partial')
+    expect(result.metrics.network?.reason_code).toBe('snapshot_unavailable')
+    // **0 이 아니다.** 조회조차 못 한 것에 0 을 내면 "트래픽이 없었다" 가 된다.
+    expect(result.metrics.network?.data).toBeNull()
+
+    // 형식 버전을 올리지 않았다는 것 자체가 계약이다.
+    const manifest = JSON.parse(readFileSync(join(runDir, 'capture.json'), 'utf8')) as {
+      version: number
+    }
+    expect(manifest.version).toBe(1)
+  })
+
+  /**
+   * `BaseExtractContext.appUid` 배선의 유일한 단언. `appUid: manifest.target_app.uid` 를
+   * `appUid: null` 로 바꿔도 컴파일은 통과하고, network 는 조용히 `app_uid_unknown` 이 된다.
+   * uid 가 결과의 숫자에 실제로 쓰였다는 것을 `data.uid` 로 확인한다.
+   */
+  it('netstats/packages 원본이 있으면 network 가 uid 델타를 낸다 — uid 는 매니페스트에서 온다', async () => {
+    const runDir = await makeRun({
+      trace: null,
+      raw: {
+        netstats_before: NETSTATS,
+        netstats_after: NETSTATS_AFTER,
+        packages_before: PACKAGES,
+        packages_after: PACKAGES,
+      },
+    })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
+
+    expect(result.metrics.network?.status).toBe('collected')
+    expect(result.metrics.network?.data).toEqual({
+      uid: APP_UID,
+      rx_bytes: 5000,
+      tx_bytes: 1000,
+      rx_packets: 10,
+      tx_packets: 5,
+      shared_uid_packages: ['com.nhn.android.webtoon', 'com.example.sibling'],
+    } satisfies NetworkData)
+  })
+
+  /**
+   * 같은 result.json 안의 두 필드가 같은 센서에 대해 서로 다른 말을 하면 안 된다.
+   * 옛 파서로 찍힌 run 의 `capture.json` 은 `thermal_zones` 가 15항목(AP 가 두 번)이고,
+   * `metrics.thermal.zones` 는 원문을 다시 읽어 8존을 낸다. 그대로 두면 LLM 소비자가
+   * 두 필드를 교차 참조했을 때 모순으로 읽는다.
+   *
+   * 지어내는 것이 아니다 — **같은 바이트를 고쳐진 파서로 다시 읽는 것**이고,
+   * `target_app.render_process` 가 이미 같은 방식으로 채워진다.
+   */
+  it('옛 run 의 중복된 thermal_zones 를 raw 원문에서 다시 만든다', async () => {
+    const runDir = await makeRun({
+      trace: null,
+      thermalZones: LEGACY_DUP_ZONES,
+      raw: { thermalservice_before: THERMAL, thermalservice_after: THERMAL_AFTER },
+    })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
+
+    const zones = result.device.state_before.thermal_zones
+    expect(zones).toHaveLength(8)
+    expect(zones.filter((z) => z.name === 'AP')).toHaveLength(1)
+    // 배치 A 가 넓힌 필드가 옛 run 에서도 실제로 채워진다.
+    expect(zones.find((z) => z.name === 'AP')).toEqual({
+      name: 'AP',
+      celsius: 37.1,
+      type: 0,
+      status: 0,
+      source: 'hal',
+    })
+    expect(zones.find((z) => z.name === 'PA1THM')?.source).toBe('cached')
+
+    // 그리고 metrics.thermal 과 **같은 말을** 한다.
+    const thermal = result.metrics.thermal?.data as ThermalData
+    expect(zones.map((z) => z.name)).toEqual(thermal.zones.map((z) => z.name))
+
+    // state_after 도 같이 고쳐진다 — after 원문은 AP 가 41.6 이다.
+    expect(result.device.state_after?.thermal_zones.find((z) => z.name === 'AP')?.celsius).toBe(41.6)
+
+    // capture.json 은 건드리지 않는다. 캡처 기록 자체는 보존된다.
+    const manifest = JSON.parse(readFileSync(join(runDir, 'capture.json'), 'utf8')) as {
+      device: { state_before: { thermal_zones: unknown[] } }
+    }
+    expect(manifest.device.state_before.thermal_zones).toHaveLength(15)
+  })
+
+  /** 근거가 없으면 덮지 않는다. 빈 배열로 덮으면 "센서가 없었다" 는 없던 사실이 된다. */
+  it('raw 원문이 없으면 capture.json 의 thermal_zones 를 그대로 옮긴다', async () => {
+    const runDir = await makeRun({ trace: null, thermalZones: LEGACY_DUP_ZONES })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
+
+    expect(result.device.state_before.thermal_zones).toHaveLength(15)
+    // 그리고 그 상태를 숨기지 않는다 — thermal 은 원문이 없다고 정직하게 말한다.
+    expect(result.metrics.thermal?.reason_code).toBe('snapshot_unavailable')
+  })
+
+  it('매니페스트에 uid 가 없으면 network 는 app_uid_unknown 이다', async () => {
+    const runDir = await makeRun({
+      trace: null,
+      appUid: null,
+      raw: { netstats_before: NETSTATS, netstats_after: NETSTATS_AFTER },
+    })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
+
+    expect(result.metrics.network?.reason_code).toBe('app_uid_unknown')
+    expect(result.metrics.network?.data).toBeNull()
+  })
+
   it('오버헤드 쿼리가 터져도 result.json 은 나온다', async () => {
     const runDir = await makeRun()
     const trace = join(runDir, 'trace.perfetto-trace')
@@ -489,6 +697,54 @@ describe('extractRun', () => {
 
     expect(result.metrics.frame.status).toBe('collected')
     expect(result.measurement_overhead.tracing_processes_cpu_time_ms).toBeNull()
+  })
+})
+
+describe('readSnapshots', () => {
+  it('artifacts.raw 의 전/후 파일을 key 로 묶는다', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pt-snap-'))
+    mkdirSync(join(dir, 'raw'))
+    writeFileSync(join(dir, 'raw', 'thermalservice_before.txt'), 'Thermal Status: 0\n')
+    writeFileSync(join(dir, 'raw', 'thermalservice_after.txt'), 'Thermal Status: 1\n')
+
+    const snaps = await readSnapshots(dir, [
+      'raw/thermalservice_before.txt',
+      'raw/thermalservice_after.txt',
+    ])
+    expect(snaps['thermalservice']).toEqual({
+      before: 'Thermal Status: 0\n',
+      after: 'Thermal Status: 1\n',
+    })
+  })
+
+  /** stop 을 안 거친 run 이 그렇다. after 를 0 이나 '' 로 채우면 거짓 청정 신호가 된다. */
+  it('after 파일이 없으면 after 는 null 이고 before 는 살아 있다', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pt-snap-'))
+    mkdirSync(join(dir, 'raw'))
+    writeFileSync(join(dir, 'raw', 'netstats_before.txt'), 'x\n')
+
+    expect(await readSnapshots(dir, ['raw/netstats_before.txt'])).toEqual({
+      netstats: { before: 'x\n', after: null },
+    })
+  })
+
+  /** tryShell 이 실패를 빈 문자열로 흡수하므로 빈 파일은 "명령이 실패했다" 는 뜻이다. */
+  it('빈 파일은 null 이다', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pt-snap-'))
+    mkdirSync(join(dir, 'raw'))
+    writeFileSync(join(dir, 'raw', 'netstats_before.txt'), '')
+    expect((await readSnapshots(dir, ['raw/netstats_before.txt']))['netstats']?.before).toBeNull()
+  })
+
+  it('매니페스트에 있는데 디스크에 없는 파일은 null 로 남고 던지지 않는다', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pt-snap-'))
+    expect(await readSnapshots(dir, ['raw/netstats_before.txt'])).toEqual({
+      netstats: { before: null, after: null },
+    })
+  })
+
+  it('트레이스 같은 비-스냅샷 항목은 무시한다', async () => {
+    expect(await readSnapshots('/nonexistent', ['trace.perfetto-trace', 'video.mp4'])).toEqual({})
   })
 })
 

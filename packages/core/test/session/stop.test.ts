@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { MeasurementWindowViolationError, SessionStateError } from '../../src/errors.js'
@@ -64,6 +64,129 @@ describe('stopSession — 정상 경로', () => {
     // stop 자신이 창을 닫은 뒤 보낸 명령들은 카운터에 잡히지 않는다.
     expect(manifestOf(session.runDir).adb_commands_during_session).toBe(1)
     expect(adb.window.isOpen).toBe(false)
+  })
+
+  /**
+   * 이 단언이 지키는 배선: `stopSession` 이 `runSnapshots(ctx.adb, snapshotSpecs)` 를 실제로
+   * 부른다는 것. 그 한 줄을 지우면 `raw/netstats_after.txt` / `raw/packages_after.txt` 가
+   * 사라지고 (thermalservice 는 `collectDeviceState` 가 따로 찍으므로 살아남는다)
+   * extract 의 network collector 는 영원히 `snapshot_unavailable` 만 낸다.
+   * TypeScript 는 이 배선을 지키지 못한다 — 지우는 것도 `{}` 로 무력화하는 것도 타입이 맞는다.
+   *
+   * `stoppableDevice` 는 두 명령에 응답을 등록하지 않으므로 `FakeProcessRunner` 가 exit 127 을
+   * 내고 `tryShell` 이 그것을 빈 문자열로 흡수한다 → **빈 파일이 쓰이고 등재된다.**
+   * 그것이 정상 동작이다: 명령 하나가 세션을 죽이지 않고, `snapshotText` 가 빈 원문을 null 로
+   * 접어 collector 가 `snapshot_unavailable` 로 정직하게 말한다.
+   */
+  it('종료 스냅샷도 raw/ 에 저장되고 등재된다 — before/after 가 짝을 이룬다', async () => {
+    const { session, home } = await startedSession()
+
+    await stopSession({ adb: clientFor(stoppableDevice(session)), serial: SERIAL }, session, LATER, home)
+
+    const manifest = manifestOf(session.runDir)
+    for (const key of ['netstats', 'packages', 'thermalservice']) {
+      for (const phase of ['before', 'after']) {
+        const rel = join('raw', `${key}_${phase}.txt`)
+        expect(manifest.artifacts.raw, rel).toContain(rel)
+        expect(existsSync(join(session.runDir, rel)), rel).toBe(true)
+      }
+    }
+  })
+
+  /**
+   * 원칙 1 의 트립와이어, **stop 쪽.** start 는 이것을 두 겹으로 갖고 있었는데
+   * (`start.test.ts` 의 "명령 전체 목록" + "스냅샷은 트레이스를 켜기 전에") stop 은 둘 다
+   * 없었다. 리뷰어가 변이로 확증했다: `collectDeviceState` + `runSnapshots` 두 줄을
+   * `isSessionDetached` / `stopDetachedSession` **앞**으로 옮겨도 651개가 전부 통과했다.
+   *
+   * 그 배치에서 무엇이 깨지는가: `dumpsys netstats` / `pm list packages -U` /
+   * `dumpsys thermalservice` / `dumpsys battery` 가 **아직 도는 트레이서 안에서** 실행되고,
+   * 그 비용이 `metrics.cpu` · `metrics.log` · `measurement_overhead` 에 그대로 섞인다.
+   * **온-디바이스 테스트도 이것을 못 잡는다** — 측정 창은 이미 닫혀 있으므로
+   * `adb_commands_during_session` 은 여전히 0 이다.
+   *
+   * `dumpsys` 로 거르지 않고 **목록 전체**를 고정하는 이유는 start 쪽과 같다:
+   * M3 이 늘린 명령 중 하나가 `pm list packages -U` 라 그 필터에 애초에 걸리지 않았다.
+   * 개수만 세는 것도 안 된다 — 하나가 늘고 하나가 사라진 경우를 못 잡는다.
+   *
+   * M4 가 Power 로 `dumpsys batterystats` 를 더하면 이 목록이 먼저 깨진다. 그때
+   * **어디에 넣었는지**(트레이서 정지 뒤인지)가 다음 두 테스트의 질문이다.
+   */
+  it('기기로 나가는 명령 전체가 이 목록과 정확히 같다', async () => {
+    const { session, home } = await startedSession()
+    const runner = stoppableDevice(session)
+
+    await stopSession({ adb: clientFor(runner), serial: SERIAL }, session, LATER, home)
+
+    expect(runner.commands).toEqual([
+      // 1) 트레이서를 먼저 멈춘다.
+      `-s ${SERIAL} shell perfetto --is_detached=${session.perfettoKey}`,
+      `-s ${SERIAL} shell perfetto --attach=${session.perfettoKey} --stop`,
+      // 2) 원본을 회수하고 기기 쪽을 지운다.
+      `-s ${SERIAL} pull ${session.remoteTracePath} ${join(session.runDir, 'trace.perfetto-trace')}`,
+      `-s ${SERIAL} shell rm -f ${session.remoteTracePath}`,
+      // 3) collectDeviceState — 여기부터가 종료 스냅샷이다.
+      `-s ${SERIAL} shell dumpsys battery`,
+      `-s ${SERIAL} shell dumpsys thermalservice`,
+      `-s ${SERIAL} shell echo "brightness=$(settings get system screen_brightness) low_power=$(settings get global low_power) anim=$(settings get global animator_duration_scale)"`,
+      `-s ${SERIAL} shell grep MemAvailable /proc/meminfo`,
+      `-s ${SERIAL} shell ip route get 8.8.8.8`,
+      // 4) collectSnapshotSpecs — M3 이 늘린 둘. network collector 가 읽는다.
+      `-s ${SERIAL} shell dumpsys netstats`,
+      `-s ${SERIAL} shell pm list packages -U`,
+    ])
+  })
+
+  /**
+   * `stop.ts` 의 주석이 단언하는 바로 그것: "트레이서가 이미 멈춘 뒤이므로 이 명령들도
+   * 트레이스에 남지 않는다." 그 문장을 지키는 장치가 이 테스트다.
+   *
+   * 창 밖이라는 것만으로는 부족하다 — 창은 `stopSession` 첫 줄에서 이미 닫혔고,
+   * 트레이서는 그것과 무관하게 `--attach --stop` 까지 돈다. 두 사건은 다른 사건이다.
+   */
+  it('종료 스냅샷 명령은 트레이서를 멈춘 뒤에 나간다', async () => {
+    const { session, home } = await startedSession()
+    const runner = stoppableDevice(session)
+
+    await stopSession({ adb: clientFor(runner), serial: SERIAL }, session, LATER, home)
+
+    const stopped = runner.commands.indexOf(
+      `-s ${SERIAL} shell perfetto --attach=${session.perfettoKey} --stop`,
+    )
+    expect(stopped, '트레이서를 멈추는 명령이 아예 없다').toBeGreaterThanOrEqual(0)
+
+    for (const snapshot of [
+      'shell dumpsys battery',
+      'shell dumpsys thermalservice',
+      'shell dumpsys netstats',
+      'shell pm list packages -U',
+    ]) {
+      const at = runner.commands.findIndex((c) => c.endsWith(snapshot))
+      expect(at, `${snapshot} 가 나가지 않았다`).toBeGreaterThanOrEqual(0)
+      expect(at, `${snapshot} 가 트레이서가 도는 동안 나갔다`).toBeGreaterThan(stopped)
+    }
+  })
+
+  /**
+   * 같은 계열의 **두 번째** 자기 주장. `NetworkDataSchema.rx_bytes` 의 `.describe()` 가
+   * 소비자에게 이렇게 공시한다: "종료 스냅샷은 트레이스를 회수한 **뒤**에 찍히므로 회수에
+   * 걸린 시간이 포함된다(트레이스가 클수록 길어진다)." 그 문장을 근거로 스키마는
+   * `state_after.captured_at` 으로 처리량을 계산하지 말라고까지 말한다.
+   *
+   * 스냅샷을 회수 **앞**으로 옮기면 그 공시가 통째로 거짓이 되는데, 그 배치를 지키는 것은
+   * 지금까지 아무것도 없었다. 값이 아니라 **순서**가 계약인 자리다.
+   */
+  it('종료 스냅샷은 트레이스를 회수한 뒤에 찍힌다 — 스키마가 그렇게 공시한다', async () => {
+    const { session, home } = await startedSession()
+    const runner = stoppableDevice(session)
+
+    await stopSession({ adb: clientFor(runner), serial: SERIAL }, session, LATER, home)
+
+    const pull = runner.commands.findIndex((c) => c.startsWith(`-s ${SERIAL} pull `))
+    const netstats = runner.commands.findIndex((c) => c.endsWith('shell dumpsys netstats'))
+
+    expect(pull).toBeGreaterThanOrEqual(0)
+    expect(netstats).toBeGreaterThan(pull)
   })
 
   it('세션이 사라지고 기기에도 트레이스가 없으면 aborted 로 남긴다', async () => {
@@ -219,12 +342,33 @@ describe('stopSession — 프로세스를 넘어온 위반 카운트 (I4)', () =
     expect(manifestOf(session.runDir).adb_commands_during_session).toBe(2)
   })
 
-  it('진행 중인 run 디렉토리를 옮겨도 stop 이 사람이 읽을 수 있는 오류를 낸다', async () => {
+  /**
+   * I-1 과 **같은 계열**을 하나 더 발견해서 함께 막는다.
+   *
+   * `stop.ts` 는 매니페스트 읽기와 스냅샷 명세 확정(`collectSnapshotSpecs`)을 기기에 손대기
+   * **전에** 한다고 주석으로 단언한다: "그 평가가 트레이스 회수·삭제 뒤에 있으면 기기의
+   * 트레이스를 이미 지운 상태에서 던지게 된다 — 정본이 사라진 뒤의 실패다."
+   * 두 줄 다 던질 수 있다 (`parseVersionedJson`, `mergeSnapshotSpecs` 의 key 충돌 —
+   * M4 가 Power 로 `dumpsys battery` 를 선언하면 바로 그 길이다).
+   *
+   * 그런데 옛 단언은 "SessionStateError 가 난다" 뿐이었다. 두 줄을 회수 뒤로 옮겨도
+   * 그 단언은 **그대로 통과한다** — 예외 타입은 같고, 그때는 이미 `pull` 과 `rm -f` 가
+   * 끝난 뒤라 기기의 정본이 사라진 상태다. C1 이 Critical 이었던 바로 그 손실이다.
+   *
+   * 그래서 예외 타입이 아니라 **그 시점에 기기로 나간 명령이 하나도 없다는 것**을 단언한다.
+   */
+  it('매니페스트를 읽지 못하면 기기를 건드리기 전에 던진다 — 정본이 사라진 뒤에 실패하지 않는다', async () => {
     const { session, home } = await startedSession()
     writeFileSync(join(session.runDir, 'capture.json'), '{not json', 'utf8')
+    const runner = stoppableDevice(session)
 
     await expect(
-      stopSession({ adb: clientFor(stoppableDevice(session)), serial: SERIAL }, session, LATER, home),
+      stopSession({ adb: clientFor(runner), serial: SERIAL }, session, LATER, home),
     ).rejects.toBeInstanceOf(SessionStateError)
+
+    // 한 줄이 전부다: 기기에 아무것도 보내지 않았으면 트레이스도 세션도 그대로다.
+    expect(runner.commands).toEqual([])
+    // 포인터도 살아 있어야 다음 stop 이 같은 세션을 다시 집는다.
+    expect(await readActiveSession(SERIAL, home)).not.toBeNull()
   })
 })

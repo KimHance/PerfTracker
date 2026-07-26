@@ -244,6 +244,98 @@ describe('startSession — 오케스트레이션 불변식', () => {
     expect(first.runDir).not.toBe(second.runDir)
   })
 
+  /**
+   * 원칙 1 의 트립와이어. **`dumpsys` 로 거르지 않고 목록 전체를 고정한다.**
+   *
+   * 옛 단언은 `commands.filter((c) => c.includes('dumpsys'))` 였는데, M3 가 추가하기로 한
+   * 두 명령 중 하나가 **`pm list packages -U`** 라서 그 필터에 애초에 걸리지 않았다 —
+   * "기기로 나가는 명령이 M2 와 한 개도 다르지 않다" 를 지킨다고 주장하면서 그중 하나를
+   * 보지 못하는 트립와이어였다. 개수만 세는 것도 같은 이유로 안 된다: 하나가 늘고 하나가
+   * 사라진 경우를 못 잡는다.
+   *
+   * 이 목록이 늘어난다는 것은 곧 "세션 하나가 기기에 더 많은 일을 시킨다" 는 뜻이고,
+   * 그때는 **그 명령을 읽는 collector 가 어디 있는지** 가 반드시 따라와야 한다 (G4).
+   */
+  it('기기로 나가는 명령 전체가 이 목록과 정확히 같다', async () => {
+    const h = start({ launch: true })
+    const session = await h.result
+
+    expect(h.runner.commands.map((c) => c.replaceAll(session.id, '<id>'))).toEqual([
+      // probeDevice
+      `-s ${SERIAL} shell which perfetto`,
+      `-s ${SERIAL} shell perfetto --query`,
+      `-s ${SERIAL} shell getprop ro.build.version.sdk`,
+      // collectDeviceStatic
+      `-s ${SERIAL} shell for p in ro.product.manufacturer ro.product.model ro.build.version.release ro.build.version.sdk ro.product.cpu.abilist ro.soc.model ro.soc.manufacturer ro.build.fingerprint; do echo "$p=$(getprop $p)"; done`,
+      `-s ${SERIAL} shell for c in /sys/devices/system/cpu/cpu[0-9]*; do [ -d "$c" ] && echo "$(basename $c) $(cat $c/cpufreq/cpuinfo_max_freq 2>/dev/null)"; done`,
+      `-s ${SERIAL} shell grep MemTotal /proc/meminfo`,
+      `-s ${SERIAL} shell wm size`,
+      `-s ${SERIAL} shell wm density`,
+      `-s ${SERIAL} shell dumpsys display`,
+      // collectDeviceState
+      `-s ${SERIAL} shell dumpsys battery`,
+      `-s ${SERIAL} shell dumpsys thermalservice`,
+      `-s ${SERIAL} shell echo "brightness=$(settings get system screen_brightness) low_power=$(settings get global low_power) anim=$(settings get global animator_duration_scale)"`,
+      `-s ${SERIAL} shell grep MemAvailable /proc/meminfo`,
+      `-s ${SERIAL} shell ip route get 8.8.8.8`,
+      // collectSnapshotSpecs — M3 이 늘린 둘. network collector 가 읽는다.
+      `-s ${SERIAL} shell dumpsys netstats`,
+      `-s ${SERIAL} shell pm list packages -U`,
+      // 콜드 상태 보장 → 트레이스 → 앱 실행
+      `-s ${SERIAL} shell am force-stop 'com.nhn.android.webtoon'`,
+      `-s ${SERIAL} shell rm -f /data/misc/perfetto-traces/perftracker_<id>.pftrace; ` +
+        `perfetto -c - --txt -o /data/misc/perfetto-traces/perftracker_<id>.pftrace --detach=perftracker_<id>`,
+      `-s ${SERIAL} shell am start -W -n 'com.nhn.android.webtoon/com.naver.webtoon.splash.SplashActivity'; ` +
+        `echo __perftracker_pidof__; pidof 'com.nhn.android.webtoon'`,
+    ])
+  })
+
+  /**
+   * M3 이 기기로 보내는 명령이 둘 늘었다. 늘어난 명령이 **트레이스를 켜기 전에** 나가는지가
+   * 계약이다 — 창 밖이라는 것만으로는 부족하다. `--detach` 뒤에 dumpsys 를 부르면
+   * 그 작업이 트레이스에 기록되어 CPU / Log / measurement_overhead 숫자에 섞인다.
+   */
+  it('스냅샷 명령은 트레이스를 켜기 전에 나간다', async () => {
+    const h = start({ launch: true })
+    await h.result
+
+    const detach = h.runner.commands.findIndex((c) => c.includes('--detach=perftracker_'))
+    const netstats = h.runner.commands.findIndex((c) => c.endsWith('shell dumpsys netstats'))
+    const packages = h.runner.commands.findIndex((c) => c.endsWith('shell pm list packages -U'))
+
+    expect(netstats).toBeGreaterThanOrEqual(0)
+    expect(packages).toBeGreaterThanOrEqual(0)
+    expect(netstats).toBeLessThan(detach)
+    expect(packages).toBeLessThan(detach)
+  })
+
+  it('시작 스냅샷 원본이 raw/ 에 저장되고 artifacts.raw 에 등재된다', async () => {
+    const h = start({ launch: true })
+    const session = await h.result
+    const manifest = JSON.parse(
+      readFileSync(join(session.runDir, 'capture.json'), 'utf8'),
+    ) as CaptureManifest
+
+    expect(manifest.artifacts.raw).toContain(join('raw', 'netstats_before.txt'))
+    expect(manifest.artifacts.raw).toContain(join('raw', 'packages_before.txt'))
+    expect(existsSync(join(session.runDir, 'raw', 'netstats_before.txt'))).toBe(true)
+  })
+
+  /**
+   * G4 를 start 경로에서 고정한다. sdk 33 기기에서는 network 가 미지원이므로
+   * **그 두 명령이 기기로 나가면 안 된다** — 읽지 않을 데이터를 위해 기기를 건드리는 것이다.
+   */
+  it('network 가 미지원인 기기에는 그 두 명령이 나가지 않는다', async () => {
+    const runner = startableDevice((r) => {
+      r.on(`-s ${SERIAL} shell getprop ro.build.version.sdk`, { stdout: '33\n' })
+    })
+    const h = start({ launch: true, runner })
+    await h.result
+
+    expect(h.runner.commands.some((c) => c.includes('dumpsys netstats'))).toBe(false)
+    expect(h.runner.commands.some((c) => c.includes('pm list packages -U'))).toBe(false)
+  })
+
   it('트레이스를 먼저 켜고 나서 앱을 실행한다 — 콜드 스타트가 트레이스 안에 들어가야 한다', async () => {
     const h = start({ launch: true })
     await h.result

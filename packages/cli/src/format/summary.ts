@@ -1,8 +1,35 @@
-import type { CpuData, LogData, LogEvent, MemoryData, Result, StartupData } from '@perftracker/core'
+import type {
+  CpuData,
+  LogData,
+  LogEvent,
+  MemoryData,
+  NetworkData,
+  Result,
+  StartupData,
+  ThermalData,
+} from '@perftracker/core'
 
 const num = (v: number): string => v.toLocaleString('en-US')
 const mb = (kb: number): string => `${num(Math.round(kb / 1024))}MB`
 const mhz = (khz: number): string => `${num(Math.round(khz / 1000))}MHz`
+
+const bytes = (n: number): string => {
+  if (n < 1024) return `${num(n)}B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)}KB`
+  return `${(n / 1024 / 1024).toFixed(1)}MB`
+}
+
+/**
+ * 부호를 반드시 붙인다. 실기기 4세션 중 **2세션에서 온도가 내려갔다**(32.1→30.8, 32.1→31.9).
+ * 부호를 잃으면 요약이 "발열했다" 는 없던 사실을 말하게 된다.
+ */
+const signed = (v: number): string => `${v > 0 ? '+' : ''}${v.toFixed(1)}`
+
+/** 못 읽은 숫자 자리. 0 으로 채우면 "재 봤더니 0" 이 되어 정반대 뜻이 된다. */
+const orNa = (v: number | null): string => (v === null ? 'n/a' : String(v))
+
+/** 앞 몇 개 존만 보여줄지. 나머지는 개수로 접는다 — 정렬하지 않으므로 기기 순서가 남는다. */
+const ZONE_PREVIEW = 3
 
 const LABEL_WIDTH = 10
 const STATUS_WIDTH = 13
@@ -143,6 +170,81 @@ export function formatSummary(result: Result): string {
     if (log.reason !== null) lines.push(`          ${`[${log.reason_code}]`} ${log.reason}`)
   } else {
     lines.push(statusLine('Log', log))
+  }
+
+  const thermal = result.metrics.thermal
+  if (thermal?.data != null) {
+    const t = thermal.data as ThermalData
+    // hal_ready 는 세 상태다. null 을 "not ready" 로 접으면 확인하지 않은 것을 단정하게 된다.
+    const hal =
+      t.hal_ready_before === true ? 'HAL ready' : t.hal_ready_before === false ? 'HAL not ready' : 'HAL n/a'
+    lines.push(
+      valueLine(
+        'Thermal',
+        thermal.status,
+        `${num(t.zones.length)} zone${t.zones.length === 1 ? '' : 's'} · ` +
+          `Thermal Status ${orNa(t.device_status_before)} → ${orNa(t.device_status_after)} · ${hal}`,
+      ),
+    )
+
+    // `zones` 가 온 순서 그대로 앞에서부터 자른다. 델타 크기로 정렬하지 않는다 —
+    // 어느 센서가 중요한지는 이 도구가 말하지 않는 종류의 것이다.
+    // (그 순서는 "기기가 준 순서" 가 아니라 HAL 절 먼저, cached 전용이 뒤다.
+    //  스키마의 zones 설명에 규칙이 있다. 여기서 다시 정렬하면 그 규칙마저 지운다.)
+    const preview = t.zones.slice(0, ZONE_PREVIEW)
+    const shown = preview.map((z) => {
+      const from = z.before_c === null ? 'n/a' : z.before_c.toFixed(1)
+      const to = z.after_c === null ? 'n/a' : z.after_c.toFixed(1)
+      // `cached` 만 표시한다. `hal` 은 기본값이라 붙이면 모든 줄이 길어지고 얻는 것이 없다.
+      const notes = [
+        z.delta_c === null ? null : signed(z.delta_c),
+        z.source === 'cached' ? 'cached' : null,
+      ].filter((v): v is string => v !== null)
+      return `${z.name} ${from}→${to}${notes.length > 0 ? ` (${notes.join(', ')})` : ''}`
+    })
+    const rest = t.zones.length - shown.length
+    // Network 줄이 uid 한정을 터미널까지 들고 가는 것과 같은 이유다. `cached` 존의 delta 0 을
+    // "안 변했다" 로 읽는 것이 정확히 이 숫자의 오독이고, 요약만 보는 사람이 가장 많다.
+    // 실기기에서는 HAL 존이 먼저 정렬되므로 cached 전용 존은 대개 "외 N개" 로 접히지만,
+    // 그건 그 기기 계열의 관측이지 보장이 아니다 — HAL 이 존을 적게 주면 미리보기에 들어온다.
+    // 표시 비용은 그때만 든다: cached 존이 안 보이면 이 문구는 아예 붙지 않는다.
+    const cachedNote = preview.some((z) => z.source === 'cached')
+      ? ' · cached = 갱신이 올 때만 바뀌는 값 (delta 0 이 "안 변했다" 가 아닐 수 있음)'
+      : ''
+    lines.push(
+      `          ${'zones'.padEnd(STATUS_WIDTH)} ${shown.join(' · ')}` +
+        `${rest > 0 ? ` · 외 ${num(rest)}개` : ''}${cachedNote}`,
+    )
+    if (thermal.reason !== null) lines.push(`          [${thermal.reason_code}] ${thermal.reason}`)
+  } else {
+    lines.push(statusLine('Thermal', thermal))
+  }
+
+  const network = result.metrics.network
+  if (network?.data != null) {
+    const n = network.data as NetworkData
+    lines.push(
+      valueLine(
+        'Network',
+        network.status,
+        `rx ${bytes(n.rx_bytes)} / ${num(n.rx_packets)}pk · ` +
+          `tx ${bytes(n.tx_bytes)} / ${num(n.tx_packets)}pk (세션 델타)`,
+      ),
+    )
+    // uid 단위라는 한정을 터미널에도 남긴다. 요약만 보는 사람이 가장 많고,
+    // "이 앱이 1.2MB 를 썼다" 로 읽는 것이 정확히 이 숫자의 오독이다.
+    // null 은 "확인 안 됨" 이다 — [] 로 접어 "0개" 라고 쓰면 조회한 적도 없는 것을 단정한다.
+    const shared =
+      n.shared_uid_packages === null
+        ? '이 uid 를 쓰는 패키지: 확인 안 됨'
+        : `이 uid 를 쓰는 패키지 ${num(n.shared_uid_packages.length)}개` +
+          (n.shared_uid_packages.length > 0 ? `: ${n.shared_uid_packages.join(', ')}` : '')
+    // uid 는 수량이 아니라 **식별자**다. `num()` 을 태우면 `10,388` 이 되어
+    // 기기에서 본 값(`10388`)과 글자가 달라지고 grep 이 안 된다.
+    lines.push(`          ${'uid'.padEnd(STATUS_WIDTH)} ${String(n.uid)} · ${shared}`)
+    if (network.reason !== null) lines.push(`          [${network.reason_code}] ${network.reason}`)
+  } else {
+    lines.push(statusLine('Network', network))
   }
 
   const o = result.measurement_overhead

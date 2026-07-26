@@ -4,13 +4,16 @@ import { cpuCollector } from './cpu.js'
 import { frameCollector } from './frame.js'
 import { logCollector } from './log.js'
 import { memoryCollector } from './memory.js'
+import { networkCollector } from './network.js'
+import { mergeSnapshotSpecs, type SnapshotSpec } from './snapshots.js'
 import { startupCollector } from './startup.js'
+import { thermalCollector } from './thermal.js'
 import type { Collector, CollectorEnv } from './types.js'
 
 /**
  * 활성 collector 목록. **이 배열이 실제로 소비된다** — `startSession` 이 여기서 TraceConfig
  * 블록을 모으고 `extractRun` 이 여기를 순회해 `metrics` 를 채운다.
- * M3 에서 network/thermal/power 가 여기 한 줄로 붙는다.
+ * 나중에 power 가 여기 한 줄로 붙는다.
  */
 export const COLLECTORS: Collector<unknown>[] = [
   frameCollector,
@@ -18,6 +21,8 @@ export const COLLECTORS: Collector<unknown>[] = [
   cpuCollector,
   memoryCollector,
   logCollector,
+  thermalCollector,
+  networkCollector,
 ]
 
 /** 이 기기에서 실제로 뭔가를 낼 수 있는 collector 들. */
@@ -32,6 +37,14 @@ export function supportedCollectors(env: CollectorEnv): Collector<unknown>[] {
  */
 export function collectTraceConfigBlocks(env: CollectorEnv): string[] {
   return mergeTraceConfigBlocks(supportedCollectors(env).flatMap((c) => c.traceConfigBlocks()))
+}
+
+/**
+ * 지원되는 collector 들이 요청한 스냅샷 명령을 합친다.
+ * `collectTraceConfigBlocks` 와 완전히 대칭이고, 규칙은 `mergeSnapshotSpecs` 에 있다.
+ */
+export function collectSnapshotSpecs(env: CollectorEnv): SnapshotSpec[] {
+  return mergeSnapshotSpecs(supportedCollectors(env).flatMap((c) => c.captureSnapshots?.() ?? []))
 }
 
 /**

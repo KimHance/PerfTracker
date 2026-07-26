@@ -1,5 +1,6 @@
 import type { TraceProcessor } from '../perfetto/traceProcessor/client.js'
 import type { MetricReason } from '../schema/reasons.js'
+import type { SnapshotPair, SnapshotSpec } from './snapshots.js'
 
 export interface CollectorEnv {
   sdkInt: number
@@ -46,6 +47,20 @@ export interface CaptureFacts {
    * 자세한 이유는 `collectors/appProcess.ts` 에 있다.
    */
   appPid: number | null
+  /**
+   * `raw/<key>_before.txt` / `raw/<key>_after.txt` 의 원문. key 는 명령의 이름이다
+   * (`thermalservice`, `netstats`, ...).
+   *
+   * **collector 가 `captureSnapshots()` 로 선언했는지와 무관하게 채워진다.** 이 맵은
+   * `capture.json` 의 `artifacts.raw` 를 훑어 만들기 때문이다. 그래서 `dumpsys
+   * thermalservice` 처럼 `collectDeviceState()` 가 예전부터 찍어 오던 원문도 여기 들어오고,
+   * **M3 이전에 찍힌 run 디렉토리도 그대로 열린다** — capture.json 의 형식 버전을
+   * 올리지 않는 이유가 이것이다.
+   *
+   * 값이 없는 자리는 null 이다: 파일이 없거나(옛 run, 아직 stop 하지 않은 세션),
+   * 명령이 실패해 빈 파일이 남았거나. **`''` 는 오지 않는다.**
+   */
+  snapshots: Record<string, SnapshotPair>
 }
 
 /**
@@ -56,6 +71,21 @@ export interface CaptureFacts {
  */
 export interface BaseExtractContext {
   packageName: string
+  /**
+   * `capture.json` 의 `target_app.uid`. uid 없이는 per-uid 카운터를 조회할 대상이 없다.
+   *
+   * **출처는 `PACKAGE_UIDS_SNAPSHOT` 이 아니다.** 이름이 비슷해 헷갈리기 쉬운데 둘은
+   * 플래그가 다른 별개의 명령이고 쓰임도 다르다:
+   *   - 이 필드 ← `app/list.ts` 의 **`pm list packages -3 -U --show-versioncode`**.
+   *     세션 시작 **전** 앱 해석 단계에서 나가고, **그 원문은 raw/ 에 남지 않는다.**
+   *   - `PACKAGE_UIDS_SNAPSHOT` = **`pm list packages -U`** (`-3` 없음, 시스템 패키지 포함).
+   *     network collector 가 `shared_uid_packages` 를 만들 때만 쓰고 `raw/packages_*.txt`
+   *     로 남는다. 이 필드와는 무관하다.
+   *
+   * null 이 되는 경우: 그 출력에 `uid:` 가 없었거나, 대상 앱이 **`-3`(서드파티) 목록에 아예
+   * 없는 경우**다 — 시스템 앱은 `-3` 때문에 목록에 나오지도 않는다.
+   */
+  appUid: number | null
   env: CollectorEnv
   capture: CaptureFacts
 }
@@ -91,6 +121,19 @@ interface CollectorBase {
   supports(env: CollectorEnv): SupportResult
   /** 이 collector 가 필요로 하는 데이터소스 블록. 반드시 `collectors/blocks.ts` 의 상수를 쓴다. */
   traceConfigBlocks(): string[]
+  /**
+   * capture 단계에 **시작 직전 1회 / 종료 직후 1회**씩 찍을 셸 명령. 반드시
+   * `collectors/snapshots.ts` 의 상수를 쓴다. `traceConfigBlocks()` 와 대칭이고,
+   * 같은 성질을 하나 더 갖는다 — **이 collector 가 미지원인 기기에는 명령이 아예 나가지 않는다.**
+   *
+   * optional 인 것은 의도다. 기존 collector 다섯은 이 훅을 선언하지 않고 한 줄도 바뀌지 않는다.
+   * `Collector<T>` 유니온에 세 번째 멤버를 만들지 않는 이유는 M3 계획서 D2 에 있다.
+   *
+   * **읽기와 무관하다.** 원문을 읽으려고 여기 선언할 필요는 없다 —
+   * `CaptureFacts.snapshots` 는 `artifacts.raw` 전체를 노출한다. 선언은 오직
+   * "capture 가 이 명령을 **추가로** 실행해 달라" 는 뜻이다.
+   */
+  captureSnapshots?(): SnapshotSpec[]
 }
 
 /** 트레이스를 파싱해야 값이 나오는 collector. */

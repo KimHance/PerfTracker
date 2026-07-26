@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Result } from '@perftracker/core'
+import type { NetworkData, Result, ThermalData } from '@perftracker/core'
 import { formatSummary } from '../../src/format/summary.js'
 
 function result(overrides: Partial<Result['metrics']> = {}): Result {
@@ -398,5 +398,280 @@ describe('formatSummary — M2 메트릭', () => {
     const out = formatSummary(result())
     expect(out).not.toContain('5,000ms')
     expect(out).not.toContain('5000ms')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// M3 — Thermal / Network
+// ---------------------------------------------------------------------------
+
+type Zone = ThermalData['zones'][number]
+
+/** 실기기(SM-S901N) 4세션 중 `02-45-12` 의 실측 8존을 그대로 옮긴 것. */
+function realZones(): Zone[] {
+  const z = (
+    name: string,
+    type: number,
+    before: number | null,
+    after: number | null,
+    source: 'hal' | 'cached' = 'hal',
+  ): Zone => ({
+    name,
+    type,
+    before_c: before,
+    after_c: after,
+    delta_c:
+      before === null || after === null ? null : Number((after - before).toFixed(1)),
+    status_before: 0,
+    status_after: after === null ? null : 0,
+    source,
+  })
+  return [
+    z('AP', 0, 31.1, 36.2),
+    z('BAT', 2, 30.7, 31.6),
+    z('PATHM', 5, 33.4, 36.5),
+    z('SKIN', 3, 31.1, 32.4),
+    z('SUBBAT', 2, 0, 0),
+    z('SUBBATRAW', 2, 0, 0),
+    z('USB', 4, 30.4, 30.6),
+    z('PA1THM', 5, 27, 27, 'cached'),
+  ]
+}
+
+function thermalMetric(data: Partial<ThermalData> = {}): Result['metrics']['thermal'] {
+  return {
+    status: 'collected',
+    source: 'dumpsys thermalservice: 세션 시작 직전 / 종료 직후 스냅샷의 센서별 온도 차이',
+    reason_code: null,
+    reason: null,
+    data: {
+      zones: realZones(),
+      device_status_before: 0,
+      device_status_after: 0,
+      status_override_before: false,
+      status_override_after: false,
+      hal_ready_before: true,
+      hal_ready_after: true,
+      headroom_thresholds: [null, 0.8666667, 0.93333334, 1, 1.1333333, 1.4333333, 2.4333334],
+      ...data,
+    },
+  }
+}
+
+function networkMetric(data: Partial<NetworkData> = {}): Result['metrics']['network'] {
+  return {
+    status: 'collected',
+    source: 'dumpsys netstats mAppUidStatsMap: 세션 전/후 스냅샷의 uid 행 델타',
+    reason_code: null,
+    reason: null,
+    data: {
+      uid: 10388,
+      rx_bytes: 1_258_291,
+      tx_bytes: 441_344,
+      rx_packets: 1119,
+      tx_packets: 871,
+      shared_uid_packages: ['com.nhn.android.webtoon'],
+      ...data,
+    },
+  }
+}
+
+const withThermal = (data: Partial<ThermalData> = {}): Result =>
+  result({ thermal: thermalMetric(data) })
+
+const withNetwork = (data: Partial<NetworkData> = {}): Result =>
+  result({ network: networkMetric(data) })
+
+const withBoth = (): Result => result({ thermal: thermalMetric(), network: networkMetric() })
+
+describe('formatSummary — Thermal 줄', () => {
+  /** 깨지는 조건: 존 개수·기기 전후 상태·HAL 준비 여부 중 하나라도 줄에서 빠지면 실패한다. */
+  it('존 개수와 전후 Thermal Status 를 내고 앞 3개 존을 전후·델타로 보여준다', () => {
+    const out = formatSummary(withThermal())
+    expect(out).toContain('Thermal   collected')
+    expect(out).toContain('8 zones')
+    expect(out).toContain('Thermal Status 0 → 0')
+    // 존이 1개인 기기(에뮬레이터)에서 "1 zones" 라고 쓰지 않는다.
+    expect(formatSummary(withThermal({ zones: realZones().slice(0, 1) }))).toContain('1 zone ·')
+    expect(out).toContain('HAL ready')
+    expect(out).toMatch(/AP 31\.1→36\.2 \(\+5\.1\)/)
+  })
+
+  /**
+   * 깨지는 조건: 부호를 버리거나 절댓값을 쓰면 실패한다.
+   * 실기기 4세션 중 2세션에서 온도가 **내려갔다**. 부호를 잃으면 도구가
+   * "발열했다" 는 없던 사실을 말하게 된다.
+   */
+  it('델타가 음수면 음수로 쓴다 — "발열" 로 바꾸지 않는다', () => {
+    const zones = realZones()
+    zones[0] = { ...zones[0]!, before_c: 32.1, after_c: 30.8, delta_c: -1.3 }
+    const out = formatSummary(withThermal({ zones }))
+    expect(out).toContain('(-1.3)')
+    expect(out).not.toContain('(+1.3)')
+  })
+
+  /**
+   * 깨지는 조건: 존을 델타 크기로 정렬하거나 전부 펼치면 실패한다.
+   * 순서는 기기가 준 것이고 "어느 존이 중요한가" 는 이 도구가 말하지 않는다.
+   */
+  it('존이 3개를 넘으면 앞 3개만 쓰고 나머지는 개수로 접는다 — 기기 순서를 지킨다', () => {
+    const out = formatSummary(withThermal())
+    expect(out).toContain('외 5개')
+    // 기기가 준 순서: AP · BAT · PATHM. 델타 순(AP · PATHM · SKIN)이 아니다.
+    expect(out).toMatch(/AP 31\.1→36\.2 \(\+5\.1\) · BAT 30\.7→31\.6 \(\+0\.9\) · PATHM/)
+    expect(out).not.toContain('PA1THM 27')
+  })
+
+  /**
+   * M-4. Network 줄은 uid 한정을 터미널까지 들고 가는데 Thermal 줄은 `source` 를 버렸다.
+   * `cached` 존의 delta 0 을 "안 변했다" 로 읽는 것이 정확히 이 숫자의 오독이고
+   * (실기기 `PA1THM` 은 약 3시간 4세션 8덤프 내내 27.0°C 고정이었다),
+   * 요약만 보는 사람이 가장 많다.
+   *
+   * 표시 비용은 **cached 존이 미리보기에 들어올 때만** 든다. 실기기에서는 HAL 존이 먼저
+   * 정렬되어 대개 "외 N개" 로 접히지만 그건 관측이지 보장이 아니다 — HAL 이 존을 적게 주면
+   * 미리보기에 들어온다.
+   */
+  it('미리보기에 cached 존이 오면 그 사실과 뜻을 함께 쓴다', () => {
+    // HAL 존이 둘뿐이라 cached 전용 존이 미리보기 안으로 들어오는 기기.
+    const zones = [...realZones().slice(0, 2), realZones()[7]!]
+    const out = formatSummary(withThermal({ zones }))
+
+    // `signed` 는 0 에 부호를 붙이지 않는다 — 0 은 오르지도 내리지도 않은 값이다.
+    expect(out).toContain('PA1THM 27.0→27.0 (0.0, cached)')
+    // 단어만 붙이면 장식이다 — 그 뜻이 오독을 막는다.
+    expect(out).toMatch(/갱신이 올 때만 바뀌는 값/)
+  })
+
+  /** 대가가 있는 표시다. cached 존이 안 보이면 한 글자도 붙지 않아야 한다. */
+  it('미리보기가 전부 hal 이면 아무것도 붙이지 않는다 — 없는 줄을 길게 만들지 않는다', () => {
+    // 기본 realZones() 의 앞 3개는 전부 hal 이고 PA1THM 은 "외 5개" 로 접힌다.
+    const out = formatSummary(withThermal())
+    expect(out).not.toContain('cached')
+    expect(out).toMatch(/AP 31\.1→36\.2 \(\+5\.1\) · BAT/)
+  })
+
+  /** 깨지는 조건: after 가 없는 존에 0 을 쓰면 실패한다. null 은 "없다" 지 0 이 아니다. */
+  it('after 가 없는 존은 "n/a" 로 쓴다 — 0 이 아니다', () => {
+    const zones = realZones()
+    zones[0] = { ...zones[0]!, after_c: null, delta_c: null, status_after: null }
+    const out = formatSummary(withThermal({ zones }))
+    expect(out).toContain('31.1→n/a')
+    expect(out).not.toContain('31.1→0.0')
+  })
+
+  /** 깨지는 조건: data 가 null 인데 값 줄을 내려고 하면 죽거나 빈 줄이 된다. */
+  it('값이 없으면 status 와 reason_code 줄이 나온다', () => {
+    const out = formatSummary(
+      result({
+        thermal: {
+          status: 'partial',
+          source: 'dumpsys thermalservice',
+          reason_code: 'snapshot_unavailable',
+          reason: '세션 종료 스냅샷(raw/thermalservice_after.txt)이 없습니다.',
+          data: null,
+        },
+      }),
+    )
+    expect(out).toContain('Thermal   partial')
+    expect(out).toContain('[snapshot_unavailable]')
+  })
+
+  /** 깨지는 조건: HAL 준비 여부를 확인 못 했는데 "not ready" 로 단정하면 실패한다. */
+  it('hal_ready 가 null 이면 n/a 다 — "not ready" 로 단정하지 않는다', () => {
+    const out = formatSummary(withThermal({ hal_ready_before: null }))
+    expect(out).toContain('HAL n/a')
+    expect(out).not.toContain('HAL not ready')
+  })
+
+  /** 깨지는 조건: 기기 상태를 못 읽었는데 0(=NONE) 으로 채우면 실패한다. */
+  it('device_status 가 null 이면 0 이 아니라 n/a 로 쓴다', () => {
+    const out = formatSummary(withThermal({ device_status_after: null }))
+    expect(out).toContain('Thermal Status 0 → n/a')
+  })
+})
+
+describe('formatSummary — Network 줄', () => {
+  /** 깨지는 조건: 바이트만 쓰고 패킷을 버리거나, 델타가 아닌 누적으로 읽히면 실패한다. */
+  it('rx/tx 를 바이트 단위와 패킷 수로 함께 쓴다', () => {
+    const out = formatSummary(withNetwork())
+    expect(out).toContain('Network   collected')
+    expect(out).toMatch(/rx 1\.2MB \/ 1,119pk/)
+    expect(out).toMatch(/tx 431KB \/ 871pk/)
+    expect(out).toContain('세션 델타')
+  })
+
+  /**
+   * 깨지는 조건: uid 한정이 터미널에서 사라지면 실패한다.
+   * 요약만 보는 사람이 가장 많고, "이 앱이 1.2MB 를 썼다" 로 읽는 것이
+   * 정확히 이 숫자의 오독이다.
+   */
+  it('uid 와 그 uid 를 쓰는 패키지 수를 함께 쓴다', () => {
+    const out = formatSummary(withNetwork({ shared_uid_packages: ['a', 'b'] }))
+    expect(out).toContain('uid')
+    expect(out).toContain('10388')
+    expect(out).toContain('2개')
+  })
+
+  /** 깨지는 조건: null 을 `[]` 처럼 취급해 "0개"/"1개" 를 찍으면 실패한다. */
+  it('shared_uid_packages 가 null 이면 "확인 안 됨" 이라고 쓴다 — "1개" 가 아니다', () => {
+    const out = formatSummary(withNetwork({ shared_uid_packages: null }))
+    expect(out).toContain('확인 안 됨')
+    expect(out).not.toMatch(/패키지 \d+개/)
+  })
+
+  /**
+   * 깨지는 조건: 0 을 "못 쟀다" 로 접으면 실패한다.
+   * **조회했고 관측된 변화가 없어서 나온 0 은 정직한 0 이다** — null 과 반대다.
+   */
+  it('0 바이트도 collected 면 0 으로 쓴다 — 조회한 0 은 사실이다', () => {
+    const out = formatSummary(
+      withNetwork({ rx_bytes: 0, tx_bytes: 0, rx_packets: 0, tx_packets: 0 }),
+    )
+    expect(out).toContain('rx 0B')
+    expect(out).not.toContain('rx n/a')
+  })
+
+  /** 깨지는 조건: data 가 null 인데 값 줄을 내려고 하면 죽거나 빈 줄이 된다. */
+  it('값이 없으면 status 와 reason_code 줄이 나온다', () => {
+    const out = formatSummary(
+      result({
+        network: {
+          status: 'unsupported',
+          source: 'dumpsys netstats mAppUidStatsMap',
+          reason_code: 'sdk_too_low',
+          reason: 'Android 14 이상이 필요합니다 (기기 sdk_int=33, 최소 sdk_int=34).',
+          data: null,
+        },
+      }),
+    )
+    expect(out).toContain('Network   unsupported')
+    expect(out).toContain('[sdk_too_low]')
+  })
+})
+
+describe('formatSummary — M3 이 요약 계약을 깨지 않는다', () => {
+  /** 깨지는 조건: 두 줄이 Overhead 뒤로 밀리거나 Log 앞으로 올라오면 실패한다. */
+  it('여덟 줄이 Frame → Startup → CPU → Memory → Log → Thermal → Network → Overhead 순이다', () => {
+    const out = formatSummary(withBoth())
+    const order = ['Frame', 'Startup', 'CPU', 'Memory', 'Log', 'Thermal', 'Network', 'Overhead']
+    const at = order.map((label) =>
+      out.split('\n').findIndex((l) => l.startsWith(label)),
+    )
+    for (const i of at) expect(i).toBeGreaterThanOrEqual(0)
+    expect(at).toEqual([...at].sort((a, b) => a - b))
+  })
+
+  /** 깨지는 조건: 새 두 줄에 평가어가 섞이면 실패한다. */
+  it('Thermal / Network 줄에도 판정 언어가 없다', () => {
+    const out = formatSummary(withBoth())
+    expect(out).not.toMatch(/느림|양호|나쁨|높음|초과|권장|개선|발열|과열|PASS|FAIL/)
+  })
+
+  /** 깨지는 조건: 키가 없는 옛 결과에서 죽으면 실패한다. */
+  it('thermal / network 키가 없는 결과도 죽지 않는다', () => {
+    const out = formatSummary(result())
+    expect(out).toContain('Thermal   not-collected')
+    expect(out).toContain('Network   not-collected')
   })
 })

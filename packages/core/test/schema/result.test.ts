@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { COLLECTORS } from '../../src/collectors/registry.js'
+import { thermalCollector } from '../../src/collectors/thermal.js'
 import { resultJsonSchema } from '../../src/schema/jsonSchema.js'
 import { REFERENCES } from '../../src/schema/references.js'
 import { METRIC_REASON_CODES } from '../../src/schema/reasons.js'
@@ -125,6 +127,59 @@ describe('ResultSchema', () => {
     r.metrics.frame.data!.buckets = [{ from_ms: 700, to_ms: null, count: 3 }] as never
     expect(() => ResultSchema.parse(r)).not.toThrow()
   })
+
+  /**
+   * D8: `type`/`status` 를 required 로 넣으면 M3 이전 문서가 통째로 깨진다. 그것은 major 다.
+   * optional 로 넣었다는 사실을 여기서 고정한다 — 누가 `.optional()` 을 지우면 실패한다.
+   */
+  it('M3 이전의 thermal_zones({name, celsius})만 있는 문서도 통과한다', () => {
+    const legacy = minimalResult()
+    legacy.device.state_before.thermal_zones = [{ name: 'AP', celsius: 37.1 }]
+    expect(ResultSchema.safeParse(legacy).success).toBe(true)
+  })
+
+  /**
+   * zod 는 기본적으로 모르는 키를 **조용히 버린다.** 스키마를 안 넓히면 파싱은 성공하면서
+   * `type`/`status` 만 사라진다 — 결함이 통과하는 가장 나쁜 모양이다. 그래서 통과 여부가
+   * 아니라 **살아남은 값**을 단언한다.
+   */
+  it('type/status 가 붙은 새 문서도 통과하고, 그 값이 결과에 남는다', () => {
+    const next = minimalResult()
+    next.device.state_before.thermal_zones = [
+      { name: 'AP', celsius: 37.1, type: 0, status: 0 },
+    ] as never
+    const parsed = ResultSchema.safeParse(next)
+    expect(parsed.success).toBe(true)
+    expect(parsed.data!.device.state_before.thermal_zones[0]).toEqual({
+      name: 'AP',
+      celsius: 37.1,
+      type: 0,
+      status: 0,
+    })
+  })
+
+  /**
+   * D4: "각 존은 어느 섹션에서 왔는지 `source` 로 들고 다닌다." 이 값이 없으면 소비자는
+   * cached 존의 값이 갱신되지 않은 것일 수 있다는 사실에 도달할 수 없다.
+   */
+  it('source 가 붙은 문서도 통과하고 그 값이 결과에 남는다', () => {
+    const next = minimalResult()
+    next.device.state_before.thermal_zones = [
+      { name: 'PA1THM', celsius: 27, type: 5, status: 0, source: 'cached' },
+    ] as never
+    const parsed = ResultSchema.safeParse(next)
+    expect(parsed.success).toBe(true)
+    expect(parsed.data!.device.state_before.thermal_zones[0]?.source).toBe('cached')
+  })
+
+  /** 벤더가 mType/mStatus 를 안 찍는 기기의 값은 null 이지 0 이 아니다 (G2). */
+  it('type/status 가 null 인 존도 통과한다', () => {
+    const next = minimalResult()
+    next.device.state_before.thermal_zones = [
+      { name: 'CPU', celsius: 41.5, type: null, status: null },
+    ] as never
+    expect(ResultSchema.safeParse(next).success).toBe(true)
+  })
 })
 
 describe('REFERENCES', () => {
@@ -143,6 +198,40 @@ describe('REFERENCES', () => {
   it('startup 기준선 세 개가 들어 있다', () => {
     const startup = REFERENCES.filter((r) => r.metric === 'startup')
     expect(startup.map((r) => r.value).sort((a, b) => a - b)).toEqual([1500, 2000, 5000])
+  })
+
+  /**
+   * 깨지는 조건: `metric` 에 collector id 가 아닌 값(오타, 없어진 id)이 들어오면 실패한다.
+   * 소비자는 `references` 를 `metrics` 의 키로 조인하는 것 말고 쓸 방법이 없다.
+   */
+  it('metric 이 실제 collector id 다 — 소비자가 매칭할 수 있어야 한다', () => {
+    const ids = new Set(COLLECTORS.map((c) => c.id))
+    for (const r of REFERENCES) expect(ids.has(r.metric), `${r.metric} 은 collector id 가 아니다`).toBe(true)
+  })
+
+  /**
+   * 깨지는 조건: `unit` 이 `'MB'` 로 바뀌거나 `name` 에서 `background` 가 빠지면 실패한다.
+   * 원문(Android Vitals) 은 "**mobile** network usage ... 50 MB per day while running in the
+   * **background**" 다. 이 도구가 재는 것은 수십 초짜리 **포그라운드** 세션의
+   * **전 인터페이스(loopback 포함) 합계**라 시간·인터페이스 두 축 모두 차원이 다르다.
+   * 단위나 이름에서 그 한정이 사라지는 순간 소비자가 "18MB < 50MB 니까 괜찮다" 로 읽는다 —
+   * 이 프로젝트가 정확히 피하려는 것이다.
+   */
+  it('네트워크 기준선이 시간(/day)·상태(background)·인터페이스(mobile) 한정을 전부 들고 있다', () => {
+    const net = REFERENCES.filter((r) => r.metric === 'network')
+    expect(net).toHaveLength(1)
+    expect(net[0]!.unit).toContain('/day')
+    expect(net[0]!.name).toContain('background')
+    expect(net[0]!.name).toContain('mobile')
+  })
+
+  /**
+   * 깨지는 조건: 누군가 출처 없는 온도 기준선(예: ADPF 의 headroom 휴리스틱 0.85/0.95/1.0)을
+   * 넣으면 실패한다. 그 값들은 출처가 있지만 **이 도구가 산출하지 않는 값**의 기준선이라
+   * 여기 실으면 소비자를 오도한다.
+   */
+  it('thermal 기준선은 없다 — 출처 있는 구글 수치를 찾지 못했다', () => {
+    expect(REFERENCES.filter((r) => r.metric === 'thermal')).toEqual([])
   })
 })
 
@@ -371,15 +460,251 @@ describe('resultJsonSchema', () => {
     expect(d).toContain('ftrace')
   })
 
+  /** `data` 는 nullable 이라 anyOf 로 나온다 — object 쪽 가지를 찾아 들어간다. */
+  const metricDataProps = (id: string): Record<string, any> => {
+    const data = props(props(props(resultJsonSchema())['metrics'])[id])['data'] as {
+      anyOf?: Record<string, any>[]
+    }
+    const object = data.anyOf?.find((b) => b['type'] === 'object') ?? data
+    return props(object)
+  }
+
+  it('thermal 의 숫자가 기기 전역이고 델타 부호가 있다는 것을 스키마에서 말한다', () => {
+    const zones = metricDataProps('thermal')['zones'] as { description?: string }
+    expect(zones.description).toBeDefined()
+    expect(zones.description).toContain('기기 전역')
+    // 전/후 2점이므로 구간 중 최고 온도는 원리적으로 없다.
+    expect(zones.description).toMatch(/구간 중 최고 온도/)
+    // 0.0 을 해석하지 않는다.
+    expect(zones.description).toContain('0.0')
+  })
+
+  /**
+   * M-7. 옛 문구는 "순서는 기기가 보고한 순서" 였는데 **거짓이었다.** 실제 규칙은
+   * "HAL 절 순서 먼저, cached 전용을 뒤에" 이고, 실기기 원문은 `Cached temperatures:` 를
+   * **먼저** 찍는다 — 그 첫 항목 `PA1THM` 이 결과에서는 마지막이다
+   * (`thermal.test.ts` 가 그 순서를 실기기 픽스처로 고정한다).
+   *
+   * 순서에 의미가 있다고 믿은 소비자는 "첫 항목이 기기가 가장 먼저 보고한 센서" 로 읽는다.
+   * 깨지는 조건: 옛 단정이 돌아오거나, 실제 규칙이 사라지면 실패한다.
+   */
+  it('zones 의 순서 규칙을 사실대로 말한다 — "기기가 보고한 순서" 라고 하지 않는다', () => {
+    const d = (metricDataProps('thermal')['zones'] as { description: string }).description
+
+    expect(d).toMatch(/순서는 "기기가 보고한 순서" 가 아니다/)
+    expect(d).toContain('Current temperatures from HAL')
+    expect(d).toContain('Cached temperatures')
+    // 근거가 함께 있어야 한다 — 규칙만 있으면 소비자가 무게를 못 잰다.
+    expect(d).toContain('PA1THM')
+    // 정렬하지 않는다는 기존 보장은 살아 있어야 한다.
+    expect(d).toMatch(/변화량 크기로 정렬하지는 \*\*않는다\*\*/)
+  })
+
+  /**
+   * 실기기 대조에서 나온 사실: `Cached` 전용 존 하나가 4세션 8개 덤프 내내 27.0°C 로
+   * 고정이었고 같은 기간 HAL 존은 30.8~41.6°C 로 움직였다. 그 존의 `delta_c` 0 은
+   * "온도가 안 변했다" 가 아니라 "이 값이 갱신되지 않았다" 일 수 있다.
+   * 이 한정이 스키마 밖(소스 주석)에만 있으면 `perftracker schema` 만 읽는 소비자에게는
+   * 거짓 청정 신호가 된다 — 0 이 관측된 안정으로 읽힌다.
+   */
+  it('cached 존의 delta 가 온도 변화가 아닐 수 있다는 것을 스키마에서 말한다', () => {
+    const zoneProps = props((metricDataProps('thermal')['zones'] as { items: unknown }).items)
+    const source = (zoneProps['source'] as { description: string }).description
+    const delta = (zoneProps['delta_c'] as { description: string }).description
+
+    expect(source).toContain('cached')
+    expect(source).toMatch(/갱신/)
+    // 근거가 함께 있어야 한다 — 주장만 있으면 소비자가 무게를 못 잰다.
+    expect(source).toContain('27.0')
+    expect(source).toMatch(/구분하지 못한다/)
+    // delta_c 만 읽는 소비자도 그 사실에 도달해야 한다.
+    expect(delta).toContain('cached')
+    expect(delta).toMatch(/음수가 정상/)
+  })
+
+  /**
+   * M-3. 존 하나가 값 **두 개**를 담는데 `source` 는 하나다. 그 하나가 무엇을 뜻하는지가
+   * 스키마에 없으면, 소비자는 `source: 'hal'` 을 "두 값 다 HAL 이 준 값" 으로도
+   * "before 가 HAL 이었다" 로도 읽을 수 있고 두 해석의 결론이 정반대다.
+   *
+   * 깨지는 조건: 규칙 문장이 사라지거나, collector 가 `source: b.source` 로 돌아가면
+   * (그건 `thermal.test.ts` 쪽이 잡는다) 이 문장이 거짓이 된다.
+   */
+  it('source 가 값 두 개를 덮는 라벨이라는 것과 그 결정 규칙을 스키마에서 말한다', () => {
+    const zoneProps = props((metricDataProps('thermal')['zones'] as { items: unknown }).items)
+    const source = (zoneProps['source'] as { description: string }).description
+
+    expect(source).toMatch(/before_c \/ after_c/)
+    expect(source).toMatch(/어느 한쪽이라도/)
+    // `hal` 이 무엇을 보장하는지까지 말해야 한다 — 보장의 범위가 이 필드의 쓸모다.
+    expect(source).toMatch(/두 값 모두 HAL/)
+  })
+
+  it('network 의 숫자가 무엇의 합계인지를 스키마에서 말한다', () => {
+    const rx = (metricDataProps('network')['rx_bytes'] as { description: string }).description
+    expect(rx).toContain('uid 단위')
+    expect(rx).toContain('IP 계층')
+    expect(rx).toContain('loopback')
+    expect(rx).toMatch(/wifi \/ mobile 로 나뉘지 않는다/)
+    // 관측한 0 과 조회 못 한 것의 구분.
+    expect(rx).toMatch(/조회하지 못했다/)
+
+    const shared = (metricDataProps('network')['shared_uid_packages'] as { description: string })
+      .description
+    expect(shared).toMatch(/null 은 그 스냅샷을 읽지 못했다는 뜻이다/)
+  })
+
+  /**
+   * I-2. 이 문단은 한때 "정확한 두 시점은 state_*.captured_at 이다" 로 끝났는데
+   * **거짓이었고 바로 앞 문장과 모순이었다.** `state_after.captured_at` 은 stop 진입 시각이라
+   * 트레이스 회수보다 앞이고, netstats 종료 스냅샷은 회수가 끝난 뒤에 나간다.
+   * 그 문장을 그대로 믿고 처리량을 구하면 **분자는 회수 구간을 포함하고 분모는 제외한다.**
+   *
+   * 깨지는 조건: "정확한 두 시점" 같은 단정이 돌아오거나, 처리량 계산 금지가 사라지면 실패한다.
+   */
+  it('captured_at 을 정확한 스냅샷 시각이라고 말하지 않고, 처리량 계산을 금지한다', () => {
+    const rx = (metricDataProps('network')['rx_bytes'] as { description: string }).description
+
+    expect(rx).toMatch(/근사일 뿐/)
+    expect(rx).toMatch(/트레이스 회수 전/)
+    expect(rx).toMatch(/처리량/)
+    // 옛 단정이 돌아오면 안 된다.
+    expect(rx).not.toMatch(/정확한 두 시점은/)
+  })
+
+  /**
+   * M-4. 패킷 필드만 읽는 소비자도 uid 단위라는 한정에 도달해야 한다.
+   * 깨지는 조건: 패킷 필드에서 SCOPE 가 빠지면 실패한다.
+   */
+  it('패킷 필드도 uid 단위라는 한정을 들고 있다', () => {
+    for (const field of ['rx_packets', 'tx_packets']) {
+      const d = (metricDataProps('network')[field] as { description: string }).description
+      expect(d, `${field}`).toMatch(/uid 단위 값이며 패키지 단위가 아니다/)
+      expect(d, `${field}`).toContain('sharedUserId')
+    }
+  })
+
+  /**
+   * C1. 옛 문서의 `thermal_zones` 에는 중복이 남아 있다. "존 하나당 정확히 한 항목이다" 를
+   * 무조건문으로 두면 **오늘 이 저장소가 만들 수 있는 문서 일부가 그 문장을 위반한다.**
+   */
+  it('thermal_zones 의 중복 없음 보장에 한정 조건이 붙어 있다', () => {
+    const d = (props(props(props(resultJsonSchema())['device'])['state_before'])[
+      'thermal_zones'
+    ] as { description: string }).description
+
+    expect(d).toMatch(/보장은 .type.\/.source. 필드를 가진 문서에만 적용된다/)
+    expect(d).toContain('raw/thermalservice')
+    expect(d).toContain('target_app.render_process')
+  })
+
   it('JSON 으로 직렬화된다 (perftracker schema 가 그대로 출력한다)', () => {
     expect(() => JSON.parse(JSON.stringify(resultJsonSchema()))).not.toThrow()
   })
 
-  it('다섯 메트릭이 모두 JSON Schema 에 실린다 — catchall 로 뭉개지지 않는다', () => {
+  it('일곱 메트릭이 모두 JSON Schema 에 실린다 — catchall 로 뭉개지지 않는다', () => {
     const metrics = props(props(resultJsonSchema())['metrics'])
-    for (const id of ['frame', 'startup', 'cpu', 'memory', 'log']) {
+    for (const id of ['frame', 'startup', 'cpu', 'memory', 'log', 'thermal', 'network']) {
       expect(metrics[id], `${id} 가 스키마에 없음`).toBeDefined()
     }
+  })
+
+  /**
+   * M-2. `status` 의 describe 는 CI 가 필터를 짤 때 읽는 유일한 문서다. M3 가 추가한
+   * data-null 경로(특히 스냅샷 계열)가 빠져 있으면, 커밋된 옛 run 4세션이 실제로 내는
+   * 유일한 data-null partial 이 문서에 없는 상태가 된다.
+   *
+   * 깨지는 조건: 목록에서 코드가 빠지거나, 실재하지 않는 코드가 들어오거나,
+   * "data !== null 로 판정하라" 는 지시가 사라지면 실패한다.
+   */
+  it('data 가 null 인 partial 목록이 M3 코드를 담고, 목록이 계약이 아님을 밝힌다', () => {
+    const d = (props(props(resultJsonSchema())['metrics'])['thermal'] as Record<string, any>)[
+      'properties'
+    ]['status']['description'] as string
+
+    // **목록 자체**를 뽑아서 본다. 설명 전체에 `toContain` 하면 바로 아래 산문의
+    // "스냅샷 계열(snapshot_unavailable / snapshot_unparsable)" 이 목록 없이도 매칭시켜
+    // 단언이 공허해진다 (실제로 그랬다 — 목록에서 빼도 통과했다).
+    const listed = (/이 버전에서 (.+?) 이다\./s.exec(d)?.[1] ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+    expect(listed.length).toBeGreaterThan(10)
+
+    for (const code of [
+      'snapshot_unavailable',
+      'snapshot_unparsable',
+      'no_thermal_zones',
+      'thermal_hal_not_ready',
+      'app_uid_unknown',
+      'uid_not_in_netstats',
+      'counter_went_backwards',
+    ]) {
+      expect(listed, `${code} 가 data-null partial 목록에 없다`).toContain(code)
+    }
+
+    // 목록에 적힌 코드는 전부 실재해야 한다 — 없는 코드를 적으면 소비자가 그것을 매칭한다.
+    for (const code of listed) {
+      expect(METRIC_REASON_CODES as readonly string[], `${code} 는 실재하지 않는 코드다`).toContain(code)
+    }
+
+    // 목록이 아니라 data !== null 이 계약이라는 것을 문서가 말해야 한다.
+    expect(d).toContain('계약이 아니다')
+    expect(d).toContain('data !== null')
+
+    // partialReason 전용 코드는 이 목록에 오면 안 된다 — 그 경로의 data 는 **non-null** 이다.
+    // (`no_meminfo_samples` / `cpu_freq_unavailable` 은 값이 나온 뒤 붙는 사유다.)
+    expect(listed).not.toContain('no_meminfo_samples')
+    expect(listed).not.toContain('cpu_freq_unavailable')
+  })
+
+  /**
+   * M-2. 바로 위 테스트가 "partialReason 전용 코드는 목록에 오면 안 된다" 를 지키는데,
+   * `snapshot_unavailable` 은 **둘 다**다: network 는 data-null 로, thermal 은
+   * partialReason(값 있음)으로 같은 코드를 낸다. 목록 안에서 유일하게 양쪽에 걸친 코드다.
+   *
+   * 그 사실을 문서가 말하지 않으면, 목록을 읽은 소비자는
+   * `reason_code === 'snapshot_unavailable'` 을 "data 는 null" 로 읽는다 —
+   * 그리고 **아직 stop 하지 않은 세션의 thermal 이 정확히 그 코드를 값과 함께 낸다.**
+   *
+   * 문구만 고정하면 문구가 코드보다 오래 살아 거짓이 될 수 있으므로, 실제 collector 를
+   * 돌려 그 경로가 아직 존재하는지 함께 확인한다.
+   */
+  it('양쪽에 걸친 코드가 있다는 사실을 문서가 말하고, 그 경로가 실재한다', async () => {
+    const d = (props(props(resultJsonSchema())['metrics'])['thermal'] as Record<string, any>)[
+      'properties'
+    ]['status']['description'] as string
+
+    // (1) 그 경로가 실재한다: after 스냅샷만 없으면 thermal 은 **값을 낸 채** 이 코드를 붙인다.
+    const out = await thermalCollector.extract({
+      packageName: 'com.foo',
+      appUid: null,
+      env: { sdkInt: 36, dataSources: [] },
+      capture: {
+        startup: null,
+        launchRequested: false,
+        appPid: null,
+        snapshots: {
+          thermalservice: {
+            before:
+              'Thermal Status: 0\nHAL Ready: true\nCurrent temperatures from HAL:\n' +
+              '\tTemperature{mValue=30.8, mType=3, mName=AP, mStatus=0}\n',
+            after: null,
+          },
+        },
+      },
+    })
+    expect(out.collected, 'thermal 이 after 없이도 값을 내는 경로가 사라졌다').toBe(true)
+    expect(out.collected && out.partialReason?.code).toBe('snapshot_unavailable')
+    expect(out.collected && out.data).not.toBeNull()
+
+    // (2) 그런데 같은 코드가 data-null 목록에도 있다.
+    const listed = (/이 버전에서 (.+?) 이다\./s.exec(d)?.[1] ?? '').split(',').map((s) => s.trim())
+    expect(listed).toContain('snapshot_unavailable')
+
+    // (3) 그러므로 문서가 그 겹침을 직접 말해야 한다 — 코드로 data 유무를 추론할 수 없다고.
+    expect(d).toMatch(/유일하게 양쪽에 걸친/)
+    expect(d).toMatch(/data 유무를 추론하지 말/)
   })
 
   it('frame 만 required 다 — 1.0.0 문서가 계속 유효해야 한다', () => {

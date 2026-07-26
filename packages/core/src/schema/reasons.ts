@@ -1,3 +1,5 @@
+import { POLL_PERIOD_MS } from '../collectors/blocks.js'
+
 /**
  * 메트릭이 왜 수집되지 않았는지를 **안정적인 기계 키**로 말한다.
  *
@@ -86,13 +88,108 @@ export const METRIC_REASON_CODES = [
    * detail: limit
    */
   'log_events_truncated',
+  /**
+   * 필요한 `raw/<key>_{before,after}.txt` 가 run 디렉토리에 없거나 비어 있다.
+   * **스냅샷 기능이 없던 시절의 옛 run 을 재산출하면 반드시 지나가는 길이다.**
+   * `tryShell` 이 명령 실패를 빈 문자열로 흡수하므로 "없다" 와 "비었다" 를 한 코드로 묶는다.
+   * detail: key, phase('before' | 'after')
+   */
+  'snapshot_unavailable',
+  /**
+   * 원문은 있는데 기대한 절이나 표 머리를 찾지 못했다 (벤더 dumpsys 포맷 차이, 안드로이드
+   * 버전 차이). **형식을 추측해서 파싱하지 않는다** — 그러면 뒤바뀐 숫자가 사실 자리에 앉는다.
+   *
+   * **이 한 코드가 세 갈래를 낸다. `detail` 이 어느 쪽인지 명시한다:**
+   *   - `found: false` — **절 자체가 없다.** 그 안드로이드 버전·벤더 출력에 그 절이 아예
+   *     없다는 뜻일 수 있다 (netstats 의 `mAppUidStatsMap` 은 sdk 34 부터다).
+   *   - `found: true` + `header` — 절은 있는데 **표 머리글이 다르다.** 컬럼 순서를 모르므로
+   *     한 행도 읽지 않는다.
+   *   - `found: true` + `rows: 0` — 머리는 맞았는데 **행을 한 개도 못 읽었다** (아래 참고).
+   *
+   * 소비자의 대응이 갈린다: 첫째는 "이 기기에서는 낼 수 없다", 나머지 둘은 "형식이 바뀌었다".
+   * 옛 detail 은 이 셋을 `header` 키의 **부재**로만 갈랐고 그 규칙은 이 표에도 렌더러에도
+   * 없었다 — 소비자가 추론해야 했다. 지금은 `found` 가 명시한다.
+   *
+   * **표 머리는 맞았는데 행을 한 개도 못 읽은 경우도 이 코드다** (detail.rows === 0).
+   * 머리 고정은 컬럼 순서만 지키고 행의 모양은 지키지 않으므로, 벤더가 행만 다르게 찍으면
+   * 0행을 읽고도 파싱이 "성공" 한다. 그것을 uid 부재로 흘려보내면 도구가 관측하지 않은
+   * 원인("트래픽이 없었다")을 대게 된다. 표가 실제로 비어 있을 수도 있고 이 도구는 둘을
+   * 구분하지 못하므로, 사유 문장이 원인을 단정하지 않고 머리 다음 줄 원문을 함께 남긴다.
+   * detail: key, section, phase, found, (있으면) header, rows, first_line
+   */
+  'snapshot_unparsable',
+  /** dumpsys thermalservice 출력에 온도 항목이 하나도 없다. */
+  'no_thermal_zones',
+  /**
+   * 온도가 없는 이유가 "센서가 없다" 가 아니라 "HAL 이 안 붙었다" 이다 (`HAL Ready: false`).
+   * 두 가지를 한 코드로 묶으면 사용자가 기기 문제인지 도구 문제인지 구분할 수 없다.
+   */
+  'thermal_hal_not_ready',
+  /**
+   * before/after 의 존 집합이 달라 일부 존의 델타를 낼 수 없다. 낼 수 있는 것은 내고
+   * 못 내는 자리는 null 로 둔다. detail: only_before, only_after
+   */
+  'thermal_zones_changed',
+  /**
+   * `target_app.uid` 가 null 이라 per-uid 카운터를 조회할 대상이 없다.
+   * (`pm list packages -U` 가 uid 를 주지 않은 경우.) detail: package
+   */
+  'app_uid_unknown',
+  /**
+   * 표는 읽었는데 **그 uid 의 행만** 없다. 세션 동안 트래픽이 전혀 없었거나 맵에 등재되지
+   * 않은 것이다. **0 으로 채워 내지 않는다** — 관측한 0 과 조회하지 못한 것은 다른 사실이다.
+   *
+   * 표를 **0행** 읽은 경우는 이 코드가 아니라 `snapshot_unparsable` 이다. 둘을 한 코드로
+   * 묶으면 형식 드리프트가 "트래픽이 없었다" 로 보고된다.
+   * detail: uid, in_before, in_after, rows_before, rows_after
+   */
+  'uid_not_in_netstats',
+  /**
+   * 누적 카운터의 after 가 before 보다 작다 (세션 중 재부팅, 앱 재설치로 uid 항목 리셋).
+   * 0 으로 뭉개지 않고 사유로 낸다 — CPU collector 가 음수 delta 를 버리는 규칙과 같은 정신이다.
+   * detail: counter, before, after
+   */
+  'counter_went_backwards',
+  /**
+   * BPF 맵 순회가 재시작되어 같은 uid 가 **서로 다른 값으로** 두 번 찍혔다 (AOSP b/220084230).
+   * 값은 마지막 행으로 냈지만 어느 쪽이 맞는지 알 수 없다는 사실을 남긴다.
+   * 같은 값으로 두 번 찍힌 경우는 해가 없으므로 이 사유를 달지 않는다.
+   * detail: uid, phase
+   */
+  'netstats_uid_duplicated',
 ] as const
 
 export type MetricReasonCode = (typeof METRIC_REASON_CODES)[number]
 
+/**
+ * sdk_int → 안드로이드 릴리즈 표기. `sdk_too_low` 문장에만 쓴다.
+ *
+ * 옛 렌더러는 `"Android 12 이상이 필요합니다 (… 최소 sdk_int=${min_sdk})"` 처럼
+ * **릴리즈 이름을 하드코딩**하고 숫자는 detail 에서 읽었다. 그것을 쓰는 collector 가
+ * frame(31) 하나뿐이라 드러나지 않았을 뿐, 다른 하한을 쓰는 순간
+ * `"Android 12 이상이 필요합니다 (… 최소 sdk_int=29)"` 라는 자기모순 문장이 나온다.
+ * 모르는 sdk 는 릴리즈 이름 없이 숫자만 말한다 — 지어내지 않는다.
+ */
+export const ANDROID_RELEASE_BY_SDK: Record<number, string> = {
+  29: '10',
+  30: '11',
+  31: '12',
+  32: '12L',
+  33: '13',
+  34: '14',
+  35: '15',
+  36: '16',
+}
+
 const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string> = {
-  sdk_too_low: (d) =>
-    `Android 12 이상이 필요합니다 (기기 sdk_int=${String(d['sdk_int'])}, 최소 sdk_int=${String(d['min_sdk'])}).`,
+  sdk_too_low: (d) => {
+    const min = Number(d['min_sdk'])
+    const release = ANDROID_RELEASE_BY_SDK[min]
+    return (
+      `이 기기의 sdk_int=${String(d['sdk_int'])} 로는 수집할 수 없습니다 ` +
+      `(최소 sdk_int=${String(d['min_sdk'])}${release !== undefined ? `, Android ${release}` : ''}).`
+    )
+  },
   data_source_not_registered: (d) =>
     `이 기기에 perfetto 데이터소스가 등록되어 있지 않습니다: ${String(d['data_source'])}`,
   trace_missing: () => '트레이스 원본이 없습니다.',
@@ -118,8 +215,12 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
     `앱이 실행되지 않았다는 뜻이 아닙니다 — 이 세션에서 시작 시간만 측정되지 않은 것입니다.`,
   no_cpu_samples: () =>
     'linux.sys_stats 의 CPU 시간 표본이 트레이스에 없습니다.',
+  // 주기를 문장에 하드코딩하지 않는다. 진실의 출처는 `collectors/blocks.ts` 의
+  // `POLL_PERIOD_MS` 하나이고, 그 값이 바뀌면 이 문장도 같이 바뀌어야 한다 —
+  // `sdk_too_low` 가 "Android 12" 를 하드코딩하고 있던 것과 정확히 같은 계열이다.
   insufficient_samples: (d) =>
-    `표본이 ${String(d['samples'])}개뿐이라 구간 차이를 낼 수 없습니다 (최소 ${String(d['required'])}개 필요). 세션이 폴링 주기(1초)보다 짧았을 수 있습니다.`,
+    `표본이 ${String(d['samples'])}개뿐이라 구간 차이를 낼 수 없습니다 ` +
+    `(최소 ${String(d['required'])}개 필요). 세션이 폴링 주기(${POLL_PERIOD_MS}ms)보다 짧았을 수 있습니다.`,
   cpu_counters_did_not_advance: (d) =>
     `표본은 ${String(d['samples'])}개 있었지만 CPU 시간 카운터가 처음과 끝이 같습니다 — ` +
     `구간 전체가 절전/유휴 상태였을 수 있습니다.`,
@@ -146,6 +247,68 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
   log_events_truncated: (d) =>
     `크래시/ANR 목록이 상한 ${String(d['limit'])}건에서 잘렸습니다 — ` +
     `그 뒤에 더 있었는지는 이 결과로 알 수 없습니다. 우선순위별 개수는 잘리지 않았습니다.`,
+  snapshot_unavailable: (d) =>
+    `세션 ${d['phase'] === 'after' ? '종료' : '시작'} 시점의 ${String(d['key'])} 스냅샷이 ` +
+    `이 run 에 없습니다 — 이 도구가 그 명령을 찍기 전에 만들어진 run 이거나, ` +
+    `명령이 이 기기에서 실패했거나, 아직 stop 하지 않은 세션입니다.`,
+  snapshot_unparsable: (d) => {
+    const tail = '형식을 추측해서 값을 만들지 않았습니다. 원본은 run 디렉토리의 raw/ 에 그대로 있습니다.'
+    // 절 자체가 없는 것은 "형식이 달랐다" 와 다른 사실이다 — 그 안드로이드 버전·벤더 출력에
+    // 그 절이 아예 없다는 뜻일 수 있다. 옛 문장은 둘을 "기대한 형식으로 읽지 못했습니다" 로
+    // 뭉쳤고, 가르는 단서는 detail 의 `header` 키가 없다는 것뿐이었다.
+    if (d['found'] === false) {
+      return (
+        `${String(d['key'])} 원문에 "${String(d['section'])}" 절이 없습니다 — ` +
+        `이 안드로이드 버전이나 벤더 출력에 그 절이 아예 없을 수 있습니다. ${tail}`
+      )
+    }
+    // 머리는 맞았는데 행이 0개인 경우. **원인을 단정하지 않는다** — 표의 행 모양이 다른 것과
+    // 표가 실제로 비어 있는 것을 이 도구는 구분하지 못하고, 어느 쪽이라고 말하면 관측하지
+    // 않은 것을 사실로 내보내는 것이 된다.
+    if (d['rows'] === 0) {
+      return (
+        `${String(d['key'])} 원문의 "${String(d['section'])}" 표 머리는 기대와 같았지만 ` +
+        `행을 한 개도 읽지 못했습니다` +
+        `${d['first_line'] != null ? ` (머리 다음 줄: ${JSON.stringify(d['first_line'])})` : ''} — ` +
+        `행의 모양이 기대와 다르거나 표가 실제로 비어 있습니다. **이 도구는 둘을 구분하지 못합니다.** ` +
+        `${tail}`
+      )
+    }
+    return (
+      `${String(d['key'])} 원문에서 "${String(d['section'])}" 을 기대한 형식으로 읽지 못했습니다` +
+      `${d['header'] != null ? ` (읽은 줄: ${JSON.stringify(d['header'])})` : ''} — ${tail}`
+    )
+  },
+  no_thermal_zones: () => 'dumpsys thermalservice 출력에 온도 항목이 하나도 없습니다.',
+  thermal_hal_not_ready: () =>
+    'Thermal HAL 이 준비되지 않았다고 기기가 보고했습니다 (HAL Ready: false) — ' +
+    '센서가 없는 것이 아니라 HAL 이 붙지 않은 상태입니다.',
+  thermal_zones_changed: (d) => {
+    const only = (v: unknown): string => (Array.isArray(v) && v.length > 0 ? v.join(', ') : '없음')
+    return (
+      `세션 전후로 관측된 센서 집합이 달라 일부 존의 변화량을 내지 못했습니다 ` +
+      `(시작에만 있던 센서: ${only(d['only_before'])} / 종료에만 있던 센서: ${only(d['only_after'])}). ` +
+      `낼 수 있는 존은 그대로 냈고, 못 낸 자리는 null 입니다.`
+    )
+  },
+  app_uid_unknown: (d) =>
+    `대상 앱(${String(d['package'])})의 uid 를 알지 못해 네트워크 사용량을 낼 수 없습니다 — ` +
+    `이 값은 uid 단위로만 집계됩니다.`,
+  uid_not_in_netstats: (d) =>
+    `uid ${String(d['uid'])} 의 행이 netstats 스냅샷에 없습니다 ` +
+    `(시작: ${d['in_before'] === true ? '있음' : '없음'} / 종료: ${d['in_after'] === true ? '있음' : '없음'}) — ` +
+    // 표에서 몇 행을 읽었는지를 같이 말한다. "표에 400행 있었는데 내 uid 만 없다" 와
+    // "표를 거의 못 읽었다" 는 소비자에게 전혀 다른 신호이고, 행 수 없이는 가를 수 없다.
+    `표에서 읽은 행은 시작 ${String(d['rows_before'] ?? '?')}행 / 종료 ${String(d['rows_after'] ?? '?')}행입니다. ` +
+    `부팅 이후 이 uid 로 오간 트래픽이 없었을 수 있습니다. 0 으로 채우지 않았습니다.`,
+  counter_went_backwards: (d) =>
+    `누적 카운터 ${String(d['counter'])} 가 세션 구간에서 감소했습니다 ` +
+    `(${String(d['before'])} → ${String(d['after'])}) — 세션 중 재부팅이나 카운터 리셋이 있었을 수 ` +
+    `있습니다. 음수 차이를 0 으로 뭉개지 않았습니다.`,
+  netstats_uid_duplicated: (d) =>
+    `netstats ${d['phase'] === 'after' ? '종료' : '시작'} 스냅샷에서 uid ${String(d['uid'])} 행이 ` +
+    `서로 다른 값으로 두 번 나왔습니다 (BPF 맵 순회 재시작, AOSP b/220084230) — ` +
+    `마지막 행을 썼지만 어느 쪽이 맞는지는 이 결과로 알 수 없습니다.`,
 }
 
 /** 코드 → 한국어 문장. 모르는 코드는 조용히 비우지 않고 코드 자체를 남긴다. */

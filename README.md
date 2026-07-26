@@ -154,6 +154,11 @@ npx perftracker schema > result.schema.json
 
 `schema_version` 이 그 계약의 버전입니다 (현재 `1.1.0`).
 
+> **다만 이 버전 하나로 "내 스키마가 최신인지" 를 판단할 수는 없습니다.** `1.1.0` 은 아직
+> 출시된 적이 없어서, 그 안에서 계약이 넓어질 때 이 도구는 버전을 올리지 않았습니다.
+> 스키마를 캐시해 두고 쓰신다면 아래 [스키마를 다시 꺼내야 하는 때](#스키마를-다시-꺼내야-하는-때)
+> 를 반드시 읽으세요.
+
 ### 최상위 구조
 
 | 필드 | 무엇인가 |
@@ -162,7 +167,7 @@ npx perftracker schema > result.schema.json
 | `session` | id, 이름, `state`, 시작/종료 시각, 길이 (아래 참고) |
 | `device` | 기기 스펙(`static`)과 세션 전후 상태(`state_before` / `state_after`) |
 | `target_app` | 패키지, 라벨, 버전, 렌더 프로세스와 pid |
-| `metrics` | 메트릭들. 키가 곧 수집기 id (`frame` / `startup` / `cpu` / `memory` / `log`) |
+| `metrics` | 메트릭들. 키가 곧 수집기 id (`frame` / `startup` / `cpu` / `memory` / `log` / `thermal` / `network`) |
 | `measurement_overhead` | 이 측정이 기기에 개입한 정도의 **하한** (아래 참고) |
 | `references` | 구글 공개 기준치. **비교에 쓰이지 않고 기록만 된다** |
 | `warnings` | 관측된 사건 (평가 아님) |
@@ -207,12 +212,39 @@ npx perftracker schema > result.schema.json
   CI 매칭은 반드시 이걸로 하세요. (예: `sdk_too_low`, `render_process_not_found`,
   `no_frames`, `trace_missing`, `data_source_not_registered`, `query_failed`)
 
-  > `reason_code` 는 **닫힌 enum** 이고 `1.1.0` 에서 6개 → 21개로 넓어졌습니다. 그중
-  > `process_name_stale_in_trace` 는 `1.0.0` 부터 있던 `metrics.frame` 에도 실립니다.
-  > `1.0.0` 스키마를 고정해 검증하는 CI 는 정상적인 `1.1.0` 산출물을 거부하니,
-  > 스키마를 다시 꺼내(`perftracker schema`) 갱신하세요.
+  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **30개**입니다
+  > (`1.0.0` 은 6개였습니다). 그중 `process_name_stale_in_trace` 는 `1.0.0` 부터 있던
+  > `metrics.frame` 에도 실립니다. 이 숫자는 테스트가 `METRIC_REASON_CODES` 와 대조해
+  > 고정하므로 코드보다 낡을 수 없습니다.
 - `reason` — 사람이 읽는 한국어 문장. 다듬힐 수 있으니 매칭에 쓰지 마세요.
 - `data` — 메트릭별 본문. 수집되지 않았으면 `null`
+
+### 스키마를 다시 꺼내야 하는 때
+
+**`schema_version` 만 보고 판단하면 안 됩니다.** `1.1.0` 은 아직 출시된 적이 없어서, 그 안에서
+계약이 넓어질 때 이 도구는 버전을 올리지 않았습니다. 그래서 **깨지는 소비자는 `1.0.0` 을
+고정한 쪽만이 아닙니다** — 지금 이 저장소가 만드는 산출물을 거부하는 가장 흔한 경우는
+`1.1.0` 시절 중간에 `perftracker schema` 를 한 번 받아 두고 그대로 쓰는 쪽입니다.
+그런데 `schema_version` 은 그때도 지금도 `1.1.0` 이라, **다시 꺼내라는 신호가 산출물 안에
+존재하지 않습니다.**
+
+`z.toJSONSchema()` 출력에서 실제로 갈라지는 곳은 둘이고, 서로 독립적입니다:
+
+1. **`device.state_*.thermal_zones` 의 항목 노드가 `additionalProperties: false` 입니다.**
+   예전 그 스키마는 `{ name, celsius }` 뿐이었고 지금 산출물은 `type` / `status` / `source`
+   를 함께 싣습니다 → 거부됩니다.
+2. **`reason_code` 가 닫힌 enum 입니다.** 예전 스키마는 21개였고 지금 산출물은
+   `snapshot_unavailable` 같은 값을 냅니다 → 거부됩니다.
+
+`1.0.0` 스키마를 고정한 CI 도 같은 이유로 거부합니다. 어느 쪽이든 답은 하나입니다 —
+
+```bash
+npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
+```
+
+**내가 가진 스키마가 낡았는지 확인하는 법:** 캐시해 둔 파일에서 `reason_code` enum 의 값
+개수를 세어 보세요. 위에 적힌 개수보다 적으면 낡은 것입니다. `thermal_zones` 항목에
+`source` 가 없어도 마찬가지입니다.
 
 ### `metrics.frame`
 
@@ -236,6 +268,101 @@ npx perftracker schema > result.schema.json
   60fps 예산 부근을 1ms 로 조밀하게 보고 꼬리로 갈수록 폭을 넓힙니다.
 - `within_16_67ms_ratio` 는 16.67ms 이하 프레임의 비율입니다. 판정이 아니라 비율입니다.
 - 종료 이벤트를 못 받은 미완결 프레임(`dur = -1`)은 집계에서 **제외**됩니다.
+
+### `metrics.thermal`
+
+세션 **시작 직전**과 **종료 직후**에 찍은 `dumpsys thermalservice` 두 스냅샷의 차이입니다.
+**추가 adb 호출이 없습니다** — 이 원문은 도구가 처음부터 매 세션 찍어 왔고, M3 은 이미
+디스크에 있던 것을 메트릭으로 승격시켰을 뿐입니다.
+
+```json
+{
+  "status": "collected",
+  "source": "dumpsys thermalservice: 세션 시작 직전 / 종료 직후 스냅샷의 센서별 온도 차이",
+  "data": {
+    "zones": [
+      { "name": "AP", "type": 0, "before_c": 31.1, "after_c": 36.2, "delta_c": 5.1,
+        "status_before": 0, "status_after": 0, "source": "hal" }
+    ],
+    "device_status_before": 0, "device_status_after": 0,
+    "status_override_before": false, "status_override_after": false,
+    "hal_ready_before": true, "hal_ready_after": true,
+    "headroom_thresholds": [null, 0.8666667, 0.93333334, 1.0, 1.1333333, 1.4333333, 2.4333334]
+  }
+}
+```
+
+읽을 때 반드시 알아야 할 것:
+
+- **기기 전역이지 대상 앱의 온도가 아닙니다.** 같은 시간에 돈 다른 앱, 화면 밝기, USB 충전이
+  전부 섞입니다. 이 도구는 adb 로 붙으므로 거의 항상 충전 중입니다 (`warnings` 의
+  `charging_during_session` 이 그 사실을 말합니다).
+- **`delta_c` 는 부호 있는 값이고 음수가 정상입니다.** 실기기 4세션 중 **2세션에서 내려갔습니다**
+  (32.1→30.8, 32.1→31.9). "발열량" 으로 읽지 마세요.
+- **전/후 두 점이므로 구간 중 최고 온도는 알 수 없습니다.** 원리적으로 그렇습니다 — 알려면
+  세션 중에 기기를 폴링해야 하고, 그것이 이 도구가 하지 않는 일입니다.
+- **`name` 은 벤더 임의 문자열입니다** (`AP` / `SKIN` / `PATHM` / `test temperature sensor`).
+  CPU 온도인지 피부 온도인지는 `type` 으로 판별하세요 (0=CPU, 1=GPU, 2=BATTERY, 3=SKIN,
+  4=USB_PORT, 5=POWER_AMPLIFIER, ...). 이름은 유일하지도 않습니다 — 한 기기에 `PATHM` 과
+  `PA1THM` 이 **둘 다** 있습니다. 존의 동일성 키는 `(type, name)` 입니다.
+- **`source` 를 함께 읽으세요.** `hal` 은 덤프 시점에 HAL 에 직접 물은 값이고, `cached` 는
+  프레임워크가 콜백으로 들고 있던 값입니다. **`cached` 존의 `delta_c` 는 온도 변화가
+  아닐 수 있습니다** — 콜백이 안 오면 같은 숫자가 그대로 남습니다. 실측: 어느 실기기의
+  cached 전용 존 `PA1THM` 은 약 3시간에 걸친 8개 덤프에서 계속 27.0°C 였고, 같은 기간
+  HAL 이 주는 `AP` 는 30.8~41.6°C 로 움직였습니다. **이 도구는 "안 변했다" 와
+  "갱신되지 않았다" 를 구분하지 못합니다.**
+- **값이 정확히 `0.0` 인 센서가 실기기에 있습니다** (`SUBBAT` / `SUBBATRAW`). 그것이 실제
+  0°C 인지 이 기기에 그 센서가 없다는 뜻인지 **이 도구는 판별하지 않습니다.**
+- `headroom_thresholds` 는 기기가 스스로 보고한 배열입니다. **이 도구는 headroom 을
+  산출하지 않으므로** 위의 섭씨 온도와 직접 비교할 수 없습니다 (headroom 은 앱 프로세스 안에서
+  `PowerManager.getThermalHeadroom()` 으로만 얻습니다). 원문의 `NaN` 은 `null` 로 실립니다.
+- 에뮬레이터에서는 값이 **합성**입니다. Android 에뮬레이터의 thermal HAL 은 예제 구현이라
+  상수를 돌려줍니다 (존 1개, `test temperature sensor`, 30.8°C 고정).
+
+### `metrics.network`
+
+세션 전/후 `dumpsys netstats` 의 `mAppUidStatsMap` 표에서 대상 앱 uid 행의 차이입니다.
+**Android 14(sdk 34) 이상에서만 나옵니다** — 그 아래에서는 같은 내용이 다른 명령에 있고
+이 도구는 그 분기를 하지 않습니다 (`unsupported` / `sdk_too_low`).
+
+```json
+{
+  "status": "collected",
+  "source": "dumpsys netstats mAppUidStatsMap: 세션 전/후 스냅샷의 uid 행 델타",
+  "data": {
+    "uid": 10388,
+    "rx_bytes": 1258291, "tx_bytes": 441344,
+    "rx_packets": 1119, "tx_packets": 871,
+    "shared_uid_packages": ["com.nhn.android.webtoon"]
+  }
+}
+```
+
+이 숫자가 **무엇이 아닌지**:
+
+- **패키지 단위가 아니라 uid 단위입니다.** 같은 uid 를 쓰는 다른 패키지의 트래픽이 섞이고
+  분리할 수 없습니다 (맵의 키가 uid 뿐입니다). `shared_uid_packages` 가 몇 개인지 보세요 —
+  1개면 그 패키지만의 값입니다. **`null` 은 확인하지 못했다는 뜻이고 `[]` 와 다릅니다**
+  (`[]` 는 "조회했고 이 uid 를 쓰는 패키지가 목록에 없었다" 입니다).
+- **IP 계층의 바이트입니다.** 이더넷 헤더는 빠지고 IP+TCP/UDP 헤더는 들어갑니다.
+- **loopback 을 포함한 모든 인터페이스의 합계이고 wifi / mobile 로 나뉘지 않습니다.**
+  loopback 통신은 송신·수신 양쪽에서 두 번 세어집니다.
+- 1500바이트를 넘는 큰 패킷은 커널이 휴리스틱으로 되계산하므로 고throughput 구간의 값은
+  정확한 wire 바이트가 아니라 **근사치**입니다.
+- 방화벽/데이터세이버가 버린 **송신** 패킷은 안 세고, 버려진 **수신** 패킷은 셉니다.
+- VPN(TUN)이 켜져 있으면 같은 트래픽이 앱 uid 와 VPN 앱 uid 양쪽에서 세어집니다.
+- **델타 구간은 세션 구간보다 조금 넓습니다.** 시작 스냅샷은 앱을 띄우기 전에, 종료 스냅샷은
+  트레이스를 회수한 뒤에 찍힙니다.
+- **`device.state_*.captured_at` 은 그 구간의 근사일 뿐 스냅샷을 찍은 시각이 아닙니다.**
+  두 값은 각각 `start` / `stop` 이 시작할 때 찍은 시계입니다. 특히 `state_after.captured_at` 은
+  **트레이스 회수 전**의 시각이라 종료 스냅샷보다 앞섭니다 (실측: 트레이스 0.3~2.1MB 인
+  4세션에서 0.5~0.7초). 그래서 **이 바이트를 그 두 시각의 차로 나눠 처리량을 구하면 안 됩니다** —
+  분자는 회수 구간을 포함하는데 분모는 제외합니다. 스냅샷 시각이 필요하면
+  `raw/netstats_{before,after}.txt` 의 파일 mtime 이 그것에 더 가깝습니다.
+- **`0` 은 "관측된 바이트가 없었다" 이지 "조회하지 못했다" 가 아닙니다.** 조회하지 못한
+  세션은 `data` 가 통째로 `null` 이고 `reason_code` 가 이유를 말합니다.
+- 누적 원값은 싣지 않습니다. 감사가 필요하면 `raw/netstats_{before,after}.txt` 원문이
+  `artifacts.raw` 에 등재되어 있습니다.
 
 ### `measurement_overhead`
 
@@ -292,6 +419,16 @@ npx perftracker schema > result.schema.json
 **이 값들은 아무것과도 비교되지 않습니다.** "구글이 이렇게 말했다" 는 사실을 옆에 놓아둘 뿐입니다.
 판정이 필요하면 이 값을 읽어서 소비하는 쪽에서 하세요.
 
+`network` 의 50MB/day 는 **모바일 네트워크**의 **백그라운드** **하루** 합계 기준입니다.
+이 도구가 재는 것은 수십 초짜리 **포그라운드** 세션의 **전 인터페이스(loopback 포함) 합계**라
+**차원이 세 축 모두 다릅니다.** 그래서 `unit` 이 `MB` 가 아니라 `MB/day` 이고 `name` 에
+`background` 와 `mobile` 이 남아 있습니다. 이 도구는 어떤 비교도 하지 않습니다.
+
+`thermal` 에는 기준선이 **없습니다.** 온도에 대한 구글의 공개 수치 기준을 찾지 못했고
+(CDD 에도 해당 요구사항 ID 가 없습니다), **출처 URL 이 없는 값은 이 배열에 넣지 않습니다.**
+ADPF 의 headroom 휴리스틱(0.85 / 0.95 / 1.0)은 출처가 있지만 **이 도구가 산출하지 않는 값**의
+기준선이라 실으면 소비자를 오도합니다.
+
 ---
 
 ## 개발
@@ -315,12 +452,59 @@ npm run test:device   # 실기기가 꽂혀 있어야 함
 
 ## 검증 환경
 
-| 항목 | M0+M1 | M2 |
-|---|---|---|
-| 실기기 (SM-S931N, Android 16 / sdk 36) | ✅ | 미검증 |
-| 에뮬레이터 (Medium_Phone_15, API 35, 4코어) | — | ✅ |
+| 항목 | M0+M1 | M2 | M3 |
+|---|---|---|---|
+| 실기기 (SM-S901N, Android 16 / sdk 36) | ✅ | 미검증 | **원본 재산출만** (thermal) |
+| 에뮬레이터 (sdk_gphone64_arm64, API 35, 4코어) | — | ✅ | ✅ |
 
-에뮬레이터에서 **검증되지 않은** 항목:
+### M3 에서 에뮬레이터가 **실제로 검증한** 것
+
+`npm run test:device` 를 에뮬레이터에서 **5회 연속** 돌려 확인했습니다.
+
+- **측정 창 안의 adb 호출이 0** 입니다. M3 이 기기로 보내는 명령을 둘(`dumpsys netstats`,
+  `pm list packages -U`) 늘렸는데도 그렇습니다 — 두 명령 모두 `start` 에서는 트레이스를 켜기
+  전에, `stop` 에서는 트레이서를 멈춘 뒤에 나갑니다.
+- **스냅샷 원본이 전/후 짝으로** `raw/` 에 남고 `artifacts.raw` 에 등재됩니다
+  (`thermalservice` / `netstats` / `packages` × `before` / `after`).
+- **존 중복 제거가 실제로 동작합니다.** 이 에뮬레이터는 `Cached temperatures` 와
+  `Current temperatures from HAL` 에 같은 센서를 하나씩 갖고 있어서, M3 이전 파서는 존을
+  **2개**로 만들었습니다. 존이 1개뿐인 기기가 오히려 이 결함을 정확히 드러냅니다.
+- **`mAppUidStatsMap` 절과 그 머리글**이 기대와 정확히 같고(`uid rxBytes rxPackets txBytes
+  txPackets`), 대상 앱 uid 의 행이 실제로 있으며, `shared_uid_packages` 가 채워집니다.
+
+### M3 에서 에뮬레이터가 **검증하지 못한** 것
+
+여기 있는 것들은 테스트가 단언하지 않습니다. 단언하면 통과하지만 아무것도 확인하지 못합니다.
+
+- **온도가 부하에 반응하는가** — 안드로이드 에뮬레이터의 thermal HAL 은 AOSP 예제 구현이라
+  상수를 돌려줍니다 (존 1개, `test temperature sensor`, 30.8°C 고정). `delta_c` 는 **항상 0**
+  이므로 `delta_c !== 0` 을 단언하면 안 됩니다. 온도가 실제로 움직인다는 근거는 실기기
+  4세션의 원본입니다: AP 가 31.1→36.2 / 33.8→41.6 으로 올라간 세션이 둘, 32.1→30.8 /
+  32.1→31.9 로 **내려간 세션이 둘**입니다.
+- **여러 존을 가진 기기의 섹션 병합** — 에뮬은 존이 1개라 `Cached` 에만 있는 센서
+  (실기기의 `PA1THM`)를 밟지 못합니다. 유닛 테스트와 실기기 원본으로만 덮입니다.
+  덧붙여 **"값이 다를 때 HAL 을 택한다" 는 tie-break 는 합성 픽스처로만 검증됐습니다** —
+  실기기 8개 덤프를 대조한 결과 `Cached` 와 HAL 의 공유 존 값은 **전부 완전히 일치**했습니다.
+  즉 그 기기의 실데이터에서 HAL 우선 규칙이 바꾼 값은 하나도 없고, 실효는 중복 제거와
+  `PA1THM` 보존뿐입니다. (규칙 자체의 근거는 유효합니다: HAL 절은 덤프 시점의 라이브 조회이고
+  `Cached` 는 프레임워크 보관값이며, 4세션 8덤프 내내 27.0°C 로 얼어붙은 `PA1THM` 이 그 증거입니다.)
+- **throttling 전이** — mock HAL 은 전이를 만들지 않습니다. 전/후 두 점 스냅샷으로는
+  원리적으로 볼 수 없습니다 (M3 범위 밖).
+- **네트워크 바이트의 크기·정확도** — 에뮬레이터는 호스트 NAT 를 타고, 세션 중 앱이 통신하지
+  않을 수 있습니다. `rx_bytes > 0` 은 flaky 한 단언이라 파이프라인과 uid 귀속만 검증하고
+  값의 크기는 검증하지 않습니다.
+- **실기기(sdk 36)의 `dumpsys netstats` 원문** — **아직 한 줄도 본 적이 없습니다.** 형식이
+  다르면 파서는 값을 지어내지 않고 `snapshot_unparsable` 로 멈추며, 읽은 줄 원문을 사유에
+  남깁니다. 머리글이 같고 **행만** 다른 경우도 같은 사유로 멈춥니다 (행을 0개 읽은 것을
+  "트래픽이 없었다" 로 보고하지 않습니다).
+- **VPN / CLAT / 이중 계수 / GSO 추정** — 그런 구성 자체가 없습니다. 문서로만 서술합니다.
+- **sdk 34 미만의 Network 미지원 경로 / 카운터 되감김 / BPF 맵 중복 행** — 재현할 방법이
+  없어 유닛 테스트로만 덮입니다.
+- **Power** — M3 범위 밖입니다. 배터리 에너지는 adb⇒USB⇒충전 때문에 구조적으로 측정할 수
+  없고(실기기 4세션 중 3세션에서 충전 카운터가 만충으로 고정), 앱별 전력의 "측정값" 은
+  안드로이드에 존재하지 않습니다.
+
+### M2 에서 에뮬레이터가 검증하지 못한 것
 
 - **CPU 주파수 값** — 에뮬레이터의 `cpuinfo_max_freq` 가 `2` 다. `power/cpu_frequency` 이벤트는
   뜨지만 값이 kHz 가 아니므로 크기에 대한 검증은 실기기에서만 가능하다.
@@ -328,7 +512,8 @@ npm run test:device   # 실기기가 꽂혀 있어야 함
   `android.log` 가 항상 비어 있다. 크래시·ANR 분류는 유닛 테스트로만 덮여 있다.
   (에뮬레이터 6세션 전부 `partial` / `no_log_entries`.)
 - **big.LITTLE 코어별 거동** — 에뮬레이터는 4코어가 모두 같은 클러스터다.
-- **Thermal / GPU** — 물리 센서가 없다 (M3 범위).
+- **Thermal** — 물리 센서가 없다. M3 에서 파이프라인은 검증됐지만 **온도 값 자체는 여전히
+  합성**이다 (위 M3 절 참조). **GPU** 는 M3 에서도 범위 밖이다.
 
 에뮬레이터에서 **검증된** 항목 (`npm run test:device` 로 돌린 `--launch` 세션 11회 실측):
 
