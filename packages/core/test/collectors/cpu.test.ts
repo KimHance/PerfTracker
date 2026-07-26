@@ -61,13 +61,36 @@ describe('summarizeCpuTimes', () => {
     expect(s.perCore).toEqual([{ cpu: 0, busy_pct: 20 }])
   })
 
-  it('단조성이 깨진 행(재부팅 등)은 버린다', () => {
+  /**
+   * 예전에는 문제가 된 **행 하나만** 버렸다. idle/io_wait 은 total 에만 들어가고 busy 에는
+   * 안 들어가므로, idle 행만 사라지면 분모에서 idle 이 빠지고 분자는 그대로다 —
+   * 사용률이 100% 쪽으로 밀린다. 아래 입력은 옛 코드에서 정확히 busy_pct 100 을 냈다.
+   */
+  it('단조성이 깨진 코어는 행 하나가 아니라 그 코어를 통째로 버린다', () => {
     const s = summarizeCpuTimes([
       { cpu: 0, counter: 'cpu.times.idle_ns', first: 900, last: 100, first_ts: 0, last_ts: 1_000_000, samples: 2 },
       { cpu: 0, counter: 'cpu.times.user_ns', first: 0, last: 400, first_ts: 0, last_ts: 1_000_000, samples: 2 },
+      { cpu: 1, counter: 'cpu.times.idle_ns', first: 0, last: 800, first_ts: 0, last_ts: 1_000_000, samples: 2 },
+      { cpu: 1, counter: 'cpu.times.user_ns', first: 0, last: 200, first_ts: 0, last_ts: 1_000_000, samples: 2 },
     ])!
-    expect(s.totalDeltaNs).toBe(400)
-    expect(s.busyDeltaNs).toBe(400)
+    expect(s.droppedCpus).toEqual([0])
+    expect(s.perCore).toEqual([{ cpu: 1, busy_pct: 20 }])
+    expect(s.totalDeltaNs).toBe(1000)
+    expect(s.busyDeltaNs).toBe(200)
+  })
+
+  it('모든 코어가 깨지면 표본이 있어도 낼 값이 없다', () => {
+    const s = summarizeCpuTimes([
+      { cpu: 0, counter: 'cpu.times.idle_ns', first: 900, last: 100, first_ts: 0, last_ts: 1_000_000, samples: 2 },
+    ])!
+    // 행이 있었다는 사실과 아무것도 못 냈다는 사실을 둘 다 남긴다 — null 이면 구분이 사라진다.
+    expect(s.perCore).toEqual([])
+    expect(s.droppedCpus).toEqual([0])
+    expect(s.totalDeltaNs).toBe(0)
+  })
+
+  it('멀쩡한 트레이스에서는 버린 코어가 없다', () => {
+    expect(summarizeCpuTimes(REAL_ROWS)!.droppedCpus).toEqual([])
   })
 
   it('구간 차이가 0 이면 코어 사용률을 0 으로 두고 나누지 않는다', () => {
@@ -165,6 +188,47 @@ describe('cpuCollector.extract', () => {
     expect(outcome).toEqual({
       collected: false,
       reason: { code: 'insufficient_samples', detail: { samples: 1, required: 2 } },
+    })
+  })
+
+  /**
+   * 표본은 충분한데 카운터가 전혀 안 움직인 경우. 예전에는 이것도 `insufficient_samples` 라
+   * 한국어 문장이 "표본이 13개뿐이라..." 라는 틀린 원인을 댔다. 원인이 다르면 코드도 다르다.
+   */
+  it('표본은 많은데 카운터가 전혀 안 움직였으면 표본 부족이라고 하지 않는다', async () => {
+    const frozen = REAL_ROWS.map((r) => ({ ...r, last: r.first }))
+    const outcome = await cpuCollector.extract(ctx({ [CPU_TIMES_SQL]: frozen }))
+    expect(outcome).toEqual({
+      collected: false,
+      reason: { code: 'cpu_counters_did_not_advance', detail: { samples: 13 } },
+    })
+  })
+
+  it('일부 코어를 버렸으면 값과 함께 그 사실을 낸다', async () => {
+    const rows: CpuTimeRow[] = [
+      ...REAL_ROWS,
+      { cpu: 2, counter: 'cpu.times.idle_ns', first: 900_000_000, last: 100, first_ts: 526952312208, last_ts: 538007140339, samples: 13 },
+      { cpu: 2, counter: 'cpu.times.user_ns', first: 0, last: 400_000_000, first_ts: 526952312208, last_ts: 538007140339, samples: 13 },
+    ]
+    const outcome = await cpuCollector.extract(ctx({ [CPU_TIMES_SQL]: rows, [CPU_FREQ_SQL]: FREQ_ROWS }))
+    expect(outcome.collected).toBe(true)
+    if (!outcome.collected) return
+    // cpu2 는 사라지고, 남은 두 코어의 값만 실린다.
+    expect(outcome.data.per_core.map((c) => c.cpu)).toEqual([0, 1])
+    expect(outcome.partialReason).toEqual({
+      code: 'cpu_counters_not_monotonic',
+      detail: { dropped_cpus: [2] },
+    })
+  })
+
+  it('모든 코어가 깨졌으면 표본이 없다고 하지 않는다', async () => {
+    const rows: CpuTimeRow[] = REAL_ROWS.map((r) =>
+      r.counter === 'cpu.times.idle_ns' ? { ...r, first: r.last, last: r.first } : r,
+    )
+    const outcome = await cpuCollector.extract(ctx({ [CPU_TIMES_SQL]: rows }))
+    expect(outcome).toEqual({
+      collected: false,
+      reason: { code: 'cpu_counters_not_monotonic', detail: { dropped_cpus: [0, 1] } },
     })
   })
 

@@ -34,6 +34,17 @@ export const METRIC_REASON_CODES = [
   'no_cpu_samples',
   /** 표본이 delta 를 낼 만큼 모이지 않았다 (세션이 폴링 주기보다 짧음). detail: samples, required */
   'insufficient_samples',
+  /**
+   * 표본은 충분한데 CPU 시간 카운터가 구간 내내 전혀 증가하지 않았다.
+   * `insufficient_samples` 와 원인이 다르다 — 이쪽은 표본 수가 아니라 카운터가 문제다.
+   * detail: samples
+   */
+  'cpu_counters_did_not_advance',
+  /**
+   * 누적이어야 할 CPU 시간 카운터가 구간 안에서 감소했다 (세션 중 재부팅 등).
+   * 해당 코어를 통째로 집계에서 제외했다. detail: dropped_cpus
+   */
+  'cpu_counters_not_monotonic',
   /** 사용률은 나왔지만 power/cpu_frequency 이벤트가 하나도 없다. */
   'cpu_freq_unavailable',
   /** 대상 앱의 프로세스가 process_stats 스캔에 잡히지 않았다. detail: package */
@@ -74,6 +85,13 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
     'linux.sys_stats 의 CPU 시간 표본이 트레이스에 없습니다.',
   insufficient_samples: (d) =>
     `표본이 ${String(d['samples'])}개뿐이라 구간 차이를 낼 수 없습니다 (최소 ${String(d['required'])}개 필요). 세션이 폴링 주기(1초)보다 짧았을 수 있습니다.`,
+  cpu_counters_did_not_advance: (d) =>
+    `표본은 ${String(d['samples'])}개 있었지만 CPU 시간 카운터가 처음과 끝이 같습니다 — ` +
+    `구간 전체가 절전/유휴 상태였을 수 있습니다.`,
+  cpu_counters_not_monotonic: (d) =>
+    `CPU ${Array.isArray(d['dropped_cpus']) ? d['dropped_cpus'].join(', ') : String(d['dropped_cpus'])}번의 ` +
+    `누적 CPU 시간 카운터가 세션 구간에서 감소했습니다 (세션 중 재부팅 등) — ` +
+    `해당 코어를 집계에서 통째로 제외했습니다. 함께 나온 값은 남은 코어만의 것입니다.`,
   cpu_freq_unavailable: () =>
     'ftrace power/cpu_frequency 이벤트가 없어 주파수를 함께 내지 못했습니다 — 사용률만 있는 값입니다.',
   process_not_in_trace: (d) =>

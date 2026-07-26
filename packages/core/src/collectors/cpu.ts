@@ -61,6 +61,8 @@ export interface CpuTimeSummary {
   totalDeltaNs: number
   busyDeltaNs: number
   perCore: { cpu: number; busy_pct: number }[]
+  /** 단조성이 깨져 통째로 제외한 코어 번호들 (오름차순). 정상 트레이스에서는 빈 배열이다. */
+  droppedCpus: number[]
 }
 
 /** /proc/stat 관례상 io_wait 도 idle 이다. 나머지(user/nice/system/irq/softirq/steal)는 전부 busy. */
@@ -70,39 +72,53 @@ const IDLE_COUNTERS = new Set(['cpu.times.idle_ns', 'cpu.times.io_wait_ns'])
  * 누적 카운터 행들을 구간 사용률로 접는다.
  *
  * `min`/`max` 를 `first`/`last` 로 쓰는 것은 이 카운터가 단조 증가라는 사실에 기댄 것이다.
- * 그 가정이 깨진 행(음수 delta — 기기 재부팅 등)은 조용히 0 으로 만들지 않고 **버린다.**
- * 남기면 total 은 늘고 busy 는 안 늘어 사용률이 실제보다 낮게 나온다.
+ * 그 가정이 깨지면(음수 delta — 세션 중 기기 재부팅 등) **그 코어를 통째로 버린다.**
+ *
+ * 왜 행 하나가 아니라 코어 전체인가: idle 과 io_wait 은 분모(total)에만 들어가고 분자(busy)
+ * 에는 안 들어간다. 되감긴 `idle_ns` 행 하나만 버리면 그 코어의 분모에서 idle 이 빠지고
+ * 분자는 그대로 남아 사용률이 100% 쪽으로 밀린다 — 못 잰 것이 "매우 바빴다" 로 둔갑한다.
+ * 한 코어의 카운터 집합은 함께 읽어야만 의미가 있으므로 함께 버린다.
+ *
+ * `rows` 가 아예 비면 null 이다("표본 없음"). 행은 있는데 전부 버린 경우는 null 이 아니라
+ * `perCore: []` + `droppedCpus` 로 돌려준다 — 그 둘은 사용자에게 다른 사실이고,
+ * 호출자가 다른 사유 코드를 낸다.
  *
  * Task 6 의 measurement_overhead 가 `totalDeltaNs` 를 분모로 재사용한다.
  */
 export function summarizeCpuTimes(rows: CpuTimeRow[]): CpuTimeSummary | null {
   if (rows.length === 0) return null
 
-  const byCpu = new Map<number, { total: number; busy: number }>()
+  const byCpu = new Map<number, { total: number; busy: number; broken: boolean }>()
   let samples = 0
   let firstTs = Number.POSITIVE_INFINITY
   let lastTs = 0
 
   for (const row of rows) {
-    const delta = row.last - row.first
-    if (!Number.isFinite(delta) || delta < 0) continue
-
-    const acc = byCpu.get(row.cpu) ?? { total: 0, busy: 0 }
-    acc.total += delta
-    if (!IDLE_COUNTERS.has(row.counter)) acc.busy += delta
+    const acc = byCpu.get(row.cpu) ?? { total: 0, busy: 0, broken: false }
     byCpu.set(row.cpu, acc)
 
     samples = Math.max(samples, row.samples)
     firstTs = Math.min(firstTs, row.first_ts)
     lastTs = Math.max(lastTs, row.last_ts)
-  }
 
-  if (byCpu.size === 0) return null
+    const delta = row.last - row.first
+    if (!Number.isFinite(delta) || delta < 0) {
+      acc.broken = true
+      continue
+    }
+    acc.total += delta
+    if (!IDLE_COUNTERS.has(row.counter)) acc.busy += delta
+  }
 
   let total = 0
   let busy = 0
   const perCore: { cpu: number; busy_pct: number }[] = []
+  const droppedCpus: number[] = []
   for (const [cpu, acc] of [...byCpu.entries()].sort((a, b) => a[0] - b[0])) {
+    if (acc.broken) {
+      droppedCpus.push(cpu)
+      continue
+    }
     total += acc.total
     busy += acc.busy
     perCore.push({ cpu, busy_pct: acc.total > 0 ? round((acc.busy / acc.total) * 100, 2) : 0 })
@@ -114,6 +130,7 @@ export function summarizeCpuTimes(rows: CpuTimeRow[]): CpuTimeSummary | null {
     totalDeltaNs: total,
     busyDeltaNs: busy,
     perCore,
+    droppedCpus,
   }
 }
 
@@ -145,13 +162,28 @@ export const cpuCollector: TraceCollector<CpuData> = {
     if (summary === null) {
       return { collected: false, reason: { code: 'no_cpu_samples' } }
     }
-    if (summary.samples < MIN_SAMPLES || summary.totalDeltaNs <= 0) {
+    // 남은 코어가 하나도 없다 = 행은 있었는데 전부 되감겼다. "표본이 없다" 와 다른 사실이다.
+    if (summary.perCore.length === 0) {
+      return {
+        collected: false,
+        reason: { code: 'cpu_counters_not_monotonic', detail: { dropped_cpus: summary.droppedCpus } },
+      }
+    }
+    if (summary.samples < MIN_SAMPLES) {
       return {
         collected: false,
         reason: {
           code: 'insufficient_samples',
           detail: { samples: summary.samples, required: MIN_SAMPLES },
         },
+      }
+    }
+    // 표본은 충분한데 카운터가 전혀 안 움직인 것은 원인이 다르다 — 세션 구간이 통째로
+    // 절전/유휴에 들어간 경우가 이렇게 나온다. 같은 코드로 뭉치면 사유 문장이 거짓말을 한다.
+    if (summary.totalDeltaNs <= 0) {
+      return {
+        collected: false,
+        reason: { code: 'cpu_counters_did_not_advance', detail: { samples: summary.samples } },
       }
     }
 
@@ -181,6 +213,19 @@ export const cpuCollector: TraceCollector<CpuData> = {
       frequency,
     }
 
+    // 사유는 하나만 실린다. 코어를 버린 사실이 주파수 부재보다 먼저다 —
+    // 그것은 `total_busy_pct` 와 `per_core` 가 **기기 전체가 아니라는** 뜻이라
+    // 이 메트릭의 주된 숫자를 어떻게 읽어야 하는지를 바꾼다.
+    if (summary.droppedCpus.length > 0) {
+      return {
+        collected: true,
+        data,
+        partialReason: {
+          code: 'cpu_counters_not_monotonic',
+          detail: { dropped_cpus: summary.droppedCpus },
+        },
+      }
+    }
     // 스펙: 사용률과 주파수는 함께 봐야 한다. 함께 못 냈으면 그 사실을 결과에 적는다.
     return frequency === null
       ? { collected: true, data, partialReason: { code: 'cpu_freq_unavailable' } }

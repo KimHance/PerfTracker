@@ -107,12 +107,20 @@ export const CpuDataSchema = z.object({
   /** 첫 표본과 마지막 표본 사이. 폴링이라 세션 길이와 정확히 같지 않다. */
   sampled_ms: z.number().int().nonnegative(),
   samples: z.number().int().nonnegative(),
-  /**
-   * 전체 코어를 합친 사용률. (총 CPU시간 − idle − iowait) / 총 CPU시간.
-   * 기기 전체의 값이며 대상 앱만의 값이 아니다 — /proc/stat 은 프로세스를 구분하지 않는다.
-   */
-  total_busy_pct: z.number(),
-  per_core: z.array(CpuCoreUsageSchema),
+  total_busy_pct: z
+    .number()
+    .describe(
+      '코어를 합친 사용률. (총 CPU시간 − idle − iowait) / 총 CPU시간. ' +
+        '**기기 전체의 값이며 대상 앱만의 값이 아니다** — /proc/stat 은 프로세스를 구분하지 않는다. ' +
+        '누적 카운터가 되감긴 코어는 집계에서 통째로 빠지므로, ' +
+        'reason_code 가 cpu_counters_not_monotonic 이면 이 값은 per_core 에 남은 코어만의 것이다.',
+    ),
+  per_core: z
+    .array(CpuCoreUsageSchema)
+    .describe(
+      '코어별 사용률. 기기의 모든 코어가 항상 들어 있다고 가정하면 안 된다 — ' +
+        '카운터가 되감긴 코어는 빠지고, 그 사실은 reason_code 로 알린다.',
+    ),
   /**
    * ftrace `power/cpu_frequency` 로 관측한 코어별 주파수(kHz).
    * 이벤트가 하나도 없으면 **null** 이다 — 사용률만 있는 결과가 사용률+주파수인 척하지 않게.
