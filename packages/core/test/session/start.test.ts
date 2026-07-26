@@ -39,11 +39,44 @@ describe('parseAmStart', () => {
       'WaitTime: 1850',
     ].join('\n')
 
-    expect(parseAmStart(text)).toEqual({ totalTimeMs: 1842, launchState: 'COLD' })
+    expect(parseAmStart(text)).toEqual({
+      totalTimeMs: 1842,
+      launchState: 'COLD',
+      status: 'ok',
+      waitTimeMs: 1850,
+    })
+  })
+
+  /**
+   * 실측(에뮬레이터, API 35): 앱의 콜드 스타트가 12~15초 걸리는 환경에서 `am start -W` 가
+   * 이 모양으로 답하는 경우가 흔하다. TotalTime 이 없는 이유를 기기가 이미 말하고 있으므로,
+   * 그것을 버리고 "알 수 없음" 으로 뭉치지 않는다.
+   */
+  it('Status: timeout 을 버리지 않는다 — TotalTime 이 없는 이유가 거기 있다', () => {
+    const text = [
+      'Starting: Intent { cmp=com.foo/.Main }',
+      'Status: timeout',
+      'LaunchState: UNKNOWN (-1)',
+      'Activity: com.foo/.Main',
+      'WaitTime: 11062',
+      'Complete',
+    ].join('\n')
+
+    expect(parseAmStart(text)).toEqual({
+      totalTimeMs: null,
+      launchState: 'UNKNOWN',
+      status: 'timeout',
+      waitTimeMs: 11062,
+    })
   })
 
   it('없으면 null', () => {
-    expect(parseAmStart('Error: Activity not started')).toEqual({ totalTimeMs: null, launchState: null })
+    expect(parseAmStart('Error: Activity not started')).toEqual({
+      totalTimeMs: null,
+      launchState: null,
+      status: null,
+      waitTimeMs: null,
+    })
   })
 })
 
@@ -93,9 +126,26 @@ describe('buildWarnings', () => {
     expect(buildWarnings({ ...state, charging: false }, { video: false })).toEqual([])
   })
 
-  it('실행 확인이 안 된 --launch 는 사실로 기록한다', () => {
-    const warnings = buildWarnings({ ...state, charging: false }, { video: false, launchUnverified: true })
-    expect(warnings.map((w) => w.code)).toEqual(['app_launch_unverified'])
+  it('시작 시간을 못 잰 --launch 는 사실로 기록한다', () => {
+    const warnings = buildWarnings(
+      { ...state, charging: false },
+      { video: false, launchTimeUnmeasured: true },
+    )
+    expect(warnings.map((w) => w.code)).toEqual(['app_launch_time_unmeasured'])
+  })
+
+  /**
+   * 옛 문구는 "force-stop 된 앱이 다시 실행되지 않았을 수 있음" 이었다. 실측한 실패 사례에서
+   * 앱은 실제로 실행됐고(pid 확보, 프레임 수집됨) `am start -W` 만 `Status: timeout` 을 냈다 —
+   * 경고가 관측하지도 않은 것을 추측으로 말하고 있었다.
+   */
+  it('경고는 관측한 것만 말한다 — 실행 실패를 추측하지 않는다', () => {
+    const [warning] = buildWarnings(
+      { ...state, charging: false },
+      { video: false, launchTimeUnmeasured: true, amStartStatus: 'timeout' },
+    )
+    expect(warning!.message).toContain('timeout')
+    expect(warning!.message).not.toMatch(/실행되지 않았|않았을 수 있음/)
   })
 })
 
@@ -265,7 +315,23 @@ describe('startSession — --launch 안전장치 (I2)', () => {
     const manifest = JSON.parse(
       readFileSync(join(session.runDir, 'capture.json'), 'utf8'),
     ) as CaptureManifest
-    expect(manifest.warnings.map((w) => w.code)).toContain('app_launch_unverified')
+    expect(manifest.warnings.map((w) => w.code)).toContain('app_launch_time_unmeasured')
+  })
+
+  it('am start 가 낸 Status 를 세션에 그대로 남긴다 — startup 이 이걸로 사유를 가른다', async () => {
+    const runner = startableDevice((r) => {
+      r.onMatch(/shell am start -W -n /, {
+        stdout: 'Status: timeout\nLaunchState: UNKNOWN (-1)\nWaitTime: 11062\nComplete\n',
+      })
+    })
+    const session = await start({ launch: true, runner }).result
+
+    expect(session.startup).toEqual({
+      totalTimeMs: null,
+      launchState: 'UNKNOWN',
+      status: 'timeout',
+      waitTimeMs: 11062,
+    })
   })
 })
 

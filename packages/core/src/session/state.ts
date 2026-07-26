@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import type { AmStartResult } from '../collectors/types.js'
 import { perfTrackerHome } from './paths.js'
 
 export interface ActiveSession {
@@ -16,7 +17,7 @@ export interface ActiveSession {
   startedAt: string
   configuredDurationMs: number
   options: { launch: boolean; video: boolean }
-  startup: { totalTimeMs: number | null; launchState: string | null } | null
+  startup: AmStartResult | null
   /**
    * `am start -W` 직후 `pidof` 가 알려 준 앱 프로세스의 pid. `--launch` 없이 시작했거나
    * `pidof` 가 답하지 못했으면 null.

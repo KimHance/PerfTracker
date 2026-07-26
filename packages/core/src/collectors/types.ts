@@ -7,12 +7,32 @@ export interface CollectorEnv {
 }
 
 /**
+ * `am start -W` 가 낸 것. `session/start.ts` 의 `parseAmStart` 결과가 그대로 담긴다.
+ *
+ * `status` 와 `waitTimeMs` 가 optional 인 것은 이 필드들이 없던 시절의 `session.json` 을
+ * 그대로 읽기 위해서다 — 필드 추가는 형식 버전을 올릴 이유가 아니다.
+ */
+export interface AmStartResult {
+  /** 프로세스 시작부터 첫 프레임까지. 기기가 보고하지 않으면 null. */
+  totalTimeMs: number | null
+  /** COLD / WARM / HOT / UNKNOWN. 기기가 뱉는 문자열 그대로다. */
+  launchState: string | null
+  /**
+   * `am start -W` 의 `Status:` 원문 (`ok` / `timeout` / ...).
+   * **TotalTime 이 없을 때 그 이유를 아는 유일한 단서**라 버리지 않는다.
+   */
+  status?: string | null
+  /** `WaitTime:`. TotalTime 이 없어도 이건 오는 경우가 많다 (실측). */
+  waitTimeMs?: number | null
+}
+
+/**
  * capture 단계에서만 알 수 있고 트레이스에는 없는 사실.
  * `extractRun` 이 `session.json` 에서 조립해 넣는다 — capture.json 의 버전을 올리지 않는 이유다.
  */
 export interface CaptureFacts {
   /** `am start -W` 가 보고한 값. `--launch` 없이 시작했으면 null. */
-  startup: { totalTimeMs: number | null; launchState: string | null } | null
+  startup: AmStartResult | null
   /**
    * 사용자가 `--launch` 를 줬는지.
    * `startup` 이 null 인 이유가 "안 켰다"(skipped)인지 "켰는데 못 읽었다"(partial)인지를 가른다.

@@ -28,8 +28,19 @@ export const METRIC_REASON_CODES = [
   'query_failed',
   /** `--launch` 없이 시작한 세션이라 시작 시간을 잴 기회 자체가 없었다. */
   'launch_not_requested',
-  /** `am start -W` 는 돌았지만 TotalTime 을 보고하지 않았다. */
+  /**
+   * `am start -W` 는 돌았지만 TotalTime 을 보고하지 않았고, 기기가 그 이유도 말하지 않았다.
+   * 기기가 `Status: timeout` 을 낸 경우는 `launch_wait_timed_out` 이다.
+   * detail: am_start_status (기기가 낸 `Status:` 원문, 없으면 null)
+   */
   'launch_time_unreported',
+  /**
+   * `am start -W` 가 `Status: timeout` 을 냈다 — ActivityManager 가 실행 완료 보고를
+   * 기다리다 포기했고, 그때 TotalTime 은 아예 찍히지 않는다. 앱이 실행되지 않았다는 뜻이
+   * **아니다** (실측: 이 상태에서도 앱은 살아 있었고 프레임도 수집됐다).
+   * detail: wait_time_ms
+   */
+  'launch_wait_timed_out',
   /** linux.sys_stats 는 켰는데 트레이스에 cpu.times.* 표본이 하나도 없다. */
   'no_cpu_samples',
   /** 표본이 delta 를 낼 만큼 모이지 않았다 (세션이 폴링 주기보다 짧음). detail: samples, required */
@@ -85,8 +96,16 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
   query_failed: (d) => `트레이스 쿼리에 실패했습니다: ${String(d['message'])}`,
   launch_not_requested: () =>
     '--launch 없이 시작한 세션이라 앱 시작 시간을 재지 않았습니다.',
-  launch_time_unreported: () =>
-    'am start -W 가 TotalTime 을 보고하지 않았습니다 — 앱이 이미 떠 있었거나 액티비티가 바로 끝났을 수 있습니다.',
+  launch_time_unreported: (d) =>
+    `am start -W 가 TotalTime 을 보고하지 않았습니다` +
+    `${d['am_start_status'] != null ? ` (Status: ${String(d['am_start_status'])})` : ''} — ` +
+    `앱이 이미 떠 있었거나 액티비티가 바로 끝났을 수 있습니다. ` +
+    `앱이 실행됐는지는 이 사유가 말하지 않습니다 (target_app.pid 와 다른 메트릭을 보세요).`,
+  launch_wait_timed_out: (d) =>
+    `am start -W 가 Status: timeout 을 보고했습니다 — ActivityManager 가 실행 완료 보고를 ` +
+    `기다리다 포기해 TotalTime 이 찍히지 않았습니다` +
+    `${d['wait_time_ms'] != null ? ` (WaitTime ${String(d['wait_time_ms'])}ms)` : ''}. ` +
+    `앱이 실행되지 않았다는 뜻이 아닙니다 — 이 세션에서 시작 시간만 측정되지 않은 것입니다.`,
   no_cpu_samples: () =>
     'linux.sys_stats 의 CPU 시간 표본이 트레이스에 없습니다.',
   insufficient_samples: (d) =>

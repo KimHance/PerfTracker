@@ -59,7 +59,25 @@ describe('startupCollector.extract', () => {
     )
     expect(outcome).toEqual({
       collected: false,
-      reason: { code: 'launch_time_unreported' },
+      reason: { code: 'launch_time_unreported', detail: { am_start_status: null } },
+    })
+  })
+
+  /**
+   * 기기가 `Status: timeout` 을 냈다면 TotalTime 이 없는 이유를 **기기가 이미 말한 것**이다.
+   * 그것을 "앱이 이미 떠 있었거나 액티비티가 바로 끝났을 수 있습니다" 로 렌더하면 도구가
+   * 관측하지 않은 원인을 지어낸다. 실측(에뮬레이터)에서 이 경로가 흔하게 잡힌다.
+   */
+  it('Status: timeout 은 별도 사유로 낸다 — 원인을 지어내지 않는다', async () => {
+    const outcome = await startupCollector.extract(
+      ctx({
+        launchRequested: true,
+        startup: { totalTimeMs: null, launchState: 'UNKNOWN', status: 'timeout', waitTimeMs: 11062 },
+      }),
+    )
+    expect(outcome).toEqual({
+      collected: false,
+      reason: { code: 'launch_wait_timed_out', detail: { wait_time_ms: 11062 } },
     })
   })
 
@@ -67,17 +85,17 @@ describe('startupCollector.extract', () => {
     const outcome = await startupCollector.extract(ctx({ launchRequested: true, startup: null }))
     expect(outcome).toEqual({
       collected: false,
-      reason: { code: 'launch_time_unreported' },
+      reason: { code: 'launch_time_unreported', detail: { am_start_status: null } },
     })
   })
 
   it('음수 TotalTime 은 받지 않는다 — 스키마가 nonnegative 다', async () => {
     const outcome = await startupCollector.extract(
-      ctx({ launchRequested: true, startup: { totalTimeMs: -1, launchState: 'COLD' } }),
+      ctx({ launchRequested: true, startup: { totalTimeMs: -1, launchState: 'COLD', status: 'ok' } }),
     )
     expect(outcome).toEqual({
       collected: false,
-      reason: { code: 'launch_time_unreported' },
+      reason: { code: 'launch_time_unreported', detail: { am_start_status: 'ok' } },
     })
   })
 })

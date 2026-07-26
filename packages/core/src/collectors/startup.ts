@@ -41,7 +41,21 @@ export const startupCollector: CaptureCollector<StartupData> = {
     // 음수는 파싱이 어긋났다는 뜻이다. 스키마의 nonnegative 에서 터뜨리는 대신 여기서 사유로 만든다 —
     // 스키마 실패는 result.json 을 통째로 못 내게 하고, 이건 메트릭 하나의 문제다.
     if (startup === null || startup.totalTimeMs === null || startup.totalTimeMs < 0) {
-      return { collected: false, reason: { code: 'launch_time_unreported' } }
+      // 기기가 `Status: timeout` 을 냈다면 TotalTime 이 없는 이유를 **기기가 이미 말한 것**이다.
+      // 그걸 "앱이 이미 떠 있었을 수 있습니다" 로 렌더하면 도구가 원인을 지어낸다.
+      if (startup?.status === 'timeout') {
+        return {
+          collected: false,
+          reason: {
+            code: 'launch_wait_timed_out',
+            detail: { wait_time_ms: startup.waitTimeMs ?? null },
+          },
+        }
+      }
+      return {
+        collected: false,
+        reason: { code: 'launch_time_unreported', detail: { am_start_status: startup?.status ?? null } },
+      }
     }
 
     return {

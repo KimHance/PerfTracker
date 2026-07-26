@@ -9,6 +9,7 @@ import {
   type MemoryData,
   probeDevice,
   readActiveSession,
+  type StartupData,
 } from '@perftracker/core'
 import { runStart } from '../../src/commands/start.js'
 import { runStop } from '../../src/commands/stop.js'
@@ -65,8 +66,32 @@ describe('M2 기기 통합', () => {
 
     // --- 에뮬레이터에서도 정직하게 참인 단언들 ---
 
-    // Startup: --launch 로 시작했으므로 skipped 가 아니어야 한다.
-    expect(result.metrics.startup?.status).not.toBe('skipped')
+    // Startup.
+    //
+    // 옛 단언은 `not.toBe('skipped')` 였는데, `--launch` 세션에서 startup 이 skipped 가 되는
+    // 경로는 **존재하지 않는다** (`collectors/startup.ts` 는 launchRequested 가 false 일 때만
+    // skipped 다). 어떤 구현 변경으로도 깨지지 않는 단언이라 아무것도 지키지 않았다.
+    //
+    // 실제로 지켜야 할 것은 두 가지다:
+    //   (1) 값이 나오면 그 값이 진짜 시작 시간이다.
+    //   (2) 값이 없으면 그 이유가 **기기가 실제로 말한 것**이어야 한다 — 도구가 지어낸
+    //       "앱이 다시 실행되지 않았을 수 있음" 이 아니라.
+    // 이 앱의 콜드 스타트는 이 에뮬레이터에서 12~15초라 `am start -W` 가 `Status: timeout` 을
+    // 내는 경우가 흔하다 (README "검증 환경" 절에 실측과 함께 적어 뒀다).
+    const startup = result.metrics.startup
+    expect(startup?.status, `startup: ${startup?.reason ?? ''}`).toMatch(/^(collected|partial)$/)
+    if (startup?.data != null) {
+      expect(startup.status).toBe('collected')
+      expect(startup.reason_code).toBeNull()
+      expect((startup.data as StartupData).total_time_ms).toBeGreaterThan(0)
+    } else {
+      expect(startup?.reason_code, `startup: ${startup?.reason ?? ''}`).toBe('launch_wait_timed_out')
+      expect(result.warnings.map((w) => w.code)).toContain('app_launch_time_unmeasured')
+    }
+
+    // 시작 시간을 못 쟀더라도 앱이 실제로 떴다는 사실은 pid 로 확인된다 —
+    // 옛 경고 문구("앱이 다시 실행되지 않았을 수 있음")가 왜 거짓이었는지가 여기 있다.
+    expect(result.target_app.pid).not.toBeNull()
 
     // CPU: 사용률은 나와야 한다. 주파수 값은 보지 않는다 (에뮬은 kHz 가 아니다).
     const cpu = result.metrics.cpu

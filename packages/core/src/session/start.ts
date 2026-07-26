@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path'
 import type { AdbClient } from '../adb/client.js'
 import { shellQuote } from '../adb/shell.js'
 import { collectTraceConfigBlocks, unsupportedReasons } from '../collectors/registry.js'
+import type { AmStartResult } from '../collectors/types.js'
 import { probeDevice } from '../device/probe.js'
 import { collectDeviceStatic } from '../device/spec.js'
 import { collectDeviceState } from '../device/state.js'
@@ -28,12 +29,31 @@ import {
   writeRunSession,
 } from './state.js'
 
-export function parseAmStart(text: string): { totalTimeMs: number | null; launchState: string | null } {
+/**
+ * `am start -W` 의 출력.
+ *
+ * `Status:` 를 함께 읽는 이유: 이 명령은 TotalTime 을 **못 내는 경우가 정상 흐름에 있다.**
+ * 실측(에뮬레이터 API 35, 콜드 스타트 12~15초짜리 앱)에서 자주 나온 답이 이것이다:
+ *
+ *     Status: timeout
+ *     LaunchState: UNKNOWN (-1)
+ *     Activity: ...
+ *     WaitTime: 11062
+ *
+ * ActivityManager 가 실행 완료 보고를 기다리다 포기한 것이고, 그때 TotalTime 은 아예 찍히지
+ * 않는다. `Status` 를 버리면 남는 것은 "TotalTime 이 없다" 뿐이라, 도구는 그 이유를 추측할 수
+ * 밖에 없다 — 이 프로젝트에서 추측은 사실 자리에 오면 안 된다.
+ */
+export function parseAmStart(text: string): AmStartResult {
   const total = /^TotalTime:\s*(\d+)/m.exec(text)?.[1]
+  const wait = /^WaitTime:\s*(\d+)/m.exec(text)?.[1]
   const launchState = /^LaunchState:\s*(\w+)/m.exec(text)?.[1]
+  const status = /^Status:\s*(\w+)/m.exec(text)?.[1]
   return {
     totalTimeMs: total !== undefined ? Number(total) : null,
     launchState: launchState ?? null,
+    status: status ?? null,
+    waitTimeMs: wait !== undefined ? Number(wait) : null,
   }
 }
 
@@ -50,7 +70,12 @@ export function parsePidof(text: string): number | null {
 /** 관측된 사실만 담는다. "느립니다" 같은 평가는 들어가지 않는다. */
 export function buildWarnings(
   stateBefore: DeviceState,
-  options: { video: boolean; launchUnverified?: boolean },
+  options: {
+    video: boolean
+    launchTimeUnmeasured?: boolean
+    /** `am start -W` 의 `Status:` 원문. 있으면 경고가 추측 대신 그것을 인용한다. */
+    amStartStatus?: string | null
+  },
 ): Warning[] {
   const warnings: Warning[] = []
 
@@ -69,11 +94,20 @@ export function buildWarnings(
       message: 'screenrecord 오버헤드가 섞인 세션임',
     })
   }
-  if (options.launchUnverified === true) {
+  // 옛 코드는 `app_launch_unverified` 와 "force-stop 된 앱이 다시 실행되지 않았을 수 있음" 이었다.
+  // 실측한 실패 사례에서 앱은 실제로 실행됐고(pid 확보, 프레임 수집됨) `am start -W` 만
+  // `Status: timeout` 을 냈다 — 경고가 관측하지 않은 원인을 지어내고 있었다.
+  // 이 경고가 아는 것은 하나다: **이 세션에서 시작 시간을 못 쟀다.**
+  if (options.launchTimeUnmeasured === true) {
+    const status =
+      options.amStartStatus != null && options.amStartStatus.length > 0
+        ? ` (Status: ${options.amStartStatus})`
+        : ''
     warnings.push({
-      code: 'app_launch_unverified',
+      code: 'app_launch_time_unmeasured',
       message:
-        'am start 가 TotalTime 을 보고하지 않았음 — force-stop 된 앱이 다시 실행되지 않았을 수 있음',
+        `am start -W 가 TotalTime 을 보고하지 않아 앱 시작 시간을 재지 못했음${status} — ` +
+        `앱 실행 여부는 이 경고가 말하지 않음 (target_app.pid 와 metrics 참고)`,
     })
   }
   return warnings
@@ -238,7 +272,8 @@ export async function startSession(
     env,
     warnings: buildWarnings(before.state, {
       video: opts.video,
-      launchUnverified: opts.launch && startup?.totalTimeMs == null,
+      launchTimeUnmeasured: opts.launch && startup?.totalTimeMs == null,
+      amStartStatus: startup?.status ?? null,
     }),
     adb_commands_during_session: 0,
     artifacts: { trace: null, video: null, raw: rawFiles },
