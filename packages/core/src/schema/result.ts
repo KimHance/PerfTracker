@@ -35,11 +35,16 @@ export const SCHEMA_VERSION = '1.1.0'
  *
  * 이 배열의 모든 값이 실재하는 `MetricReasonCode` 인지는 테스트가 고정한다.
  *
- * **`snapshot_unavailable` 은 이 목록에서 유일하게 양쪽에 걸친 코드다.** network 는 시작
- * 스냅샷이 없으면 값을 통째로 못 내지만(`network.ts` — 누적 카운터는 한쪽만으로 뜻이 없다),
- * thermal 은 **종료** 스냅샷만 없을 때 시작 스냅샷의 값을 낸 채 같은 코드를 `partialReason`
- * 으로 붙인다(`thermal.ts`) — `stop` 전 세션을 extract 하면 **반드시** 지나가는 길이다.
- * 그래서 이 코드만 보고 `data` 유무를 추론하면 틀린다. 목록을 계약으로 만들지 않은 이유가
+ * **양쪽에 걸친 코드가 셋 있다.** 같은 코드가 어떤 메트릭에서는 `data: null` 을, 다른
+ * 메트릭에서는 `data` 가 있는 `partial` 을 낸다:
+ *   - `snapshot_unavailable` — network 는 시작 스냅샷이 없으면 값을 통째로 못 내지만
+ *     (누적 카운터는 한쪽만으로 뜻이 없다), thermal 은 **종료** 스냅샷만 없을 때 시작
+ *     스냅샷의 값을 낸 채 같은 코드를 붙인다. `stop` 전 세션을 extract 하면 반드시 지난다.
+ *   - `process_not_in_trace` — memory 는 값을 통째로 못 내지만, cpu / log 는 기기 전역
+ *     값을 낸 채 `app: null` 로 둔다.
+ *   - `counter_went_backwards` — network 는 값을 통째로 못 내지만, cpu 는 기기 전역 값을
+ *     낸 채 `app: null` 로 둔다.
+ * 그래서 이 코드들만 보고 `data` 유무를 추론하면 틀린다. 목록을 계약으로 만들지 않은 이유가
  * 바로 이런 것이고, describe 문구가 그 사실을 소비자에게 직접 말한다.
  */
 const DATA_NULL_PARTIAL_CODES = [
@@ -84,12 +89,12 @@ export const MetricStatusSchema = z
       "판정은 반드시 `data !== null`(또는 `status === 'collected'`)로 하고 이 목록으로 하지 말 것. " +
       '스냅샷 계열(snapshot_unavailable / snapshot_unparsable)이 특히 흔하다: 이 도구가 ' +
       '스냅샷을 찍기 전에 만들어진 옛 run 을 재산출하면 thermal / network 가 반드시 그 길을 지난다.\n' +
-      '**`snapshot_unavailable` 은 위 목록에서 유일하게 양쪽에 걸친 코드다.** network 는 시작 ' +
-      '스냅샷이 없으면 값을 통째로 내지 못하지만(data null), thermal 은 **종료** 스냅샷만 ' +
-      '없을 때 시작 스냅샷의 값을 낸 채 같은 코드를 붙인다(data non-null) — 아직 stop 하지 ' +
-      '않은 세션을 extract 하면 반드시 지나가는 길이다. ' +
-      '**이 코드로 data 유무를 추론하지 말 것.** 목록을 계약으로 만들지 않은 이유가 이런 ' +
-      '것이며, 이 코드가 그 산 증거다.\n' +
+      '**위 목록의 코드 셋은 양쪽에 걸친다** — 같은 코드가 메트릭에 따라 data 를 내기도 하고 ' +
+      '안 내기도 한다: `snapshot_unavailable`(network 는 data null / thermal 은 non-null), ' +
+      '`process_not_in_trace`(memory 는 null / cpu·log 는 기기 전역 값을 낸 채 app 만 null), ' +
+      '`counter_went_backwards`(network 는 null / cpu 는 app 만 null). ' +
+      '**이 코드들로 data 유무를 추론하지 말 것.** 목록을 계약으로 만들지 않은 이유가 이런 ' +
+      '것이며, 이 코드들이 그 산 증거다.\n' +
       '- unsupported: 이 기기가 이 메트릭을 낼 수 없다 (sdk 하한 미달, 데이터소스 미등록). ' +
       'data 는 null 이다.\n' +
       '- failed: 예외 상황 전용이다 — 트레이스 원본이 없거나(trace_missing) ' +
@@ -195,29 +200,138 @@ export const CpuFrequencySchema = z.object({
 })
 export type CpuFrequency = z.infer<typeof CpuFrequencySchema>
 
+/**
+ * 이 메트릭의 필드 이름이 `device_` 로 시작하면 **기기 전역**, `app` 아래면 **대상 앱**이다.
+ *
+ * 예전 이름은 `total_busy_pct` / `per_core` / `frequency` 였고 전부 기기 전역이었다.
+ * 한정이 `.describe()` 에만 있었으므로 필드명만 보는 소비자에게 `total_busy_pct` 는
+ * "이 앱이 CPU 를 23% 썼다" 로 읽혔다. 앱 단위 값이 옆에 생긴 지금은 그 오독이 더 쉬워지므로
+ * 이름 자체에 범위를 넣었다 (`z.toJSONSchema()` 는 런타임이라 소스 주석을 못 본다).
+ */
+const CPU_DEVICE_SCOPE =
+  '**기기 전역이며 대상 앱만의 값이 아니다** — /proc/stat 은 프로세스를 구분하지 않는다. ' +
+  '대상 앱의 CPU 는 이 객체의 `app` 에 있다. 이 값은 그 옆에 두고 읽는 맥락이다 ' +
+  '(앱이 느린 것이 기기 전체가 바빴기 때문인지 볼 수 있다). '
+
+/** 대상 앱의 프로세스 중 대표가 아닌 것 하나. 대표는 `AppCpuSchema` 본체다. */
+export const AppCpuProcessSchema = z.object({
+  process: z
+    .string()
+    .nullable()
+    .describe('트레이스가 이 프로세스를 부르는 이름. 트레이스에 이름이 없으면 null 이다.'),
+  pid: z.number().int(),
+  user_ms: z.number().int().nonnegative(),
+  kernel_ms: z.number().int().nonnegative(),
+  total_ms: z.number().int().nonnegative(),
+})
+export type AppCpuProcess = z.infer<typeof AppCpuProcessSchema>
+
+export const AppCpuSchema = z.object({
+  process: z.string().describe(PROCESS_NAME_DESCRIPTION),
+  pid: z.number().int(),
+  samples: z.number().int().nonnegative().describe('이 프로세스의 runtime 카운터 표본 수.'),
+  sampled_ms: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      '이 프로세스의 첫 표본과 마지막 표본 사이(ms). **세션 길이가 아니다** — 세션 도중 뜬 ' +
+        '프로세스는 이 값이 짧다. 폴링 주기 때문에 세션 길이와 정확히 같은 경우도 없다.',
+    ),
+  user_ms: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      '이 프로세스가 사용자 모드에서 쓴 CPU 시간(ms). linux.process_stats 의 ' +
+        '`runtime.user_ns` 가 세션 구간에서 늘어난 양이다(= /proc/<pid>/stat 의 utime).',
+    ),
+  kernel_ms: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe('같은 구간의 커널 모드 CPU 시간(ms). `runtime.kernel_ns` 의 증가량(= stime).'),
+  total_ms: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      'user_ms + kernel_ms. **이것은 CPU 시간이지 벽시계 시간이 아니다** — 여러 코어에서 ' +
+        '동시에 돌면 벽시계보다 클 수 있다.\n' +
+        '**커널이 clock tick 단위로만 보고하므로 해상도는 10ms 다** (USER_HZ=100). 짧은 세션의 ' +
+        '0 은 "안 썼다" 가 아니라 "10ms 미만" 이다.\n' +
+        '**첫 표본 이전의 CPU 시간은 빠진다.** 카운터는 첫 폴링 때 관측된 값에서 시작하므로, ' +
+        '`--launch` 로 콜드 스타트한 앱은 프로세스 생성부터 첫 표본까지(최대 1초)의 몫이 ' +
+        '들어 있지 않다. 즉 이 값은 하한이다.',
+    ),
+  share_of_device_cpu_pct: z
+    .number()
+    .describe(
+      '**분모는 같은 구간 기기 전체의 CPU 시간(모든 코어의 cpu.times.* 증가량 합, idle 포함)** ' +
+        '이다. 즉 벽시계 시간이 아니라 "벽시계 × 코어 수" 에 가깝고, 100% 는 모든 코어를 ' +
+        '내내 이 앱이 썼다는 뜻이다. 8코어 기기에서 코어 하나를 100% 쓰면 이 값은 약 12.5% 다.\n' +
+        '**같은 분모를 measurement_overhead.tracing_processes_cpu_share_pct 가 쓴다** — ' +
+        '그래야 한 result.json 안의 두 백분율을 서로 비교할 수 있다.\n' +
+        '"기기가 실제로 한 일 중 이 앱의 몫" 이 필요하면 이 값을 device_total_busy_pct 로 ' +
+        '나누라 (분모가 같은 총 CPU 시간이라 그 비가 성립한다).\n' +
+        'reason_code 가 cpu_counters_not_monotonic 이면 분모에서 그 코어들이 빠져 있으므로 ' +
+        '이 값은 실제보다 크다.',
+    ),
+  other_processes: z
+    .array(AppCpuProcessSchema)
+    .describe(
+      '대표 프로세스가 아닌, 이 앱의 것으로 **트레이스가 이름을 붙인** 프로세스들의 CPU 시간. ' +
+        '위의 숫자에 **합산되어 있지 않다.**\n' +
+        '**왜 합치지 않는가:** CPU 시간은 더해도 이중 계산이 아니지만, 더하려면 이 앱의 ' +
+        '프로세스 집합이 완전해야 한다. 그런데 트레이스의 프로세스 이름은 완전하지 않다 — ' +
+        'linux.process_stats 는 이름을 최초 관측 때 한 번만 확정하므로 갓 fork 된 앱 본체가 ' +
+        '`<pre-initialized>` 로 남는다. 실기기 실측: 대상 앱 uid 의 프로세스 4개 중 이름이 ' +
+        '패키지명과 정확히 같은 것은 8.63초를 쓴 **본체가 아니라** 10ms 를 쓴 자식이었다. ' +
+        '불완전한 집합의 합을 "이 앱의 CPU" 라고 부르면 누가 빠졌는지조차 결과에 안 남는다. ' +
+        '그래서 대표 하나만 위에 싣고 나머지는 각자 pid 를 달고 여기 남긴다.\n' +
+        '**`[]` 는 "그런 프로세스를 관측하지 못했다" 이지 "없다" 가 아니다** — 이름이 낡은 ' +
+        '서브프로세스는 애초에 후보에 들어오지 못한다. 합계가 필요하면 이 배열의 total_ms 를 ' +
+        '직접 더하되, 그것도 하한이라는 사실과 함께 읽으라.',
+    ),
+})
+export type AppCpuData = z.infer<typeof AppCpuSchema>
+
 export const CpuDataSchema = z.object({
   /** 첫 표본과 마지막 표본 사이. 폴링이라 세션 길이와 정확히 같지 않다. */
-  sampled_ms: z.number().int().nonnegative(),
-  samples: z.number().int().nonnegative(),
-  total_busy_pct: z
+  device_sampled_ms: z.number().int().nonnegative(),
+  device_samples: z.number().int().nonnegative(),
+  device_total_busy_pct: z
     .number()
     .describe(
       '코어를 합친 사용률. (총 CPU시간 − idle − iowait) / 총 CPU시간. ' +
-        '**기기 전체의 값이며 대상 앱만의 값이 아니다** — /proc/stat 은 프로세스를 구분하지 않는다. ' +
+        CPU_DEVICE_SCOPE +
         '누적 카운터가 되감긴 코어는 집계에서 통째로 빠지므로, ' +
-        'reason_code 가 cpu_counters_not_monotonic 이면 이 값은 per_core 에 남은 코어만의 것이다.',
+        'reason_code 가 cpu_counters_not_monotonic 이면 이 값은 device_per_core 에 남은 ' +
+        '코어만의 것이다.',
     ),
-  per_core: z
+  device_per_core: z
     .array(CpuCoreUsageSchema)
     .describe(
-      '코어별 사용률. 기기의 모든 코어가 항상 들어 있다고 가정하면 안 된다 — ' +
+      `코어별 사용률. ${CPU_DEVICE_SCOPE}` +
+        '기기의 모든 코어가 항상 들어 있다고 가정하면 안 된다 — ' +
         '카운터가 되감긴 코어는 빠지고, 그 사실은 reason_code 로 알린다.',
     ),
-  /**
-   * ftrace `power/cpu_frequency` 로 관측한 코어별 주파수(kHz).
-   * 이벤트가 하나도 없으면 **null** 이다 — 사용률만 있는 결과가 사용률+주파수인 척하지 않게.
-   */
-  frequency: z.array(CpuFrequencySchema).nullable(),
+  device_frequency: z
+    .array(CpuFrequencySchema)
+    .nullable()
+    .describe(
+      `ftrace power/cpu_frequency 로 관측한 코어별 주파수(kHz). ${CPU_DEVICE_SCOPE}` +
+        '이벤트가 하나도 없으면 **null** 이다 — 사용률만 있는 결과가 사용률+주파수인 척하지 않게.',
+    ),
+  app: AppCpuSchema.nullable().describe(
+    '**대상 앱 프로세스 하나가 쓴 CPU 시간.** 프로세스 특정 규칙은 frame / memory 와 같다 ' +
+      '(캡처한 pid → 정확한 패키지명 → `패키지:서브프로세스`), 그래서 세 메트릭이 같은 ' +
+      '프로세스를 가리킨다.\n' +
+      '**null 은 0 이 아니라 "내지 못했다" 이다.** reason_code 가 갈래를 말한다: ' +
+      'process_not_in_trace(프로세스를 특정하지 못함) / no_app_cpu_samples(프로세스는 찾았는데 ' +
+      'runtime.* 카운터가 없음 — record_process_runtime 이 꺼진 옛 캡처) / ' +
+      'counter_went_backwards(누적 카운터가 감소 — pid 재사용 등) / query_failed.',
+  ),
 })
 export type CpuData = z.infer<typeof CpuDataSchema>
 
@@ -274,23 +388,40 @@ export type MemoryData = z.infer<typeof MemoryDataSchema>
 export const LogEventSchema = z.object({
   tag: z.string(),
   message: z.string(),
+  pid: z
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      '이 줄을 **찍은** 프로세스의 pid. 사건의 주체가 아니라 기록자다 — ANR 은 ' +
+        'system_server 가 찍으므로 여기 system_server 의 pid 가 온다(실측 확인). ' +
+        '대상 앱이 직접 찍은 줄인지는 metrics.log.data.app.pid 와 비교해서 판단하라. ' +
+        '**null 은 트레이스가 이 줄의 프로세스를 특정하지 못했다는 뜻이다** — ' +
+        'android_logs 는 utid 만 갖고 있어 thread/process 테이블을 거쳐야 하는데 ' +
+        'linux.process_stats 가 없거나 그 스레드를 못 본 경우가 있다.',
+    ),
+  process: z
+    .string()
+    .nullable()
+    .describe('그 프로세스의 이름(트레이스 기준). pid 와 같은 규칙으로 null 일 수 있다.'),
 })
 export type LogEvent = z.infer<typeof LogEventSchema>
 
 /**
- * 이 metric 의 모든 숫자는 **기기 전역**이다. 그 사실이 지금까지 소스 주석에만 있었는데,
- * `perftracker schema` 는 `z.toJSONSchema(ResultSchema)` 라 주석을 보지 못한다 —
- * 스키마만 읽는 CI 와 LLM 에게는 `crashes` 가 대상 앱의 크래시로 보였다.
- * 범위가 한정된 숫자의 한정 조건은 주석이 아니라 `.describe()` 에 있어야 한다.
+ * `device_` 접두어가 없던 시절의 `total` / `by_priority` / `crashes` / `anrs` 는 전부
+ * 기기 전역이었고, 그 한정이 `.describe()` 에만 있었다. 이제 앱 단위 값이 옆에 생기므로
+ * **접두어로 범위를 이름에 넣는다** — `total` 이라는 이름으로 앱 단위 값과 기기 전역 값이
+ * 각각 존재하는 상태가 가장 나쁘다.
  */
-const LOG_SCOPE =
+const LOG_DEVICE_SCOPE =
   '이 값은 **기기 전역**이며 대상 앱만의 값이 아니다 — android.log 데이터소스는 logd 전체를 ' +
-  '받고 프로세스로 거르지 않는다. '
+  '받고 프로세스로 거르지 않는다. 대상 앱만의 개수는 `app` 에 있다. ' +
+  '실측 대조(같은 세션, SM-S901N / Android 16): 기기 전역 W 1,095 / E 412 인데 대상 앱 ' +
+  '프로세스만은 W 24 / E 13 이었다 — **45배 / 32배 차이다.** '
 const LOG_EVENT_SCOPE =
-  '원문을 그대로 실으므로 누구 것인지는 tag/message 로 직접 읽어야 한다. ' +
   `crashes 와 anrs 를 합쳐 최대 ${'200'}건까지만 담는다(ts 오름차순). ` +
   '상한에 닿으면 status 가 partial 이 되고 reason_code 가 log_events_truncated 로 그 사실을 ' +
-  '말한다 — 그 뒤에 더 있었는지는 이 결과로 알 수 없다. 개수(total/by_priority)는 잘리지 않는다. '
+  '말한다 — 그 뒤에 더 있었는지는 이 결과로 알 수 없다. 개수는 잘리지 않는다. '
 /**
  * `[]` 와 `null` 은 다른 사실이다. 이 구분이 없던 동안, 이벤트 쿼리가 실패한 세션이
  * "크래시 0건" 을 사실처럼 실어 냈다 — 같은 collector 가 빈 로그 버퍼에 대해서는
@@ -301,6 +432,36 @@ const LOG_EVENT_NULL =
   'query_failed 로 그 사실을 말한다. 빈 배열([])은 "쿼리는 성공했고 관측된 것이 없다" 이다. ' +
   '둘을 같은 뜻으로 읽으면 안 된다.'
 
+export const AppLogSchema = z.object({
+  process: z.string().describe(PROCESS_NAME_DESCRIPTION),
+  pid: z.number().int(),
+  total: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      '이 프로세스가 찍은 로그 줄의 수. android_logs 를 utid → thread → **upid** 로 걸러 센다 ' +
+        '(pid 가 아니다 — pid 는 재사용될 수 있고 그러면 남의 로그가 섞인다).\n' +
+        '**시간으로 자르지 않는다**: 이 프로세스가 트레이스 구간 안에서 찍은 줄 전부이고, ' +
+        '첫 process_stats 표본 이전(콜드 스타트 구간)의 줄도 포함된다.\n' +
+        '**0 은 관측이다** — 이 값이 나온 시점에 기기 전역 개수는 이미 0 이 아니었으므로 ' +
+        '(그렇지 않으면 이 메트릭 전체가 no_log_entries 로 값을 내지 않는다) 로그 경로가 ' +
+        '살아 있었다는 것이 확인된 상태다. 반대로 앱을 **특정하지 못한** 경우 이 객체 자체가 ' +
+        'null 이다.',
+    ),
+  by_priority: z
+    .object({
+      warn: z.number().int().nonnegative(),
+      error: z.number().int().nonnegative(),
+      fatal: z.number().int().nonnegative(),
+    })
+    .describe(
+      '이 프로세스가 찍은 W/E/F 세 우선순위의 줄 수. 세 값의 합은 total 과 다를 수 있다 — ' +
+        'total 은 이 셋 밖의 우선순위까지 세기 때문이다.',
+    ),
+})
+export type AppLogData = z.infer<typeof AppLogSchema>
+
 export const LogDataSchema = z.object({
   min_prio: z
     .string()
@@ -310,43 +471,67 @@ export const LogDataSchema = z.object({
         '이 도구는 트레이스를 받은 뒤 우선순위로 다시 거르지 않는다 — 개수의 정의는 ' +
         '"트레이스에 있는 것을 센다" 이지 "문턱 이상만 센다" 가 아니다. ' +
         '그래도 문턱 없이는 개수를 읽을 수 없다: "W 118건" 은 무엇이 걸러진 뒤의 숫자인지 ' +
-        '모르면 의미가 없다.',
+        '모르면 의미가 없다. app 과 device_* 양쪽에 똑같이 적용된다.',
     ),
-  total: z
+  app: AppLogSchema.nullable().describe(
+    '**대상 앱 프로세스가 찍은 로그만** 센 것. 프로세스 특정 규칙은 frame / memory / cpu 와 ' +
+      '같다, 그래서 네 메트릭이 같은 프로세스를 가리킨다.\n' +
+      '**null 은 0 이 아니라 "내지 못했다" 이다.** reason_code 가 갈래를 말한다 ' +
+      '(process_not_in_trace / query_failed). ' +
+      '**앱이 한 줄도 안 찍은 것은 null 이 아니라 total: 0 이다** — 둘을 같게 읽으면 안 된다.\n' +
+      '**크래시와 ANR 은 여기 없다.** 아래 device_crashes / device_anrs 설명을 보라 — ' +
+      '앱 pid 로 거르면 ANR 이 통째로 사라지기 때문이다.',
+  ),
+  device_total: z
     .number()
     .int()
     .nonnegative()
     .describe(
-      `트레이스에 담긴 로그 줄 **전부**의 수. ${LOG_SCOPE}` +
+      `트레이스에 담긴 로그 줄 **전부**의 수. ${LOG_DEVICE_SCOPE}` +
         '우선순위로 거르지 않고 트레이스에 있는 줄을 그대로 센다(min_prio 설명 참고). ' +
         '트레이스 버퍼가 넘쳤다면 그만큼 적다(measurement_overhead.trace_buffer_overrun 참고).',
     ),
-  by_priority: z
+  device_by_priority: z
     .object({
       warn: z.number().int().nonnegative(),
       error: z.number().int().nonnegative(),
       fatal: z.number().int().nonnegative(),
     })
     .describe(
-      `W/E/F 세 우선순위의 로그 줄 수. ${LOG_SCOPE}` +
-        '세 값의 합은 total 과 다를 수 있다 — total 은 이 셋 밖의 우선순위(문턱보다 낮은 줄이 ' +
-        '섞여 온 경우)까지 세기 때문이다. 반대 방향의 누락은 없다.',
+      `W/E/F 세 우선순위의 로그 줄 수. ${LOG_DEVICE_SCOPE}` +
+        '세 값의 합은 device_total 과 다를 수 있다 — device_total 은 이 셋 밖의 우선순위 ' +
+        '(문턱보다 낮은 줄이 섞여 온 경우)까지 세기 때문이다. 반대 방향의 누락은 없다.',
     ),
-  crashes: z
+  device_crashes: z
     .array(LogEventSchema)
     .nullable()
     .describe(
-      `세션 동안 관측된 크래시(AndroidRuntime 의 FATAL EXCEPTION, libc 의 Fatal signal). ${LOG_SCOPE}` +
-        '크래시는 앱이 아니라 시스템이 찍으므로 앱 프로세스로 거르면 정작 그 줄이 사라진다. ' +
+      '세션 동안 관측된 크래시(AndroidRuntime 의 FATAL EXCEPTION, libc 의 Fatal signal). ' +
+        '**기기 전역이며 대상 앱으로 거르지 않는다 — 그것이 의도다.** ' +
+        '거르면 앱이 죽은 뒤 다른 프로세스가 남긴 줄이 사라진다. 대신 각 항목이 **찍은 ' +
+        '프로세스의 pid/process** 를 함께 실으므로, 대상 앱 것만 보려면 ' +
+        'data.app.pid 와 비교해 직접 거르라.\n' +
+        '실측(SM-S901N / Android 16): 네이티브 크래시를 내는 `libc` 태그 줄은 **그 프로세스 ' +
+        '자신이** 찍었다(대상 앱 pid, 두 세션에서 각각 9줄). `AndroidRuntime` 태그도 그것을 ' +
+        '내는 프로세스 자신이 찍는 것으로 관측됐다(기기 logcat 의 `RuntimeInit` 시작 줄이 ' +
+        '그 명령 자신의 pid 로 찍혔다). **다만 `FATAL EXCEPTION` 줄 자체는 이 저장소가 ' +
+        '실기기에서 한 줄도 보지 못했다** — 관측한 세션에 0건이었고, 확인하려면 사용자의 앱을 ' +
+        '실제로 죽여야 한다. 그래서 자바 크래시가 항상 앱 프로세스로 찍힌다고 **단정하지 ' +
+        '않으며**, 거르지 않는 이유가 여기에도 있다. ' +
         LOG_EVENT_SCOPE +
         LOG_EVENT_NULL,
     ),
-  anrs: z
+  device_anrs: z
     .array(LogEventSchema)
     .nullable()
     .describe(
-      `세션 동안 관측된 ANR(ActivityManager 의 "ANR in ..."). ${LOG_SCOPE}` +
-        'ANR 은 system_server 가 찍는다. ' +
+      '세션 동안 관측된 ANR(ActivityManager 의 "ANR in ..."). ' +
+        '**기기 전역이며 대상 앱으로 거를 수 없다.** ' +
+        '실측(SM-S901N / Android 16): 이 트레이스의 `ActivityManager` 태그 16줄은 **전부 ' +
+        'system_server(pid 2414)가 찍었다.** ANR 은 앱이 아니라 system_server 가 기록하므로 ' +
+        '대상 앱 pid 로 걸렀다면 ANR 이 **하나도 남지 않았을 것이다.** ' +
+        '어느 앱의 ANR 인지는 message 의 "ANR in <패키지>" 로 읽으라 — 항목의 pid/process 는 ' +
+        '기록자(system_server)이지 멈춘 앱이 아니다. ' +
         LOG_EVENT_SCOPE +
         LOG_EVENT_NULL,
     ),
@@ -555,10 +740,23 @@ export const NetworkDataSchema = z.object({
     .nullable()
     .describe(
       '`pm list packages -U` 스냅샷에서 **이 uid 를 쓰는 것으로 관측된 패키지 전부**(시스템 포함). ' +
-        '항목이 1개면 위 숫자는 그 패키지만의 것이고, 2개 이상이면 그 패키지들의 합이며 ' +
-        '분리할 수 없다. 실측 근거: 어느 에뮬레이터에서 uid 1000 을 11개 패키지가 공유했다. ' +
-        '**null 은 그 스냅샷을 읽지 못했다는 뜻이다 — 빈 배열([])이 아니다.** ' +
-        '[] 는 "조회했고 이 uid 를 쓰는 패키지가 목록에 없었다" 이다. ' +
+        '**이 배열의 길이가 위 숫자들의 귀속 범위다.** ' +
+        '1개 → 위 숫자는 그 패키지만의 것이다 (그때만 이 메트릭의 status 가 collected 다). ' +
+        '2개 이상 → 그 패키지들의 **합계**이고 대상 앱 몫만 떼어 낼 수 없다 ' +
+        '(mAppUidStatsMap 의 키가 uid 뿐이다). 그때 status 는 partial 이고 ' +
+        'reason_code 는 uid_shared_by_multiple_packages 다. ' +
+        '실측 근거: 실기기(sdk 36)에서 uid 1000 을 **86개** 패키지가 공유했다. ' +
+        '**null 과 [] 는 다른 사실이다.** ' +
+        'null = **열거하지 못했다** — 스냅샷이 없거나, 이 uid 가 속한 안드로이드 user 를 ' +
+        '그 목록이 한 줄도 열거하지 않았다. 후자는 삼성 시큐어 폴더(실측 user 150) 같은 경우로, ' +
+        '`pm list packages -U` 가 그 user 에 대해 SecurityException 을 stderr 로 내고 ' +
+        '**종료 코드 0** 으로 끝나 목록이 조용히 불완전해진다. ' +
+        '그런 uid 의 패키지명을 이 도구는 **알 수 없다**. ' +
+        '[] = **열거했는데 이 uid 를 쓰는 패키지가 목록에 없었다** (대상 패키지 자신도 없다). ' +
+        '어느 쪽이든 status 는 partial 이고 reason_code 가 어느 갈래인지 말한다 ' +
+        '(uid_packages_not_enumerable / uid_not_in_package_list). ' +
+        '**단, reason_code 자리는 하나뿐이라 netstats_uid_duplicated 가 겹치면 그쪽이 먼저 실린다** — ' +
+        '귀속 범위를 판단할 때는 reason_code 가 아니라 **이 배열**을 보라. ' +
         '부계정(secondary user)의 같은 앱은 다른 uid(user*100000 + appId)를 받으며 여기 포함되지 않는다.',
     ),
 })
@@ -683,7 +881,19 @@ export const TargetAppSchema = z.object({
   label_source: z.enum(['apk_resources', 'aapt2', 'package_name']),
   version_name: z.string().nullable(),
   version_code: z.number().int().nullable(),
-  uid: z.number().int().nullable(),
+  uid: z
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      '이 패키지에 배정된 리눅스 uid (`pm list packages -U` 가 보고한 값). ' +
+        '**패키지와 1:1 이 아니다** — `sharedUserId` 를 쓰는 패키지들은 같은 uid 를 공유하고, ' +
+        '안드로이드 플랫폼 패키지 수십 개가 uid 1000 을 함께 쓴다(실기기 실측 86개). ' +
+        'uid 단위로만 집계되는 값(metrics.network)이 무엇의 합인지는 ' +
+        '`metrics.network.data.shared_uid_packages` 가 말한다. ' +
+        '**null 은 이 도구가 uid 를 확인하지 못했다는 뜻이다** — 셸 권한이 닿지 않는 ' +
+        '안드로이드 user(시큐어 폴더 등)의 앱이 그렇다. 0 이나 -1 로 채우지 않는다.',
+    ),
   install_source: z.string().nullable(),
   launcher_activity: z.string().nullable(),
   render_process: z.string().nullable(),

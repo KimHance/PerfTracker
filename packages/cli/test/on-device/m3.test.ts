@@ -15,6 +15,7 @@ import {
 import { runStart } from '../../src/commands/start.js'
 import { runStop } from '../../src/commands/stop.js'
 import { createContext } from '../../src/context.js'
+import { DEVICE_TARGET_APP } from './target.js'
 
 /**
  * `mAppUidStatsMap` 표에서 uid 한 행을 **collector 와 무관하게** 다시 읽는다.
@@ -72,6 +73,7 @@ function readUidRow(
  *   - **sdk 34 미만의 Network 미지원 경로 / 카운터 되감김 / BPF 맵 중복 행.** 재현할 방법이
  *     없어 유닛 테스트로만 덮인다.
  */
+
 describe('M3 기기 통합', () => {
   it('이 기기가 M3 의 두 지표를 낼 수 있는 조건을 갖췄다', async () => {
     const ctx = await createAdbContext({})
@@ -101,7 +103,7 @@ describe('M3 기기 통합', () => {
     const out = mkdtempSync(join(tmpdir(), 'pt-m3-'))
     const ctx = await createContext({})
 
-    await runStart(ctx, { name: 'm3', launch: true, video: false, out, force: true })
+    await runStart(ctx, { app: DEVICE_TARGET_APP, name: 'm3', launch: true, video: false, out, force: true })
     const active = await readActiveSession(ctx.serial)
     expect(active).not.toBeNull()
 
@@ -183,7 +185,14 @@ describe('M3 기기 통합', () => {
     // ---- Network ----
     const network = result.metrics.network
     if (result.device.static.sdk_int >= 34) {
-      expect(network?.status, `network: ${network?.reason ?? ''}`).toBe('collected')
+      /**
+       * **이 한 줄이 결함 1 의 회귀 방어다.** 대상이 시스템 앱이면 옛 코드에서 이 값은
+       * null 이었고, network 는 "대상 앱의 uid 를 알지 못해…" 로 멈췄다 — 기기가 그 값을
+       * 주고 있고 이 도구가 매 세션 그 목록을 저장까지 하는데도.
+       */
+      expect(result.target_app.uid, '시스템 앱의 uid 를 해석하지 못했다').not.toBeNull()
+
+      expect(network?.data, `network: ${network?.reason ?? ''}`).not.toBeNull()
       const n = network!.data as NetworkData
       expect(n.uid).toBe(result.target_app.uid)
 
@@ -216,10 +225,32 @@ describe('M3 기기 통합', () => {
         tx_bytes: ra!.txBytes - rb!.txBytes,
         tx_packets: ra!.txPackets - rb!.txPackets,
       })
-      // uid 한정이 사실로 채워졌는지. null 이면 packages 스냅샷을 못 읽은 것이다 —
-      // `[]` 와 다르고, 그 구분이 이 필드의 존재 이유다.
+      // uid 한정이 사실로 채워졌는지. null 이면 그 uid 를 쓰는 패키지를 **열거하지 못한**
+      // 것이다 — `[]`("열거했고 없었다")와 다르고, 그 구분이 이 필드의 존재 이유다.
       expect(n.shared_uid_packages).not.toBeNull()
       expect(n.shared_uid_packages).toContain(result.target_app.package)
+
+      /**
+       * **status 가 관측된 사실에 매여 있는지.** 이 저장소가 내린 판단이 여기서 검증된다:
+       * 이 uid 를 쓰는 패키지가 하나뿐일 때만 `collected` 이고, 둘 이상이면 값은 다 싣되
+       * `partial` 이다 — 그 숫자가 여러 패키지의 합이라는 사실이 `status` 만 읽는 소비자
+       * (= 대부분의 CI 게이트)에게도 닿아야 하기 때문이다.
+       *
+       * 조건문이지만 무르지 않다. 어느 쪽 가지든 단언이 걸리고, **어느 가지로 갈지를 정하는
+       * 것은 테스트가 아니라 기기가 실제로 찍은 목록**이다. 이 기기에서는 uid 1000 을
+       * 86개가 공유하므로 partial 가지로 간다.
+       *
+       * 깨지는 조건: 공유 사유를 지우면 86개짜리 결과가 `collected` 로 나와 실패한다.
+       */
+      const shared = n.shared_uid_packages!
+      expect(network?.status, `network(공유 ${shared.length}개): ${network?.reason ?? ''}`).toBe(
+        shared.length === 1 ? 'collected' : 'partial',
+      )
+      if (shared.length > 1) {
+        // 사유 자리는 하나뿐이고 BPF 중복이 겹치면 그쪽이 먼저다 — 그래서 코드를 못 박지
+        // 않고 "사유 없이 통과하지 않는다" 를 못 박는다. 어느 쪽이든 status 는 partial 이다.
+        expect(network?.reason_code, '공유 uid 인데 사유가 비어 있다').not.toBeNull()
+      }
     } else {
       expect(network?.status).toBe('unsupported')
       expect(network?.reason_code).toBe('sdk_too_low')

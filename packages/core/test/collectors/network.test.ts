@@ -104,6 +104,42 @@ describe('parseAppUidStats', () => {
     expect([...parseAppUidStats(text).byUid.keys()]).not.toContain(99999)
   })
 
+  /**
+   * 실기기(SM-S901N / sdk 36)의 `mAppUidStatsMap` 은 uid 열에 **음수**를 찍는다.
+   * 실측 원문 (3회 연속 동일, 표 93행 중 82번째):
+   *
+   *     -253 151772 1156 2367519 1871
+   *
+   * 그 값이 무엇인지 이 도구는 모른다 — 그리고 알 필요도 없다. 문제는 uid 열을 `\d+` 로
+   * 읽던 옛 파서가 이 줄을 **행이 아니라고 판단해 표 읽기를 통째로 멈췄다**는 것이다.
+   * 뒤따르던 12행(uid 10070 은 1.6GB 를 받은 행이다)이 소리 없이 사라졌고, 그 12행 중에
+   * 대상 앱의 uid 가 있었으면 이 도구는 `uid_not_in_netstats` 를 내면서
+   * **"부팅 이후 이 uid 로 오간 트래픽이 없었을 수 있습니다"** 라고 말했을 것이다.
+   * 관측하지 않은 원인을 사실 자리에 앉히는 바로 그 모양이다.
+   *
+   * 깨지는 조건: uid 열이 다시 부호를 안 받으면 `1051` 행을 못 읽고 실패한다.
+   */
+  it('uid 열의 음수 행에서 표 읽기를 멈추지 않는다 — 실기기가 실제로 찍는다', () => {
+    const text = NETSTATS.replace(
+      '    1051 0 0 1088 18\n',
+      '    -253 151772 1156 2367519 1871\n    1051 0 0 1088 18\n',
+    )
+    const d = parseAppUidStats(text)
+    // 음수 행 **뒤**의 행이 살아 있어야 한다. 이것이 이 테스트의 전부다.
+    expect(d.byUid.get(1051)).toEqual({
+      uid: 1051,
+      rxBytes: 0,
+      rxPackets: 0,
+      txBytes: 1088,
+      txPackets: 18,
+    })
+    // 읽은 행 수도 그 줄을 포함한다 — 읽고도 안 셌다고 말하지 않는다.
+    expect(d.rowCount).toBe(6)
+    // 값 자체는 지어내지 않고 원문 그대로 싣는다. 대상 앱 uid 는 음수일 수 없으므로
+    // 이 항목이 조회에 걸리는 일은 없다.
+    expect(d.byUid.get(-253)?.rxBytes).toBe(151_772)
+  })
+
   it('같은 uid 가 같은 값으로 두 번 나오면 충돌로 치지 않는다', () => {
     expect(parseAppUidStats(NETSTATS).conflictingUids).toEqual([])
   })
@@ -230,7 +266,7 @@ describe('networkCollector.supports', () => {
 describe('networkCollector.extract', () => {
   it('전/후 누적 카운터의 차이를 낸다', async () => {
     const out = await networkCollector.extract(ctx())
-    expect(out).toEqual({
+    expect(out).toMatchObject({
       collected: true,
       data: {
         uid: 10388,
@@ -241,6 +277,149 @@ describe('networkCollector.extract', () => {
         shared_uid_packages: ['com.nhn.android.webtoon', 'com.example.sibling'],
       },
     })
+  })
+
+  /**
+   * **이 저장소가 내린 판단이 여기 있다.** uid 를 여럿이 공유하면 값은 다 싣되 `status` 로도
+   * 그 사실을 말한다.
+   *
+   * 왜 `collected` 가 아닌가: 실기기에서 uid 1000 을 **86개 패키지가 공유한다.** 그 상태로
+   * `collected` 를 내면 `rx_bytes` 만 읽는 소비자는 "이 앱이 1.7MB 를 썼다" 로 읽는다.
+   * 이 저장소는 이미 같은 이유로 `NETWORK_SCOPE` 문장을 네 필드 전부에 복사해 뒀다 —
+   * "한 필드만 읽는 소비자도 그 한정에 도달해야 한다". `status` 는 그 필드들 중에서도
+   * 가장 먼저 읽히는 자리이고, CI 는 대개 `status === 'collected'` 하나로 게이트를 만든다.
+   *
+   * 판정이 아니다: "이 값이 크다/틀렸다" 고 말하지 않는다. **이 숫자가 무엇의 합인지**를
+   * 말할 뿐이고 그것은 관측된 사실이다. 값은 하나도 빠짐없이 실린다.
+   *
+   * 깨지는 조건: 공유 사유를 지우면 `partial` 이 아니라 사유 없는 `collected` 가 되어 실패한다.
+   */
+  it('uid 를 여럿이 공유하면 값은 다 싣되 partial 로 낸다 — 그 숫자는 한 앱의 것이 아니다', async () => {
+    const out = collected(await networkCollector.extract(ctx()))
+
+    expect(out.data.shared_uid_packages).toHaveLength(2)
+    expect(out.partialReason).toEqual({
+      code: 'uid_shared_by_multiple_packages',
+      detail: { uid: 10388, package_count: 2 },
+    })
+    // 사유 문장이 소비자에게 무엇을 하라고 말하는지도 계약이다.
+    expect(renderReason(out.partialReason!)).toContain('2개')
+  })
+
+  /** 혼자 쓰는 uid 는 한정이 없다. 여기서 partial 을 내면 정직이 아니라 소음이다. */
+  it('그 uid 를 쓰는 패키지가 하나뿐이면 collected 다 — 한정이 없으면 달지 않는다', async () => {
+    const out = collected(
+      await networkCollector.extract(
+        withSnapshots({
+          netstats: { before: NETSTATS, after: NETSTATS_AFTER },
+          packages: { before: 'package:com.nhn.android.webtoon uid:10388\n', after: null },
+        }),
+      ),
+    )
+    expect(out.data.shared_uid_packages).toEqual(['com.nhn.android.webtoon'])
+    expect(out.partialReason).toBeUndefined()
+  })
+
+  /**
+   * 결함 2. **열거 실패와 "공유 패키지 없음" 은 다른 사실이다.**
+   *
+   * 실기기 실측: `pm list packages -U` 는 삼성 시큐어 폴더(안드로이드 user 150)를 열거하지
+   * 못한다 — 기기가 stderr 로 `SecurityException: Shell does not have permission to access
+   * user 150` 을 내고 **종료 코드는 0** 이며 stdout 에는 그 user 의 패키지가 한 줄도 없다.
+   * 그런데 `dumpsys netstats` 에는 그 user 의 uid 행이 실재한다 (실측 18개: 15010241,
+   * 15010240, …). 그 uid 를 조회하면 목록에서 아무것도 못 찾는다.
+   *
+   * 그때 `[]` 를 내면 "이 uid 를 쓰는 패키지가 없다" 는 **거짓**이 된다. 사실은
+   * "이 셸 권한으로는 그 user 를 열거할 수 없었다" 이고, 도구는 그것을 알 수 있다 —
+   * 자기가 읽은 목록에 user 150 의 패키지가 **하나도** 없다는 것을 보면 된다.
+   *
+   * 깨지는 조건: 열거 범위를 보지 않고 `parsePackageUids` 결과를 그대로 실으면 `[]` 가 되어
+   * 두 단언이 모두 실패한다.
+   */
+  it('셸이 열거하지 못한 user 의 uid 는 [] 가 아니라 null 이다 — 시큐어 폴더(user 150)', async () => {
+    const out = collected(
+      await networkCollector.extract(
+        ctx({
+          appUid: 15_010_241,
+          capture: {
+            ...ctx().capture,
+            snapshots: {
+              netstats: {
+                before: NETSTATS.replace('    1051 0 0 1088 18\n', '    15010241 100 1 200 2\n'),
+                after: NETSTATS.replace('    1051 0 0 1088 18\n', '    15010241 300 3 500 5\n'),
+              },
+              packages: { before: PACKAGES, after: PACKAGES },
+            },
+          },
+        }),
+      ),
+    )
+
+    expect(out.data.shared_uid_packages).toBeNull()
+    expect(out.partialReason).toEqual({
+      code: 'uid_packages_not_enumerable',
+      detail: {
+        uid: 15_010_241,
+        packages_snapshot: true,
+        uid_user_id: 150,
+        enumerated_user_ids: [0],
+      },
+    })
+    expect(renderReason(out.partialReason!)).toContain('150')
+  })
+
+  /**
+   * 열거된 user 안에서 못 찾은 것은 진짜로 `[]` 다 — 열거 실패(null)와 뭉개지 않는다.
+   *
+   * 그런데 그것이 `collected` 는 아니다. 대상 앱의 uid 를 쓰는 패키지가 목록에 **하나도**
+   * 없다는 것은 대상 패키지 자신도 거기 없다는 뜻이고, 그러면 이 숫자를 어느 패키지에
+   * 귀속시킬 수 있는지 도구가 확인하지 못한 것이다. 그 상태로 `collected` 를 내면
+   * "관측하지 않은 귀속" 을 사실로 내보내게 된다.
+   */
+  it('열거된 user 안에서 못 찾으면 [] 이고, 그것도 collected 가 아니다', async () => {
+    const out = collected(
+      await networkCollector.extract(
+        ctx({
+          appUid: 1051,
+          capture: {
+            ...ctx().capture,
+            snapshots: {
+              netstats: { before: NETSTATS, after: NETSTATS_AFTER },
+              packages: { before: PACKAGES, after: PACKAGES },
+            },
+          },
+        }),
+      ),
+    )
+    expect(out.data.shared_uid_packages).toEqual([])
+    expect(out.partialReason).toEqual({
+      code: 'uid_not_in_package_list',
+      detail: { uid: 1051, package: 'com.nhn.android.webtoon' },
+    })
+  })
+
+  /**
+   * 사유는 하나만 실린다. BPF 맵 중복(= 어느 값이 맞는지 모른다)이 공유 uid(= 무엇의 합인지
+   * 안다)보다 먼저다 — 앞엣것은 값 자체를 의심하게 하고, 뒤엣것은 값이 무엇을 덮는지만
+   * 말한다. 이 순서가 계약이라는 것을 여기서 못박는다. 어느 쪽이 실리든 `status` 는 똑같이
+   * `partial` 이고, 공유 사실은 `shared_uid_packages` 배열에 그대로 남는다.
+   */
+  it('중복 행과 공유 uid 가 겹치면 중복이 먼저 실린다', async () => {
+    const before = NETSTATS.replace(
+      '    10388 1200000 1119 431000 871\n    1000',
+      '    10388 999 9 99 9\n    1000',
+    )
+    const out = collected(
+      await networkCollector.extract(
+        withSnapshots({
+          netstats: { before, after: NETSTATS_AFTER },
+          packages: { before: PACKAGES, after: PACKAGES },
+        }),
+      ),
+    )
+    expect(out.partialReason?.code).toBe('netstats_uid_duplicated')
+    // 공유 사실 자체는 사라지지 않는다 — 사유 자리를 못 얻었을 뿐이다.
+    expect(out.data.shared_uid_packages).toHaveLength(2)
   })
 
   /** 조회했고 변화가 없었다. 이 0 은 정직한 0 이다 (G2 의 반대편). */
@@ -479,7 +658,9 @@ describe('networkCollector.extract', () => {
     const out = await networkCollector.extract(
       withSnapshots({
         netstats: { before, after: NETSTATS_AFTER },
-        packages: { before: PACKAGES, after: PACKAGES },
+        // 이 uid 를 쓰는 패키지가 하나뿐인 목록이라 귀속 사유도 붙지 않는다 —
+        // 남는 사유가 있다면 그것은 남의 uid 의 중복뿐이고, 그것이 이 단언의 표적이다.
+        packages: { before: 'package:com.nhn.android.webtoon uid:10388\n', after: null },
       }),
     )
     expect(collected(out).partialReason).toBeUndefined()
@@ -487,10 +668,17 @@ describe('networkCollector.extract', () => {
 
   /** G2. 조회 못 한 것을 [] 로 내면 "이 앱만 이 uid 를 쓴다" 는 없던 사실이 된다. */
   it('packages 스냅샷이 없으면 shared_uid_packages 는 [] 가 아니라 null 이다', async () => {
-    const out = await networkCollector.extract(
-      withSnapshots({ netstats: { before: NETSTATS, after: NETSTATS_AFTER } }),
+    const out = collected(
+      await networkCollector.extract(
+        withSnapshots({ netstats: { before: NETSTATS, after: NETSTATS_AFTER } }),
+      ),
     )
-    expect(collected(out).data.shared_uid_packages).toBeNull()
+    expect(out.data.shared_uid_packages).toBeNull()
+    // 스냅샷이 아예 없는 것과 있는데 그 user 를 못 열거한 것은 detail 로 갈린다.
+    expect(out.partialReason).toEqual({
+      code: 'uid_packages_not_enumerable',
+      detail: { uid: 10388, packages_snapshot: false },
+    })
   })
 
   /**
@@ -535,11 +723,53 @@ describe('networkCollector.extract', () => {
     expect(collected(out).data.shared_uid_packages).toEqual(['com.nhn.android.webtoon'])
   })
 
+  /**
+   * **온-디바이스 스펙이 밟던 경로를 여기서 밟는다.**
+   *
+   * 한동안 세션 스펙의 대상 앱이 `com.android.settings` 였고, 그 앱이 uid 1000 을 **86개**
+   * 패키지와 공유하기 때문에 이 갈래가 실기기에서 실제로 확인됐다. 세션 대상을 서드파티 앱
+   * (uid 를 혼자 쓴다)으로 옮기면서 그 커버리지가 사라지지 않도록 여기로 옮긴다.
+   *
+   * **기기가 필요한 부분이 없다** — 입력은 `pm list packages -U` 원문 텍스트뿐이고, 개수 86 은
+   * 실기기(SM-S901N / Android 16 / sdk 36) `raw/packages_before.txt` 632줄 중 `uid:1000` 인
+   * 줄을 센 실측치다. 패키지 **이름**은 합성이다(저장소는 합성 픽스처만 커밋한다) —
+   * 이 갈래가 검사하는 것은 이름이 아니라 "몇 개가 이 uid 를 쓰는가" 이므로 그것으로 충분하다.
+   */
+  it('uid 를 86개가 공유하면 값은 다 싣되 무엇의 합인지 말한다', async () => {
+    const shared = Array.from(
+      { length: 86 },
+      (_, i) => `package:com.example.platform${i} uid:1000\n`,
+    ).join('')
+
+    const out = await networkCollector.extract(
+      ctx({
+        appUid: 1000,
+        packageName: 'com.example.platform0',
+        capture: {
+          ...ctx().capture,
+          snapshots: {
+            netstats: { before: NETSTATS, after: NETSTATS_AFTER },
+            packages: { before: shared, after: shared },
+          },
+        },
+      }),
+    )
+
+    // 값은 하나도 빠짐없이 실린다 — `partial` 인 것은 값이 없어서가 아니라 귀속 때문이다.
+    expect(collected(out).data.uid).toBe(1000)
+    expect(collected(out).data.shared_uid_packages).toHaveLength(86)
+    expect(collected(out).partialReason).toEqual({
+      code: 'uid_shared_by_multiple_packages',
+      detail: { uid: 1000, package_count: 86 },
+    })
+  })
+
   /** [] 는 "조회했고 이 uid 를 쓰는 패키지가 목록에 없었다" 이다. null 과 같은 뜻이 아니다. */
   it('조회했는데 그 uid 를 쓰는 패키지가 없으면 [] 다', async () => {
     const out = await networkCollector.extract(
       withSnapshots({
         netstats: { before: NETSTATS, after: NETSTATS_AFTER },
+        // 같은 안드로이드 user(0) 를 열거한 목록이다 — 그 안에서 못 찾은 것은 진짜 부재다.
         packages: { before: 'package:com.other uid:10001\n', after: null },
       }),
     )

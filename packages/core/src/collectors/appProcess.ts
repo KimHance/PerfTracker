@@ -1,3 +1,5 @@
+import { sqlQuote } from '../perfetto/traceProcessor/client.js'
+
 /**
  * 트레이스 안에서 "대상 앱의 프로세스" 를 특정하는 **단 하나의 규칙.**
  *
@@ -39,6 +41,31 @@ export interface ResolvedAppProcess<C extends AppProcessCandidate> {
 
 function isAppName(name: string | null, packageName: string): boolean {
   return name !== null && (name === packageName || name.startsWith(`${packageName}:`))
+}
+
+/**
+ * 후보를 좁혀서 가져온다. **frame 을 뺀 세 collector(cpu / memory / log)가 이 한 쿼리를
+ * 공유한다** — 셋이 각자 후보를 모으면 같은 세션의 세 지표가 서로 다른 프로세스를 가리킬 수
+ * 있고, 그것이 이 파일이 존재하는 이유 자체를 무너뜨린다. (frame 은 프레임을 낸 프로세스만
+ * 후보로 삼으므로 `actual_frame_timeline_slice` 를 조인한 자기 쿼리를 쓴다.)
+ *
+ * `glob` 을 쓰는 이유: 패키지명에 `.` 이 흔한데 `like` 에서는 `_` 가 와일드카드라
+ * `com.foo_bar` 가 `com.fooXbar` 를 잡는다. glob 은 `.` 도 `_` 도 리터럴이다.
+ * (`*` 와 `?` 와 `[` 는 패키지명에 나올 수 없다.)
+ *
+ * `appPid` 가 있으면 pid 조건도 함께 건다 — 이름이 `<pre-initialized>` 나 `zygote64` 로 굳은
+ * 프로세스는 이름 조건으로는 절대 후보에 들어오지 못하기 때문이다 (위 설명 참고).
+ * pid 는 숫자라 인터폴레이션이 안전하다.
+ */
+export function appProcessSql(packageName: string, appPid: number | null): string {
+  const exact = sqlQuote(packageName)
+  const sub = sqlQuote(`${packageName}:*`)
+  const byPid = appPid !== null ? ` or p.pid = ${Math.trunc(appPid)}` : ''
+  return (
+    "select json_group_array(json_object('upid', upid, 'pid', pid, 'name', name)) as j from (" +
+    `select p.upid as upid, p.pid as pid, p.name as name from process p ` +
+    `where p.name = ${exact} or p.name glob ${sub}${byPid} order by p.pid)`
+  )
 }
 
 /**

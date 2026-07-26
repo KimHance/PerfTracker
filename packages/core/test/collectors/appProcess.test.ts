@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { type AppProcessCandidate, resolveAppProcess } from '../../src/collectors/appProcess.js'
+import {
+  type AppProcessCandidate,
+  appProcessSql,
+  resolveAppProcess,
+} from '../../src/collectors/appProcess.js'
 
 const PKG = 'com.foo.bar'
 
@@ -76,5 +80,27 @@ describe('resolveAppProcess — 캡처한 pid 로만 확인되는 경우', () =>
     const r = resolveAppProcess([main, { upid: 8, pid: 30000, name: PKG }], PKG, 30000)!
     expect(r.candidate.upid).toBe(8)
     expect(r.match).toBe('trace_name')
+  })
+})
+
+/**
+ * 이 쿼리는 cpu / memory / log 세 collector 가 **공유**한다 (`appProcess.ts` 로 옮긴 이유).
+ * 셋이 각자 후보를 모으면 같은 세션의 세 지표가 서로 다른 프로세스를 가리킬 수 있다.
+ */
+describe('appProcessSql', () => {
+  it('패키지명을 SQL 리터럴로 감싼다', () => {
+    expect(appProcessSql('com.foo.bar', null)).toContain("'com.foo.bar'")
+  })
+
+  it('작은따옴표가 섞여도 리터럴 밖으로 새지 않는다', () => {
+    expect(appProcessSql("a'b", null)).toContain("'a''b'")
+  })
+
+  it('캡처한 pid 가 있으면 이름이 낡은 프로세스도 후보에 넣는다', () => {
+    expect(appProcessSql('com.foo.bar', 6037)).toContain('p.pid = 6037')
+  })
+
+  it('pid 를 모르면 pid 조건을 붙이지 않는다', () => {
+    expect(appProcessSql('com.foo.bar', null)).not.toContain('p.pid =')
   })
 })

@@ -6,6 +6,7 @@ import {
   createAdbContext,
   type CpuData,
   extractRun,
+  type LogData,
   type MemoryData,
   probeDevice,
   readActiveSession,
@@ -14,6 +15,7 @@ import {
 import { runStart } from '../../src/commands/start.js'
 import { runStop } from '../../src/commands/stop.js'
 import { createContext } from '../../src/context.js'
+import { DEVICE_TARGET_APP } from './target.js'
 
 /**
  * 실기기 또는 에뮬레이터가 필요하다. `npm run test:device` 로만 실행된다.
@@ -47,7 +49,7 @@ describe('M2 기기 통합', () => {
     const out = mkdtempSync(join(tmpdir(), 'pt-m2-'))
     const ctx = await createContext({})
 
-    await runStart(ctx, { name: 'm2', launch: true, video: false, out, force: true })
+    await runStart(ctx, { app: DEVICE_TARGET_APP, name: 'm2', launch: true, video: false, out, force: true })
     const active = await readActiveSession(ctx.serial)
     expect(active).not.toBeNull()
 
@@ -110,19 +112,29 @@ describe('M2 기기 통합', () => {
     const cpu = result.metrics.cpu
     expect(cpu?.status, `cpu: ${cpu?.reason ?? ''}`).toMatch(/^(collected|partial)$/)
     const cpuData = cpu?.data as CpuData
-    expect(cpuData.samples).toBeGreaterThanOrEqual(2)
-    expect(cpuData.total_busy_pct).toBeGreaterThanOrEqual(0)
-    expect(cpuData.total_busy_pct).toBeLessThanOrEqual(100)
-    expect(cpuData.per_core.length).toBeGreaterThan(0)
-    for (const core of cpuData.per_core) {
+    expect(cpuData.device_samples).toBeGreaterThanOrEqual(2)
+    expect(cpuData.device_total_busy_pct).toBeGreaterThanOrEqual(0)
+    expect(cpuData.device_total_busy_pct).toBeLessThanOrEqual(100)
+    expect(cpuData.device_per_core.length).toBeGreaterThan(0)
+    for (const core of cpuData.device_per_core) {
       expect(core.busy_pct).toBeGreaterThanOrEqual(0)
       expect(core.busy_pct).toBeLessThanOrEqual(100)
     }
     // 주파수는 **필드의 존재**만 단언한다. 에뮬레이터에서 ftrace power/cpu_frequency 이벤트가
     // 실제로 흐르는 것은 실측으로 확인된 사실이므로 null 이면 회귀다. 값의 크기는 보지 않는다 —
     // 이 이미지의 cpuinfo_max_freq 는 2 이고 그것은 kHz 가 아니다.
-    expect(cpuData.frequency, `cpu: ${cpu?.reason ?? ''}`).not.toBeNull()
-    expect(cpuData.frequency!.length).toBeGreaterThan(0)
+    expect(cpuData.device_frequency, `cpu: ${cpu?.reason ?? ''}`).not.toBeNull()
+    expect(cpuData.device_frequency!.length).toBeGreaterThan(0)
+
+    // CPU 앱 단위: **이 세션은 `--launch` 라 대상 앱이 반드시 떠 있다.** 그러니 앱 자리가
+    // null 이면 그건 회귀다 (기기 전역 값만 내던 옛 동작이 그 모양이었다).
+    expect(cpuData.app, `cpu: ${cpu?.reason ?? ''}`).not.toBeNull()
+    expect(cpuData.app!.process.startsWith(result.target_app.package)).toBe(true)
+    expect(cpuData.app!.total_ms).toBe(cpuData.app!.user_ms + cpuData.app!.kernel_ms)
+    // 한 프로세스가 기기 전체 CPU 시간보다 많이 쓸 수는 없다. 분모가 벽시계였다면
+    // (또는 코어 하나였다면) 이 상계가 성립하지 않는다.
+    expect(cpuData.app!.share_of_device_cpu_pct).toBeGreaterThanOrEqual(0)
+    expect(cpuData.app!.share_of_device_cpu_pct).toBeLessThanOrEqual(100)
 
     // Memory: 앱 RSS 와 시스템 메모리 둘 다 나와야 한다.
     //
@@ -161,13 +173,29 @@ describe('M2 기기 통합', () => {
     if (log?.data === null) {
       expect(log.reason_code).toBe('no_log_entries')
     }
+
+    const logData = log?.data as LogData | null
+    if (logData !== null) {
+      // 앱 단위 개수가 나와야 한다 — `--launch` 세션이라 앱 프로세스가 트레이스에 있다.
+      expect(logData.app, `log: ${log?.reason ?? ''}`).not.toBeNull()
+      expect(logData.app!.process.startsWith(result.target_app.package)).toBe(true)
+      // **필터가 실제로 좁히는지**를 본다. upid 조건을 지우면 두 값이 같아진다.
+      // (기기 전역에는 system_server / surfaceflinger 등 다른 프로세스의 줄이 반드시 섞인다 —
+      //  실측: 실기기 세션에서 앱 37줄 대 기기 전역 1,507줄.)
+      expect(logData.app!.total).toBeLessThan(logData.device_total)
+    }
+
+    // **세 지표가 같은 프로세스를 가리킨다.** 이것이 `resolveAppProcess` 를 공유하는 이유이고,
+    // 어느 collector 하나가 자기만의 규칙으로 되돌아가면 여기서 깨진다.
+    expect(cpuData.app!.pid).toBe(memData.pid)
+    if (logData?.app != null) expect(logData.app.pid).toBe(memData.pid)
   })
 
   it('--launch 없이 시작하면 startup 이 skipped 다', async () => {
     const out = mkdtempSync(join(tmpdir(), 'pt-m2-nolaunch-'))
     const ctx = await createContext({})
 
-    await runStart(ctx, { name: 'm2-nolaunch', launch: false, video: false, out, force: true })
+    await runStart(ctx, { app: DEVICE_TARGET_APP, name: 'm2-nolaunch', launch: false, video: false, out, force: true })
     const active = await readActiveSession(ctx.serial)
 
     await new Promise((r) => setTimeout(r, 5_000))

@@ -1,6 +1,7 @@
 import { access, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ProcessRunner } from '../adb/process.js'
+import { findPackageUid } from '../app/list.js'
 import { frameCollector } from '../collectors/frame.js'
 import { COLLECTORS } from '../collectors/registry.js'
 import { parseSnapshotRawPath, type SnapshotPair, snapshotText } from '../collectors/snapshots.js'
@@ -87,6 +88,30 @@ function reparseThermalZones<T extends DeviceState | null>(state: T, raw: string
 }
 
 /**
+ * 대상 앱의 uid. 매니페스트에 있으면 그것이고, 없으면 **이미 회수해 둔 원문**에서 찾는다.
+ *
+ * 왜 여기서 다시 구하는가: 캡처 때 uid 를 못 적은 run 이 실재한다 (대상 해석이 서드파티
+ * 목록만 보던 시절의 run — 시스템 앱을 대상으로 삼으면 uid 가 null 이었다). 그런데 같은 run
+ * 디렉토리의 `raw/packages_{before,after}.txt` 는 `pm list packages -U` 원문이고 거기 답이
+ * 있다. 그것을 안 보고 null 을 그대로 실으면 도구가 손에 쥔 답을 두고 "모른다" 고 말한다.
+ *
+ * 왜 정당한가: 없던 값을 지어내는 것이 아니라 **이 run 이 기기에서 받아 온 바이트를 읽는
+ * 것**이다. 기기로 나가는 명령은 0개 늘어난다. "extract 가 더 나은 근거를 쥐면 캡처 시점
+ * 값을 갱신한다" 는 이 코드베이스의 기존 관행이기도 하다 — `target_app.render_process` 와
+ * `pid` 가 정확히 그렇게 채워진다.
+ *
+ * 시작 스냅샷을 먼저 본다: 세션 구간에 이 앱이 어떤 uid 였는지가 질문이다.
+ * 원문에 그 패키지의 행이 없으면 **null 로 남긴다.** 아무 숫자나 채우는 것이 지어내는 것이다.
+ */
+function resolveAppUid(manifest: CaptureManifest, capture: CaptureFacts): number | null {
+  if (manifest.target_app.uid !== null) return manifest.target_app.uid
+
+  const packages = capture.snapshots['packages']
+  const text = packages?.before ?? packages?.after
+  return text != null ? findPackageUid(text, manifest.target_app.package) : null
+}
+
+/**
  * run 디렉토리의 session.json. `start` 는 `state: 'running'` 을 쓰고 `stop` 이 그것을 덮는다.
  * 진행 중인 run 에 extract 를 돌리는 것은 충분히 있을 법한 사용자 행동이므로 'running' 을 포함한다.
  */
@@ -125,6 +150,7 @@ async function runCollector(
   tp: TraceProcessor | null,
   manifest: CaptureManifest,
   capture: CaptureFacts,
+  appUid: number | null,
 ): Promise<MetricResult<unknown>> {
   // 지원 판정을 트레이스 유무보다 **먼저** 본다. "이 기기가 이 메트릭을 못 낸다" 는
   // "이 run 에 트레이스가 없다" 보다 강하고 안정적인 사실이다.
@@ -133,7 +159,7 @@ async function runCollector(
 
   const base: BaseExtractContext = {
     packageName: manifest.target_app.package,
-    appUid: manifest.target_app.uid,
+    appUid,
     env: manifest.env,
     capture,
   }
@@ -260,11 +286,13 @@ export async function extractRun(
     snapshots: await readSnapshots(runDir, manifest.artifacts.raw),
   }
 
+  const appUid = resolveAppUid(manifest, capture)
+
   // 레지스트리를 순회한다 — collector 를 배열에 넣기만 하면 되고, 한 메트릭이 터져도
   // 나머지는 정상 산출된다.
   const metrics: Record<string, MetricResult<unknown>> = {}
   for (const collector of COLLECTORS) {
-    metrics[collector.id] = await runCollector(collector, tp, manifest, capture)
+    metrics[collector.id] = await runCollector(collector, tp, manifest, capture, appUid)
   }
 
   if (tp !== null) {
@@ -317,9 +345,15 @@ export async function extractRun(
     // frame 이 렌더 프로세스를 특정했으면 여기서 채운다 — 손에 쥐고도 안 쓰던 값이다.
     // frame 이 값을 못 냈어도 pid 는 캡처 때 받아 둔 것이 있을 수 있다. 이름은 그렇지 않다 —
     // 렌더 프로세스가 어느 것인지는 트레이스를 봐야만 알 수 있으므로 null 로 남긴다.
+    // uid 도 같은 규칙이다: 캡처가 못 적었어도 회수해 둔 원문에 답이 있으면 그것을 싣는다.
     target_app: frameData.success
-      ? { ...manifest.target_app, render_process: frameData.data.process, pid: frameData.data.pid }
-      : { ...manifest.target_app, pid: manifest.target_app.pid ?? capture.appPid },
+      ? {
+          ...manifest.target_app,
+          uid: appUid,
+          render_process: frameData.data.process,
+          pid: frameData.data.pid,
+        }
+      : { ...manifest.target_app, uid: appUid, pid: manifest.target_app.pid ?? capture.appPid },
     // 키는 collector.id 다. 스키마가 frame 을 알고 나머지는 MetricResult 모양으로 검증한다.
     metrics: metrics as Result['metrics'],
     measurement_overhead: {

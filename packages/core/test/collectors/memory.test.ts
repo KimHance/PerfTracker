@@ -1,31 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { appProcessSql } from '../../src/collectors/appProcess.js'
 import { PROCESS_STATS_BLOCK, SYS_STATS_BLOCK } from '../../src/collectors/blocks.js'
 import {
   appMemorySql,
-  appProcessSql,
   type CounterStatRow,
   memoryCollector,
   SYSTEM_MEMORY_SQL,
 } from '../../src/collectors/memory.js'
 import type { ExtractContext } from '../../src/collectors/types.js'
-
-describe('appProcessSql', () => {
-  it('패키지명을 SQL 리터럴로 감싼다', () => {
-    expect(appProcessSql('com.foo.bar', null)).toContain("'com.foo.bar'")
-  })
-
-  it('작은따옴표가 섞여도 리터럴 밖으로 새지 않는다', () => {
-    expect(appProcessSql("a'b", null)).toContain("'a''b'")
-  })
-
-  it('캡처한 pid 가 있으면 이름이 낡은 프로세스도 후보에 넣는다', () => {
-    expect(appProcessSql('com.foo.bar', 6037)).toContain('p.pid = 6037')
-  })
-
-  it('pid 를 모르면 pid 조건을 붙이지 않는다', () => {
-    expect(appProcessSql('com.foo.bar', null)).not.toContain('p.pid =')
-  })
-})
 
 class FakeTp {
   constructor(private readonly answers: Record<string, unknown>) {}

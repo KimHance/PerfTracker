@@ -54,6 +54,11 @@ describe('README 가 스키마에 대해 말하는 숫자', () => {
     expect(section).toContain('additionalProperties: false')
     // 경로 2 — reason_code 가 닫힌 enum 이다.
     expect(section).toContain('reason_code')
+    // 경로 3 — cpu / log 의 필드 이름이 바뀌었다. 이름이 바뀐 것은 소비자가 **즉시** 알아야
+    // 하는 종류의 변경이고(옛 이름을 읽으면 undefined 다), 그 사실이 여기 없으면
+    // `schema_version` 이 1.1.0 그대로인 지금 산출물 안에 신호가 하나도 없다.
+    expect(section).toContain('device_total_busy_pct')
+    expect(section).toContain('log.device_total')
     // 그리고 왜 신호가 없는지.
     expect(section).toContain('schema_version')
     expect(section).toMatch(/신호가 산출물 안에\s*\n?존재하지 않습니다/)

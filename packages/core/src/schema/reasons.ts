@@ -71,6 +71,13 @@ export const METRIC_REASON_CODES = [
   /** 프로세스는 찾았지만 mem.rss 표본이 없다. detail: process */
   'no_rss_samples',
   /**
+   * 프로세스는 찾았지만 `runtime.user_ns` / `runtime.kernel_ns` 카운터가 없다.
+   * `record_process_runtime: true` 가 없던 시절의 캡처가 이 길을 지난다.
+   * `no_cpu_samples`(기기 전역 표본 없음)와 다른 사실이다 — 이쪽은 그 프로세스만의 문제다.
+   * detail: process, pid
+   */
+  'no_app_cpu_samples',
+  /**
    * 트레이스가 그 프로세스를 아직 zygote 이름으로 알고 있어, 캡처 때 받아 둔 pid 로 대상 앱을
    * 특정했다. 값은 정상이고 보고하는 이름은 패키지명이다. detail: package, pid, trace_name
    */
@@ -157,6 +164,45 @@ export const METRIC_REASON_CODES = [
    * detail: uid, phase
    */
   'netstats_uid_duplicated',
+  /**
+   * **이 숫자는 한 앱의 것이 아니다.** 이 uid 를 쓰는 패키지가 둘 이상 관측됐고
+   * (`sharedUserId`), `mAppUidStatsMap` 의 키는 uid 뿐이라 분리할 방법이 없다.
+   * 실기기 실측: uid 1000 을 **86개** 패키지가 공유한다.
+   *
+   * 값은 하나도 빠짐없이 실린다 — `status` 가 `partial` 인 것은 값이 없어서가 아니라
+   * 그 값이 무엇의 합인지를 `status` 만 읽는 소비자에게도 알리기 위해서다.
+   * 어느 패키지들인지는 `metrics.network.data.shared_uid_packages` 에 전부 있다.
+   * detail: uid, package_count
+   */
+  'uid_shared_by_multiple_packages',
+  /**
+   * 이 uid 를 쓰는 패키지를 **열거하지 못했다.** `shared_uid_packages` 가 null 인 경우다.
+   *
+   * **`detail` 이 두 갈래를 명시한다:**
+   *   - `packages_snapshot: false` — `pm list packages -U` 스냅샷 자체가 이 run 에 없다
+   *     (그 명령을 찍기 전에 만들어진 run 이거나 원본이 유실됐다).
+   *   - `packages_snapshot: true` + `uid_user_id` / `enumerated_user_ids` — 스냅샷은 있는데
+   *     **이 uid 가 속한 안드로이드 user 를 그 목록이 한 줄도 열거하지 않았다.**
+   *     실기기에서 `pm list packages -U` 는 삼성 시큐어 폴더(user 150)를 열거하지 못하고
+   *     (`SecurityException: Shell does not have permission to access user 150` — stderr 로만
+   *     나가고 종료 코드는 0 이다), 그런데 `dumpsys netstats` 에는 그 user 의 uid 행이 있다.
+   *     이 도구는 그런 uid 의 패키지명을 **알 수 없다** — 그것이 사실이므로 그대로 말한다.
+   *
+   * 여기서 `[]` 를 내면 "이 uid 를 쓰는 패키지가 없다" 는 거짓이 된다.
+   * detail: uid, packages_snapshot, (스냅샷이 있으면) uid_user_id, enumerated_user_ids
+   */
+  'uid_packages_not_enumerable',
+  /**
+   * 목록은 이 uid 의 안드로이드 user 를 열거했는데 이 uid 를 쓰는 패키지가 **하나도 없다** —
+   * 측정 대상 패키지 자신도 없다. `shared_uid_packages` 가 `[]` 인 경우다.
+   *
+   * `uid_packages_not_enumerable`(= null) 과 다른 사실이다: 이쪽은 열거에 성공했다.
+   * 그래도 `collected` 가 아닌 이유는, 대상 패키지가 그 uid 에 없는 채로 "이 앱의 값" 이라고
+   * 내보내면 관측하지 않은 귀속을 사실로 만드는 것이기 때문이다 (세션 도중 앱이 삭제됐거나
+   * 매니페스트의 uid 가 이 스냅샷과 다른 기기·시점의 것일 수 있다).
+   * detail: uid, package
+   */
+  'uid_not_in_package_list',
 ] as const
 
 export type MetricReasonCode = (typeof METRIC_REASON_CODES)[number]
@@ -233,6 +279,10 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
   process_not_in_trace: (d) =>
     `대상 앱(${String(d['package'])})의 프로세스가 트레이스에 없습니다 — 세션 동안 실행되지 않았을 수 있습니다.`,
   no_rss_samples: (d) => `프로세스(${String(d['process'])})의 메모리 표본을 찾지 못했습니다.`,
+  no_app_cpu_samples: (d) =>
+    `대상 앱 프로세스(${String(d['process'])}, pid ${String(d['pid'])})의 CPU 시간 카운터가 ` +
+    `트레이스에 없습니다 — process_stats 의 record_process_runtime 이 꺼진 채로 찍힌 캡처일 수 ` +
+    `있습니다. 기기 전역 값은 그대로 실었고 앱 단위 값만 내지 못했습니다 (0 으로 채우지 않았습니다).`,
   process_name_stale_in_trace: (d) =>
     `트레이스는 이 프로세스(pid ${String(d['pid'])})를 "${String(d['trace_name'])}" 이라는 이름으로 기록했습니다 — ` +
     `zygote 가 fork 한 직후 이름이 확정되기 전에 관측된 것입니다. ` +
@@ -309,6 +359,28 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
     `netstats ${d['phase'] === 'after' ? '종료' : '시작'} 스냅샷에서 uid ${String(d['uid'])} 행이 ` +
     `서로 다른 값으로 두 번 나왔습니다 (BPF 맵 순회 재시작, AOSP b/220084230) — ` +
     `마지막 행을 썼지만 어느 쪽이 맞는지는 이 결과로 알 수 없습니다.`,
+  uid_shared_by_multiple_packages: (d) =>
+    `uid ${String(d['uid'])} 를 패키지 ${String(d['package_count'])}개가 함께 씁니다 — ` +
+    `이 숫자는 그 ${String(d['package_count'])}개가 주고받은 것의 **합계**이고 대상 앱 몫만 ` +
+    `떼어 낼 수 없습니다 (mAppUidStatsMap 의 키가 uid 뿐입니다). ` +
+    `값은 전부 실었습니다. 어느 패키지들인지는 data.shared_uid_packages 에 있습니다.`,
+  uid_packages_not_enumerable: (d) =>
+    d['packages_snapshot'] === false
+      ? `이 run 에 pm list packages -U 스냅샷이 없어 uid ${String(d['uid'])} 를 어느 패키지가 ` +
+        `쓰는지 확인하지 못했습니다 — data.shared_uid_packages 가 null 인 이유입니다. ` +
+        `값은 전부 실었지만 그것이 몇 개 패키지의 합인지는 이 결과로 알 수 없습니다.`
+      : `uid ${String(d['uid'])} 는 안드로이드 user ${String(d['uid_user_id'])} 의 것인데, ` +
+        `pm list packages -U 목록은 user ` +
+        `${Array.isArray(d['enumerated_user_ids']) && d['enumerated_user_ids'].length > 0 ? d['enumerated_user_ids'].join(', ') : '없음'}` +
+        ` 만 열거했습니다 — 이 셸 권한으로는 그 user 의 패키지를 볼 수 없습니다 ` +
+        `(삼성 시큐어 폴더 등. 기기는 이 거부를 stderr 로만 말하고 종료 코드는 0 입니다). ` +
+        `그래서 패키지명을 **알 수 없고**, 빈 배열 대신 null 을 냈습니다 — ` +
+        `[] 는 "이 uid 를 쓰는 패키지가 없다" 라는 다른 사실입니다.`,
+  uid_not_in_package_list: (d) =>
+    `uid ${String(d['uid'])} 를 쓰는 패키지가 pm list packages -U 목록에 하나도 없습니다 — ` +
+    `측정 대상(${String(d['package'])}) 자신도 그 uid 로 등재되어 있지 않습니다. ` +
+    `목록은 이 uid 의 안드로이드 user 를 열거했으므로 "못 봤다" 가 아니라 "없다" 입니다. ` +
+    `값은 전부 실었지만 이 숫자를 그 패키지의 것이라고 말할 근거를 확인하지 못했습니다.`,
 }
 
 /** 코드 → 한국어 문장. 모르는 코드는 조용히 비우지 않고 코드 자체를 남긴다. */
