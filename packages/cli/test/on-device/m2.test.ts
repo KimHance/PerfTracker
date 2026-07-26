@@ -24,7 +24,7 @@ import { createContext } from '../../src/context.js'
  * (에뮬은 cpuinfo_max_freq=2), android.log 개수(SELinux 가 logdr 를 막음),
  * runtime.* 이 0 보다 큰 것(10ms 해상도), 그리고 `am start -W` 가 TotalTime 을 내는 것
  * (이 앱의 콜드 스타트가 12~15초라 ActivityManager 가 자주 `Status: timeout` 을 낸다 —
- * 실측 6회 중 3회). frame 수집은 이제 단언한다: `--launch` 세션 6회 모두 대상 앱의 프레임이
+ * 실측 11회 중 4회). frame 수집은 이제 단언한다: `--launch` 세션 11회 모두 대상 앱의 프레임이
  * 잡혔다(옛 "에뮬 런처는 frametimeline 을 안 채운다" 는 런처만 조작한 세션의 관측이었다).
  */
 describe('M2 기기 통합', () => {
@@ -71,8 +71,8 @@ describe('M2 기기 통합', () => {
 
     // Frame: `--launch` 로 앱을 콜드 스타트시킨 세션은 실제로 프레임을 수집한다.
     // (옛 README 의 "에뮬레이터는 actual_frame_timeline_slice 를 안 채운다" 는 런처만 조작한
-    // 세션의 관측이었다. --launch 세션 9회 연속으로 대상 앱의 프레임이 잡혔다.)
-    // 프레임 **수**는 단언하지 않는다 — 15초 세션에 4~8개라 통계적 의미는 실기기 몫이다.
+    // 세션의 관측이었다. --launch 세션 11회 연속으로 대상 앱의 프레임이 잡혔다.)
+    // 프레임 **수**는 단언하지 않는다 — 15초 세션에 4~9개라 통계적 의미는 실기기 몫이다.
     const frame = result.metrics.frame
     expect(frame.status, `frame: ${frame.reason ?? ''}`).toMatch(/^(collected|partial)$/)
     expect(frame.data, `frame: ${frame.reason ?? ''}`).not.toBeNull()
