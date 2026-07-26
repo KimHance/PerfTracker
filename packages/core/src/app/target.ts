@@ -5,7 +5,7 @@ import { getAppDetail } from './detail.js'
 import { loadLabelCache } from './label/cache.js'
 import { resolveAppLabel } from './label/resolve.js'
 import { loadLabeledApps } from './labeled.js'
-import { listInstalledApps } from './list.js'
+import { listAllPackages } from './list.js'
 import { detectForegroundPackage, matchApp } from './select.js'
 
 /**
@@ -14,9 +14,15 @@ import { detectForegroundPackage, matchApp } from './select.js'
  *
  * `query` 를 생략하면 지금 포그라운드에 있는 앱을 고른다.
  * 라벨 전체 해석은 라벨로 찾아야 할 때만 한다 (패키지명이 정확히 오면 건너뛴다).
+ *
+ * **목록은 `listAllPackages`(시스템 앱 포함) 에서 온다.** 여기가 `uid` 와 `version_code` 의
+ * 출처이기 때문이다. 서드파티 목록(`-3`)으로 uid 를 해석하면 시스템 앱을 대상으로 삼은
+ * 세션에서 도구가 "이 앱의 uid 를 모른다" 고 말하게 되는데, 그것은 거짓이다 — 기기는
+ * 그 답을 주고 있고 이 도구는 매 세션 그 목록을 통째로 저장까지 한다.
+ * 라벨 검색(`matchApp`)만 서드파티 목록을 쓴다: 632개 패키지의 라벨을 해석할 수는 없다.
  */
 export async function resolveTargetApp(ctx: AdbContext, query?: string): Promise<TargetApp> {
-  const installed = await listInstalledApps(ctx.adb)
+  const installed = await listAllPackages(ctx.adb)
 
   let packageName: string
   if (query === undefined) {

@@ -608,6 +608,64 @@ describe('extractRun', () => {
   })
 
   /**
+   * 캡처 때 uid 를 못 적은 run 을 재산출하는 경로. **이 도구가 이미 저장한 원문 안에 답이 있다.**
+   *
+   * `raw/packages_before.txt` 는 `pm list packages -U` 의 원문이고 대상 패키지의 행이 거기
+   * 있다. 그것을 안 보고 `uid: null` 을 그대로 실어 network 를 `app_uid_unknown` 으로
+   * 끝내면, 도구가 손에 쥔 답을 두고 모른다고 말하는 것이 된다.
+   *
+   * 선례: `target_app.render_process` / `pid` 도 extract 가 트레이스에서 다시 구해 덮는다.
+   * 기기에 나가는 명령은 **0개** 늘어난다 — 이미 회수된 파일만 읽는다.
+   *
+   * 깨지는 조건: 폴백을 지우면 `target_app.uid` 가 null 이 되고 network 는 `app_uid_unknown`
+   * 이 되어 두 단언이 모두 실패한다.
+   */
+  it('매니페스트에 uid 가 없으면 packages 원본에서 찾아 채운다 — 새 adb 명령 없이', async () => {
+    const runDir = await makeRun({
+      trace: null,
+      appUid: null,
+      raw: {
+        netstats_before: NETSTATS,
+        netstats_after: NETSTATS_AFTER,
+        packages_before: PACKAGES,
+        packages_after: PACKAGES,
+      },
+    })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
+
+    expect(result.target_app.uid).toBe(APP_UID)
+    expect(result.metrics.network?.data).toMatchObject({ uid: APP_UID, rx_bytes: 5000 })
+  })
+
+  /**
+   * 폴백은 **답이 있을 때만** 덮는다. 원문에 그 패키지의 행이 없으면 uid 는 null 로 남고
+   * network 는 `app_uid_unknown` 이다. 여기서 아무 숫자나 채우면 그것이야말로 지어내는 것이다.
+   */
+  it('packages 원본에도 그 패키지가 없으면 uid 는 null 로 남는다', async () => {
+    const runDir = await makeRun({
+      trace: null,
+      appUid: null,
+      raw: {
+        netstats_before: NETSTATS,
+        netstats_after: NETSTATS_AFTER,
+        packages_before: 'package:com.other.app uid:10999\n',
+      },
+    })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
+
+    expect(result.target_app.uid).toBeNull()
+    expect(result.metrics.network?.reason_code).toBe('app_uid_unknown')
+  })
+
+  /**
    * 같은 result.json 안의 두 필드가 같은 센서에 대해 서로 다른 말을 하면 안 된다.
    * 옛 파서로 찍힌 run 의 `capture.json` 은 `thermal_zones` 가 15항목(AP 가 두 번)이고,
    * `metrics.thermal.zones` 는 원문을 다시 읽어 8존을 낸다. 그대로 두면 LLM 소비자가

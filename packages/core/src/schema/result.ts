@@ -683,7 +683,19 @@ export const TargetAppSchema = z.object({
   label_source: z.enum(['apk_resources', 'aapt2', 'package_name']),
   version_name: z.string().nullable(),
   version_code: z.number().int().nullable(),
-  uid: z.number().int().nullable(),
+  uid: z
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      '이 패키지에 배정된 리눅스 uid (`pm list packages -U` 가 보고한 값). ' +
+        '**패키지와 1:1 이 아니다** — `sharedUserId` 를 쓰는 패키지들은 같은 uid 를 공유하고, ' +
+        '안드로이드 플랫폼 패키지 수십 개가 uid 1000 을 함께 쓴다(실기기 실측 86개). ' +
+        'uid 단위로만 집계되는 값(metrics.network)이 무엇의 합인지는 ' +
+        '`metrics.network.data.shared_uid_packages` 가 말한다. ' +
+        '**null 은 이 도구가 uid 를 확인하지 못했다는 뜻이다** — 셸 권한이 닿지 않는 ' +
+        '안드로이드 user(시큐어 폴더 등)의 앱이 그렇다. 0 이나 -1 로 채우지 않는다.',
+    ),
   install_source: z.string().nullable(),
   launcher_activity: z.string().nullable(),
   render_process: z.string().nullable(),
