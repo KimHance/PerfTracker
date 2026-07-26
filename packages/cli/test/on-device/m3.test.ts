@@ -1,11 +1,13 @@
-import { existsSync, mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  APP_UID_STATS_HEADER,
   createAdbContext,
   extractRun,
   type NetworkData,
+  parseThermalZones,
   probeDevice,
   readActiveSession,
   type ThermalData,
@@ -13,6 +15,45 @@ import {
 import { runStart } from '../../src/commands/start.js'
 import { runStop } from '../../src/commands/stop.js'
 import { createContext } from '../../src/context.js'
+
+/**
+ * `mAppUidStatsMap` 표에서 uid 한 행을 **collector 와 무관하게** 다시 읽는다.
+ *
+ * `parseAppUidStats` 를 부르지 않는 것이 요점이다. 같은 파서로 읽으면 컬럼이 뒤바뀌어도
+ * 양쪽이 똑같이 뒤바뀌어 단언이 통과한다 — 델타 배선은 지키지만 컬럼 지도는 못 지킨다.
+ * 여기서 한 번 더 읽으면 그 두 번째 눈이 생긴다.
+ *
+ * 앵커 규칙은 파서와 같다: `BPF map status:` 절의 `mAppUidStatsMap: OK` 를 배제하기 위해
+ * **콜론 뒤가 비어 있는 줄**만 절의 머리로 본다.
+ */
+function readUidRow(
+  path: string,
+  uid: number,
+): { rxBytes: number; rxPackets: number; txBytes: number; txPackets: number } | null {
+  const lines = readFileSync(path, 'utf8').split('\n')
+  const at = lines.findIndex((l) => /^\s*mAppUidStatsMap:\s*$/.test(l))
+  if (at < 0) return null
+
+  let i = at + 1
+  while (i < lines.length && lines[i]!.trim().length === 0) i++
+  // 헤더가 다르면 컬럼 지도를 모른다 — 추측해서 읽지 않는다.
+  if ((lines[i] ?? '').trim().replace(/\s+/g, ' ') !== APP_UID_STATS_HEADER) return null
+
+  for (let j = i + 1; j < lines.length; j++) {
+    const m = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$/.exec(lines[j]!)
+    if (m === null) break
+    // 헤더 순서 그대로: uid rxBytes rxPackets txBytes txPackets.
+    // (AOSP 의 `StatsMapValue` 필드 순서와 **다르다** — 헤더가 정본이다.)
+    if (Number(m[1]) !== uid) continue
+    return {
+      rxBytes: Number(m[2]),
+      rxPackets: Number(m[3]),
+      txBytes: Number(m[4]),
+      txPackets: Number(m[5]),
+    }
+  }
+  return null
+}
 
 /**
  * 실기기 또는 에뮬레이터가 필요하다. `npm run test:device` 로만 실행된다.
@@ -97,9 +138,27 @@ describe('M3 기기 통합', () => {
     const thermal = result.metrics.thermal
     expect(thermal?.status, `thermal: ${thermal?.reason ?? ''}`).toBe('collected')
     const t = thermal!.data as ThermalData
-    expect(t.zones.length).toBeGreaterThan(0)
     expect(t.hal_ready_before).toBe(true)
     expect(t.device_status_before).not.toBeNull()
+
+    /**
+     * 옛 단언은 `t.zones.length > 0` 하나였는데 `status === 'collected'` 가 그것을 이미
+     * 함의한다 (존이 하나도 없으면 collector 가 `no_thermal_zones` / `thermal_hal_not_ready`
+     * 로 멈춘다). 어떤 구현 변경으로도 깨질 수 없는 줄이었다.
+     *
+     * 대신 **원문을 다시 읽어** 존 목록을 대조한다. 이 단언이 지키는 것 셋:
+     *   1. `zones` 가 before 스냅샷의 존 전부를 담는다 (하나도 잃지 않는다)
+     *   2. `before_c` 가 그 원문의 값이다 (다른 스냅샷의 값이 새어 들지 않는다)
+     *   3. **순서** — HAL 절의 순서를 먼저 싣고 cached 전용을 뒤에 붙인다.
+     *      `ThermalDataSchema.zones` 의 `.describe()` 가 소비자에게 그렇게 공시한다.
+     */
+    const beforeZones = parseThermalZones(
+      readFileSync(join(active!.runDir, 'raw', 'thermalservice_before.txt'), 'utf8'),
+    )
+    expect(beforeZones.length).toBeGreaterThan(0)
+    expect(t.zones.slice(0, beforeZones.length).map((z) => `${String(z.type)} ${z.name} ${String(z.before_c)}`)).toEqual(
+      beforeZones.map((z) => `${String(z.type)} ${z.name} ${String(z.celsius)}`),
+    )
     for (const z of t.zones) {
       expect(z.before_c, `${z.name}.before_c`).not.toBeNull()
       expect(z.after_c, `${z.name}.after_c`).not.toBeNull()
@@ -127,10 +186,36 @@ describe('M3 기기 통합', () => {
       expect(network?.status, `network: ${network?.reason ?? ''}`).toBe('collected')
       const n = network!.data as NetworkData
       expect(n.uid).toBe(result.target_app.uid)
-      // 크기는 단언하지 않는다 — 세션 중 앱이 통신하지 않을 수 있다.
-      for (const v of [n.rx_bytes, n.tx_bytes, n.rx_packets, n.tx_packets]) {
-        expect(v).toBeGreaterThanOrEqual(0)
-      }
+
+      /**
+       * 옛 단언은 네 필드에 `>= 0` 을 걸었는데 **어떤 구현 변경으로도 깨질 수 없었다.**
+       * `NetworkDataSchema` 가 네 필드에 `.int().nonnegative()` 를 걸고 `extractRun` 은
+       * `safeParse` 실패 시 던지며, 음수 델타는 애초에 `counter_went_backwards` 라
+       * `status !== 'collected'` 가 되어 두 줄 위에서 잡힌다.
+       *
+       * 대신 **원문 두 개를 다시 읽어 델타를 직접 구한다.** 크기를 단언하지 않는다는
+       * 성질은 그대로다 (세션 중 앱이 통신하지 않아 전부 0 이어도 통과한다) —
+       * 그러면서 델타 계산 배선은 실제로 지킨다. `after` 를 그대로 싣거나, 뺄셈의 방향이
+       * 뒤집히거나, 두 스냅샷을 바꿔 읽으면 여기서 깨진다.
+       */
+      const raw = (phase: 'before' | 'after') =>
+        readUidRow(join(active!.runDir, 'raw', `netstats_${phase}.txt`), n.uid)
+      const rb = raw('before')
+      const ra = raw('after')
+      expect(rb, 'netstats_before.txt 에서 uid 행을 못 읽었다').not.toBeNull()
+      expect(ra, 'netstats_after.txt 에서 uid 행을 못 읽었다').not.toBeNull()
+
+      expect({
+        rx_bytes: n.rx_bytes,
+        rx_packets: n.rx_packets,
+        tx_bytes: n.tx_bytes,
+        tx_packets: n.tx_packets,
+      }).toEqual({
+        rx_bytes: ra!.rxBytes - rb!.rxBytes,
+        rx_packets: ra!.rxPackets - rb!.rxPackets,
+        tx_bytes: ra!.txBytes - rb!.txBytes,
+        tx_packets: ra!.txPackets - rb!.txPackets,
+      })
       // uid 한정이 사실로 채워졌는지. null 이면 packages 스냅샷을 못 읽은 것이다 —
       // `[]` 와 다르고, 그 구분이 이 필드의 존재 이유다.
       expect(n.shared_uid_packages).not.toBeNull()
