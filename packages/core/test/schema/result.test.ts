@@ -125,6 +125,45 @@ describe('ResultSchema', () => {
     r.metrics.frame.data!.buckets = [{ from_ms: 700, to_ms: null, count: 3 }] as never
     expect(() => ResultSchema.parse(r)).not.toThrow()
   })
+
+  /**
+   * D8: `type`/`status` 를 required 로 넣으면 M3 이전 문서가 통째로 깨진다. 그것은 major 다.
+   * optional 로 넣었다는 사실을 여기서 고정한다 — 누가 `.optional()` 을 지우면 실패한다.
+   */
+  it('M3 이전의 thermal_zones({name, celsius})만 있는 문서도 통과한다', () => {
+    const legacy = minimalResult()
+    legacy.device.state_before.thermal_zones = [{ name: 'AP', celsius: 37.1 }]
+    expect(ResultSchema.safeParse(legacy).success).toBe(true)
+  })
+
+  /**
+   * zod 는 기본적으로 모르는 키를 **조용히 버린다.** 스키마를 안 넓히면 파싱은 성공하면서
+   * `type`/`status` 만 사라진다 — 결함이 통과하는 가장 나쁜 모양이다. 그래서 통과 여부가
+   * 아니라 **살아남은 값**을 단언한다.
+   */
+  it('type/status 가 붙은 새 문서도 통과하고, 그 값이 결과에 남는다', () => {
+    const next = minimalResult()
+    next.device.state_before.thermal_zones = [
+      { name: 'AP', celsius: 37.1, type: 0, status: 0 },
+    ] as never
+    const parsed = ResultSchema.safeParse(next)
+    expect(parsed.success).toBe(true)
+    expect(parsed.data!.device.state_before.thermal_zones[0]).toEqual({
+      name: 'AP',
+      celsius: 37.1,
+      type: 0,
+      status: 0,
+    })
+  })
+
+  /** 벤더가 mType/mStatus 를 안 찍는 기기의 값은 null 이지 0 이 아니다 (G2). */
+  it('type/status 가 null 인 존도 통과한다', () => {
+    const next = minimalResult()
+    next.device.state_before.thermal_zones = [
+      { name: 'CPU', celsius: 41.5, type: null, status: null },
+    ] as never
+    expect(ResultSchema.safeParse(next).success).toBe(true)
+  })
 })
 
 describe('REFERENCES', () => {

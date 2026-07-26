@@ -9,7 +9,9 @@ import {
   parseMemAvailableKb,
   parseNetworkFromIpRoute,
   parseSettingsLine,
+  parseThermalDump,
   parseThermalZones,
+  mergeThermalReadings,
   runSnapshots,
 } from '../../src/device/state.js'
 import { FakeProcessRunner } from '../support/fakeProcessRunner.js'
@@ -19,6 +21,7 @@ const read = (n: string): string =>
 
 const BATTERY = read('dumpsys-battery.txt')
 const THERMAL = read('dumpsys-thermalservice.txt')
+const THERMAL_EMU = read('dumpsys-thermalservice-emu.txt')
 const SETTINGS = 'brightness=131 low_power=0 anim=1.0\n'
 const IP_ROUTE = '8.8.8.8 via 192.168.0.1 dev wlan0 table 1045 src 192.168.0.5 uid 2000 \n    cache \n'
 
@@ -36,12 +39,97 @@ describe('parseBattery', () => {
   })
 })
 
-describe('parseThermalZones', () => {
-  it('부위별 온도를 뽑는다', () => {
+/**
+ * 픽스처는 실기기(SM-S901N / Android 16)와 에뮬레이터(API 35) 의 `dumpsys thermalservice`
+ * 원문을 **구조 그대로** 옮기고 값만 합성한 것이다. 이 파서의 결함은 전부 구조에서 나왔다.
+ */
+describe('parseThermalDump', () => {
+  it('두 섹션을 따로 읽는다 — 예전 파서는 둘을 한 배열로 뭉쳐 중복을 만들었다', () => {
+    const dump = parseThermalDump(THERMAL)
+    expect(dump.cached).toHaveLength(8)
+    expect(dump.hal).toHaveLength(7)
+  })
+
+  it('mType 과 mStatus 를 버리지 않는다 — throttling 상태는 mStatus 에만 있다', () => {
+    const dump = parseThermalDump(THERMAL)
+    expect(dump.hal).toContainEqual({ name: 'AP', type: 0, celsius: 37.1, status: 0 })
+    expect(dump.hal).toContainEqual({ name: 'PATHM', type: 5, celsius: 37.2, status: 1 })
+  })
+
+  it('Thermal Status / IsStatusOverride / HAL Ready 를 읽는다', () => {
+    const dump = parseThermalDump(THERMAL)
+    expect(dump.deviceStatus).toBe(0)
+    expect(dump.statusOverride).toBe(false)
+    expect(dump.halReady).toBe(true)
+  })
+
+  /** JSON 에는 NaN 이 없다. null 로 접지 않으면 result.json 이 파싱 불가능해진다. */
+  it('headroom 임계 배열을 읽고 NaN 을 null 로 바꾼다', () => {
+    expect(parseThermalDump(THERMAL).headroomThresholds).toEqual([
+      null, 0.8666667, 0.93333334, 1.0, 1.1333333, 1.4333333, 2.4333334,
+    ])
+  })
+
+  it('CoolingDevice 와 TemperatureThreshold 를 온도로 오탐하지 않는다', () => {
+    const dump = parseThermalDump(THERMAL_EMU)
+    expect(dump.hal).toEqual([
+      { name: 'test temperature sensor', type: 3, celsius: 30.8, status: 0 },
+    ])
+    expect(dump.cached).toHaveLength(1)
+  })
+
+  it('섹션이 통째로 없으면 빈 배열이고 던지지 않는다', () => {
+    const dump = parseThermalDump('')
+    expect(dump).toEqual({
+      deviceStatus: null,
+      statusOverride: null,
+      halReady: null,
+      hal: [],
+      cached: [],
+      headroomThresholds: null,
+    })
+  })
+
+  /** 벤더가 mStatus 를 안 찍는 경우에도 온도는 살려야 한다 — 값이 없는 것과 존이 없는 것은 다르다. */
+  it('mStatus 가 없는 항목도 온도는 살리고 status 만 null 로 둔다', () => {
+    const dump = parseThermalDump(
+      'Current temperatures from HAL:\n\tTemperature{mValue=41.5, mType=0, mName=CPU}\n',
+    )
+    expect(dump.hal).toEqual([{ name: 'CPU', type: 0, celsius: 41.5, status: null }])
+  })
+})
+
+describe('mergeThermalReadings', () => {
+  it('HAL 을 우선하고 Cached 에만 있는 존을 잃지 않는다 — 실기기 15항목이 8존이 된다', () => {
+    const zones = mergeThermalReadings(parseThermalDump(THERMAL))
+    expect(zones).toHaveLength(8)
+    expect(zones.map((z) => z.name)).toContain('PA1THM')
+    // PATHM 의 mStatus 는 두 섹션에서 다르다. HAL 이 이겨야 한다.
+    expect(zones.find((z) => z.name === 'PATHM')).toEqual({
+      name: 'PATHM', type: 5, celsius: 37.2, status: 1, source: 'hal',
+    })
+    expect(zones.find((z) => z.name === 'PA1THM')?.source).toBe('cached')
+  })
+
+  it('중복이 하나도 없다 — 같은 (type,name) 이 두 번 나오지 않는다', () => {
+    const zones = mergeThermalReadings(parseThermalDump(THERMAL))
+    const keys = zones.map((z) => `${String(z.type)} ${z.name}`)
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  it('HAL 섹션이 비어 있으면 Cached 를 전부 쓴다', () => {
+    const dump = parseThermalDump(THERMAL)
+    const zones = mergeThermalReadings({ ...dump, hal: [] })
+    expect(zones).toHaveLength(8)
+    expect(zones.every((z) => z.source === 'cached')).toBe(true)
+  })
+})
+
+describe('parseThermalZones (DeviceState 투영)', () => {
+  it('중복 없이 존 하나당 한 줄이고 type/status 를 들고 간다', () => {
     const zones = parseThermalZones(THERMAL)
-    expect(zones).toContainEqual({ name: 'AP', celsius: 37.1 })
-    expect(zones).toContainEqual({ name: 'SKIN', celsius: 35.4 })
-    expect(zones).toHaveLength(6)
+    expect(zones).toHaveLength(8)
+    expect(zones).toContainEqual({ name: 'AP', celsius: 37.1, type: 0, status: 0 })
   })
 
   it('센서가 없으면 빈 배열', () => {
@@ -120,7 +208,7 @@ describe('collectDeviceState', () => {
       animator_duration_scale: 1,
       thermal_zones: parseThermalZones(THERMAL),
     })
-    expect(state.thermal_zones).toHaveLength(6)
+    expect(state.thermal_zones).toHaveLength(8)
     expect(raw['battery']).toBe(BATTERY)
     expect(raw['thermalservice']).toBe(THERMAL)
     expect(Object.keys(raw).sort()).toEqual(['battery', 'iproute', 'meminfo', 'settings', 'thermalservice'])

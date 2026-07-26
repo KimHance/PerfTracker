@@ -27,12 +27,167 @@ export function parseBattery(text: string): {
   }
 }
 
-export function parseThermalZones(text: string): { name: string; celsius: number }[] {
-  const out: { name: string; celsius: number }[] = []
-  for (const m of text.matchAll(/Temperature\{mValue=(-?[\d.]+),\s*mType=\d+,\s*mName=([^,}]+)/g)) {
-    out.push({ name: m[2]!.trim(), celsius: Number(m[1]) })
+/** `dumpsys thermalservice` 의 온도 항목 하나. 이름은 벤더 문자열이고 `type` 이 표준이다. */
+export interface ThermalReading {
+  /**
+   * `mName`. **벤더가 정하는 임의 문자열이다** (`AP` / `SKIN` / `test temperature sensor`).
+   * 이 값으로 CPU/피부 온도를 판별하면 안 된다 — 그 판별은 `type` 으로 한다.
+   */
+  name: string
+  /**
+   * `mType`. `android.hardware.thermal` 의 `TemperatureType` 표준 enum:
+   * 0=CPU, 1=GPU, 2=BATTERY, 3=SKIN, 4=USB_PORT, 5=POWER_AMPLIFIER, 6=BCL_VOLTAGE,
+   * 7=BCL_CURRENT, 8=BCL_PERCENTAGE, 9=NPU. 없으면 null.
+   */
+  type: number | null
+  celsius: number
+  /** `mStatus`. 이 센서 기준의 throttling 단계(THERMAL_STATUS_*). 없으면 null. */
+  status: number | null
+}
+
+/** `dumpsys thermalservice` 한 판의 전체 구조. */
+export interface ThermalDump {
+  /** `Thermal Status: N` — 기기 전체의 throttling 단계. */
+  deviceStatus: number | null
+  /** `IsStatusOverride: true|false` — 상태가 강제 설정된 것인지. */
+  statusOverride: boolean | null
+  /** `HAL Ready: true|false`. */
+  halReady: boolean | null
+  /** `Current temperatures from HAL:` 절. */
+  hal: ThermalReading[]
+  /** `Cached temperatures:` 절. HAL 에 없는 센서가 여기 있을 수 있다 (실측: `PA1THM`). */
+  cached: ThermalReading[]
+  /** `Temperature headroom thresholds:` 의 배열. **`NaN` 은 null 이다** (JSON 에 NaN 이 없다). */
+  headroomThresholds: (number | null)[] | null
+}
+
+/**
+ * 섹션 하나의 줄들을 집는다.
+ *
+ * `dumpsys thermalservice` 의 섹션 머리는 **들여쓰기 없는 줄**이고 내용은 들여쓰기된 줄이다.
+ * 그래서 `Cached temperatures:` 아래를 훑다가 `HAL Ready: true` 를 만나면 끝난다.
+ * (유일한 예외가 `Temperature headroom thresholds:` 인데, 그 배열은 따로 집는다.)
+ */
+function sectionLines(lines: string[], header: string): string[] {
+  const at = lines.findIndex((l) => l.trimEnd() === header)
+  if (at < 0) return []
+  const out: string[] = []
+  for (let i = at + 1; i < lines.length; i++) {
+    const line = lines[i]!
+    if (/^\S/.test(line)) break
+    out.push(line)
   }
   return out
+}
+
+/**
+ * 두 단계로 읽는다. `Temperature{...}` 를 통째로 잡은 뒤 안에서 필드를 하나씩 꺼낸다 —
+ * 필드 순서를 한 정규식에 박으면 `mStatus` 를 안 찍는 벤더의 출력에서 **존 자체가 사라진다.**
+ * (값이 없는 것과 존이 없는 것은 다른 사실이다.)
+ *
+ * `Temperature\{mValue=` 로 시작을 못박는 것이 중요하다. 같은 덤프에 `CoolingDevice{mValue=...}`
+ * 와 `TemperatureThreshold{mType=...}` 가 있고(에뮬레이터 실측), 느슨하게 잡으면 둘 다 온도가 된다.
+ */
+function parseReadings(text: string): ThermalReading[] {
+  const out: ThermalReading[] = []
+  for (const m of text.matchAll(/Temperature\{(mValue=[^}]*)\}/g)) {
+    const body = m[1]!
+    const value = /mValue=(-?[\d.]+)/.exec(body)?.[1]
+    const name = /mName=([^,}]*)/.exec(body)?.[1]?.trim()
+    if (value === undefined || name === undefined || name.length === 0) continue
+    const type = /mType=(-?\d+)/.exec(body)?.[1]
+    const status = /mStatus=(-?\d+)/.exec(body)?.[1]
+    out.push({
+      name,
+      type: type !== undefined ? Number(type) : null,
+      celsius: Number(value),
+      status: status !== undefined ? Number(status) : null,
+    })
+  }
+  return out
+}
+
+function boolOrNull(text: string, re: RegExp): boolean | null {
+  const m = re.exec(text)?.[1]
+  return m === undefined ? null : m === 'true'
+}
+
+export function parseThermalDump(text: string): ThermalDump {
+  const lines = text.split('\n')
+
+  const headroomAt = lines.findIndex((l) => l.trimEnd() === 'Temperature headroom thresholds:')
+  const headroomRaw =
+    headroomAt >= 0 ? /^\s*\[(.*)\]\s*$/.exec(lines[headroomAt + 1] ?? '')?.[1] : undefined
+
+  const status = /^Thermal Status:\s*(-?\d+)/m.exec(text)?.[1]
+
+  return {
+    deviceStatus: status !== undefined ? Number(status) : null,
+    statusOverride: boolOrNull(text, /^IsStatusOverride:\s*(true|false)/m),
+    halReady: boolOrNull(text, /^HAL Ready:\s*(true|false)/m),
+    hal: parseReadings(sectionLines(lines, 'Current temperatures from HAL:').join('\n')),
+    cached: parseReadings(sectionLines(lines, 'Cached temperatures:').join('\n')),
+    headroomThresholds:
+      headroomRaw === undefined
+        ? null
+        : headroomRaw.split(',').map((v) => {
+            const n = Number(v.trim())
+            // NaN 은 "이 단계에 임계가 정의되지 않았다" 는 기기의 진술이다. 0 으로 접으면
+            // 없던 임계를 지어내는 것이고, JSON 은 NaN 을 실을 수 없다.
+            return Number.isFinite(n) ? n : null
+          }),
+  }
+}
+
+/** 존의 동일성 키. **이름만으로는 안 된다** — 벤더 문자열이라 유일성이 보장되지 않는다. */
+export function thermalZoneKey(r: { name: string; type: number | null }): string {
+  return `${r.type === null ? 'null' : String(r.type)} ${r.name}`
+}
+
+/**
+ * 두 섹션을 존 하나당 한 줄로 합친다.
+ *
+ * `Current temperatures from HAL` 은 덤프 시점에 HAL 에 직접 물어본 값이라 우선한다.
+ * `Cached temperatures` 는 프레임워크가 콜백으로 들고 있던 값인데, **HAL 이 이번에 안 준
+ * 센서가 여기 남아 있을 수 있다** (실기기 실측: `PA1THM`). 그래서 버리지 않고 뒤에 붙인다.
+ *
+ * 예전 `parseThermalZones` 는 두 섹션을 구분 없이 전역 matchAll 해서, 실기기에서 8존이
+ * **15개 항목**으로 나왔다 (`AP` 가 두 번, `BAT` 이 두 번, ...).
+ */
+export function mergeThermalReadings(
+  dump: ThermalDump,
+): (ThermalReading & { source: 'hal' | 'cached' })[] {
+  const out: (ThermalReading & { source: 'hal' | 'cached' })[] = []
+  const seen = new Set<string>()
+
+  for (const r of dump.hal) {
+    const key = thermalZoneKey(r)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ ...r, source: 'hal' })
+  }
+  for (const r of dump.cached) {
+    const key = thermalZoneKey(r)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ ...r, source: 'cached' })
+  }
+  return out
+}
+
+/**
+ * `DeviceState.thermal_zones` 로 가는 투영. `metrics.thermal` 과 **같은 파서를 쓴다** —
+ * 파서가 둘이면 결함도 둘이 된다.
+ */
+export function parseThermalZones(
+  text: string,
+): { name: string; celsius: number; type: number | null; status: number | null }[] {
+  return mergeThermalReadings(parseThermalDump(text)).map((z) => ({
+    name: z.name,
+    celsius: z.celsius,
+    type: z.type,
+    status: z.status,
+  }))
 }
 
 function numberOrNull(raw: string | undefined): number | null {

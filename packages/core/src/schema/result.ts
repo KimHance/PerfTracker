@@ -331,7 +331,50 @@ export const DeviceStateSchema = z.object({
   network: z.string().nullable(),
   mem_available_kb: z.number().int().nullable(),
   animator_duration_scale: z.number().nullable(),
-  thermal_zones: z.array(z.object({ name: z.string(), celsius: z.number() })),
+  thermal_zones: z
+    .array(
+      z.object({
+        name: z
+          .string()
+          .describe(
+            '센서 이름. **벤더가 정하는 임의 문자열이다**(`AP` / `SKIN` / `PATHM` / ' +
+              '`test temperature sensor`). 이 값으로 CPU 온도인지 피부 온도인지 판별하지 말 것 — ' +
+              '그 판별은 type 으로 한다.',
+          ),
+        celsius: z.number(),
+        type: z
+          .number()
+          .int()
+          .nullable()
+          .optional()
+          .describe(
+            '`android.hardware.thermal` 의 TemperatureType 표준 enum: ' +
+              '0=CPU, 1=GPU, 2=BATTERY, 3=SKIN, 4=USB_PORT, 5=POWER_AMPLIFIER, ' +
+              '6=BCL_VOLTAGE, 7=BCL_CURRENT, 8=BCL_PERCENTAGE, 9=NPU. ' +
+              '기기가 안 주면 null. **이 필드가 아예 없는 문서는 M3 이전에 산출된 것이다.**',
+          ),
+        status: z
+          .number()
+          .int()
+          .nullable()
+          .optional()
+          .describe(
+            '이 센서 기준의 throttling 단계(`mStatus`, THERMAL_STATUS_*: 0=NONE … 6=SHUTDOWN). ' +
+              '기기 전체의 단계가 아니라 이 센서의 것이다. ' +
+              '**이 필드가 아예 없는 문서는 M3 이전에 산출된 것이다.**',
+          ),
+      }),
+    )
+    .describe(
+      '`dumpsys thermalservice` 가 이 시점에 보고한 센서별 온도. ' +
+        '**기기 전역이며 대상 앱의 온도가 아니다** — 다른 앱, 화면 밝기, USB 충전이 전부 섞인다. ' +
+        '`Current temperatures from HAL` 을 우선하고 거기 없는 센서는 `Cached temperatures` 에서 ' +
+        '가져오며, 존 하나당 정확히 한 항목이다. ' +
+        '값이 정확히 `0.0` 인 존이 실기기에서 관측된다(SUBBAT / SUBBATRAW). ' +
+        '이 도구는 그것이 "실제 0°C" 인지 "이 기기에 그 센서가 없다" 인지 **판별하지 않는다** — ' +
+        '기기가 보고한 값을 그대로 싣는다. ' +
+        '세션 구간의 변화량은 metrics.thermal 에 있다.',
+    ),
 })
 export type DeviceState = z.infer<typeof DeviceStateSchema>
 

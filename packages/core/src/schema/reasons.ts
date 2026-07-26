@@ -90,9 +90,35 @@ export const METRIC_REASON_CODES = [
 
 export type MetricReasonCode = (typeof METRIC_REASON_CODES)[number]
 
+/**
+ * sdk_int → 안드로이드 릴리즈 표기. `sdk_too_low` 문장에만 쓴다.
+ *
+ * 옛 렌더러는 `"Android 12 이상이 필요합니다 (… 최소 sdk_int=${min_sdk})"` 처럼
+ * **릴리즈 이름을 하드코딩**하고 숫자는 detail 에서 읽었다. 그것을 쓰는 collector 가
+ * frame(31) 하나뿐이라 드러나지 않았을 뿐, 다른 하한을 쓰는 순간
+ * `"Android 12 이상이 필요합니다 (… 최소 sdk_int=29)"` 라는 자기모순 문장이 나온다.
+ * 모르는 sdk 는 릴리즈 이름 없이 숫자만 말한다 — 지어내지 않는다.
+ */
+export const ANDROID_RELEASE_BY_SDK: Record<number, string> = {
+  29: '10',
+  30: '11',
+  31: '12',
+  32: '12L',
+  33: '13',
+  34: '14',
+  35: '15',
+  36: '16',
+}
+
 const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string> = {
-  sdk_too_low: (d) =>
-    `Android 12 이상이 필요합니다 (기기 sdk_int=${String(d['sdk_int'])}, 최소 sdk_int=${String(d['min_sdk'])}).`,
+  sdk_too_low: (d) => {
+    const min = Number(d['min_sdk'])
+    const release = ANDROID_RELEASE_BY_SDK[min]
+    return (
+      `이 기기의 sdk_int=${String(d['sdk_int'])} 로는 수집할 수 없습니다 ` +
+      `(최소 sdk_int=${String(d['min_sdk'])}${release !== undefined ? `, Android ${release}` : ''}).`
+    )
+  },
   data_source_not_registered: (d) =>
     `이 기기에 perfetto 데이터소스가 등록되어 있지 않습니다: ${String(d['data_source'])}`,
   trace_missing: () => '트레이스 원본이 없습니다.',
