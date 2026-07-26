@@ -723,6 +723,47 @@ describe('networkCollector.extract', () => {
     expect(collected(out).data.shared_uid_packages).toEqual(['com.nhn.android.webtoon'])
   })
 
+  /**
+   * **온-디바이스 스펙이 밟던 경로를 여기서 밟는다.**
+   *
+   * 한동안 세션 스펙의 대상 앱이 `com.android.settings` 였고, 그 앱이 uid 1000 을 **86개**
+   * 패키지와 공유하기 때문에 이 갈래가 실기기에서 실제로 확인됐다. 세션 대상을 서드파티 앱
+   * (uid 를 혼자 쓴다)으로 옮기면서 그 커버리지가 사라지지 않도록 여기로 옮긴다.
+   *
+   * **기기가 필요한 부분이 없다** — 입력은 `pm list packages -U` 원문 텍스트뿐이고, 개수 86 은
+   * 실기기(SM-S901N / Android 16 / sdk 36) `raw/packages_before.txt` 632줄 중 `uid:1000` 인
+   * 줄을 센 실측치다. 패키지 **이름**은 합성이다(저장소는 합성 픽스처만 커밋한다) —
+   * 이 갈래가 검사하는 것은 이름이 아니라 "몇 개가 이 uid 를 쓰는가" 이므로 그것으로 충분하다.
+   */
+  it('uid 를 86개가 공유하면 값은 다 싣되 무엇의 합인지 말한다', async () => {
+    const shared = Array.from(
+      { length: 86 },
+      (_, i) => `package:com.example.platform${i} uid:1000\n`,
+    ).join('')
+
+    const out = await networkCollector.extract(
+      ctx({
+        appUid: 1000,
+        packageName: 'com.example.platform0',
+        capture: {
+          ...ctx().capture,
+          snapshots: {
+            netstats: { before: NETSTATS, after: NETSTATS_AFTER },
+            packages: { before: shared, after: shared },
+          },
+        },
+      }),
+    )
+
+    // 값은 하나도 빠짐없이 실린다 — `partial` 인 것은 값이 없어서가 아니라 귀속 때문이다.
+    expect(collected(out).data.uid).toBe(1000)
+    expect(collected(out).data.shared_uid_packages).toHaveLength(86)
+    expect(collected(out).partialReason).toEqual({
+      code: 'uid_shared_by_multiple_packages',
+      detail: { uid: 1000, package_count: 86 },
+    })
+  })
+
   /** [] 는 "조회했고 이 uid 를 쓰는 패키지가 목록에 없었다" 이다. null 과 같은 뜻이 아니다. */
   it('조회했는데 그 uid 를 쓰는 패키지가 없으면 [] 다', async () => {
     const out = await networkCollector.extract(

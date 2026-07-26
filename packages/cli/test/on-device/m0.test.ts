@@ -6,7 +6,17 @@ import {
   resolveTargetApp,
   runDoctor,
 } from '@perftracker/core'
-import { DEVICE_TARGET_APP } from './target.js'
+import { assertTargetAppInstalled } from './target.js'
+
+/**
+ * 시스템 앱 해석 경로 전용 대상. **세션 대상(`DEVICE_TARGET_APP`)과 일부러 다르다.**
+ *
+ * 이 상수를 쓰는 스펙은 `resolveTargetApp` 만 부른다 — `pm list packages` 와 라벨 조회뿐이고
+ * `am force-stop` 도 `am start` 도 하지 않는다. 그래서 사용자의 화면에 아무 일도 일어나지
+ * 않으면서 "서드파티 목록만 보던 결함" 의 회귀를 계속 잡는다.
+ * 세션 대상을 서드파티 앱으로 옮기면서 이 커버리지가 사라지지 않게 여기에 남긴다.
+ */
+const SYSTEM_APP = 'com.android.settings'
 
 /** 실기기가 필요하다. `npm run test:device` 로만 실행된다. */
 describe('M0 기기 통합', () => {
@@ -26,6 +36,17 @@ describe('M0 기기 통합', () => {
   })
 
   /**
+   * 세션을 여는 스펙들이 기대하는 앱이 이 기기에 실제로 있는지 **가장 먼저** 확인한다.
+   * 없으면 뒤의 스펙들이 `AppNotFoundError` 로 줄줄이 실패하고, 그 메시지는 무엇을 어떻게
+   * 바꾸면 되는지 말하지 않는다. 건너뛰기는 넣지 않는다 — 이유는 `./target.ts` 에 있다.
+   */
+  it('세션 스펙의 대상 앱이 이 기기에 설치되어 있다', async () => {
+    const ctx = await createAdbContext({})
+    const apps = await loadLabeledApps(ctx)
+    assertTargetAppInstalled(apps.map((a) => a.packageName))
+  })
+
+  /**
    * **도구가 손에 쥔 것을 모른다고 말하지 않는다.**
    *
    * 옛 동작은 대상 해석이 `pm list packages -3`(서드파티만)을 봤다. 시스템 앱은 그 목록에
@@ -40,9 +61,9 @@ describe('M0 기기 통합', () => {
    */
   it('시스템 앱도 대상으로 해석되고 uid 가 나온다', async () => {
     const ctx = await createAdbContext({})
-    const app = await resolveTargetApp(ctx, DEVICE_TARGET_APP)
+    const app = await resolveTargetApp(ctx, SYSTEM_APP)
 
-    expect(app.package).toBe(DEVICE_TARGET_APP)
+    expect(app.package).toBe(SYSTEM_APP)
     expect(app.uid, '시스템 앱의 uid — 기기는 pm list packages -U 로 이 값을 준다').not.toBeNull()
     expect(app.version_code).not.toBeNull()
     // `--launch` 가 쓸 런처 액티비티. 없으면 m3 의 세션 테스트가 이 앱을 못 띄운다.
