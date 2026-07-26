@@ -467,6 +467,48 @@ describe('networkCollector.extract', () => {
     expect(collected(out).data.shared_uid_packages).toBeNull()
   })
 
+  /**
+   * M-6. `packages?.before ?? packages?.after` 폴백이 테스트되지 않았다.
+   *
+   * 이 경로는 실제로 있다: `pm list packages -U` 는 `tryShell` 로 나가므로 start 에서
+   * 실패하면 빈 파일이 되고 `snapshotText` 가 그것을 null 로 접는다 — 그때 stop 의
+   * 스냅샷만 남는다. run 디렉토리에서 `packages_before.txt` 하나만 사라진 경우도 같다.
+   *
+   * 폴백이 정당한 이유: uid → 패키지 매핑은 **거의 정적**이라(앱을 설치·삭제해야 바뀐다)
+   * 어느 쪽 스냅샷을 읽어도 대개 같은 답이다. 그래서 한쪽이 없다고 null 을 내면
+   * "조회하지 못했다" 는 없던 사실이 된다 — 손에 답을 쥐고 있으면서.
+   */
+  it('시작 스냅샷이 없으면 종료 스냅샷으로 uid 한정을 채운다 — 답을 쥐고 null 을 내지 않는다', async () => {
+    const out = await networkCollector.extract(
+      withSnapshots({
+        netstats: { before: NETSTATS, after: NETSTATS_AFTER },
+        packages: { before: null, after: PACKAGES },
+      }),
+    )
+    expect(collected(out).data.shared_uid_packages).toEqual([
+      'com.nhn.android.webtoon',
+      'com.example.sibling',
+    ])
+  })
+
+  /**
+   * 폴백의 **방향**도 계약이다. 델타의 기준이 시작 스냅샷이므로 uid 한정도 그쪽을 먼저 본다.
+   * 두 스냅샷 사이에 같은 uid 를 쓰는 패키지가 설치되면 두 답이 갈리는데, 이 결과가 말해야
+   * 하는 것은 "델타를 잰 그 구간에 이 uid 를 쓰던 패키지" 다.
+   */
+  it('둘 다 있으면 시작 스냅샷이 이긴다 — 델타의 기준이 그쪽이다', async () => {
+    const out = await networkCollector.extract(
+      withSnapshots({
+        netstats: { before: NETSTATS, after: NETSTATS_AFTER },
+        packages: {
+          before: 'package:com.nhn.android.webtoon uid:10388\n',
+          after: `${PACKAGES}package:com.example.installed_later uid:10388\n`,
+        },
+      }),
+    )
+    expect(collected(out).data.shared_uid_packages).toEqual(['com.nhn.android.webtoon'])
+  })
+
   /** [] 는 "조회했고 이 uid 를 쓰는 패키지가 목록에 없었다" 이다. null 과 같은 뜻이 아니다. */
   it('조회했는데 그 uid 를 쓰는 패키지가 없으면 [] 다', async () => {
     const out = await networkCollector.extract(
