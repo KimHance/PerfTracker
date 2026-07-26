@@ -42,6 +42,11 @@ export const METRIC_REASON_CODES = [
   'no_rss_samples',
   /** linux.sys_stats 는 켰는데 meminfo 표본이 없다. */
   'no_meminfo_samples',
+  /**
+   * android.log 는 등록되어 있었지만 트레이스에 로그 항목이 하나도 없다.
+   * 두 가지 뜻이 겹친다 — 정말 아무것도 안 찍혔거나, traced_probes 가 logd 를 못 읽었거나.
+   */
+  'no_log_entries',
 ] as const
 
 export type MetricReasonCode = (typeof METRIC_REASON_CODES)[number]
@@ -71,6 +76,10 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
   no_rss_samples: (d) => `프로세스(${String(d['process'])})의 메모리 표본을 찾지 못했습니다.`,
   no_meminfo_samples: () =>
     'linux.sys_stats 의 meminfo 표본이 없어 기기 전체 메모리를 함께 내지 못했습니다.',
+  no_log_entries: (d) =>
+    `트레이스에 로그 항목이 없습니다 (문턱 ${String(d['min_prio'])}). ` +
+    `실제로 아무것도 기록되지 않았거나, traced_probes 가 logd 를 읽지 못했을 수 있습니다 ` +
+    `(SELinux 가 logdr 소켓을 막는 에뮬레이터 이미지에서 관측된 적이 있습니다).`,
 }
 
 /** 코드 → 한국어 문장. 모르는 코드는 조용히 비우지 않고 코드 자체를 남긴다. */

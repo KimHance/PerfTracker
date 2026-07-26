@@ -2,6 +2,7 @@ import { mergeTraceConfigBlocks } from '../perfetto/config.js'
 import { renderReason } from '../schema/reasons.js'
 import { cpuCollector } from './cpu.js'
 import { frameCollector } from './frame.js'
+import { logCollector } from './log.js'
 import { memoryCollector } from './memory.js'
 import { startupCollector } from './startup.js'
 import type { Collector, CollectorEnv } from './types.js'
@@ -16,6 +17,7 @@ export const COLLECTORS: Collector<unknown>[] = [
   startupCollector,
   cpuCollector,
   memoryCollector,
+  logCollector,
 ]
 
 /** 이 기기에서 실제로 뭔가를 낼 수 있는 collector 들. */

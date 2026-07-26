@@ -141,6 +141,35 @@ export const MemoryDataSchema = z.object({
 })
 export type MemoryData = z.infer<typeof MemoryDataSchema>
 
+export const LogEventSchema = z.object({
+  tag: z.string(),
+  message: z.string(),
+})
+export type LogEvent = z.infer<typeof LogEventSchema>
+
+export const LogDataSchema = z.object({
+  /**
+   * 이 세션이 로그를 받은 최소 우선순위. 개수는 이 문턱 아래에서만 의미가 있다 —
+   * "W 118건" 은 무엇을 걸렀는지 없이는 읽을 수 없는 숫자다.
+   */
+  min_prio: z.string(),
+  total: z.number().int().nonnegative(),
+  by_priority: z.object({
+    warn: z.number().int().nonnegative(),
+    error: z.number().int().nonnegative(),
+    fatal: z.number().int().nonnegative(),
+  }),
+  /**
+   * 세션 동안 **기기 전역에서** 관측된 크래시와 ANR. 대상 앱만이 아니다.
+   * 크래시(`AndroidRuntime`)와 ANR(`ActivityManager` = system_server)은 앱이 아니라 시스템이
+   * 찍는다 — 앱 프로세스로 필터링하면 정작 중요한 줄이 사라진다.
+   * 원문을 그대로 실어서 누구 것인지 사람이 볼 수 있게 한다.
+   */
+  crashes: z.array(LogEventSchema),
+  anrs: z.array(LogEventSchema),
+})
+export type LogData = z.infer<typeof LogDataSchema>
+
 export const CpuClusterSchema = z.object({
   cpus: z.array(z.number().int()),
   max_freq_khz: z.number().int().nullable(),
@@ -287,6 +316,7 @@ export const ResultSchema = z.object({
       startup: metricResultSchema(StartupDataSchema).optional(),
       cpu: metricResultSchema(CpuDataSchema).optional(),
       memory: metricResultSchema(MemoryDataSchema).optional(),
+      log: metricResultSchema(LogDataSchema).optional(),
     })
     .catchall(metricResultSchema(z.unknown())),
   measurement_overhead: MeasurementOverheadSchema,
