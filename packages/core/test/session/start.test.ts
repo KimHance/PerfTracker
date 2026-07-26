@@ -3,10 +3,11 @@ import { isAbsolute, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { MeasurementWindowViolationError, SessionStateError } from '../../src/errors.js'
 import type { CaptureManifest } from '../../src/session/manifest.js'
-import { buildWarnings, parseAmStart, startSession } from '../../src/session/start.js'
+import { buildWarnings, parseAmStart, parsePidof, startSession } from '../../src/session/start.js'
 import { readActiveSession, writeActiveSession } from '../../src/session/state.js'
 import {
   clientFor,
+  PKG,
   SERIAL,
   startableDevice,
   targetApp,
@@ -43,6 +44,25 @@ describe('parseAmStart', () => {
 
   it('없으면 null', () => {
     expect(parseAmStart('Error: Activity not started')).toEqual({ totalTimeMs: null, launchState: null })
+  })
+})
+
+describe('parsePidof', () => {
+  it('pid 하나를 읽는다', () => {
+    expect(parsePidof('6037\n')).toBe(6037)
+  })
+
+  it('여러 개가 오면 첫 번째를 쓴다', () => {
+    expect(parsePidof('6037 6099\n')).toBe(6037)
+  })
+
+  it('빈 답이면 null 이다 — pidof 는 못 찾으면 아무것도 안 찍고 exit 1 이다', () => {
+    expect(parsePidof('')).toBeNull()
+    expect(parsePidof('\n')).toBeNull()
+  })
+
+  it('숫자가 아니면 null 이다', () => {
+    expect(parsePidof('/system/bin/sh: pidof: not found\n')).toBeNull()
   })
 })
 
@@ -176,6 +196,54 @@ describe('startSession — 오케스트레이션 불변식', () => {
     expect(forceStop).toBeGreaterThanOrEqual(0)
     expect(detach).toBeGreaterThan(forceStop)
     expect(amStart).toBeGreaterThan(detach)
+  })
+})
+
+/**
+ * `linux.process_stats` 는 갓 fork 된 앱 프로세스를 `zygote64` 라는 이름으로 굳혀 버릴 수 있고
+ * (`collectors/appProcess.ts`), 그러면 트레이스 안에서 앱을 이름으로 찾을 방법이 사라진다.
+ * pid 를 알아 두는 것이 그 상황의 유일한 탈출구다.
+ */
+describe('startSession — 앱 pid 확보 (Defect 0)', () => {
+  it('--launch 로 띄운 앱의 pid 를 세션에 남긴다', async () => {
+    const h = start({ launch: true })
+    const session = await h.result
+
+    expect(session.appPid).toBe(24193)
+    const stored = JSON.parse(readFileSync(join(session.runDir, 'session.json'), 'utf8')) as {
+      appPid: number | null
+    }
+    expect(stored.appPid).toBe(24193)
+  })
+
+  it('pid 조회는 am start 다음, 측정 창이 열리기 전이다', async () => {
+    const h = start({ launch: true })
+    await h.result
+
+    const amStart = h.runner.commands.findIndex((c) => c.includes('am start -W -n'))
+    const pidof = h.runner.commands.findIndex((c) => c.includes('pidof'))
+
+    expect(pidof).toBeGreaterThan(amStart)
+    // 창이 열린 뒤였다면 이 호출 자체가 MeasurementWindowViolationError 로 죽었을 것이다.
+    expect(h.adb.window.isOpen).toBe(true)
+  })
+
+  it('--launch 가 아니면 기기에 pid 를 묻지 않는다 — 그 앱은 이미 이름이 확정돼 있다', async () => {
+    const h = start({ launch: false })
+    const session = await h.result
+
+    expect(session.appPid).toBeNull()
+    expect(h.runner.commands.some((c) => c.includes('pidof'))).toBe(false)
+  })
+
+  it('pidof 가 실패해도 세션은 시작된다 — pid 는 있으면 좋은 것이지 전제가 아니다', async () => {
+    // pidof 가 없거나(옛 toybox) 못 찾은 기기. 정확 키가 패턴을 이기므로 같은 키로 덮는다.
+    const runner = startableDevice((r) => {
+      r.on(`-s ${SERIAL} shell pidof '${PKG}'`, { code: 1, stderr: '' })
+    })
+    const session = await start({ launch: true, runner }).result
+
+    expect(session.appPid).toBeNull()
   })
 })
 

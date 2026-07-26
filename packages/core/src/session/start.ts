@@ -37,6 +37,16 @@ export function parseAmStart(text: string): { totalTimeMs: number | null; launch
   }
 }
 
+/**
+ * `pidof <package>` 의 출력. 못 찾으면 아무것도 안 찍고 exit 1 이므로 빈 문자열이 온다.
+ * 같은 이름의 프로세스가 여럿이면 공백으로 이어 찍는데, 그중 어느 것이든 그 앱의 프로세스다.
+ */
+export function parsePidof(text: string): number | null {
+  const first = text.trim().split(/\s+/)[0]
+  if (first === undefined || !/^\d+$/.test(first)) return null
+  return Number(first)
+}
+
 /** 관측된 사실만 담는다. "느립니다" 같은 평가는 들어가지 않는다. */
 export function buildWarnings(
   stateBefore: DeviceState,
@@ -180,9 +190,24 @@ export async function startSession(
 
   // 4) 런처 액티비티를 콜드 실행하고 시작 시간을 잰다.
   let startup: ActiveSession['startup'] = null
+  let appPid: number | null = null
   if (opts.launch && app.launcher_activity !== null) {
     const r = await ctx.adb.raw(['shell', `am start -W -n ${shellQuote(`${app.package}/${app.launcher_activity}`)}`])
     startup = parseAmStart(r.stdout)
+
+    // 4-b) 방금 띄운 프로세스의 pid 를 받아 둔다.
+    //
+    // 왜 필요한가: `linux.process_stats` 는 프로세스 이름을 최초 관측 시 한 번만 확정하고,
+    // zygote 가 fork 한 앱은 `Process.setArgV0()` 전에 잠깐 `zygote64` 라는 이름을 갖는다.
+    // 그 창에 폴링이 걸리면 트레이스는 앱을 영원히 `zygote64` 로 알고, 이름으로는 다시 찾을
+    // 방법이 없다 (`collectors/appProcess.ts`). `--launch` 는 force-stop 후 재실행이라
+    // 앱 프로세스가 **항상** 갓 fork 된 상태이므로 이 경합은 예외가 아니다.
+    //
+    // 왜 여기인가: 이 호출은 `am start -W` 와 같은 단계에 있고 측정 창이 열리기 **전**이다.
+    // 창이 열린 뒤에는 어떤 adb 도 보내지 않는다는 규칙은 그대로다.
+    // 실패는 삼킨다 — pid 는 있으면 좋은 것이지 세션의 전제가 아니다.
+    const pid = await ctx.adb.raw(['shell', `pidof ${shellQuote(app.package)}`])
+    appPid = parsePidof(pid.stdout)
   }
 
   const session: ActiveSession = {
@@ -198,6 +223,7 @@ export async function startSession(
     configuredDurationMs: DEFAULT_MAX_DURATION_MS,
     options: { launch: opts.launch, video: opts.video },
     startup,
+    appPid,
   }
 
   await writeCaptureManifest(runDir, {

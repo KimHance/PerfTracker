@@ -49,6 +49,7 @@ export function startableDevice(overrides: (r: FakeProcessRunner) => void = () =
     .onMatch(/shell am start -W -n /, {
       stdout: 'Status: ok\nLaunchState: COLD\nTotalTime: 1842\n',
     })
+    .on(`-s ${SERIAL} shell pidof '${PKG}'`, { stdout: '24193\n' })
 
   overrides(runner)
   return runner

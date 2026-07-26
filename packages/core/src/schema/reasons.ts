@@ -40,6 +40,11 @@ export const METRIC_REASON_CODES = [
   'process_not_in_trace',
   /** 프로세스는 찾았지만 mem.rss 표본이 없다. detail: process */
   'no_rss_samples',
+  /**
+   * 트레이스가 그 프로세스를 아직 zygote 이름으로 알고 있어, 캡처 때 받아 둔 pid 로 대상 앱을
+   * 특정했다. 값은 정상이고 보고하는 이름은 패키지명이다. detail: package, pid, trace_name
+   */
+  'process_name_stale_in_trace',
   /** linux.sys_stats 는 켰는데 meminfo 표본이 없다. */
   'no_meminfo_samples',
   /**
@@ -74,6 +79,11 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
   process_not_in_trace: (d) =>
     `대상 앱(${String(d['package'])})의 프로세스가 트레이스에 없습니다 — 세션 동안 실행되지 않았을 수 있습니다.`,
   no_rss_samples: (d) => `프로세스(${String(d['process'])})의 메모리 표본을 찾지 못했습니다.`,
+  process_name_stale_in_trace: (d) =>
+    `트레이스는 이 프로세스(pid ${String(d['pid'])})를 "${String(d['trace_name'])}" 이라는 이름으로 기록했습니다 — ` +
+    `zygote 가 fork 한 직후 이름이 확정되기 전에 관측된 것입니다. ` +
+    `대상 앱(${String(d['package'])})임은 실행 직후 기기에서 받아 둔 pid 로 확인했고, ` +
+    `보고하는 이름은 그 패키지명입니다.`,
   no_meminfo_samples: () =>
     'linux.sys_stats 의 meminfo 표본이 없어 기기 전체 메모리를 함께 내지 못했습니다.',
   no_log_entries: (d) =>

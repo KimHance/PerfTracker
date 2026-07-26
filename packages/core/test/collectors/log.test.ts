@@ -53,7 +53,7 @@ function ctx(answers: Record<string, unknown>): ExtractContext {
     tp: new FakeTp(answers) as unknown as ExtractContext['tp'],
     packageName: 'com.foo.bar',
     env: { sdkInt: 35, dataSources: ['android.log'] },
-    capture: { startup: null, launchRequested: false },
+    capture: { startup: null, launchRequested: false, appPid: null },
   }
 }
 

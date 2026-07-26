@@ -1,4 +1,5 @@
 import type { FrameBucket, FrameData } from '../schema/result.js'
+import { type AppProcessCandidate, resolveAppProcess, staleNameReason } from './appProcess.js'
 import { FRAMETIMELINE_BLOCK, PROCESS_STATS_BLOCK } from './blocks.js'
 import { round } from './num.js'
 import type {
@@ -65,33 +66,8 @@ export function percentile(sortedMs: number[], p: number): number {
   return sortedMs[Math.min(sortedMs.length - 1, Math.max(0, rank - 1))]!
 }
 
-export interface FrameProcessCandidate {
-  upid: number
-  pid: number
-  name: string | null
+export interface FrameProcessCandidate extends AppProcessCandidate {
   frames: number
-}
-
-function isSystemProcess(name: string | null): boolean {
-  if (name === null) return true
-  return name.startsWith('/') || name.startsWith('system_server') || name.startsWith('com.android.systemui')
-}
-
-/**
- * 런처 alias 때문에 패키지명과 실제 렌더 프로세스명이 다를 수 있다.
- * 패키지 일치를 먼저 보고, 없으면 시스템 프로세스를 뺀 프레임 최다 프로세스를 고른다.
- */
-export function selectRenderProcess(
-  candidates: FrameProcessCandidate[],
-  packageName: string,
-): FrameProcessCandidate | null {
-  const exact = candidates.find(
-    (c) => c.name === packageName || (c.name !== null && c.name.startsWith(`${packageName}:`)),
-  )
-  if (exact) return exact
-
-  const apps = candidates.filter((c) => !isSystemProcess(c.name)).sort((a, b) => b.frames - a.frames)
-  return apps[0] ?? null
 }
 
 export const FRAME_PROCESS_SQL =
@@ -133,18 +109,24 @@ export const frameCollector: TraceCollector<FrameData> = {
     return [FRAMETIMELINE_BLOCK, PROCESS_STATS_BLOCK]
   },
 
+  /**
+   * 프로세스 특정에 **추측이 없다.** 이 필드(`data.process`)는 사실로 팔리는 값이므로,
+   * 확인하지 못한 이름을 넣느니 `render_process_not_found` 로 값을 내지 않는 쪽을 고른다.
+   * 규칙 자체는 `collectors/appProcess.ts` 가 갖고 있다 — memory 와 같은 규칙을 쓴다.
+   */
   async extract(ctx: ExtractContext): Promise<ExtractOutcome<FrameData>> {
     const candidates = await ctx.tp.queryJson<FrameProcessCandidate[]>(FRAME_PROCESS_SQL)
-    const picked = selectRenderProcess(candidates, ctx.packageName)
-    if (!picked) {
+    const resolved = resolveAppProcess(candidates, ctx.packageName, ctx.capture.appPid)
+    if (resolved === null) {
       return {
         collected: false,
         reason: { code: 'render_process_not_found', detail: { package: ctx.packageName } },
       }
     }
 
+    const picked = resolved.candidate
     const durationsNs = await ctx.tp.queryJson<number[]>(frameDurationsSql(picked.upid))
-    const processName = picked.name ?? String(picked.pid)
+    const processName = resolved.name
     if (durationsNs.length === 0) {
       return { collected: false, reason: { code: 'no_frames', detail: { process: processName } } }
     }
@@ -168,6 +150,9 @@ export const frameCollector: TraceCollector<FrameData> = {
       mean_ms: round(durationsMs.reduce((s, v) => s + v, 0) / durationsMs.length, 2),
       max_ms: round(sorted[sorted.length - 1]!, 2),
     }
-    return { collected: true, data }
+
+    // 이름이 아니라 pid 로 확인한 경우, 트레이스가 다른 이름을 알고 있다는 사실을 숨기지 않는다.
+    const stale = staleNameReason(resolved, ctx.packageName)
+    return stale === null ? { collected: true, data } : { collected: true, data, partialReason: stale }
   },
 }

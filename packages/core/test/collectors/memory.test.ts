@@ -5,46 +5,25 @@ import {
   appProcessSql,
   type CounterStatRow,
   memoryCollector,
-  type MemoryProcessCandidate,
-  selectAppProcess,
   SYSTEM_MEMORY_SQL,
 } from '../../src/collectors/memory.js'
 import type { ExtractContext } from '../../src/collectors/types.js'
 
-describe('selectAppProcess', () => {
-  const main: MemoryProcessCandidate = { upid: 5, pid: 24193, name: 'com.foo.bar' }
-  const remote: MemoryProcessCandidate = { upid: 6, pid: 24290, name: 'com.foo.bar:remote' }
-  const push: MemoryProcessCandidate = { upid: 7, pid: 24101, name: 'com.foo.bar:push' }
-
-  it('패키지명과 정확히 같은 프로세스를 먼저 고른다', () => {
-    expect(selectAppProcess([remote, main, push], 'com.foo.bar')).toBe(main)
-  })
-
-  it('메인 프로세스가 없으면 pid 가 가장 작은 서브프로세스를 고른다', () => {
-    expect(selectAppProcess([remote, push], 'com.foo.bar')).toBe(push)
-  })
-
-  it('접두어만 같은 다른 패키지를 잡지 않는다', () => {
-    const other: MemoryProcessCandidate = { upid: 9, pid: 1, name: 'com.foo.barbaz' }
-    expect(selectAppProcess([other], 'com.foo.bar')).toBeNull()
-  })
-
-  it('이름이 null 인 후보는 무시한다', () => {
-    expect(selectAppProcess([{ upid: 1, pid: 2, name: null }], 'com.foo.bar')).toBeNull()
-  })
-
-  it('후보가 없으면 null 이다', () => {
-    expect(selectAppProcess([], 'com.foo.bar')).toBeNull()
-  })
-})
-
 describe('appProcessSql', () => {
   it('패키지명을 SQL 리터럴로 감싼다', () => {
-    expect(appProcessSql('com.foo.bar')).toContain("'com.foo.bar'")
+    expect(appProcessSql('com.foo.bar', null)).toContain("'com.foo.bar'")
   })
 
   it('작은따옴표가 섞여도 리터럴 밖으로 새지 않는다', () => {
-    expect(appProcessSql("a'b")).toContain("'a''b'")
+    expect(appProcessSql("a'b", null)).toContain("'a''b'")
+  })
+
+  it('캡처한 pid 가 있으면 이름이 낡은 프로세스도 후보에 넣는다', () => {
+    expect(appProcessSql('com.foo.bar', 6037)).toContain('p.pid = 6037')
+  })
+
+  it('pid 를 모르면 pid 조건을 붙이지 않는다', () => {
+    expect(appProcessSql('com.foo.bar', null)).not.toContain('p.pid =')
   })
 })
 
@@ -60,12 +39,12 @@ class FakeTp {
 
 const PKG = 'com.android.systemui'
 
-function ctx(answers: Record<string, unknown>): ExtractContext {
+function ctx(answers: Record<string, unknown>, appPid: number | null = null): ExtractContext {
   return {
     tp: new FakeTp(answers) as unknown as ExtractContext['tp'],
     packageName: PKG,
     env: { sdkInt: 35, dataSources: ['linux.process_stats', 'linux.sys_stats'] },
-    capture: { startup: null, launchRequested: false },
+    capture: { startup: null, launchRequested: false, appPid },
   }
 }
 
@@ -93,7 +72,7 @@ const CANDIDATES = [{ upid: 261, pid: 802, name: PKG }]
 
 function answers(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    [appProcessSql(PKG)]: CANDIDATES,
+    [appProcessSql(PKG, null)]: CANDIDATES,
     [appMemorySql(261)]: APP_ROWS,
     [SYSTEM_MEMORY_SQL]: SYS_ROWS,
     ...over,
@@ -167,10 +146,53 @@ describe('memoryCollector.extract', () => {
   })
 
   it('앱 프로세스가 트레이스에 없으면 process_not_in_trace 다', async () => {
-    const outcome = await memoryCollector.extract(ctx(answers({ [appProcessSql(PKG)]: [] })))
+    const outcome = await memoryCollector.extract(ctx(answers({ [appProcessSql(PKG, null)]: [] })))
     expect(outcome).toEqual({
       collected: false,
       reason: { code: 'process_not_in_trace', detail: { package: PKG } },
+    })
+  })
+
+  /** 에뮬레이터 실측: 앱은 트레이스 안에 있는데 이름이 "zygote64" 로 굳어 못 찾던 상황. */
+  describe('트레이스의 프로세스 이름이 낡았을 때', () => {
+    const STALE = [{ upid: 309, pid: 6037, name: 'zygote64' }]
+    const STALE_ROWS: CounterStatRow[] = [
+      { counter: 'mem.rss', min: 300000000, max: 400904192, avg: 350000000, samples: 40 },
+    ]
+
+    function staleAnswers(over: Record<string, unknown> = {}): Record<string, unknown> {
+      return {
+        [appProcessSql(PKG, 6037)]: STALE,
+        [appMemorySql(309)]: STALE_ROWS,
+        [SYSTEM_MEMORY_SQL]: SYS_ROWS,
+        ...over,
+      }
+    }
+
+    it('캡처한 pid 로 앱을 찾아 RSS 를 낸다', async () => {
+      const outcome = await memoryCollector.extract(ctx(staleAnswers(), 6037))
+      expect(outcome.collected).toBe(true)
+      if (!outcome.collected) return
+      expect(outcome.data.pid).toBe(6037)
+      expect(outcome.data.samples).toBe(40)
+      expect(outcome.data.rss.max_kb).toBe(391508)
+      // 트레이스가 아는 이름을 그대로 흘리지 않는다.
+      expect(outcome.data.process).not.toBe('zygote64')
+      expect(outcome.data.process).toBe(PKG)
+      expect(outcome.partialReason).toEqual({
+        code: 'process_name_stale_in_trace',
+        detail: { package: PKG, pid: 6037, trace_name: 'zygote64' },
+      })
+    })
+
+    it('pid 를 모르면 이름이 낡은 프로세스를 앱이라고 우기지 않는다', async () => {
+      const outcome = await memoryCollector.extract(
+        ctx(answers({ [appProcessSql(PKG, null)]: STALE })),
+      )
+      expect(outcome).toEqual({
+        collected: false,
+        reason: { code: 'process_not_in_trace', detail: { package: PKG } },
+      })
     })
   })
 

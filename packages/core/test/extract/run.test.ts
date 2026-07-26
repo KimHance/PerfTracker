@@ -37,6 +37,7 @@ async function makeRun(
     endedAt?: string | null
     adbCommandsDuringSession?: number
     launch?: boolean
+    appPid?: number | null
   } = {},
 ): Promise<string> {
   const runDir = mkdtempSync(join(tmpdir(), 'pt-extract-'))
@@ -60,6 +61,7 @@ async function makeRun(
       options: { launch: overrides.launch ?? true, video: false },
       startup:
         (overrides.launch ?? true) ? { totalTimeMs: 1842, launchState: 'COLD' } : null,
+      ...(overrides.appPid !== undefined ? { appPid: overrides.appPid } : {}),
     },
     {
       ...(endedAt !== null ? { endedAt } : {}),
@@ -383,6 +385,65 @@ describe('extractRun', () => {
     expect(result.measurement_overhead.tracing_processes_cpu_time_ms).toBeNull()
     expect(result.measurement_overhead.tracing_processes_cpu_share_pct).toBeNull()
     expect(result.measurement_overhead.tracing_processes_peak_rss_kb).toBeNull()
+  })
+
+  /**
+   * 에뮬레이터 실측 재현 (Defect 0). `--launch` 로 띄운 앱이 트레이스에는 `zygote64` 라는
+   * 이름으로 들어 있고, capture 단계가 받아 둔 pid 만이 그것을 대상 앱과 이어 준다.
+   */
+  describe('트레이스의 프로세스 이름이 낡았을 때', () => {
+    const STALE_CANDIDATES =
+      '[{"upid":254,"pid":551,"name":"system_server","frames":37},' +
+      '{"upid":309,"pid":6037,"name":"zygote64","frames":11}]'
+
+    function staleRunner(tracePath: string): FakeProcessRunner {
+      return runner(tracePath)
+        .on(`query ${tracePath} ${FRAME_PROCESS_SQL}`, { stdout: `"j"\n"${STALE_CANDIDATES}"\n` })
+        .on(`query ${tracePath} ${frameDurationsSql(309)}`, {
+          stdout: '"j"\n"[8000000,20000000,4000000]"\n',
+        })
+    }
+
+    it('frame 이 zygote64 대신 패키지명을 내고 그 근거를 사유로 남긴다', async () => {
+      const runDir = await makeRun({ appPid: 6037 })
+      const result = await extractRun(runDir, {
+        traceProcessorPath: process.execPath,
+        runner: staleRunner(join(runDir, 'trace.perfetto-trace')),
+      })
+
+      expect(result.metrics.frame.data?.process).toBe(PKG)
+      expect(result.metrics.frame.data?.pid).toBe(6037)
+      expect(result.metrics.frame.status).toBe('partial')
+      expect(result.metrics.frame.reason_code).toBe('process_name_stale_in_trace')
+      expect(result.metrics.frame.reason).toContain('zygote64')
+      // target_app 까지 틀린 이름이 번지지 않는다.
+      expect(result.target_app.render_process).toBe(PKG)
+      expect(result.target_app.pid).toBe(6037)
+    })
+
+    it('pid 가 없던 시절의 session.json 은 추측 대신 render_process_not_found 를 낸다', async () => {
+      const runDir = await makeRun()
+      const result = await extractRun(runDir, {
+        traceProcessorPath: process.execPath,
+        runner: staleRunner(join(runDir, 'trace.perfetto-trace')),
+      })
+
+      expect(result.metrics.frame.data).toBeNull()
+      expect(result.metrics.frame.reason_code).toBe('render_process_not_found')
+      expect(result.target_app.render_process).toBeNull()
+    })
+
+    it('frame 이 값을 못 내도 캡처한 pid 는 target_app 에 남는다', async () => {
+      const runDir = await makeRun({ trace: null, appPid: 6037 })
+      const result = await extractRun(runDir, {
+        traceProcessorPath: process.execPath,
+        runner: new FakeProcessRunner(),
+      })
+
+      expect(result.metrics.frame.status).toBe('failed')
+      expect(result.target_app.pid).toBe(6037)
+      expect(result.target_app.render_process).toBeNull()
+    })
   })
 
   it('오버헤드 쿼리가 터져도 result.json 은 나온다', async () => {

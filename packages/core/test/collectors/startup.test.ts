@@ -2,8 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { startupCollector } from '../../src/collectors/startup.js'
 import type { BaseExtractContext, CaptureFacts } from '../../src/collectors/types.js'
 
-function ctx(capture: CaptureFacts): BaseExtractContext {
-  return { packageName: 'com.foo.bar', env: { sdkInt: 35, dataSources: [] }, capture }
+/** startup 은 `appPid` 를 읽지 않는다 — 기본값으로 채워 두고 각 케이스는 나머지만 말한다. */
+function ctx(capture: Omit<CaptureFacts, 'appPid'> & { appPid?: number | null }): BaseExtractContext {
+  return {
+    packageName: 'com.foo.bar',
+    env: { sdkInt: 35, dataSources: [] },
+    capture: { appPid: null, ...capture },
+  }
 }
 
 describe('startupCollector.supports', () => {

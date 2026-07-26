@@ -1,5 +1,6 @@
 import { sqlQuote } from '../perfetto/traceProcessor/client.js'
 import type { MemoryData, MemoryStat, SystemMemory } from '../schema/result.js'
+import { type AppProcessCandidate, resolveAppProcess, staleNameReason } from './appProcess.js'
 import { PROCESS_STATS_BLOCK, SYS_STATS_BLOCK } from './blocks.js'
 import { bytesToKb } from './num.js'
 import type {
@@ -12,11 +13,7 @@ import type {
 
 const PROCESS_STATS_SOURCE = 'linux.process_stats'
 
-export interface MemoryProcessCandidate {
-  upid: number
-  pid: number
-  name: string | null
-}
+export type MemoryProcessCandidate = AppProcessCandidate
 
 export interface CounterStatRow {
   counter: string
@@ -30,14 +27,19 @@ export interface CounterStatRow {
  * 후보를 좁혀서 가져온다. `glob` 을 쓰는 이유: 패키지명에 `.` 이 흔한데 `like` 에서는 `_` 가
  * 와일드카드라 `com.foo_bar` 가 `com.fooXbar` 를 잡는다. glob 은 `.` 도 `_` 도 리터럴이다.
  * (`*` 와 `?` 와 `[` 는 패키지명에 나올 수 없다.)
+ *
+ * `appPid` 가 있으면 pid 조건도 함께 건다 — 이름이 `zygote64` 로 굳은 프로세스는 이름
+ * 조건으로는 절대 후보에 들어오지 못하기 때문이다 (`collectors/appProcess.ts` 참고).
+ * pid 는 숫자라 인터폴레이션이 안전하다.
  */
-export function appProcessSql(packageName: string): string {
+export function appProcessSql(packageName: string, appPid: number | null): string {
   const exact = sqlQuote(packageName)
   const sub = sqlQuote(`${packageName}:*`)
+  const byPid = appPid !== null ? ` or p.pid = ${Math.trunc(appPid)}` : ''
   return (
     "select json_group_array(json_object('upid', upid, 'pid', pid, 'name', name)) as j from (" +
     `select p.upid as upid, p.pid as pid, p.name as name from process p ` +
-    `where p.name = ${exact} or p.name glob ${sub} order by p.pid)`
+    `where p.name = ${exact} or p.name glob ${sub}${byPid} order by p.pid)`
   )
 }
 
@@ -67,25 +69,6 @@ export const SYSTEM_MEMORY_SQL =
   'cast(max(c.value) as int) as max_v, cast(avg(c.value) as int) as avg_v, count(*) as samples ' +
   'from counter c join counter_track t on c.track_id = t.id ' +
   "where t.type = 'meminfo' group by t.name order by t.name)"
-
-/**
- * 앱이 여러 프로세스를 띄우면(`pkg:remote`, `pkg:push`) 어느 것이 "그 앱" 인지 정해야 한다.
- * 메인 프로세스 이름은 패키지명과 정확히 같다. 그것이 없으면 — 메인이 세션 중에 안 떴다는 뜻이라 —
- * 가장 먼저 뜬(= pid 가 가장 작은) 서브프로세스를 쓰고, 그 이름을 결과에 그대로 남긴다.
- * 합산하지 않는다: 합산한 RSS 는 공유 페이지를 여러 번 세서 실제보다 크다.
- */
-export function selectAppProcess(
-  candidates: MemoryProcessCandidate[],
-  packageName: string,
-): MemoryProcessCandidate | null {
-  const exact = candidates.find((c) => c.name === packageName)
-  if (exact !== undefined) return exact
-
-  const sub = candidates
-    .filter((c) => c.name !== null && c.name.startsWith(`${packageName}:`))
-    .sort((a, b) => a.pid - b.pid)
-  return sub[0] ?? null
-}
 
 function toStat(row: CounterStatRow | undefined): MemoryStat | null {
   if (row === undefined) return null
@@ -152,17 +135,18 @@ export const memoryCollector: TraceCollector<MemoryData> = {
 
   async extract(ctx: ExtractContext): Promise<ExtractOutcome<MemoryData>> {
     const candidates = await ctx.tp.queryJson<MemoryProcessCandidate[]>(
-      appProcessSql(ctx.packageName),
+      appProcessSql(ctx.packageName, ctx.capture.appPid),
     )
-    const picked = selectAppProcess(candidates, ctx.packageName)
-    if (picked === null) {
+    const resolved = resolveAppProcess(candidates, ctx.packageName, ctx.capture.appPid)
+    if (resolved === null) {
       return {
         collected: false,
         reason: { code: 'process_not_in_trace', detail: { package: ctx.packageName } },
       }
     }
 
-    const processName = picked.name ?? String(picked.pid)
+    const picked = resolved.candidate
+    const processName = resolved.name
     const rows = await ctx.tp.queryJson<CounterStatRow[]>(appMemorySql(picked.upid))
     const by = new Map(rows.map((r) => [r.counter, r]))
     const rss = by.get('mem.rss')
@@ -190,6 +174,11 @@ export const memoryCollector: TraceCollector<MemoryData> = {
       system,
     }
 
+    // 사유는 하나만 실을 수 있다. 둘이 겹치면 **정체성** 쪽을 먼저 낸다 —
+    // meminfo 가 없다는 사실은 `system: null` 로 데이터에 이미 드러나지만,
+    // "이 프로세스가 그 앱이라는 근거가 이름이 아니라 pid 였다" 는 데이터 어디에도 안 남는다.
+    const stale = staleNameReason(resolved, ctx.packageName)
+    if (stale !== null) return { collected: true, data, partialReason: stale }
     return system === null
       ? { collected: true, data, partialReason: { code: 'no_meminfo_samples' } }
       : { collected: true, data }

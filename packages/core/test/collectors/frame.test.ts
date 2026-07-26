@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  bucketFrames,
-  buildFrameBuckets,
-  frameCollector,
-  percentile,
-  selectRenderProcess,
-} from '../../src/collectors/frame.js'
+import { bucketFrames, buildFrameBuckets, frameCollector, percentile } from '../../src/collectors/frame.js'
 import { FRAME_PROCESS_SQL, frameDurationsSql } from '../../src/collectors/frame.js'
 import type { CaptureFacts } from '../../src/collectors/types.js'
 import { buildTraceConfig } from '../../src/perfetto/config.js'
@@ -13,10 +7,10 @@ import { TraceProcessor } from '../../src/perfetto/traceProcessor/client.js'
 import { FakeProcessRunner } from '../support/fakeProcessRunner.js'
 
 /**
- * frame 은 `capture` 를 전혀 읽지 않는다 — 이 필드는 `ExtractContext` 가 요구하는 값을
- * 채우기 위한 픽스처일 뿐이다. `--launch` 없이 시작한 세션과 같은 모양을 쓴다.
+ * `--launch` 없이 시작한 세션. 그런 세션에는 앱의 pid 를 알 기회가 없으므로 `appPid` 는 null 이다
+ * (그리고 그때는 앱이 트레이스 시작 전부터 떠 있어 이름이 이미 확정돼 있다).
  */
-const NO_CAPTURE: CaptureFacts = { startup: null, launchRequested: false }
+const NO_CAPTURE: CaptureFacts = { startup: null, launchRequested: false, appPid: null }
 
 describe('buildFrameBuckets', () => {
   it('스펙이 정한 101개 버킷을 만든다', () => {
@@ -91,59 +85,6 @@ describe('percentile', () => {
 
   it('빈 배열은 0', () => {
     expect(percentile([], 50)).toBe(0)
-  })
-})
-
-describe('selectRenderProcess', () => {
-  const pkg = 'com.nhn.android.webtoon'
-
-  it('패키지명과 정확히 같은 프로세스를 고른다', () => {
-    const picked = selectRenderProcess(
-      [
-        { upid: 1, pid: 1, name: '/system/bin/surfaceflinger', frames: 900 },
-        { upid: 2, pid: 2, name: pkg, frames: 100 },
-      ],
-      pkg,
-    )
-    expect(picked?.name).toBe(pkg)
-  })
-
-  it('패키지의 서브프로세스도 인정한다', () => {
-    const picked = selectRenderProcess([{ upid: 2, pid: 2, name: `${pkg}:remote`, frames: 10 }], pkg)
-    expect(picked?.name).toBe(`${pkg}:remote`)
-  })
-
-  it('프레임이 더 많은 다른 앱이 있어도 패키지명이 정확히 일치하면 그쪽을 고른다', () => {
-    const picked = selectRenderProcess(
-      [
-        { upid: 2, pid: 2, name: pkg, frames: 10 },
-        { upid: 3, pid: 3, name: 'com.other.app', frames: 500 },
-      ],
-      pkg,
-    )
-    expect(picked?.name).toBe(pkg)
-  })
-
-  it('패키지 프로세스가 없으면 시스템 프로세스를 뺀 최다 프레임을 고른다', () => {
-    const picked = selectRenderProcess(
-      [
-        { upid: 1, pid: 1, name: '/system/bin/surfaceflinger', frames: 900 },
-        { upid: 3, pid: 3, name: 'com.other.app', frames: 50 },
-      ],
-      pkg,
-    )
-    expect(picked?.name).toBe('com.other.app')
-  })
-
-  it('시스템 프로세스만 있으면 null 을 낸다', () => {
-    // 잠금화면 세션이 실제로 이렇게 나온다 — 450프레임이 전부 surfaceflinger 였다.
-    expect(
-      selectRenderProcess([{ upid: 1, pid: 1, name: '/system/bin/surfaceflinger', frames: 450 }], pkg),
-    ).toBeNull()
-  })
-
-  it('후보가 없으면 null', () => {
-    expect(selectRenderProcess([], pkg)).toBeNull()
   })
 })
 
@@ -263,5 +204,68 @@ describe('frameCollector', () => {
         capture: NO_CAPTURE,
       }),
     ).resolves.toEqual({ collected: false, reason: { code: 'no_frames', detail: { process: pkg } } })
+  })
+
+  /**
+   * 에뮬레이터 실측 트레이스 그대로. `--launch` 는 앱을 force-stop 하고 다시 띄우므로 앱
+   * 프로세스는 항상 갓 fork 된 상태이고, `linux.process_stats` 가 `Process.setArgV0` 이전에
+   * 그 프로세스를 훑으면 이름이 "zygote64" 로 굳는다.
+   */
+  const ZYGOTE_CANDIDATES =
+    '[{"upid":254,"pid":551,"name":"system_server","frames":37},' +
+    '{"upid":234,"pid":398,"name":"/system/bin/surfaceflinger","frames":36},' +
+    '{"upid":309,"pid":6037,"name":"zygote64","frames":11},' +
+    '{"upid":1,"pid":1074,"name":"com.google.android.apps.nexuslauncher","frames":9}]'
+
+  function zygoteRunner(): FakeProcessRunner {
+    return new FakeProcessRunner()
+      .on(`query /t.pftrace ${FRAME_PROCESS_SQL}`, { stdout: `"j"\n"${ZYGOTE_CANDIDATES}"\n` })
+      .on(`query /t.pftrace ${frameDurationsSql(309)}`, {
+        stdout: '"j"\n"[8000000,20000000,4000000]"\n',
+      })
+  }
+
+  const LAUNCHED: CaptureFacts = {
+    startup: { totalTimeMs: 12457, launchState: 'COLD' },
+    launchRequested: true,
+    appPid: 6037,
+  }
+
+  it('트레이스 이름이 zygote64 로 굳어도 캡처한 pid 로 앱을 찾고, 그 이름을 쓰지 않는다', async () => {
+    const pkg = 'com.example.streaming.debug'
+    const outcome = await frameCollector.extract({
+      tp: new TraceProcessor('/bin/tp', '/t.pftrace', zygoteRunner()),
+      packageName: pkg,
+      env: { sdkInt: 35, dataSources: ['android.surfaceflinger.frametimeline'] },
+      capture: LAUNCHED,
+    })
+
+    expect(outcome.collected).toBe(true)
+    if (!outcome.collected) return
+    // 이것이 결함의 핵심이었다: 사실로 팔리는 필드에 틀린 값이 실려 나갔다.
+    expect(outcome.data.process).not.toBe('zygote64')
+    expect(outcome.data.process).toBe(pkg)
+    expect(outcome.data.pid).toBe(6037)
+    expect(outcome.data.total_frames).toBe(3)
+    // 트레이스가 다른 이름을 알고 있다는 사실 자체는 숨기지 않는다.
+    expect(outcome.partialReason).toEqual({
+      code: 'process_name_stale_in_trace',
+      detail: { package: pkg, pid: 6037, trace_name: 'zygote64' },
+    })
+  })
+
+  it('pid 를 모르면 프레임이 가장 많은 프로세스를 앱이라고 추측하지 않는다', async () => {
+    const pkg = 'com.example.streaming.debug'
+    const outcome = await frameCollector.extract({
+      tp: new TraceProcessor('/bin/tp', '/t.pftrace', zygoteRunner()),
+      packageName: pkg,
+      env: { sdkInt: 35, dataSources: ['android.surfaceflinger.frametimeline'] },
+      capture: NO_CAPTURE,
+    })
+
+    expect(outcome).toEqual({
+      collected: false,
+      reason: { code: 'render_process_not_found', detail: { package: pkg } },
+    })
   })
 })

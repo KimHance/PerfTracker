@@ -159,6 +159,8 @@ export async function extractRun(
   const capture: CaptureFacts = {
     startup: session.startup ?? null,
     launchRequested: session.options.launch,
+    // 이 필드가 없던 시절의 session.json 은 undefined 다 — 그것은 "pid 를 모른다" 와 같다.
+    appPid: session.appPid ?? null,
   }
 
   // 레지스트리를 순회한다 — collector 를 배열에 넣기만 하면 되고, 한 메트릭이 터져도
@@ -207,9 +209,11 @@ export async function extractRun(
       state_after: manifest.device.state_after,
     },
     // frame 이 렌더 프로세스를 특정했으면 여기서 채운다 — 손에 쥐고도 안 쓰던 값이다.
+    // frame 이 값을 못 냈어도 pid 는 캡처 때 받아 둔 것이 있을 수 있다. 이름은 그렇지 않다 —
+    // 렌더 프로세스가 어느 것인지는 트레이스를 봐야만 알 수 있으므로 null 로 남긴다.
     target_app: frameData.success
       ? { ...manifest.target_app, render_process: frameData.data.process, pid: frameData.data.pid }
-      : manifest.target_app,
+      : { ...manifest.target_app, pid: manifest.target_app.pid ?? capture.appPid },
     // 키는 collector.id 다. 스키마가 frame 을 알고 나머지는 MetricResult 모양으로 검증한다.
     metrics: metrics as Result['metrics'],
     measurement_overhead: {

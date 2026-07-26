@@ -61,6 +61,9 @@ export function formatSummary(result: Result): string {
       ),
       `          process       ${f.process} (pid ${f.pid})`,
     )
+    // 값이 다 나왔어도 사유가 붙을 수 있다 — 프로세스 이름을 트레이스가 아니라 pid 로
+    // 확인한 세션이 그렇다. 그 단서를 숫자 뒤에 숨기지 않는다.
+    if (frame.reason !== null) lines.push(`          ${`[${frame.reason_code}]`} ${frame.reason}`)
   } else {
     lines.push(statusLine('Frame', frame))
   }

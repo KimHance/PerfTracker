@@ -47,8 +47,20 @@ export const FrameBucketSchema = z.object({
 })
 export type FrameBucket = z.infer<typeof FrameBucketSchema>
 
+/**
+ * 프로세스 이름의 출처를 스키마에 싣는다. 트레이스가 갓 fork 된 앱을 `zygote64` 로 기록하는
+ * 경우가 있어서, 이 도구는 이름이 맞지 않으면 캡처 때 받아 둔 pid 로 대상 앱을 특정한다.
+ * 그때 `status` 는 `partial`, `reason_code` 는 `process_name_stale_in_trace` 다.
+ */
+const PROCESS_NAME_DESCRIPTION =
+  '대상 앱 프로세스의 이름. 트레이스의 프로세스 이름이 패키지명(또는 `패키지:서브프로세스`)과 ' +
+  '일치했거나, 일치하지 않았을 때는 실행 직후 기기에서 받아 둔 pid 로 대상 앱임을 확인한 뒤 ' +
+  '패키지명을 적은 것이다. 후자의 경우 reason_code 가 process_name_stale_in_trace 로 그 사실을 ' +
+  '말한다. 둘 중 어느 것으로도 확인되지 않으면 이 메트릭은 값을 내지 않는다 — ' +
+  '확인되지 않은 이름이 이 자리에 오는 일은 없다.'
+
 export const FrameDataSchema = z.object({
-  process: z.string(),
+  process: z.string().describe(PROCESS_NAME_DESCRIPTION),
   /** 그 프로세스의 pid. target_app.render_process / target_app.pid 가 여기서 채워진다. */
   pid: z.number().int(),
   total_frames: z.number().int().nonnegative(),
@@ -128,7 +140,7 @@ export const SystemMemorySchema = z.object({
 export type SystemMemory = z.infer<typeof SystemMemorySchema>
 
 export const MemoryDataSchema = z.object({
-  process: z.string(),
+  process: z.string().describe(PROCESS_NAME_DESCRIPTION),
   pid: z.number().int(),
   samples: z.number().int().nonnegative(),
   rss: MemoryStatSchema,

@@ -18,6 +18,14 @@ export interface CaptureFacts {
    * `startup` 이 null 인 이유가 "안 켰다"(skipped)인지 "켰는데 못 읽었다"(partial)인지를 가른다.
    */
   launchRequested: boolean
+  /**
+   * `am start -W` 직후 기기가 알려 준 앱 프로세스의 pid. `--launch` 없이 시작했거나
+   * `pidof` 가 답하지 못했으면 null.
+   *
+   * 트레이스만으로는 갓 fork 된 앱 프로세스를 이름으로 찾지 못하는 경우가 있어서 필요하다.
+   * 자세한 이유는 `collectors/appProcess.ts` 에 있다.
+   */
+  appPid: number | null
 }
 
 /**

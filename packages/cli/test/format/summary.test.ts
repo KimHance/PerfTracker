@@ -213,6 +213,27 @@ describe('formatSummary', () => {
     expect(out).toContain('[render_process_not_found]')
   })
 
+  it('값이 있는 Frame 에도 사유가 있으면 그 줄을 감추지 않는다', () => {
+    // 프로세스 이름을 pid 로 확인한 세션이 정확히 이 모양이다 — 숫자는 다 있는데
+    // "그 이름을 어떻게 확인했는가" 라는 단서가 붙는다. 그것을 삼키면 안 된다.
+    const r = result()
+    const out = formatSummary({
+      ...r,
+      metrics: {
+        ...r.metrics,
+        frame: {
+          ...r.metrics.frame,
+          status: 'partial',
+          reason_code: 'process_name_stale_in_trace',
+          reason: '트레이스는 이 프로세스(pid 6037)를 "zygote64" 라는 이름으로 기록했습니다.',
+        },
+      },
+    })
+    expect(out).toContain('Frame     partial')
+    expect(out).toContain('[process_name_stale_in_trace]')
+    expect(out).toContain('zygote64')
+  })
+
   it('좋다/나쁘다 판정을 넣지 않는다', () => {
     expect(formatSummary(result())).not.toMatch(/느림|양호|나쁨|권장|개선|PASS|FAIL/)
   })
