@@ -207,6 +207,36 @@ describe('frameCollector', () => {
   })
 
   /**
+   * M9. `bucketFrames` 가 던지는 `RangeError` 는 `runCollector` 의 포괄 catch 에 걸려
+   * `query_failed` 로 렌더됐다 — "트레이스 쿼리에 실패했습니다: 프레임 duration 이 버킷 범위
+   * 밖입니다" 라는, 원인을 잘못 짚는 문장이 된다. 쿼리는 성공했다.
+   * SQL 의 `dur >= 0` 때문에 도달하기 어렵지만, 도달하면 사유가 틀리는 것이 문제다.
+   */
+  it('버킷 범위 밖 duration 은 쿼리 실패가 아니라 그 자체의 사유로 낸다', async () => {
+    const pkg = 'com.nhn.android.webtoon'
+    const runner = new FakeProcessRunner()
+      .on(`query /t.pftrace ${FRAME_PROCESS_SQL}`, {
+        stdout: `"j"\n"[{"upid":2,"pid":24193,"name":"${pkg}","frames":2}]"\n`,
+      })
+      .on(`query /t.pftrace ${frameDurationsSql(2)}`, {
+        stdout: '"j"\n"[8000000,-1000000]"\n',
+      })
+    const tp = new TraceProcessor('/bin/tp', '/t.pftrace', runner)
+
+    await expect(
+      frameCollector.extract({
+        tp,
+        packageName: pkg,
+        env: { sdkInt: 36, dataSources: ['android.surfaceflinger.frametimeline'] },
+        capture: NO_CAPTURE,
+      }),
+    ).resolves.toEqual({
+      collected: false,
+      reason: { code: 'frame_duration_out_of_range', detail: { process: pkg, duration_ms: -1 } },
+    })
+  })
+
+  /**
    * 에뮬레이터 실측 트레이스 그대로. `--launch` 는 앱을 force-stop 하고 다시 띄우므로 앱
    * 프로세스는 항상 갓 fork 된 상태이고, `linux.process_stats` 가 `Process.setArgV0` 이전에
    * 그 프로세스를 훑으면 이름이 "zygote64" 로 굳는다.

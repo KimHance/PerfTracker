@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { AdbClient } from '../adb/client.js'
 import { shellQuote } from '../adb/shell.js'
-import { collectTraceConfigBlocks, unsupportedReasons } from '../collectors/registry.js'
+import { collectTraceConfigBlocks, supportedCollectors, unsupportedReasons } from '../collectors/registry.js'
 import type { AmStartResult } from '../collectors/types.js'
 import { probeDevice } from '../device/probe.js'
 import { collectDeviceStatic } from '../device/spec.js'
@@ -232,8 +232,18 @@ export async function startSession(
   const remotePath = remoteTracePath(perfettoKey)
   const blocks = collectTraceConfigBlocks(env)
   if (blocks.length === 0) {
+    // "수집 가능한 항목이 없습니다" 는 사실이 아니다 — startup 은 트레이스 없이도 수집된다.
+    // 거부 자체는 맞다(start 는 트레이스 세션을 여는 명령이다). 이유를 정확히 말한다.
+    const traceFree = supportedCollectors(env)
+      .filter((c) => !c.needsTrace)
+      .map((c) => c.id)
     throw new SessionStateError(
-      `이 기기에서 수집 가능한 항목이 없습니다.\n  ${unsupportedReasons(env).join('\n  ')}`,
+      `이 기기에서는 트레이스로 수집 가능한 항목이 없어 세션을 시작할 수 없습니다.\n  ` +
+        unsupportedReasons(env).join('\n  ') +
+        (traceFree.length > 0
+          ? `\n트레이스 없이도 수집되는 항목(${traceFree.join(', ')})은 있지만, ` +
+            `start 는 트레이스 세션을 여는 명령이라 그것만으로는 시작하지 않습니다.`
+          : ''),
     )
   }
   await startDetachedSession(ctx.adb, {

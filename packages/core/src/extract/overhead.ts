@@ -23,6 +23,11 @@ export function isTracingProcess(name: string | null): boolean {
 }
 
 export interface TracingCounterRow {
+  /**
+   * 프로세스의 정체성. **이름이 아니라 이것으로 접는다** — 같은 이름의 프로세스가 둘이면
+   * 이름으로 접었을 때 peak RSS 가 합이 아니라 max 가 되어, describe 가 약속한 상계가 깨진다.
+   */
+  upid: number
   process: string | null
   counter: string
   first: number
@@ -34,9 +39,9 @@ export interface TracingCounterRow {
  * 최종 판정은 `isTracingProcess` 가 호스트에서 한다 — 그래야 규칙이 기기 없이 테스트된다.
  */
 export const TRACING_OVERHEAD_SQL =
-  "select json_group_array(json_object('process', name, 'counter', counter, " +
+  "select json_group_array(json_object('upid', upid, 'process', name, 'counter', counter, " +
   "'first', first_value, 'last', last_value)) as j from (" +
-  'select p.name as name, t.name as counter, ' +
+  'select p.upid as upid, p.name as name, t.name as counter, ' +
   'cast(min(c.value) as int) as first_value, cast(max(c.value) as int) as last_value ' +
   'from counter c join process_counter_track t on c.track_id = t.id ' +
   'join process p on t.upid = p.upid ' +
@@ -65,7 +70,9 @@ const RUNTIME_COUNTERS = new Set(['runtime.user_ns', 'runtime.kernel_ns'])
 export function summarizeTracingCost(rows: TracingCounterRow[]): TracingCost {
   let cpuNs = 0
   let sawRuntime = false
-  const peakRssByProcess = new Map<string, number>()
+  // 키는 upid 다. 이름으로 접으면 같은 이름의 프로세스가 둘일 때 합이 아니라 max 가 되어
+  // "프로세스별 최댓값의 합" 이라는 상계가 성립하지 않는다.
+  const peakRssByProcess = new Map<number, number>()
 
   for (const row of rows) {
     if (!isTracingProcess(row.process)) continue
@@ -80,8 +87,7 @@ export function summarizeTracingCost(rows: TracingCounterRow[]): TracingCost {
     }
 
     if (row.counter === 'mem.rss') {
-      const key = row.process ?? ''
-      peakRssByProcess.set(key, Math.max(peakRssByProcess.get(key) ?? 0, row.last))
+      peakRssByProcess.set(row.upid, Math.max(peakRssByProcess.get(row.upid) ?? 0, row.last))
     }
   }
 

@@ -370,6 +370,34 @@ describe('startSession — --launch 안전장치 (I2)', () => {
   })
 })
 
+/**
+ * M3. 트레이스를 하나도 못 켜는 기기에서 세션을 거부하는 것은 맞다 — start 는 트레이스
+ * 세션을 여는 명령이다. 하지만 "수집 가능한 항목이 없습니다" 는 사실이 아니었다:
+ * startup 은 트레이스 없이도 수집된다. M2 가 트레이스 없는 collector 를 들이면서 생긴 불일치다.
+ */
+describe('startSession — 트레이스를 못 켜는 기기의 거부 문구', () => {
+  /** sdk 30(frame 미달) + 데이터소스 하나도 미등록 → 트레이스 블록이 0개. */
+  function traceLessDevice(): ReturnType<typeof startableDevice> {
+    return startableDevice((r) => {
+      r.on(`-s ${SERIAL} shell getprop ro.build.version.sdk`, { stdout: '30\n' }).on(
+        `-s ${SERIAL} shell perfetto --query`,
+        { stdout: 'NAME                                     PRODUCER\n' },
+      )
+    })
+  }
+
+  it('트레이스로 못 낸다고 말하지, 아무것도 못 낸다고 말하지 않는다', async () => {
+    const h = start({ runner: traceLessDevice() })
+
+    await expect(h.result).rejects.toBeInstanceOf(SessionStateError)
+    await h.result.catch((e: Error) => {
+      expect(e.message).toContain('트레이스')
+      // startup 은 이 기기에서도 수집된다 — 그 사실을 지우지 않는다.
+      expect(e.message).toContain('startup')
+    })
+  })
+})
+
 describe('startSession — --force 는 기기 쪽 세션도 정리한다 (I3)', () => {
   it('옛 perfetto 세션을 멈추고 남은 트레이스를 지운다', async () => {
     const dirs = tempDirs()

@@ -1,4 +1,4 @@
-import type { CpuData, LogData, MemoryData, Result, StartupData } from '@perftracker/core'
+import type { CpuData, LogData, LogEvent, MemoryData, Result, StartupData } from '@perftracker/core'
 
 const num = (v: number): string => v.toLocaleString('en-US')
 const mb = (kb: number): string => `${num(Math.round(kb / 1024))}MB`
@@ -116,11 +116,13 @@ export function formatSummary(result: Result): string {
   const log = result.metrics.log
   if (log?.data != null) {
     const l = log.data as LogData
+    // null 은 "못 셌다" 다. 0 으로 찍으면 "재 봤더니 크래시가 없었다" 가 되어 정반대 뜻이 된다.
+    const events = (v: LogEvent[] | null): string => (v === null ? 'n/a' : String(v.length))
     lines.push(
       valueLine(
         'Log',
         log.status,
-        `crash ${l.crashes.length} · ANR ${l.anrs.length} · E ${num(l.by_priority.error)} · W ${num(l.by_priority.warn)} (device-wide, ${l.min_prio})`,
+        `crash ${events(l.crashes)} · ANR ${events(l.anrs)} · E ${num(l.by_priority.error)} · W ${num(l.by_priority.warn)} (device-wide, ${l.min_prio})`,
       ),
     )
     if (log.reason !== null) lines.push(`          ${`[${log.reason_code}]`} ${log.reason}`)

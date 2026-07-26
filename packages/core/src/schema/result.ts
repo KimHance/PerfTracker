@@ -223,7 +223,16 @@ const LOG_EVENT_SCOPE =
   '원문을 그대로 실으므로 누구 것인지는 tag/message 로 직접 읽어야 한다. ' +
   `crashes 와 anrs 를 합쳐 최대 ${'200'}건까지만 담는다(ts 오름차순). ` +
   '상한에 닿으면 status 가 partial 이 되고 reason_code 가 log_events_truncated 로 그 사실을 ' +
-  '말한다 — 그 뒤에 더 있었는지는 이 결과로 알 수 없다. 개수(total/by_priority)는 잘리지 않는다.'
+  '말한다 — 그 뒤에 더 있었는지는 이 결과로 알 수 없다. 개수(total/by_priority)는 잘리지 않는다. '
+/**
+ * `[]` 와 `null` 은 다른 사실이다. 이 구분이 없던 동안, 이벤트 쿼리가 실패한 세션이
+ * "크래시 0건" 을 사실처럼 실어 냈다 — 같은 collector 가 빈 로그 버퍼에 대해서는
+ * `no_log_entries` 로 거부하던 바로 그 일이다.
+ */
+const LOG_EVENT_NULL =
+  '**null 은 세지 못했다는 뜻이다** — 이벤트 쿼리가 실패한 경우이며 reason_code 가 ' +
+  'query_failed 로 그 사실을 말한다. 빈 배열([])은 "쿼리는 성공했고 관측된 것이 없다" 이다. ' +
+  '둘을 같은 뜻으로 읽으면 안 된다.'
 
 export const LogDataSchema = z.object({
   min_prio: z
@@ -258,17 +267,21 @@ export const LogDataSchema = z.object({
     ),
   crashes: z
     .array(LogEventSchema)
+    .nullable()
     .describe(
       `세션 동안 관측된 크래시(AndroidRuntime 의 FATAL EXCEPTION, libc 의 Fatal signal). ${LOG_SCOPE}` +
         '크래시는 앱이 아니라 시스템이 찍으므로 앱 프로세스로 거르면 정작 그 줄이 사라진다. ' +
-        LOG_EVENT_SCOPE,
+        LOG_EVENT_SCOPE +
+        LOG_EVENT_NULL,
     ),
   anrs: z
     .array(LogEventSchema)
+    .nullable()
     .describe(
       `세션 동안 관측된 ANR(ActivityManager 의 "ANR in ..."). ${LOG_SCOPE}` +
         'ANR 은 system_server 가 찍는다. ' +
-        LOG_EVENT_SCOPE,
+        LOG_EVENT_SCOPE +
+        LOG_EVENT_NULL,
     ),
 })
 export type LogData = z.infer<typeof LogDataSchema>

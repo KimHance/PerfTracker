@@ -128,8 +128,11 @@ export const logCollector: TraceCollector<LogData> = {
         error: countOf(PRIO_ERROR),
         fatal: countOf(PRIO_FATAL),
       },
-      crashes,
-      anrs,
+      // 쿼리가 실패했으면 **null** 이다. 빈 배열은 "관측된 것이 없다" 는 사실 주장인데,
+      // 못 센 것을 그렇게 실으면 이 collector 가 스스로 내세운 규칙(빈 로그 버퍼를 0 으로
+      // 보고하지 않는다, 위 D6)을 두 줄 아래에서 뒤집는 것이 된다.
+      crashes: eventFailure === null ? crashes : null,
+      anrs: eventFailure === null ? anrs : null,
     }
 
     // 사유는 하나만 실린다. 쿼리 실패가 먼저다 — 그쪽은 배열이 잘린 것이 아니라 비어 있다.

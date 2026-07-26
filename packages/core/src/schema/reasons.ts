@@ -24,6 +24,12 @@ export const METRIC_REASON_CODES = [
   'render_process_not_found',
   /** 프로세스는 찾았지만 완료된 프레임이 하나도 없다. detail: process */
   'no_frames',
+  /**
+   * 프레임 duration 이 버킷에 넣을 수 없는 값이었다 (음수 또는 유한하지 않음).
+   * SQL 이 `dur >= 0` 으로 거르므로 정상 트레이스에서는 나오지 않는다.
+   * detail: process, duration_ms
+   */
+  'frame_duration_out_of_range',
   /** trace_processor 쿼리가 실패했다. detail: message */
   'query_failed',
   /** `--launch` 없이 시작한 세션이라 시작 시간을 잴 기회 자체가 없었다. */
@@ -93,6 +99,10 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
   render_process_not_found: (d) =>
     `대상 앱(${String(d['package'])})의 렌더 프로세스를 트레이스에서 찾지 못했습니다.`,
   no_frames: (d) => `렌더 프로세스(${String(d['process'])})에서 완료된 프레임을 찾지 못했습니다.`,
+  frame_duration_out_of_range: (d) =>
+    `렌더 프로세스(${String(d['process'])})의 프레임 duration 에 버킷 범위 밖의 값이 ` +
+    `있습니다 (${String(d['duration_ms'])}ms) — 트레이스 쿼리는 성공했고 값 자체가 집계할 수 ` +
+    `없는 값입니다.`,
   query_failed: (d) => `트레이스 쿼리에 실패했습니다: ${String(d['message'])}`,
   launch_not_requested: () =>
     '--launch 없이 시작한 세션이라 앱 시작 시간을 재지 않았습니다.',

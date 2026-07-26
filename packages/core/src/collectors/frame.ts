@@ -37,16 +37,27 @@ export function buildFrameBuckets(): FrameBucket[] {
 }
 
 /**
+ * 버킷에 넣을 수 있는 값인가. `bucketFrames` 와 collector 가 **같은 규칙**을 쓰게 하는 자리다 —
+ * 규칙이 둘로 갈리면 하나는 던지고 하나는 통과시키는 상태가 생긴다.
+ */
+export function isBucketableDuration(ms: number): boolean {
+  return Number.isFinite(ms) && ms >= 0
+}
+
+/**
  * 경계는 [from, to) 반개구간이다.
  * 범위 밖(음수·NaN) 입력은 조용히 오버플로 버킷으로 흘리지 않고 거부한다 — 그렇게 하면
  * `dur = -1` 짜리 미완결 slice 가 구글의 700ms frozen frame 기준에 대응하는 자리에 섞인다.
+ *
+ * 이 함수는 순수 함수의 불변식으로 던진다. collector 는 던지게 두지 않고 **부르기 전에**
+ * 같은 규칙으로 걸러 메트릭 사유로 바꾼다 (`frame_duration_out_of_range`).
  */
 export function bucketFrames(durationsMs: number[]): FrameBucket[] {
   const buckets = buildFrameBuckets()
   const overflow = buckets[buckets.length - 1]!
 
   for (const ms of durationsMs) {
-    if (!Number.isFinite(ms) || ms < 0) {
+    if (!isBucketableDuration(ms)) {
       throw new RangeError(`프레임 duration 이 버킷 범위 밖입니다: ${ms}`)
     }
     if (ms >= OVERFLOW_FROM_MS) {
@@ -132,6 +143,21 @@ export const frameCollector: TraceCollector<FrameData> = {
     }
 
     const durationsMs = durationsNs.map((ns) => ns / 1e6)
+
+    // `bucketFrames` 가 던지는 RangeError 를 `runCollector` 의 포괄 catch 까지 흘려보내면
+    // "트레이스 쿼리에 실패했습니다: ..." 로 렌더된다 — 쿼리는 성공했으므로 사유가 틀린다.
+    // SQL 의 `dur >= 0` 덕에 도달하기 어렵지만, 도달할 때 맞는 말을 하는 것이 요점이다.
+    const outOfRange = durationsMs.find((ms) => !isBucketableDuration(ms))
+    if (outOfRange !== undefined) {
+      return {
+        collected: false,
+        reason: {
+          code: 'frame_duration_out_of_range',
+          detail: { process: processName, duration_ms: outOfRange },
+        },
+      }
+    }
+
     const sorted = [...durationsMs].sort((a, b) => a - b)
     const within = durationsMs.filter((ms) => ms <= FRAME_BUDGET_MS).length
 

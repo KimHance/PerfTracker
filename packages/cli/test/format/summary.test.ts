@@ -288,6 +288,29 @@ describe('formatSummary — M2 메트릭', () => {
     expect(formatSummary(result())).toContain('crash 0 · ANR 0 · E 23 · W 118')
   })
 
+  it('크래시/ANR 을 못 셌으면 0 이라고 찍지 않는다', () => {
+    // null 은 "재 봤더니 없었다" 가 아니라 "못 셌다" 다 (이벤트 쿼리 실패).
+    const out = formatSummary(
+      result({
+        log: {
+          status: 'partial',
+          source: 'perfetto: android.log (device-wide, min_prio=PRIO_WARN)',
+          reason_code: 'query_failed',
+          reason: '트레이스 쿼리에 실패했습니다: no such table',
+          data: {
+            min_prio: 'PRIO_WARN',
+            total: 142,
+            by_priority: { warn: 118, error: 23, fatal: 1 },
+            crashes: null,
+            anrs: null,
+          },
+        },
+      }),
+    )
+    expect(out).toContain('crash n/a · ANR n/a')
+    expect(out).not.toContain('crash 0')
+  })
+
   it('수집되지 않은 항목은 상태와 사유 코드를 같은 자리에 보여준다', () => {
     const out = formatSummary(
       result({

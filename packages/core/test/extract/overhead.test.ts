@@ -33,12 +33,12 @@ describe('isTracingProcess', () => {
 
 /** 에뮬레이터 실측 12초 캡처의 값 그대로. */
 const REAL_TRACING_ROWS: TracingCounterRow[] = [
-  { process: '/system/bin/traced_probes', counter: 'mem.rss', first: 7593984, last: 7856128 },
-  { process: '/system/bin/traced_probes', counter: 'runtime.kernel_ns', first: 30000000, last: 140000000 },
-  { process: '/system/bin/traced_probes', counter: 'runtime.user_ns', first: 30000000, last: 70000000 },
-  { process: '/system/bin/traced', counter: 'mem.rss', first: 3346432, last: 3477504 },
-  { process: '/system/bin/traced', counter: 'runtime.kernel_ns', first: 10000000, last: 10000000 },
-  { process: '/system/bin/traced', counter: 'runtime.user_ns', first: 0, last: 0 },
+  { upid: 12, process: '/system/bin/traced_probes', counter: 'mem.rss', first: 7593984, last: 7856128 },
+  { upid: 12, process: '/system/bin/traced_probes', counter: 'runtime.kernel_ns', first: 30000000, last: 140000000 },
+  { upid: 12, process: '/system/bin/traced_probes', counter: 'runtime.user_ns', first: 30000000, last: 70000000 },
+  { upid: 9, process: '/system/bin/traced', counter: 'mem.rss', first: 3346432, last: 3477504 },
+  { upid: 9, process: '/system/bin/traced', counter: 'runtime.kernel_ns', first: 10000000, last: 10000000 },
+  { upid: 9, process: '/system/bin/traced', counter: 'runtime.user_ns', first: 0, last: 0 },
 ]
 
 describe('summarizeTracingCost', () => {
@@ -63,7 +63,7 @@ describe('summarizeTracingCost', () => {
   it('트레이싱 프로세스가 아닌 행은 무시한다 — SQL 이 느슨해도 여기서 걸린다', () => {
     expect(
       summarizeTracingCost([
-        { process: 'com.foo.bar', counter: 'mem.rss', first: 0, last: 999_999_999 },
+        { upid: 3, process: 'com.foo.bar', counter: 'mem.rss', first: 0, last: 999_999_999 },
         ...REAL_TRACING_ROWS,
       ]),
     ).toEqual({ cpuTimeMs: 150, peakRssKb: 11068 })
@@ -72,10 +72,26 @@ describe('summarizeTracingCost', () => {
   it('단조성이 깨진 CPU 행은 버린다', () => {
     expect(
       summarizeTracingCost([
-        { process: 'traced', counter: 'runtime.user_ns', first: 500_000_000, last: 0 },
-        { process: 'traced', counter: 'runtime.kernel_ns', first: 0, last: 20_000_000 },
+        { upid: 9, process: 'traced', counter: 'runtime.user_ns', first: 500_000_000, last: 0 },
+        { upid: 9, process: 'traced', counter: 'runtime.kernel_ns', first: 0, last: 20_000_000 },
       ]),
     ).toEqual({ cpuTimeMs: 20, peakRssKb: null })
+  })
+
+  /**
+   * M5. describe 가 약속한 것은 "프로세스별 최댓값의 **합**"(= 동시 최대의 상계)이다.
+   * 이름으로 접으면 같은 이름의 프로세스가 둘일 때 합이 아니라 max 가 되어 상계가 깨진다 —
+   * 지금 대상 셋이 싱글턴이라 실무상 무해할 뿐이고, 약속은 이미 거짓이 된다.
+   * 프로세스의 정체성은 이름이 아니라 upid 다 (SQL 도 upid 로 group by 한다).
+   */
+  it('같은 이름의 프로세스가 둘이면 max 가 아니라 합이다 — 상계가 상계여야 한다', () => {
+    expect(
+      summarizeTracingCost([
+        { upid: 9, process: '/system/bin/traced', counter: 'mem.rss', first: 0, last: 3_000_000 },
+        { upid: 41, process: '/system/bin/traced', counter: 'mem.rss', first: 0, last: 2_000_000 },
+      ]),
+      // 3,000,000 + 2,000,000 바이트 = 4,883 kB. 이름으로 접으면 2,930 kB(= max)가 된다.
+    ).toEqual({ cpuTimeMs: null, peakRssKb: 4883 })
   })
 })
 

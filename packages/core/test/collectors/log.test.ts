@@ -173,14 +173,29 @@ describe('logCollector.extract', () => {
     expect(outcome.partialReason).toBeUndefined()
   })
 
-  it('이벤트 쿼리가 터져도 개수는 살리고 partial 로 남긴다', async () => {
+  /**
+   * M2. 이 collector 는 "빈 로그 버퍼를 0 으로 보고하지 않는다" 를 원칙으로 내세운다
+   * (`no_log_entries`). 그런데 이벤트 쿼리가 터졌을 때는 `crashes: []` / `anrs: []` 를
+   * 사실처럼 실었다 — 같은 원칙이 두 줄 아래에서 뒤집힌 것이다. CLI 도 "crash 0 · ANR 0" 을
+   * 찍었다. 못 센 것은 빈 배열이 아니라 **null** 이다.
+   */
+  it('이벤트 쿼리가 터지면 개수는 살리되 크래시/ANR 은 0 이 아니라 null 이다', async () => {
     const outcome = await logCollector.extract(
       ctx({ [LOG_COUNT_SQL]: COUNTS, [LOG_EVENT_SQL]: new Error('no such table: android_logs') }),
     )
     expect(outcome.collected).toBe(true)
     if (!outcome.collected) return
     expect(outcome.data.total).toBe(142)
-    expect(outcome.data.crashes).toEqual([])
+    expect(outcome.data.crashes).toBeNull()
+    expect(outcome.data.anrs).toBeNull()
     expect(outcome.partialReason).toEqual({ code: 'query_failed', detail: { message: 'no such table: android_logs' } })
+  })
+
+  it('쿼리가 성공하고 아무것도 없으면 그때는 빈 배열이다 — null 과 뜻이 다르다', async () => {
+    const outcome = await logCollector.extract(ctx({ [LOG_COUNT_SQL]: COUNTS, [LOG_EVENT_SQL]: [] }))
+    expect(outcome.collected).toBe(true)
+    if (!outcome.collected) return
+    expect(outcome.data.crashes).toEqual([])
+    expect(outcome.data.anrs).toEqual([])
   })
 })
