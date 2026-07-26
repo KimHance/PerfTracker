@@ -342,12 +342,33 @@ describe('stopSession — 프로세스를 넘어온 위반 카운트 (I4)', () =
     expect(manifestOf(session.runDir).adb_commands_during_session).toBe(2)
   })
 
-  it('진행 중인 run 디렉토리를 옮겨도 stop 이 사람이 읽을 수 있는 오류를 낸다', async () => {
+  /**
+   * I-1 과 **같은 계열**을 하나 더 발견해서 함께 막는다.
+   *
+   * `stop.ts` 는 매니페스트 읽기와 스냅샷 명세 확정(`collectSnapshotSpecs`)을 기기에 손대기
+   * **전에** 한다고 주석으로 단언한다: "그 평가가 트레이스 회수·삭제 뒤에 있으면 기기의
+   * 트레이스를 이미 지운 상태에서 던지게 된다 — 정본이 사라진 뒤의 실패다."
+   * 두 줄 다 던질 수 있다 (`parseVersionedJson`, `mergeSnapshotSpecs` 의 key 충돌 —
+   * M4 가 Power 로 `dumpsys battery` 를 선언하면 바로 그 길이다).
+   *
+   * 그런데 옛 단언은 "SessionStateError 가 난다" 뿐이었다. 두 줄을 회수 뒤로 옮겨도
+   * 그 단언은 **그대로 통과한다** — 예외 타입은 같고, 그때는 이미 `pull` 과 `rm -f` 가
+   * 끝난 뒤라 기기의 정본이 사라진 상태다. C1 이 Critical 이었던 바로 그 손실이다.
+   *
+   * 그래서 예외 타입이 아니라 **그 시점에 기기로 나간 명령이 하나도 없다는 것**을 단언한다.
+   */
+  it('매니페스트를 읽지 못하면 기기를 건드리기 전에 던진다 — 정본이 사라진 뒤에 실패하지 않는다', async () => {
     const { session, home } = await startedSession()
     writeFileSync(join(session.runDir, 'capture.json'), '{not json', 'utf8')
+    const runner = stoppableDevice(session)
 
     await expect(
-      stopSession({ adb: clientFor(stoppableDevice(session)), serial: SERIAL }, session, LATER, home),
+      stopSession({ adb: clientFor(runner), serial: SERIAL }, session, LATER, home),
     ).rejects.toBeInstanceOf(SessionStateError)
+
+    // 한 줄이 전부다: 기기에 아무것도 보내지 않았으면 트레이스도 세션도 그대로다.
+    expect(runner.commands).toEqual([])
+    // 포인터도 살아 있어야 다음 stop 이 같은 세션을 다시 집는다.
+    expect(await readActiveSession(SERIAL, home)).not.toBeNull()
   })
 })
