@@ -8,6 +8,35 @@ adb 로 붙어서 Perfetto 트레이스를 기기에 남기고, 그것을 호스
 
 측정 대상은 **릴리즈 빌드로 설치된 아무 앱**입니다. 내가 만든 앱이든 아니든 상관없습니다.
 
+> **이 저장소에서 작업을 이어받는다면** [`docs/STATUS.md`](docs/STATUS.md) 를 먼저 보세요 —
+> 어디까지 왔고, 무엇을 확인하지 못했고, 다음에 무엇을 할 차례인지가 거기 있습니다.
+> 이 README 는 **도구를 쓰는 법**을 말하고, 그쪽은 **프로젝트의 상태**를 말합니다.
+
+---
+
+## 무엇을 재는가 — 지표 7개
+
+`result.json` 의 `metrics` 아래에 이 일곱 개가 들어갑니다. 키가 곧 수집기 id 입니다.
+
+| 지표 | 귀속 범위 | 무엇인가 | 어디서 나오는가 |
+| --- | --- | --- | --- |
+| [`frame`](#metricsframe) | 앱 | 프레임별 실제 소요 시간의 분포·백분위 | perfetto `android.surfaceflinger.frametimeline` |
+| [`startup`](#metricsstartup) | 앱 | 콜드 스타트 시간 (`--launch` 세션만) | `am start -W` — **유일하게 트레이스를 안 읽는 지표** |
+| [`cpu`](#metricscpu) | **앱 + 기기 전역** | 앱 프로세스의 CPU 시간, 기기 전체 사용률·코어별·주파수 | perfetto `linux.sys_stats` + `linux.process_stats` |
+| [`memory`](#metricsmemory) | **앱 + 기기 전역** | 앱 프로세스의 RSS 통계, 기기 전체 meminfo | perfetto `linux.process_stats` + `linux.sys_stats` |
+| [`log`](#metricslog) | **앱 + 기기 전역** | 우선순위별 로그 개수, 크래시·ANR 목록 | perfetto `android.log` |
+| [`thermal`](#metricsthermal) | 기기 전역 | 센서별 온도의 세션 전/후 차이 | `dumpsys thermalservice` 전/후 스냅샷 |
+| [`network`](#metricsnetwork) | **uid** | 세션 동안 오간 바이트·패킷 | `dumpsys netstats` 전/후 스냅샷 |
+
+범위 열을 그냥 넘기지 마세요. 이 도구가 가장 자주 오해받은 자리입니다:
+
+- **`cpu` · `memory` · `log` 는 앱 단위와 기기 전역을 함께 싣고, 필드 이름이 그 범위를
+  말합니다.** `app` 아래는 대상 앱의 것이고 `device_` 로 시작하는 것은 기기 전체의 것입니다.
+  같은 세션에서 두 값이 **45배** 차이 난 적이 있습니다 (로그: 앱 37줄 vs 기기 전역 1,507줄).
+- **`thermal` 은 기기 전역뿐입니다.** 앱별 온도는 물리적으로 존재하지 않습니다.
+- **`network` 은 패키지가 아니라 uid 단위입니다.** 실기기에서 uid 하나를 86개 패키지가
+  공유하는 것을 봤습니다. 귀속 범위의 정본은 `shared_uid_packages` 배열입니다.
+
 ---
 
 ## 이 도구가 지키는 두 가지
@@ -68,15 +97,23 @@ adb 로 붙어서 Perfetto 트레이스를 기기에 남기고, 그것을 호스
 
 ## 설치
 
-Node 20.19 이상이 필요합니다.
+**Node 20.19 이상**이 필요합니다 (`package.json` 의 `engines`). npm workspaces 를 쓰는
+모노레포라 **저장소 루트에서 한 번** `npm install` 하면 `packages/core` 와 `packages/cli` 가
+함께 설치되고 서로 링크됩니다. 패키지 디렉토리 안에서 따로 설치하지 마세요.
 
 ```bash
-git clone <repo> && cd PerfTracker
+git clone https://github.com/KimHance/PerfTracker.git && cd PerfTracker
 npm install
-npm run build
+npm run build        # tsc --build. dist/ 가 있어야 CLI 가 돕니다
+npx perftracker doctor
 ```
 
-`adb` 는 다음 순서로 찾습니다. 하나만 되면 됩니다.
+런타임 의존성은 `zod` 와 `commander` 둘뿐입니다. 안드로이드 SDK 도, Gradle 도,
+JDK 도 필요 없습니다 — 이 도구는 앱을 빌드하지 않습니다.
+
+### `adb`
+
+다음 순서로 찾습니다. 하나만 되면 됩니다.
 
 1. `--adb <경로>` 옵션
 2. `PERFTRACKER_ADB` 환경변수
@@ -84,12 +121,45 @@ npm run build
 4. `ANDROID_HOME` / `ANDROID_SDK_ROOT` 의 `platform-tools/`
 5. OS 기본 SDK 경로 (macOS 는 `~/Library/Android/sdk`)
 
-기기 쪽 준비물은 **USB 디버깅 켜기**가 전부입니다. Android 12(API 31) 이상이어야
-프레임 타이밍(`android.surfaceflinger.frametimeline`)을 얻을 수 있습니다.
+**`adb` 가 `PATH` 에 없는 것이 드문 일이 아닙니다.** Android Studio 만 깔면 보통 그렇습니다.
+이 저장소의 개발 맥에서도 그랬고, 실제 경로는
+`~/Library/Android/sdk/platform-tools/adb` 였습니다. 4·5번 규칙이 그 경우를 덮으므로
+대개는 아무것도 안 해도 되지만, SDK 를 기본 위치가 아닌 곳에 두었다면:
 
-트레이스 파서(`trace_processor_shell`)는 첫 `stop` 때 자동으로 내려받아
-`~/.perftracker/bin/` 에 SHA256 검증과 함께 캐시합니다. 네트워크를 쓰고 싶지 않으면
-`--offline` 을 주고, 바이너리를 직접 지정하려면 `PERFTRACKER_TRACE_PROCESSOR` 를 쓰세요.
+```bash
+export PERFTRACKER_ADB="$HOME/Library/Android/sdk/platform-tools/adb"
+# 또는
+export ANDROID_HOME="$HOME/Library/Android/sdk"
+```
+
+`perftracker doctor` 가 무엇을 찾았는지 그대로 보여줍니다. 막히면 거기서부터 보세요.
+
+### 기기
+
+준비물은 **USB 디버깅 켜기**가 전부입니다. 기기에 아무것도 설치하지 않고 루팅도 필요 없습니다.
+
+- **Android 12(API 31) 이상**이어야 프레임 타이밍(`android.surfaceflinger.frametimeline`)을
+  얻을 수 있습니다. 그 아래에서는 `metrics.frame` 이 `unsupported` / `sdk_too_low` 입니다.
+- **`metrics.network` 은 Android 14(sdk 34) 이상**에서만 나옵니다 (아래 해당 절 참고).
+- **기기를 하나만 연결해 두세요.** 에뮬레이터를 함께 켜 두면 기기가 둘이 되어
+  `AmbiguousDeviceError` 가 납니다. 굳이 둘을 두려면 `-d, --device <serial>` 로 지목하세요
+  (단 온-디바이스 테스트는 serial 을 넘기지 않습니다 — 아래 "개발" 참고).
+
+### 트레이스 파서 (`trace_processor_shell`)
+
+**따로 설치하지 않습니다.** 첫 `stop`(또는 `extract`) 때 자동으로 내려받아
+`~/.perftracker/bin/` 에 캐시합니다. 받은 바이트는 **크기와 SHA256 을 둘 다 검증**한 뒤에만
+저장하므로, 프록시가 중간에서 응답을 바꾸면 조용히 넘어가지 않고 실패합니다.
+(고정 버전은 `perfetto/traceProcessor/locate.ts` 의 `TRACE_PROCESSOR_VERSION` 하나가
+소유합니다. 현재 `v57.2`, 약 12~14MB.)
+
+- 네트워크를 쓰고 싶지 않으면 `--offline` 을 주세요. 캐시가 없으면 **받을 URL 과 둘 자리를
+  오류 메시지에 찍고** 멈춥니다 — 그 파일을 손으로 받아 그 경로에 두면 됩니다.
+- 이미 가진 바이너리를 쓰려면 `PERFTRACKER_TRACE_PROCESSOR` 에 절대 경로를 주세요.
+- 캐시 위치를 옮기려면 `PERFTRACKER_HOME` 을 바꾸세요 (기본 `~/.perftracker`).
+  이 디렉토리에는 활성 세션 포인터(`active/<serial>.json`)도 함께 삽니다.
+- 회사 방화벽 등으로 `commondatastorage.googleapis.com` 이 막혀 있으면 다른 머신에서 받아
+  옮긴 뒤 `PERFTRACKER_TRACE_PROCESSOR` 로 지정하는 것이 가장 빠릅니다.
 
 ---
 
@@ -275,6 +345,60 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 - `within_16_67ms_ratio` 는 16.67ms 이하 프레임의 비율입니다. 판정이 아니라 비율입니다.
 - 종료 이벤트를 못 받은 미완결 프레임(`dur = -1`)은 집계에서 **제외**됩니다.
 
+### `metrics.startup`
+
+**이 값은 트레이스에서 계산한 것이 아니라 `am start -W` 가 보고한 숫자입니다.**
+일곱 지표 중 유일하게 트레이스를 읽지 않습니다 — `start` 가 앱을 띄우면서 받아
+`session.json` 에 적어 둔 것을 `extract` 가 그대로 옮깁니다. 그래서 이 지표는 TraceConfig 를
+한 블록도 늘리지 않고, SDK 하한도 데이터소스 요구도 없습니다 (`am start -W` 는 어느
+안드로이드에서나 돕니다).
+
+```json
+{
+  "total_time_ms": 509,
+  "launch_state": "COLD"
+}
+```
+
+실기기(SM-S901N / Android 16 / sdk 36)에서 `com.nhn.android.webtoon` 을 `--launch` 로
+콜드 스타트한 세션 `da49c4` 의 실측값입니다.
+
+- `total_time_ms` — `am start -W` 의 `TotalTime`. 프로세스 시작부터 첫 프레임까지입니다.
+  **ActivityManager 가 보고한 숫자를 그대로 옮긴 것**이지 이 도구가 트레이스에서 잰 값이
+  아닙니다. 그래서 같은 세션의 `metrics.frame` 과는 출처가 다릅니다.
+- `launch_state` — 기기가 준 `LaunchState` 원문 (`COLD` / `WARM` / `HOT`).
+  **enum 으로 좁히지 않습니다** — 우리가 정하는 값이 아니라 기기가 뱉는 문자열이기
+  때문입니다. 기기가 보고하지 않으면 `null` 입니다.
+
+한정 조건:
+
+- **런처 액티비티까지만 잽니다.** `am start -W` 는 exported 진입점만 실행할 수 있습니다.
+  앱 안쪽 화면으로 들어가는 시간은 이 지표가 재지 않습니다 (v1 범위 밖).
+- **`--launch` 없이 시작한 세션에서는 `skipped` 입니다** (`launch_not_requested`).
+  재려다 실패한 것이 아니라 잴 기회 자체가 없었다는 뜻이라 `partial` 이 아닙니다.
+- **`am start -W` 가 `TotalTime` 을 아예 안 찍는 경우가 있습니다.** 기기가
+  `Status: timeout` 을 내면 `TotalTime` 줄이 통째로 없습니다. **앱이 실행되지 않았다는 뜻이
+  아닙니다** — 같은 세션에서 pid 는 확보되고 프레임·메모리도 정상 수집됩니다. 에뮬레이터에서
+  **11세션 중 4회** 실측했습니다. 자세한 원문과 근거는 아래
+  "`--launch` 인데 시작 시간이 안 나오는 경우" 를 보세요.
+- **한 세션에 한 번뿐입니다.** 이 지표에는 분포도 표본 수도 없습니다. 값 하나가 그 세션의
+  전부이므로, 편차를 보려면 세션을 여러 번 돌려 비교해야 합니다. 참고로 같은 실기기·같은 앱의
+  콜드 스타트 4세션이 **509 / 747 / 822 / 3,199ms** 였습니다 — 한 번의 값으로 결론을 내지
+  마세요.
+
+값이 없을 때 `data` 는 `null` 이고 `reason_code` 가 갈래를 말합니다:
+
+| `status` | `reason_code` | 뜻 |
+| --- | --- | --- |
+| `skipped` | `launch_not_requested` | `--launch` 없이 시작했다. 잴 기회가 없었다. |
+| `partial` | `launch_wait_timed_out` | 기기가 `Status: timeout` 을 냈다. `detail.wait_time_ms` 에 기기가 보고한 `WaitTime` 이 있다. **앱이 안 떴다는 뜻이 아니다.** |
+| `partial` | `launch_time_unreported` | `TotalTime` 이 없는데 기기가 이유도 말하지 않았다. `detail.am_start_status` 에 기기가 낸 `Status:` 원문이 있다 (그것조차 없으면 `null`). |
+
+> **`launch_wait_timed_out` 을 실패로 집계하지 마세요.** 그것은 이 도구의 결함도 앱의 결함도
+> 아니고, "이 세션에서는 시작 시간만 못 쟀다" 는 사실입니다. 앱이 실제로 떴는지는
+> `target_app.pid` 와 다른 지표들이 말합니다. 세션 전체에는 경고
+> `app_launch_time_unmeasured` 가 함께 실립니다.
+
 ### `metrics.cpu`
 
 **앱 단위 값과 기기 전역 값이 함께 들어 있고, 필드 이름이 그 범위를 말합니다.**
@@ -319,6 +443,112 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 - **`app` 이 `null` 이면 그것은 `0` 이 아니라 "내지 못했다" 입니다.** `reason_code` 가
   갈래를 말합니다 (`process_not_in_trace` / `no_app_cpu_samples` / `counter_went_backwards` /
   `query_failed`). 그때도 `device_*` 값은 그대로 나옵니다.
+
+### `metrics.memory`
+
+대상 앱 프로세스 **하나**의 RSS 를 세션 동안 1초 주기로 관측한 통계입니다.
+기기 전체 메모리(`system`)는 그 옆에 두고 읽는 맥락입니다 — "앱이 큰 것" 과 "기기가 이미
+쪼들리던 것" 은 다른 사실이고, 둘이 나란히 없으면 가를 수 없습니다.
+
+```json
+{
+  "process": "com.nhn.android.webtoon",
+  "pid": 26424,
+  "samples": 72,
+  "rss":      { "min_kb": 21396, "max_kb": 369576, "avg_kb": 280044 },
+  "rss_anon": { "min_kb": 14744, "max_kb": 197668, "avg_kb": 108851 },
+  "rss_file": { "min_kb": 6400,  "max_kb": 174260, "avg_kb": 169902 },
+  "rss_watermark_peak_kb": 494432,
+  "system": {
+    "mem_total_kb": 7394224,
+    "mem_available": { "min_kb": 2725828, "max_kb": 3215192, "avg_kb": 2879622 },
+    "mem_free":      { "min_kb": 196048,  "max_kb": 452376,  "avg_kb": 396176 },
+    "cached":        { "min_kb": 2591928, "max_kb": 2709448, "avg_kb": 2606573 },
+    "swap_total_kb": 8388604,
+    "swap_free":     { "min_kb": 5818808, "max_kb": 5888932, "avg_kb": 5824497 }
+  }
+}
+```
+
+실기기(SM-S901N / Android 16 / sdk 36)의 72.9초 세션 `da49c4` 실측값입니다.
+72초에 표본 72개 — 폴링 주기가 1초라는 것이 그대로 보입니다.
+
+- **단위는 전부 kB 입니다.** `trace_processor` 는 바이트로 주므로 이 도구가 변환합니다.
+  필드 이름의 `_kb` 접미어가 그 계약입니다.
+- `rss` / `rss_anon` / `rss_file` 은 **세션 구간의 관측 통계**(min/max/avg)입니다.
+  `linux.process_stats` 가 `/proc/<pid>/status` 를 폴링해 만든 `mem.rss` 계열 카운터에서
+  나옵니다. `rss_anon` / `rss_file` 은 해당 카운터가 트레이스에 없으면 `null` 입니다 —
+  없는 것을 0 으로 채우지 않습니다.
+- **`min_kb` 를 "이 앱의 최소 사용량" 으로 읽지 마세요.** `--launch` 세션의 첫 표본은 앱이
+  갓 fork 된 직후라 아주 작고, 그 뒤 올라간 것이 같은 프로세스입니다.
+  `--launch` 여부가 이 값을 완전히 갈라놓습니다 (실기기 5세션 실측, 단위 kB):
+
+  | 세션 | `--launch` | `rss.min_kb` | `rss.max_kb` |
+  | --- | --- | --- | --- |
+  | `da49c4` | 있음 | **21,396** | 369,576 |
+  | `5a6e26` | 있음 | **38,036** | 359,256 |
+  | `9e8c75` | 있음 | **99,312** | 375,736 |
+  | `f58e76` | 있음 | **142,772** | 309,472 |
+  | `b8fb03` | **없음** | **362,508** | 365,268 |
+
+  이미 떠 있던 앱을 잰 마지막 줄만 `min` 과 `max` 가 거의 같습니다. **콜드 스타트 세션의
+  `min_kb` 는 앱의 특성이 아니라 "언제부터 쟀는가" 를 말합니다.**
+
+**`rss_watermark_peak_kb` 는 이 세션의 값이 아닙니다.** 이 필드만 성격이 다릅니다:
+
+- `/proc/<pid>/status` 의 **`VmHWM`** 이고, **프로세스가 시작된 뒤 지금까지의 최고점**을
+  커널이 기억하고 있는 값입니다. 옆의 `rss.max_kb` 는 이 세션에서 1초 주기로 관측한
+  최댓값이라 **구간이 다릅니다.**
+- 그래서 **`--launch` 없이 이미 떠 있던 앱을 잰 세션에서는 몇 시간 전, 혹은 이전 세션의
+  최고점이 그대로 실립니다.** 실측 예 — 같은 pid(12103)를 이어서 잰 두 세션:
+
+  | 세션 | `--launch` | `rss.max_kb` | `rss_watermark_peak_kb` |
+  | --- | --- | --- | --- |
+  | `9e8c75` | 있음 | 375,736 | 382,320 |
+  | `b8fb03` | **없음** | 365,268 | **382,320** (동일) |
+
+  두 번째 세션은 관측된 최댓값이 오히려 **더 낮은데** 워터마크는 첫 세션에서 찍힌 값
+  그대로입니다. 이것을 "폴링이 놓친 이번 세션의 진짜 피크" 로 읽으면 안 됩니다.
+- **이번 세션 구간의 피크가 필요하면 `rss.max_kb` 를 쓰세요.**
+- `null` 은 트레이스에 `mem.rss.watermark` 카운터가 없었다는 뜻입니다.
+
+`system` 에 대해:
+
+- `linux.sys_stats` 의 meminfo 에서 나오는 **기기 전체** 값입니다. 대상 앱과 무관하게
+  같은 시간에 돈 모든 것이 섞입니다.
+- **필요한 항목이 하나라도 빠지면 통째로 `null` 입니다.** 반쯤 채운 시스템 메모리는 읽는 쪽이
+  구분할 수 없는 거짓말이 되므로, 그 자리를 0 으로 메우지 않고 포기합니다. 그때 앱 RSS 는
+  그대로 나오고 `reason_code` 가 `no_meminfo_samples` 입니다 (`status` 는 `partial` 이지만
+  **`data` 는 non-null** — 값이 없다는 뜻이 아닙니다).
+
+**프로세스를 하나만 고르고 합산하지 않습니다.** CPU 와 결론은 같지만 이유는 다릅니다:
+
+- CPU 를 안 합치는 이유는 "더할 대상 집합이 완전하지 않아서" 입니다 (위 cpu 절 참고).
+- **메모리는 그것에 더해, 합산 자체가 틀립니다.** 여러 프로세스의 RSS 를 더하면 공유
+  페이지(zygote 가 물려준 프레임워크 코드, 공유 라이브러리, 파일 매핑)를 **여러 번 셉니다.**
+  그렇게 나온 숫자는 어느 프로세스의 것도 아니고 기기가 실제로 쓴 양도 아닙니다.
+- 그래서 `metrics.memory` 에는 `other_processes` 같은 배열이 없습니다. 대표 프로세스 하나의
+  값만 있고, 그것이 어느 프로세스인지 `process` / `pid` 가 말합니다.
+
+값이 없을 때 / 한정이 붙을 때:
+
+| `status` | `reason_code` | `data` | 뜻 |
+| --- | --- | --- | --- |
+| `unsupported` | `data_source_not_registered` | `null` | 이 기기에 `linux.process_stats` 가 없다. |
+| `partial` | `process_not_in_trace` | `null` | 대상 앱 프로세스를 트레이스에서 특정하지 못했다. |
+| `partial` | `no_rss_samples` | `null` | 프로세스는 찾았는데 `mem.rss` 표본이 없다. |
+| `partial` | `process_name_stale_in_trace` | **non-null** | 값은 다 있다. 트레이스가 그 프로세스를 다른 이름으로 알고 있어 pid 로 확인했다는 뜻이다 (아래 참고). |
+| `partial` | `no_meminfo_samples` | **non-null** | 앱 RSS 는 있고 `system` 만 `null` 이다. |
+| `failed` | `trace_missing` / `query_failed` | `null` | 트레이스 원본이 없거나 쿼리가 예외로 터졌다. |
+
+> **사유 자리는 하나뿐입니다.** `process_name_stale_in_trace` 와 `no_meminfo_samples` 가
+> 겹치면 **정체성 쪽(`process_name_stale_in_trace`)이 먼저 실립니다** — meminfo 가 없다는
+> 사실은 `system: null` 로 데이터에 이미 드러나지만, "이 프로세스가 그 앱이라는 근거가
+> 이름이 아니라 pid 였다" 는 데이터 어디에도 안 남기 때문입니다.
+
+`process_name_stale_in_trace` 는 예외 상황이 아닙니다 — 실기기의 최근 두 `--launch` 세션
+(`5a6e26`, `da49c4`)이 둘 다 이 사유를 달았습니다. **값이 잘못됐다는 뜻이 아닙니다.**
+자세한 것은 아래 "트레이스가 앱을 다른 이름으로 아는 경우" 를 보세요.
 
 ### `metrics.log`
 
@@ -473,13 +703,17 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 
 ```json
 {
-  "tracing_processes_cpu_time_ms": null,
-  "tracing_processes_cpu_share_pct": null,
-  "tracing_processes_peak_rss_kb": null,
+  "tracing_processes_cpu_time_ms": 5570,
+  "tracing_processes_cpu_share_pct": 1,
+  "tracing_processes_peak_rss_kb": 15436,
   "adb_commands_during_session": 0,
   "trace_buffer_overrun": false
 }
 ```
+
+(실기기 72.9초 세션 `da49c4` 의 실측값입니다. 같은 세션에서 대상 앱은
+`share_of_device_cpu_pct` 가 1.72 였으므로, 트레이싱이 쓴 몫이 앱과 같은 자릿수라는 뜻입니다 —
+아래 하한 단서와 함께 읽으세요.)
 
 - `adb_commands_during_session` — **측정 창이 열린 동안** perftracker 를 통해 시도되어
   차단된 adb 호출 수. 0 이 아니면 그 데이터는 의심하세요.
@@ -504,7 +738,10 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   **`null` 은 확인하지 못했다는 뜻입니다**(`false` 가 아닙니다) — 이 run 에 트레이스 원본이
   없거나(아직 `stop` 전, 또는 트레이스를 잃은 `aborted` 세션) 통계 쿼리 자체가 실패한 경우입니다.
 - `tracing_processes_*` — 트레이싱 **프로세스들**(`traced` / `traced_probes` / `perfetto`)이
-  쓴 CPU 시간과 RSS 입니다. M2 에서 채워집니다.
+  쓴 CPU 시간과 RSS 입니다. `cpu_share_pct` 의 분모는 `metrics.cpu` 의
+  `app.share_of_device_cpu_pct` 와 **같은 분모**(같은 구간 기기 전체의 CPU 시간)라
+  두 백분율을 서로 비교할 수 있습니다. 셋 다 `null` 이면 트레이스 원본이 없거나 쿼리가
+  실패한 것입니다.
 
   > **이건 트레이싱의 총비용이 아니라 체계적인 하한입니다.** 커널이 ftrace 이벤트를
   > 링버퍼에 기록하는 비용은 그 순간 인터럽트당한 프로세스(대상 앱일 수 있습니다)에
@@ -539,10 +776,10 @@ ADPF 의 headroom 휴리스틱(0.85 / 0.95 / 1.0)은 출처가 있지만 **이 �
 ## 개발
 
 ```bash
-npm test          # 유닛 테스트 (기기 불필요)
+npm test          # 유닛 테스트 (기기 불필요) — 현재 713개, 1초 미만
 npm run typecheck # src + test 전체 타입체크
 npm run build
-npm run test:device   # 실기기가 꽂혀 있어야 함
+npm run test:device   # 온-디바이스 스펙 (기기가 꽂혀 있어야 함) — 현재 11개
 ```
 
 - `packages/core` — 기기·세션·수집·파싱. 도메인 로직 전부.
@@ -555,6 +792,49 @@ npm run test:device   # 실기기가 꽂혀 있어야 함
 `COLLECTORS` 에 넣으면 됩니다. `start` 가 TraceConfig 블록을 모으고 `extract` 가
 `metrics[collector.id]` 를 채우는 것은 그 배열을 순회해서 일어납니다.
 
+### 온-디바이스 테스트를 다른 기기에서 돌리기
+
+**이것을 먼저 읽지 않으면 새 기기에서 `npm run test:device` 가 실패합니다.**
+
+세션을 여는 온-디바이스 스펙은 대상 앱을 **고정**합니다. 기본값은
+**`com.nhn.android.webtoon`**(네이버 웹툰)이고, 그 앱이 없는 기기에서는 실패합니다.
+
+```bash
+# 이 기기에 있는 서드파티 앱 하나를 골라 덮는다
+PERFTRACKER_TEST_APP=<패키지명> npm run test:device
+```
+
+고를 앱의 조건은 둘입니다.
+
+1. **런처 액티비티가 있어야 합니다.** `--launch` 가 그것으로 콜드 스타트합니다.
+   런처처럼 진입점이 없는 앱을 고르면 `No activity found` 로 거부됩니다.
+2. **강제 종료돼도 괜찮은 앱이어야 합니다.** `--launch` 는 `am force-stop` 후 재실행이라
+   스펙을 돌릴 때마다 그 앱이 죽고 화면에 튀어나옵니다. 설치된 앱은
+   `npx perftracker apps` 로 볼 수 있습니다.
+
+앱이 없으면 스펙은 **조용히 건너뛰지 않고 실패합니다.** 무엇이 없어서 못 도는지와 어떻게
+바꾸는지를 메시지에 적습니다 (`assertTargetAppInstalled`). 건너뛰기를 넣지 않은 이유는
+단순합니다 — 건너뛴 스펙은 통과한 스펙과 같은 색으로 보이고, 그러면 이 스펙이 지키려는 것이
+아무 데서도 지켜지지 않습니다.
+
+**왜 고정하는가:** 예전에는 CLI 기본값(포그라운드 앱)을 그대로 썼습니다. 그래서 **사람이
+화면에 무엇을 두었는가가 테스트의 커버리지와 결과를 정했습니다.** 5회 연속 실행이 그것을 두
+모양으로 드러냈습니다 — 포그라운드가 우연히 설정 앱이라 시스템 앱 경로만 밟은 회차, 그리고
+폰이 홈 화면이라 포그라운드가 런처였고 런처에는 런처 액티비티가 없어 `--launch` 자체가
+거부된 회차. 코드가 아니라 폰이 어느 화면에 있었는가가 원인이었습니다.
+
+그 밖에 새 기기에서 걸리는 것들:
+
+- **기기를 하나만 연결하세요.** 온-디바이스 스펙은 `createContext({})` 라 serial 을 넘기지
+  않습니다 — 에뮬레이터가 함께 켜져 있으면 `AmbiguousDeviceError` 로 전부 실패합니다.
+- **화면이 꺼지면 세션이 의미를 잃습니다.** 필요하면 `adb shell svc power stayon usb`,
+  **끝나면 반드시 `false` 로 원복하세요.**
+- 스펙 파일들은 **직렬로** 돕니다 (`vitest.device.config.ts` 의 `fileParallelism: false`).
+  같은 기기의 활성 세션 포인터를 공유하므로 병렬로 돌리면 서로의 세션을 밟아 가짜 실패가
+  납니다. 이것을 켜지 마세요.
+- 온-디바이스 스펙은 `npm test` 에서 제외되어 있습니다 (`vitest.config.ts`).
+  기기 없이도 `npm test` 는 그대로 통과해야 합니다.
+
 ## 검증 환경
 
 | 항목 | M0+M1 | M2 | M3 |
@@ -562,7 +842,19 @@ npm run test:device   # 실기기가 꽂혀 있어야 함
 | 실기기 (SM-S901N, Android 16 / sdk 36) | ✅ | ✅ | ✅ |
 | 에뮬레이터 (sdk_gphone64_arm64, API 35, 4코어) | — | ✅ | ✅ |
 
-실기기 검증은 `npm run test:device` **5회 연속 10/10** 입니다 (2026-07-27).
+실기기 검증(2026-07-27)은 두 단계로 나뉩니다. **숫자가 다른 이유를 함께 적습니다** —
+중간에 스펙이 하나 늘고 대상 앱이 바뀌었기 때문입니다.
+
+| 언제 | 스펙 수 | 결과 | 대상 앱 |
+| --- | --- | --- | --- |
+| 실기기 검증 웨이브 | 10 | **5회 연속 10/10** | `com.android.settings` |
+| CPU·Log 앱 단위화 이후 (현재) | 11 | **1회 11/11** | `com.nhn.android.webtoon` |
+
+즉 **현재 스펙 구성으로 5회 연속을 돌린 적은 없습니다.** 5회 연속의 근거는 그 앞 구성의
+것이고, 늘어난 스펙 하나는 "세션 스펙의 대상 앱이 이 기기에 설치되어 있다"(`m0`)입니다.
+대상 앱을 바꾼 이유는 아래 "온-디바이스 테스트를 다른 기기에서 돌리기" 에 있습니다.
+
+유닛 테스트는 `npm test` **713/713**, `npm run typecheck` · `npm run build` 클린입니다.
 
 ### M3 에서 에뮬레이터가 **실제로 검증한** 것
 
