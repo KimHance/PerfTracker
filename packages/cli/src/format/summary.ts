@@ -31,6 +31,29 @@ const orNa = (v: number | null): string => (v === null ? 'n/a' : String(v))
 /** 앞 몇 개 존만 보여줄지. 나머지는 개수로 접는다 — 정렬하지 않으므로 기기 순서가 남는다. */
 const ZONE_PREVIEW = 3
 
+/**
+ * 공유 uid 의 패키지 이름을 몇 개까지 터미널에 쓸지.
+ * 실기기에서 uid 1000 을 **86개** 패키지가 쓴다 — 전부 쓰면 요약 한 줄이 터미널을 덮는다.
+ */
+const SHARED_PACKAGE_PREVIEW = 4
+
+/**
+ * 공유 패키지 이름 목록. **개수는 이미 앞에서 말했으므로 여기는 이름만 맡는다.**
+ *
+ * 자르되 잘랐다는 사실을 반드시 남긴다 — 잘린 목록을 잘리지 않은 것처럼 보이게 하면
+ * 이 도구가 하지 않기로 한 바로 그 일이 된다. 전체는 `result.json` 에 그대로 있고,
+ * 이 줄이 그 사실을 함께 가리킨다.
+ */
+function sharedNames(packages: string[]): string {
+  if (packages.length === 0) return ''
+  const shown = packages.slice(0, SHARED_PACKAGE_PREVIEW)
+  const rest = packages.length - shown.length
+  return (
+    `: ${shown.join(', ')}` +
+    (rest > 0 ? ` 외 ${num(rest)}개는 result.json 의 shared_uid_packages 에 있음` : '')
+  )
+}
+
 const LABEL_WIDTH = 10
 const STATUS_WIDTH = 13
 
@@ -238,7 +261,7 @@ export function formatSummary(result: Result): string {
       n.shared_uid_packages === null
         ? '이 uid 를 쓰는 패키지: 확인 안 됨'
         : `이 uid 를 쓰는 패키지 ${num(n.shared_uid_packages.length)}개` +
-          (n.shared_uid_packages.length > 0 ? `: ${n.shared_uid_packages.join(', ')}` : '')
+          sharedNames(n.shared_uid_packages)
     // uid 는 수량이 아니라 **식별자**다. `num()` 을 태우면 `10,388` 이 되어
     // 기기에서 본 값(`10388`)과 글자가 달라지고 grep 이 안 된다.
     lines.push(`          ${'uid'.padEnd(STATUS_WIDTH)} ${String(n.uid)} · ${shared}`)

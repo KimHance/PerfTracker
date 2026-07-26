@@ -613,6 +613,31 @@ describe('formatSummary — Network 줄', () => {
     expect(out).toContain('2개')
   })
 
+  /**
+   * 실기기에서 uid 1000 을 **86개** 패키지가 공유한다. 86개 이름을 한 줄에 쏟으면 요약이
+   * 요약이 아니게 되므로 터미널에서만 자른다 — **`result.json` 은 전부 싣는다.**
+   *
+   * 자르되 **숫자는 먼저 말한다.** 개수가 이 줄의 요점이기 때문이다. 그리고 잘랐다는 사실을
+   * 반드시 남긴다: 잘린 목록을 잘리지 않은 것처럼 보이게 하면 이 도구가 하지 않기로 한
+   * 바로 그 일(관측하지 않은 것을 사실처럼 보이게 하기)이 된다.
+   *
+   * 깨지는 조건: 자르면서 "…" 표시를 빼거나, 개수를 목록 길이로 바꾸면 실패한다.
+   */
+  it('공유 패키지가 많으면 목록만 자르고 개수와 생략 사실을 남긴다', () => {
+    const many = Array.from({ length: 86 }, (_, i) => `com.example.p${String(i)}`)
+    const out = formatSummary(withNetwork({ shared_uid_packages: many }))
+
+    expect(out).toContain('86개')
+    expect(out).toContain('com.example.p0')
+    // 마지막 것까지 다 찍으면 자르지 않은 것이다.
+    expect(out).not.toContain('com.example.p85')
+    // 잘렸다는 사실이 줄 안에 있어야 한다.
+    expect(out).toMatch(/외 \d+개는 result\.json/)
+    // 요약 한 줄이 터미널을 뒤덮지 않는다.
+    const uidLine = out.split('\n').find((l) => l.includes('86개'))!
+    expect(uidLine.length).toBeLessThan(200)
+  })
+
   /** 깨지는 조건: null 을 `[]` 처럼 취급해 "0개"/"1개" 를 찍으면 실패한다. */
   it('shared_uid_packages 가 null 이면 "확인 안 됨" 이라고 쓴다 — "1개" 가 아니다', () => {
     const out = formatSummary(withNetwork({ shared_uid_packages: null }))
