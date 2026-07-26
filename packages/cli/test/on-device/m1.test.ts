@@ -6,6 +6,7 @@ import { extractRun, readActiveSession } from '@perftracker/core'
 import { createContext } from '../../src/context.js'
 import { runStart } from '../../src/commands/start.js'
 import { runStop } from '../../src/commands/stop.js'
+import { DEVICE_TARGET_APP } from './target.js'
 
 /** 실기기가 필요하다. `npm run test:device` 로만 실행된다. */
 describe('M1 end-to-end', () => {
@@ -14,6 +15,7 @@ describe('M1 end-to-end', () => {
     const ctx = await createContext({})
 
     await runStart(ctx, {
+      app: DEVICE_TARGET_APP,
       name: 'e2e',
       launch: true,
       video: false,

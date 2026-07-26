@@ -14,6 +14,7 @@ import {
 import { runStart } from '../../src/commands/start.js'
 import { runStop } from '../../src/commands/stop.js'
 import { createContext } from '../../src/context.js'
+import { DEVICE_TARGET_APP } from './target.js'
 
 /**
  * 실기기 또는 에뮬레이터가 필요하다. `npm run test:device` 로만 실행된다.
@@ -47,7 +48,7 @@ describe('M2 기기 통합', () => {
     const out = mkdtempSync(join(tmpdir(), 'pt-m2-'))
     const ctx = await createContext({})
 
-    await runStart(ctx, { name: 'm2', launch: true, video: false, out, force: true })
+    await runStart(ctx, { app: DEVICE_TARGET_APP, name: 'm2', launch: true, video: false, out, force: true })
     const active = await readActiveSession(ctx.serial)
     expect(active).not.toBeNull()
 
@@ -167,7 +168,7 @@ describe('M2 기기 통합', () => {
     const out = mkdtempSync(join(tmpdir(), 'pt-m2-nolaunch-'))
     const ctx = await createContext({})
 
-    await runStart(ctx, { name: 'm2-nolaunch', launch: false, video: false, out, force: true })
+    await runStart(ctx, { app: DEVICE_TARGET_APP, name: 'm2-nolaunch', launch: false, video: false, out, force: true })
     const active = await readActiveSession(ctx.serial)
 
     await new Promise((r) => setTimeout(r, 5_000))

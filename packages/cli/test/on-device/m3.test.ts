@@ -15,6 +15,7 @@ import {
 import { runStart } from '../../src/commands/start.js'
 import { runStop } from '../../src/commands/stop.js'
 import { createContext } from '../../src/context.js'
+import { DEVICE_TARGET_APP } from './target.js'
 
 /**
  * `mAppUidStatsMap` 표에서 uid 한 행을 **collector 와 무관하게** 다시 읽는다.
@@ -73,26 +74,6 @@ function readUidRow(
  *     없어 유닛 테스트로만 덮인다.
  */
 
-/**
- * **대상 앱을 고정한다.** 다른 온-디바이스 스펙은 CLI 기본값(포그라운드 앱)을 그대로 쓰지만
- * 여기만 명시한다.
- *
- * 왜: 이 스펙이 지키려는 것은 uid 귀속이고, 그 경로가 실제로 밟히는지가 **화면에 무엇이
- * 떠 있었는가**에 달려 있으면 안 된다. 실기기에서 이 스펙이 실패했을 때 대상은 우연히
- * `com.android.settings` 였고, 지금 같은 기기의 포그라운드는 서드파티 앱이다 — 같은 코드가
- * 같은 날 두 결과를 낸다. 사용자가 화면에 무엇을 두었는지가 커버리지를 정하는 테스트는
- * 테스트가 아니다.
- *
- * 왜 하필 이 앱: 모든 안드로이드 빌드에 있고 런처 액티비티가 있으며, **uid 1000 을 여럿이
- * 공유한다**(실기기 실측 86개). 즉 이 스펙이 가장 확인하고 싶은 경로 —
- * "이 숫자는 한 앱의 것이 아니다" — 를 실제로 밟는다. 서드파티 앱을 고르면 공유 uid 경로는
- * 기기에서 한 번도 실행되지 않는다.
- *
- * **건너뛰기가 아니다.** 시스템 앱이라고 단언을 무르게 하지 않는다 — 아래 단언은 대상이
- * 무엇이든 똑같이 걸리고, 공유 여부는 관측된 배열 길이가 정한다.
- */
-const TARGET = 'com.android.settings'
-
 describe('M3 기기 통합', () => {
   it('이 기기가 M3 의 두 지표를 낼 수 있는 조건을 갖췄다', async () => {
     const ctx = await createAdbContext({})
@@ -122,7 +103,7 @@ describe('M3 기기 통합', () => {
     const out = mkdtempSync(join(tmpdir(), 'pt-m3-'))
     const ctx = await createContext({})
 
-    await runStart(ctx, { app: TARGET, name: 'm3', launch: true, video: false, out, force: true })
+    await runStart(ctx, { app: DEVICE_TARGET_APP, name: 'm3', launch: true, video: false, out, force: true })
     const active = await readActiveSession(ctx.serial)
     expect(active).not.toBeNull()
 
