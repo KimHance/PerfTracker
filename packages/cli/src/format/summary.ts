@@ -182,7 +182,7 @@ export function formatSummary(result: Result): string {
       valueLine(
         'Thermal',
         thermal.status,
-        `${num(t.zones.length)} zones · ` +
+        `${num(t.zones.length)} zone${t.zones.length === 1 ? '' : 's'} · ` +
           `Thermal Status ${orNa(t.device_status_before)} → ${orNa(t.device_status_after)} · ${hal}`,
       ),
     )

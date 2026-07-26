@@ -491,6 +491,8 @@ describe('formatSummary — Thermal 줄', () => {
     expect(out).toContain('Thermal   collected')
     expect(out).toContain('8 zones')
     expect(out).toContain('Thermal Status 0 → 0')
+    // 존이 1개인 기기(에뮬레이터)에서 "1 zones" 라고 쓰지 않는다.
+    expect(formatSummary(withThermal({ zones: realZones().slice(0, 1) }))).toContain('1 zone ·')
     expect(out).toContain('HAL ready')
     expect(out).toMatch(/AP 31\.1→36\.2 \(\+5\.1\)/)
   })
