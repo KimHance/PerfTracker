@@ -3,11 +3,17 @@ import { isAbsolute, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { MeasurementWindowViolationError, SessionStateError } from '../../src/errors.js'
 import type { CaptureManifest } from '../../src/session/manifest.js'
-import { buildWarnings, parseAmStart, parsePidof, startSession } from '../../src/session/start.js'
+import {
+  AM_START_PIDOF_MARKER,
+  buildWarnings,
+  parseAmStart,
+  parsePidof,
+  splitAmStartPidof,
+  startSession,
+} from '../../src/session/start.js'
 import { readActiveSession, writeActiveSession } from '../../src/session/state.js'
 import {
   clientFor,
-  PKG,
   SERIAL,
   startableDevice,
   targetApp,
@@ -266,16 +272,41 @@ describe('startSession — 앱 pid 확보 (Defect 0)', () => {
     expect(stored.appPid).toBe(24193)
   })
 
-  it('pid 조회는 am start 다음, 측정 창이 열리기 전이다', async () => {
+  /**
+   * 트레이스는 `--detach` 시점에 이미 기록을 시작했고 래치는 `window.open()` 에서야 무장한다.
+   * 그 사이에 나가는 adb 왕복은 트레이스 안에서 일어나는 일이므로 **개수 자체가 계약**이다.
+   * `am start -W` 와 `pidof` 를 한 셸 호출로 합쳐 2회를 1회로 줄였다 — 기기 쪽 작업량은
+   * 동일하고 왕복만 사라진다.
+   */
+  it('트레이스 시작과 래치 무장 사이에 adb 호출이 정확히 하나다', async () => {
     const h = start({ launch: true })
     await h.result
 
-    const amStart = h.runner.commands.findIndex((c) => c.includes('am start -W -n'))
-    const pidof = h.runner.commands.findIndex((c) => c.includes('pidof'))
+    const detach = h.runner.commands.findIndex((c) => c.includes('--detach=perftracker_'))
+    const inWindow = h.runner.commands.slice(detach + 1)
 
-    expect(pidof).toBeGreaterThan(amStart)
+    expect(inWindow).toHaveLength(1)
+    expect(inWindow[0]).toContain('am start -W -n')
+    expect(inWindow[0]).toContain('pidof')
     // 창이 열린 뒤였다면 이 호출 자체가 MeasurementWindowViolationError 로 죽었을 것이다.
     expect(h.adb.window.isOpen).toBe(true)
+  })
+
+  it('한 호출의 출력에서 am start 와 pidof 를 구분자로 정확히 가른다', () => {
+    const text =
+      'Starting: Intent { cmp=com.foo/.Main }\nStatus: ok\nTotalTime: 1842\nComplete\n' +
+      `${AM_START_PIDOF_MARKER}\n6037\n`
+    const parts = splitAmStartPidof(text)
+
+    expect(parseAmStart(parts.amStart).totalTimeMs).toBe(1842)
+    expect(parsePidof(parts.pidof)).toBe(6037)
+  })
+
+  it('구분자가 없으면 전부 am start 출력으로 본다 — pid 를 지어내지 않는다', () => {
+    const parts = splitAmStartPidof('Status: ok\nTotalTime: 1842\n')
+
+    expect(parseAmStart(parts.amStart).totalTimeMs).toBe(1842)
+    expect(parsePidof(parts.pidof)).toBeNull()
   })
 
   it('--launch 가 아니면 기기에 pid 를 묻지 않는다 — 그 앱은 이미 이름이 확정돼 있다', async () => {
@@ -287,13 +318,17 @@ describe('startSession — 앱 pid 확보 (Defect 0)', () => {
   })
 
   it('pidof 가 실패해도 세션은 시작된다 — pid 는 있으면 좋은 것이지 전제가 아니다', async () => {
-    // pidof 가 없거나(옛 toybox) 못 찾은 기기. 정확 키가 패턴을 이기므로 같은 키로 덮는다.
+    // pidof 가 없거나(옛 toybox) 못 찾은 기기. 합친 호출은 pidof 의 종료 코드를 그대로 낸다.
     const runner = startableDevice((r) => {
-      r.on(`-s ${SERIAL} shell pidof '${PKG}'`, { code: 1, stderr: '' })
+      r.onMatch(/shell am start -W -n /, {
+        code: 1,
+        stdout: `Status: ok\nLaunchState: COLD\nTotalTime: 1842\n${AM_START_PIDOF_MARKER}\n`,
+      })
     })
     const session = await start({ launch: true, runner }).result
 
     expect(session.appPid).toBeNull()
+    expect(session.startup?.totalTimeMs).toBe(1842)
   })
 })
 

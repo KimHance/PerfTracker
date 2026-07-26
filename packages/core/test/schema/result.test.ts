@@ -173,7 +173,13 @@ describe('resultJsonSchema', () => {
     expect(field.description).toBeDefined()
     // 이 필드를 가장 잘못 읽기 쉬운 소비자가 스키마만 읽는 CI 와 LLM 이다.
     expect(field.description).toContain('perftracker')
-    expect(field.description).toMatch(/역은 성립하지 않는다/)
+    // 다른 터미널의 adb 는 안 잡힌다.
+    expect(field.description).toMatch(/다른 터미널/)
+    // 그리고 **이 도구 자신이** 트레이스 시작 뒤 창이 열리기 전에 보내는 두 명령도 안 잡힌다.
+    // 이 절이 빠져 있던 동안 스키마만 읽는 소비자는 "perftracker 는 세션 중 아무것도 안
+    // 보냈다" 로 결론냈고, `--launch` 세션에서 그건 거짓이었다.
+    expect(field.description).toContain('am start -W')
+    expect(field.description).toContain('pidof')
   })
 
   it('오버헤드 세 필드의 주의사항을 스키마에 실어 보낸다 — 가장 오해하기 쉬운 숫자들이다', () => {

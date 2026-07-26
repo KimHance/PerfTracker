@@ -58,6 +58,26 @@ export function parseAmStart(text: string): AmStartResult {
 }
 
 /**
+ * `am start -W` 와 `pidof` 를 한 셸 호출로 합칠 때 두 출력을 가르는 표시.
+ *
+ * 왜 합치는가: 트레이스는 `--detach` 시점에 이미 기록을 시작하고 측정 창 래치는 그보다 뒤에
+ * 무장한다. 그 사이의 adb 왕복은 트레이스 안에서 일어나는 일이므로 개수 자체가 비용이다.
+ * 기기 쪽 작업량은 똑같으니 왕복만 2회 → 1회로 줄인 것은 순수 이득이다.
+ *
+ * 왜 표시를 넣는가: 두 출력을 이어 붙이면 `pidof` 의 숫자 한 줄이 `am start` 출력의 일부처럼
+ * 보일 수 있고, 반대로 `am start` 가 낸 줄을 pid 로 읽을 수도 있다. 경계를 추측하지 않는다.
+ * 이 문자열은 `am start` 도 `pidof` 도 절대 찍지 않는다.
+ */
+export const AM_START_PIDOF_MARKER = '__perftracker_pidof__'
+
+/** 합친 호출의 출력을 두 조각으로 가른다. 표시가 없으면 pid 쪽은 비어 있다 — 지어내지 않는다. */
+export function splitAmStartPidof(text: string): { amStart: string; pidof: string } {
+  const at = text.indexOf(AM_START_PIDOF_MARKER)
+  if (at < 0) return { amStart: text, pidof: '' }
+  return { amStart: text.slice(0, at), pidof: text.slice(at + AM_START_PIDOF_MARKER.length) }
+}
+
+/**
  * `pidof <package>` 의 출력. 못 찾으면 아무것도 안 찍고 exit 1 이므로 빈 문자열이 온다.
  * 같은 이름의 프로세스가 여럿이면 공백으로 이어 찍는데, 그중 어느 것이든 그 앱의 프로세스다.
  */
@@ -222,26 +242,30 @@ export async function startSession(
     configText: buildTraceConfig({ dataSourceBlocks: blocks, durationMs: DEFAULT_MAX_DURATION_MS }),
   })
 
-  // 4) 런처 액티비티를 콜드 실행하고 시작 시간을 잰다.
+  // 4) 런처 액티비티를 콜드 실행하고, 같은 호출에서 그 프로세스의 pid 까지 받아 온다.
+  //
+  // pid 가 왜 필요한가: `linux.process_stats` 는 프로세스 이름을 최초 관측 시 한 번만 확정하고,
+  // zygote 가 fork 한 앱은 `Process.setArgV0()` 전에 잠깐 `zygote64` 라는 이름을 갖는다.
+  // 그 창에 폴링이 걸리면 트레이스는 앱을 영원히 `zygote64` 로 알고, 이름으로는 다시 찾을
+  // 방법이 없다 (`collectors/appProcess.ts`). `--launch` 는 force-stop 후 재실행이라
+  // 앱 프로세스가 **항상** 갓 fork 된 상태이므로 이 경합은 예외가 아니다.
+  //
+  // 왜 한 호출인가: 트레이스는 3) 의 `--detach` 에서 이미 기록을 시작했고 측정 창 래치는
+  // 5) 에서야 무장한다. 그 사이의 adb 왕복은 트레이스 안에서 일어나는 일이라 개수가 곧 비용이다.
+  // 기기 쪽 작업량은 그대로이므로 왕복만 2회 → 1회로 줄였다.
+  // `pidof` 실패는 삼킨다 — pid 는 있으면 좋은 것이지 세션의 전제가 아니다.
+  // (합친 호출의 종료 코드는 `pidof` 의 것이고, `raw` 는 종료 코드로 던지지 않는다.)
   let startup: ActiveSession['startup'] = null
   let appPid: number | null = null
   if (opts.launch && app.launcher_activity !== null) {
-    const r = await ctx.adb.raw(['shell', `am start -W -n ${shellQuote(`${app.package}/${app.launcher_activity}`)}`])
-    startup = parseAmStart(r.stdout)
-
-    // 4-b) 방금 띄운 프로세스의 pid 를 받아 둔다.
-    //
-    // 왜 필요한가: `linux.process_stats` 는 프로세스 이름을 최초 관측 시 한 번만 확정하고,
-    // zygote 가 fork 한 앱은 `Process.setArgV0()` 전에 잠깐 `zygote64` 라는 이름을 갖는다.
-    // 그 창에 폴링이 걸리면 트레이스는 앱을 영원히 `zygote64` 로 알고, 이름으로는 다시 찾을
-    // 방법이 없다 (`collectors/appProcess.ts`). `--launch` 는 force-stop 후 재실행이라
-    // 앱 프로세스가 **항상** 갓 fork 된 상태이므로 이 경합은 예외가 아니다.
-    //
-    // 왜 여기인가: 이 호출은 `am start -W` 와 같은 단계에 있고 측정 창이 열리기 **전**이다.
-    // 창이 열린 뒤에는 어떤 adb 도 보내지 않는다는 규칙은 그대로다.
-    // 실패는 삼킨다 — pid 는 있으면 좋은 것이지 세션의 전제가 아니다.
-    const pid = await ctx.adb.raw(['shell', `pidof ${shellQuote(app.package)}`])
-    appPid = parsePidof(pid.stdout)
+    const component = shellQuote(`${app.package}/${app.launcher_activity}`)
+    const r = await ctx.adb.raw([
+      'shell',
+      `am start -W -n ${component}; echo ${AM_START_PIDOF_MARKER}; pidof ${shellQuote(app.package)}`,
+    ])
+    const parts = splitAmStartPidof(r.stdout)
+    startup = parseAmStart(parts.amStart)
+    appPid = parsePidof(parts.pidof)
   }
 
   const session: ActiveSession = {
