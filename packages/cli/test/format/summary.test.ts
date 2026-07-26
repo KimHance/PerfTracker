@@ -17,7 +17,7 @@ function result(overrides: Partial<Result['metrics']['frame']> = {}): Result {
     thermal_zones: [],
   }
   return {
-    schema_version: '1.0.0',
+    schema_version: '1.1.0',
     tool: { name: 'perftracker', version: '0.1.0' },
     session: {
       id: 'a3f9c1',

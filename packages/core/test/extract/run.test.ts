@@ -34,6 +34,7 @@ async function makeRun(
     state?: 'running' | 'completed' | 'aborted' | 'failed'
     endedAt?: string | null
     adbCommandsDuringSession?: number
+    launch?: boolean
   } = {},
 ): Promise<string> {
   const runDir = mkdtempSync(join(tmpdir(), 'pt-extract-'))
@@ -54,8 +55,9 @@ async function makeRun(
       remoteTracePath: '/data/misc/perfetto-traces/perftracker_a3f9c1.pftrace',
       startedAt: '2026-07-25T14:32:10.000Z',
       configuredDurationMs: 1_800_000,
-      options: { launch: true, video: false },
-      startup: { totalTimeMs: 1842, launchState: 'COLD' },
+      options: { launch: overrides.launch ?? true, video: false },
+      startup:
+        (overrides.launch ?? true) ? { totalTimeMs: 1842, launchState: 'COLD' } : null,
     },
     {
       ...(endedAt !== null ? { endedAt } : {}),
@@ -135,7 +137,7 @@ describe('extractRun', () => {
       toolVersion: '0.1.0',
     })
 
-    expect(result.schema_version).toBe('1.0.0')
+    expect(result.schema_version).toBe('1.1.0')
     expect(result.metrics.frame.status).toBe('collected')
     expect(result.metrics.frame.data?.total_frames).toBe(4)
     expect(result.session.duration_ms).toBe(42_735)
@@ -154,7 +156,7 @@ describe('extractRun', () => {
     })
 
     const written = JSON.parse(readFileSync(join(runDir, 'result.json'), 'utf8')) as Record<string, unknown>
-    expect(written['schema_version']).toBe('1.0.0')
+    expect(written['schema_version']).toBe('1.1.0')
   })
 
   it('Android 12 미만이면 frame 을 unsupported 로 남긴다', async () => {
@@ -303,5 +305,43 @@ describe('extractRun', () => {
     const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: overrun })
 
     expect(result.measurement_overhead.trace_buffer_overrun).toBe(true)
+  })
+
+  it('startup 을 session.json 의 am start -W 결과에서 채운다', async () => {
+    const runDir = await makeRun()
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: runner(join(runDir, 'trace.perfetto-trace')),
+    })
+
+    expect(result.metrics.startup?.status).toBe('collected')
+    expect(result.metrics.startup?.data).toEqual({ total_time_ms: 1842, launch_state: 'COLD' })
+  })
+
+  it('트레이스가 없어도 startup 은 살아남는다 — 트레이스에서 나온 값이 아니다', async () => {
+    const runDir = await makeRun({ trace: null })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
+
+    expect(result.metrics.frame.status).toBe('failed')
+    expect(result.metrics.startup?.status).toBe('collected')
+    expect(result.metrics.startup?.data).toEqual({ total_time_ms: 1842, launch_state: 'COLD' })
+  })
+
+  it('--launch 없이 시작한 세션의 startup 은 skipped 다', async () => {
+    const runDir = await makeRun({ launch: false })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: runner(join(runDir, 'trace.perfetto-trace')),
+    })
+
+    expect(result.metrics.startup?.status).toBe('skipped')
+    expect(result.metrics.startup?.reason_code).toBe('launch_not_requested')
+    expect(result.metrics.startup?.data).toBeNull()
   })
 })

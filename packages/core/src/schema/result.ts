@@ -1,7 +1,9 @@
 import { z } from 'zod'
 import { METRIC_REASON_CODES, type MetricReasonCode } from './reasons.js'
 
-export const SCHEMA_VERSION = '1.0.0'
+// 1.1.0 — metrics 에 startup / cpu / memory / log 를 optional 로 추가 (필드 추가는 minor).
+// 1.0.0 문서는 여전히 이 스키마를 통과한다. required 로 올리면 그것이 깨지고, 그건 major 다.
+export const SCHEMA_VERSION = '1.1.0'
 
 /** 수집 실패와 미지원을 null 로 뭉뚱그리지 않기 위한 상태 구분. */
 export const MetricStatusSchema = z.enum(['collected', 'partial', 'unsupported', 'failed', 'skipped'])
@@ -62,6 +64,17 @@ export const FrameDataSchema = z.object({
   max_ms: z.number(),
 })
 export type FrameData = z.infer<typeof FrameDataSchema>
+
+export const StartupDataSchema = z.object({
+  /** `am start -W` 의 TotalTime — 프로세스 시작부터 첫 프레임까지. */
+  total_time_ms: z.number().int().nonnegative(),
+  /**
+   * `am start -W` 의 LaunchState 원문 (COLD / WARM / HOT). 기기가 보고하지 않으면 null.
+   * enum 으로 좁히지 않는다 — 우리가 정하는 값이 아니라 기기가 뱉는 문자열이다.
+   */
+  launch_state: z.string().nullable(),
+})
+export type StartupData = z.infer<typeof StartupDataSchema>
 
 export const CpuClusterSchema = z.object({
   cpus: z.array(z.number().int()),
@@ -197,12 +210,18 @@ export const ResultSchema = z.object({
   target_app: TargetAppSchema,
   /**
    * 알려진 collector 는 자기 데이터 스키마로 검증하고, 그 밖의 키는 MetricResult 모양만 본다.
-   * 닫힌 object 로 두면 M2 가 collector 를 "등록" 하는 게 아니라 이 선언을 다시 써야 한다
-   * (그리고 zod 가 등록되지 않은 메트릭을 조용히 벗겨낸다).
+   *
+   * 새 메트릭은 **optional** 이다 (schema_version 1.1.0). 1.0.0 시절에 나온 result.json —
+   * frame 하나만 있는 문서 — 이 그대로 통과해야 minor 라고 말할 수 있다.
+   * 생산자는 항상 레지스트리의 모든 항목을 내보내므로, optional 이라고 해서 이 버전이
+   * 실제로 키를 빠뜨리는 일은 없다.
    */
-  metrics: z.object({ frame: metricResultSchema(FrameDataSchema) }).catchall(
-    metricResultSchema(z.unknown()),
-  ),
+  metrics: z
+    .object({
+      frame: metricResultSchema(FrameDataSchema),
+      startup: metricResultSchema(StartupDataSchema).optional(),
+    })
+    .catchall(metricResultSchema(z.unknown())),
   measurement_overhead: MeasurementOverheadSchema,
   references: z.array(ReferenceSchema),
   warnings: z.array(WarningSchema),

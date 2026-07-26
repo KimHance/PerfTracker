@@ -1,14 +1,15 @@
 import { mergeTraceConfigBlocks } from '../perfetto/config.js'
 import { renderReason } from '../schema/reasons.js'
 import { frameCollector } from './frame.js'
+import { startupCollector } from './startup.js'
 import type { Collector, CollectorEnv } from './types.js'
 
 /**
  * 활성 collector 목록. **이 배열이 실제로 소비된다** — `startSession` 이 여기서 TraceConfig
  * 블록을 모으고 `extractRun` 이 여기를 순회해 `metrics` 를 채운다.
- * M2 에서 cpu/memory/log/startup 이, M3 에서 network/thermal/power 가 여기 한 줄로 붙는다.
+ * M3 에서 network/thermal/power 가 여기 한 줄로 붙는다.
  */
-export const COLLECTORS: Collector<unknown>[] = [frameCollector]
+export const COLLECTORS: Collector<unknown>[] = [frameCollector, startupCollector]
 
 /** 이 기기에서 실제로 뭔가를 낼 수 있는 collector 들. */
 export function supportedCollectors(env: CollectorEnv): Collector<unknown>[] {
@@ -24,10 +25,14 @@ export function collectTraceConfigBlocks(env: CollectorEnv): string[] {
   return mergeTraceConfigBlocks(supportedCollectors(env).flatMap((c) => c.traceConfigBlocks()))
 }
 
-/** 아무것도 수집할 수 없을 때 사용자에게 보여줄 사유 목록. */
+/**
+ * 아무것도 수집할 수 없을 때 사용자에게 보여줄 사유 목록.
+ * **미지원 항목만 낸다.** 지원되는 항목을 "알 수 없음" 으로 끼워 넣으면 실제 원인이 묻힌다.
+ */
 export function unsupportedReasons(env: CollectorEnv): string[] {
-  return COLLECTORS.map((c) => {
+  return COLLECTORS.flatMap((c) => {
     const support = c.supports(env)
-    return `${c.id}: ${support.supported ? '알 수 없음' : (renderReason(support.reason) ?? '')}`
+    if (support.supported) return []
+    return [`${c.id}: ${renderReason(support.reason) ?? support.reason.code}`]
   })
 }

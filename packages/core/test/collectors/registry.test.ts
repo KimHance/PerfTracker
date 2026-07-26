@@ -6,6 +6,7 @@ import {
   supportedCollectors,
   unsupportedReasons,
 } from '../../src/collectors/registry.js'
+import { startupCollector } from '../../src/collectors/startup.js'
 import { buildTraceConfig } from '../../src/perfetto/config.js'
 
 const OK = { sdkInt: 36, dataSources: ['android.surfaceflinger.frametimeline'] }
@@ -17,14 +18,18 @@ describe('COLLECTORS 레지스트리', () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it('M1 은 frame 하나를 등록한다', () => {
+  it('frame 과 startup 이 등록되어 있다', () => {
     expect(COLLECTORS).toContain(frameCollector)
+    expect(COLLECTORS).toContain(startupCollector)
   })
 })
 
 describe('collectTraceConfigBlocks', () => {
   it('지원되는 collector 의 블록만 모은다', () => {
-    expect(collectTraceConfigBlocks(OK)).toEqual(frameCollector.traceConfigBlocks())
+    expect(collectTraceConfigBlocks(OK)).toEqual(
+      expect.arrayContaining(frameCollector.traceConfigBlocks()),
+    )
+    // startup 은 지원되지만 블록을 하나도 안 낸다 — 구형 기기에서는 config 가 빈다.
     expect(collectTraceConfigBlocks(OLD)).toEqual([])
   })
 
@@ -45,13 +50,20 @@ describe('collectTraceConfigBlocks', () => {
 describe('supportedCollectors / unsupportedReasons', () => {
   it('지원 여부로 거른다', () => {
     expect(supportedCollectors(OK)).toHaveLength(COLLECTORS.length)
-    expect(supportedCollectors(OLD)).toEqual([])
+    // startup 은 어디서나 지원된다 — 구형 기기에서도 목록이 비지 않는다.
+    expect(supportedCollectors(OLD)).toEqual([startupCollector])
   })
 
-  it('사유를 collector id 와 함께 한국어로 낸다', () => {
+  it('미지원 항목만 사유와 함께 한국어로 낸다', () => {
     const reasons = unsupportedReasons(OLD)
-    expect(reasons).toHaveLength(COLLECTORS.length)
-    expect(reasons[0]).toContain('frame:')
-    expect(reasons[0]).toContain('sdk_int=30')
+    expect(reasons.length).toBe(COLLECTORS.length - supportedCollectors(OLD).length)
+    expect(reasons.some((r) => r.startsWith('frame:'))).toBe(true)
+    expect(reasons.join('\n')).toContain('sdk_int=30')
+    // 지원되는 항목은 "알 수 없음" 같은 잡음으로 목록을 채우지 않는다.
+    expect(reasons.some((r) => r.startsWith('startup:'))).toBe(false)
+  })
+
+  it('전부 지원되면 사유가 하나도 없다', () => {
+    expect(unsupportedReasons(OK)).toEqual([])
   })
 })

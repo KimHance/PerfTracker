@@ -26,6 +26,10 @@ export const METRIC_REASON_CODES = [
   'no_frames',
   /** trace_processor 쿼리가 실패했다. detail: message */
   'query_failed',
+  /** `--launch` 없이 시작한 세션이라 시작 시간을 잴 기회 자체가 없었다. */
+  'launch_not_requested',
+  /** `am start -W` 는 돌았지만 TotalTime 을 보고하지 않았다. */
+  'launch_time_unreported',
 ] as const
 
 export type MetricReasonCode = (typeof METRIC_REASON_CODES)[number]
@@ -40,6 +44,10 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
     `대상 앱(${String(d['package'])})의 렌더 프로세스를 트레이스에서 찾지 못했습니다.`,
   no_frames: (d) => `렌더 프로세스(${String(d['process'])})에서 완료된 프레임을 찾지 못했습니다.`,
   query_failed: (d) => `트레이스 쿼리에 실패했습니다: ${String(d['message'])}`,
+  launch_not_requested: () =>
+    '--launch 없이 시작한 세션이라 앱 시작 시간을 재지 않았습니다.',
+  launch_time_unreported: () =>
+    'am start -W 가 TotalTime 을 보고하지 않았습니다 — 앱이 이미 떠 있었거나 액티비티가 바로 끝났을 수 있습니다.',
 }
 
 /** 코드 → 한국어 문장. 모르는 코드는 조용히 비우지 않고 코드 자체를 남긴다. */
