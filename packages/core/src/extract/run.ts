@@ -10,12 +10,14 @@ import type {
   Collector,
   ExtractOutcome,
 } from '../collectors/types.js'
+import { parseThermalZones } from '../device/state.js'
 import { SchemaValidationError, SessionStateError } from '../errors.js'
 import { TraceProcessor } from '../perfetto/traceProcessor/client.js'
 import { ensureTraceProcessor } from '../perfetto/traceProcessor/locate.js'
 import { REFERENCES } from '../schema/references.js'
 import { type MetricReason, renderReason } from '../schema/reasons.js'
 import {
+  type DeviceState,
   FrameDataSchema,
   type MetricResult,
   type MetricStatus,
@@ -57,6 +59,31 @@ export async function readSnapshots(
     }
   }
   return out
+}
+
+/**
+ * `device.state_*.thermal_zones` 를 raw 원문에서 **다시** 만든다.
+ *
+ * 왜 필요한가: `extract` 는 지금까지 `capture.json` 의 `device.state_before/after` 를 그대로
+ * 옮겼다. 그래서 옛 파서(두 절을 구분 없이 긁어 8존을 15항목으로 만들던 것)로 찍힌 run 은
+ * `metrics.thermal.zones` 가 8존을 말하는 **같은 파일 안에서** `device.state_*.thermal_zones`
+ * 로는 15항목을 말했다. 같은 센서에 대해 두 숫자를 내는 결과는 소비자에게 모순이다.
+ *
+ * 왜 정당한가: 이것은 없던 값을 지어내는 것이 아니라 **같은 바이트를 고쳐진 파서로 다시 읽는
+ * 것**이다. 원문은 `raw/thermalservice_{before,after}.txt` 에 그대로 남아 있고
+ * `artifacts.raw` 에 등재되어 있다. 그리고 "extract 가 더 나은 근거를 쥐면 capture 시점 값을
+ * 갱신한다" 는 이 코드베이스의 기존 관행이다 — `target_app.render_process` / `pid` 가 바로
+ * 그렇게 채워진다. `capture.json` 은 건드리지 않으므로 캡처 기록 자체는 보존된다.
+ *
+ * 근거가 없으면 덮지 않는다: 원문이 없거나(옛 run 이 raw 를 안 남겼거나 디렉토리가 옮겨졌다),
+ * 원문에서 존이 하나도 안 나오면 매니페스트 값을 그대로 둔다. 그 자리에 빈 배열을 넣으면
+ * "센서가 없었다" 는 없던 사실이 된다.
+ */
+function reparseThermalZones<T extends DeviceState | null>(state: T, raw: string | null): T {
+  if (state === null || raw === null) return state
+  const zones = parseThermalZones(raw)
+  if (zones.length === 0) return state
+  return { ...state, thermal_zones: zones }
 }
 
 /**
@@ -276,8 +303,16 @@ export async function extractRun(
     device: {
       serial: manifest.device.serial,
       static: manifest.device.static,
-      state_before: manifest.device.state_before,
-      state_after: manifest.device.state_after,
+      // 원문이 있으면 존 목록을 다시 만든다 — 그래야 이 파일 안에서 metrics.thermal 과
+      // 같은 말을 한다. 원문이 없으면 캡처 때 기록된 값을 그대로 옮긴다.
+      state_before: reparseThermalZones(
+        manifest.device.state_before,
+        capture.snapshots['thermalservice']?.before ?? null,
+      ),
+      state_after: reparseThermalZones(
+        manifest.device.state_after,
+        capture.snapshots['thermalservice']?.after ?? null,
+      ),
     },
     // frame 이 렌더 프로세스를 특정했으면 여기서 채운다 — 손에 쥐고도 안 쓰던 값이다.
     // frame 이 값을 못 냈어도 pid 는 캡처 때 받아 둔 것이 있을 수 있다. 이름은 그렇지 않다 —

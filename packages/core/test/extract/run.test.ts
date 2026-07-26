@@ -33,7 +33,29 @@ const NETSTATS_AFTER = NETSTATS.replaceAll(
 )
 const PACKAGES = fixture('pm-list-packages-u.txt').replaceAll('10388', String(APP_UID))
 
-function deviceState() {
+/**
+ * M3 이전 파서가 만들던 모양 — 두 절을 구분 없이 긁어 같은 존이 두 번 실린다.
+ * 실기기 `capture.json` 이 실제로 이렇게 생겼다(8존이 15항목). `type`/`status`/`source` 도 없다.
+ */
+const LEGACY_DUP_ZONES = [
+  { name: 'PA1THM', celsius: 27.0 },
+  { name: 'SUBBAT', celsius: 0 },
+  { name: 'SUBBATRAW', celsius: 0 },
+  { name: 'AP', celsius: 37.1 },
+  { name: 'BAT', celsius: 34.8 },
+  { name: 'USB', celsius: 32.4 },
+  { name: 'SKIN', celsius: 35.4 },
+  { name: 'PATHM', celsius: 37.2 },
+  { name: 'AP', celsius: 37.1 },
+  { name: 'BAT', celsius: 34.8 },
+  { name: 'PATHM', celsius: 37.2 },
+  { name: 'SKIN', celsius: 35.4 },
+  { name: 'SUBBAT', celsius: 0 },
+  { name: 'SUBBATRAW', celsius: 0 },
+  { name: 'USB', celsius: 32.4 },
+]
+
+function deviceState(thermalZones: { name: string; celsius: number }[] = [{ name: 'AP', celsius: 37.1 }]) {
   return {
     captured_at: '2026-07-25T14:32:10.000Z',
     battery_level: 68,
@@ -45,7 +67,7 @@ function deviceState() {
     network: 'wifi',
     mem_available_kb: 3511516,
     animator_duration_scale: 1,
-    thermal_zones: [{ name: 'AP', celsius: 37.1 }],
+    thermal_zones: thermalZones,
   }
 }
 
@@ -61,6 +83,8 @@ async function makeRun(
     /** `raw/<key>.txt` 로 쓰고 `artifacts.raw` 에 등재할 원문들. 키에 `_before`/`_after` 포함. */
     raw?: Record<string, string>
     appUid?: number | null
+    /** `capture.json` 의 `device.state_*.thermal_zones` 에 넣을 값. */
+    thermalZones?: { name: string; celsius: number }[]
   } = {},
 ): Promise<string> {
   const runDir = mkdtempSync(join(tmpdir(), 'pt-extract-'))
@@ -128,8 +152,8 @@ async function makeRun(
           supported_refresh_rates_hz: [60, 120],
         },
       },
-      state_before: deviceState(),
-      state_after: deviceState(),
+      state_before: deviceState(overrides.thermalZones),
+      state_after: deviceState(overrides.thermalZones),
     },
     target_app: {
       package: PKG,
@@ -581,6 +605,68 @@ describe('extractRun', () => {
       tx_packets: 5,
       shared_uid_packages: ['com.nhn.android.webtoon', 'com.example.sibling'],
     } satisfies NetworkData)
+  })
+
+  /**
+   * 같은 result.json 안의 두 필드가 같은 센서에 대해 서로 다른 말을 하면 안 된다.
+   * 옛 파서로 찍힌 run 의 `capture.json` 은 `thermal_zones` 가 15항목(AP 가 두 번)이고,
+   * `metrics.thermal.zones` 는 원문을 다시 읽어 8존을 낸다. 그대로 두면 LLM 소비자가
+   * 두 필드를 교차 참조했을 때 모순으로 읽는다.
+   *
+   * 지어내는 것이 아니다 — **같은 바이트를 고쳐진 파서로 다시 읽는 것**이고,
+   * `target_app.render_process` 가 이미 같은 방식으로 채워진다.
+   */
+  it('옛 run 의 중복된 thermal_zones 를 raw 원문에서 다시 만든다', async () => {
+    const runDir = await makeRun({
+      trace: null,
+      thermalZones: LEGACY_DUP_ZONES,
+      raw: { thermalservice_before: THERMAL, thermalservice_after: THERMAL_AFTER },
+    })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
+
+    const zones = result.device.state_before.thermal_zones
+    expect(zones).toHaveLength(8)
+    expect(zones.filter((z) => z.name === 'AP')).toHaveLength(1)
+    // 배치 A 가 넓힌 필드가 옛 run 에서도 실제로 채워진다.
+    expect(zones.find((z) => z.name === 'AP')).toEqual({
+      name: 'AP',
+      celsius: 37.1,
+      type: 0,
+      status: 0,
+      source: 'hal',
+    })
+    expect(zones.find((z) => z.name === 'PA1THM')?.source).toBe('cached')
+
+    // 그리고 metrics.thermal 과 **같은 말을** 한다.
+    const thermal = result.metrics.thermal?.data as ThermalData
+    expect(zones.map((z) => z.name)).toEqual(thermal.zones.map((z) => z.name))
+
+    // state_after 도 같이 고쳐진다 — after 원문은 AP 가 41.6 이다.
+    expect(result.device.state_after?.thermal_zones.find((z) => z.name === 'AP')?.celsius).toBe(41.6)
+
+    // capture.json 은 건드리지 않는다. 캡처 기록 자체는 보존된다.
+    const manifest = JSON.parse(readFileSync(join(runDir, 'capture.json'), 'utf8')) as {
+      device: { state_before: { thermal_zones: unknown[] } }
+    }
+    expect(manifest.device.state_before.thermal_zones).toHaveLength(15)
+  })
+
+  /** 근거가 없으면 덮지 않는다. 빈 배열로 덮으면 "센서가 없었다" 는 없던 사실이 된다. */
+  it('raw 원문이 없으면 capture.json 의 thermal_zones 를 그대로 옮긴다', async () => {
+    const runDir = await makeRun({ trace: null, thermalZones: LEGACY_DUP_ZONES })
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+    })
+
+    expect(result.device.state_before.thermal_zones).toHaveLength(15)
+    // 그리고 그 상태를 숨기지 않는다 — thermal 은 원문이 없다고 정직하게 말한다.
+    expect(result.metrics.thermal?.reason_code).toBe('snapshot_unavailable')
   })
 
   it('매니페스트에 uid 가 없으면 network 는 app_uid_unknown 이다', async () => {

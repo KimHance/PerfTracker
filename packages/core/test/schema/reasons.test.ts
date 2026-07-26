@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { POLL_PERIOD_MS } from '../../src/collectors/blocks.js'
 import { METRIC_REASON_CODES, type MetricReason, renderReason } from '../../src/schema/reasons.js'
 
 describe('renderReason', () => {
@@ -33,6 +34,24 @@ describe('renderReason', () => {
       expect(rendered, code).toMatch(/[가-힣]/)
       expect(rendered, code).not.toMatch(/느림|나쁨|권장|개선|PASS|FAIL/)
     }
+  })
+})
+
+/**
+ * `sdk_too_low` 의 "Android 12" 와 정확히 같은 계열의 하드코딩이 하나 더 있었다:
+ * `insufficient_samples` 가 `"폴링 주기(1초)"` 를 문자열로 박아 두고 있었는데,
+ * 진실의 출처는 `collectors/blocks.ts` 의 `POLL_PERIOD_MS` 다. 그 값을 바꾸면 이 문장만
+ * 조용히 거짓이 된다 — 렌더러가 그것을 읽지 않았기 때문이다.
+ */
+describe('insufficient_samples 렌더러', () => {
+  it('폴링 주기를 문자열로 박지 않고 POLL_PERIOD_MS 를 읽는다', () => {
+    const text = renderReason({
+      code: 'insufficient_samples',
+      detail: { samples: 1, required: 2 },
+    })!
+    expect(text).toContain(String(POLL_PERIOD_MS))
+    // 1000ms 를 "1초" 라고 다시 쓰면 상수를 안 읽고도 통과할 수 있다.
+    expect(text).not.toContain('1초')
   })
 })
 

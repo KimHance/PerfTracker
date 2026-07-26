@@ -70,6 +70,29 @@ describe('parseThermalDump', () => {
     ])
   })
 
+  /**
+   * G2. `NaN` 은 null 로 접으면서 **빈 배열만 뚫려 있었다**:
+   * `''.split(',')` → `['']` → `Number('')` → `0` → `Number.isFinite(0)` 이 참이라
+   * `[0]` 이 나왔다. THERMAL_STATUS_NONE(0단계) 에 임계 0 이 정의된 것처럼 보이는데,
+   * 기기는 임계를 하나도 보고하지 않았다. 없는 임계를 지어내는 것이고,
+   * 바로 그 자리의 주석이 "0 으로 접으면 없던 임계를 지어내는 것" 이라고 쓰여 있었다.
+   */
+  it('빈 headroom 배열은 [0] 이 아니라 [] 다 — 없는 임계를 지어내지 않는다', () => {
+    const dump = parseThermalDump('Temperature headroom thresholds:\n[]\n')
+    expect(dump.headroomThresholds).toEqual([])
+  })
+
+  it('공백만 있는 headroom 배열도 [] 다', () => {
+    expect(parseThermalDump('Temperature headroom thresholds:\n[  ]\n').headroomThresholds).toEqual(
+      [],
+    )
+  })
+
+  /** 절 자체가 없는 것은 "빈 배열" 과 다른 사실이다 — 그쪽은 null 이다. */
+  it('headroom 절이 아예 없으면 [] 가 아니라 null 이다', () => {
+    expect(parseThermalDump('Thermal Status: 0\n').headroomThresholds).toBeNull()
+  })
+
   it('CoolingDevice 와 TemperatureThreshold 를 온도로 오탐하지 않는다', () => {
     const dump = parseThermalDump(THERMAL_EMU)
     expect(dump.hal).toEqual([
@@ -129,11 +152,27 @@ describe('parseThermalZones (DeviceState 투영)', () => {
   it('중복 없이 존 하나당 한 줄이고 type/status 를 들고 간다', () => {
     const zones = parseThermalZones(THERMAL)
     expect(zones).toHaveLength(8)
-    expect(zones).toContainEqual({ name: 'AP', celsius: 37.1, type: 0, status: 0 })
+    expect(zones).toContainEqual({ name: 'AP', celsius: 37.1, type: 0, status: 0, source: 'hal' })
   })
 
   it('센서가 없으면 빈 배열', () => {
     expect(parseThermalZones('')).toEqual([])
+  })
+
+  /**
+   * 계획서 D4: "각 존은 어느 섹션에서 왔는지 `source` 로 들고 다닌다."
+   * `mergeThermalReadings` 가 계산해 놓은 `source` 를 이 투영이 버리고 있었다.
+   *
+   * 왜 중요한가: 실기기(SM-S901N / Android 16) 원본 8개를 대조하니 `Cached` 전용 존인
+   * `PA1THM` 이 약 3시간에 걸친 4세션의 전/후 덤프에서 소수점까지 **계속 27.0°C** 였다.
+   * 같은 기간 HAL 이 주는 `AP` 는 30.8~41.6°C 로 움직였다. 즉 `cached` 존의 델타 0 은
+   * "온도가 안 변했다" 가 아니라 "이 값이 갱신되지 않았다" 일 수 있고, `source` 없이는
+   * 소비자가 그 구분을 할 방법이 아예 없다.
+   */
+  it('source 를 버리지 않는다 — Cached 전용 존의 값은 갱신되지 않을 수 있다', () => {
+    const zones = parseThermalZones(THERMAL)
+    expect(zones.find((z) => z.name === 'AP')?.source).toBe('hal')
+    expect(zones.find((z) => z.name === 'PA1THM')?.source).toBe('cached')
   })
 })
 

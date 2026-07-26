@@ -1,3 +1,5 @@
+import { POLL_PERIOD_MS } from '../collectors/blocks.js'
+
 /**
  * 메트릭이 왜 수집되지 않았는지를 **안정적인 기계 키**로 말한다.
  *
@@ -193,8 +195,12 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
     `앱이 실행되지 않았다는 뜻이 아닙니다 — 이 세션에서 시작 시간만 측정되지 않은 것입니다.`,
   no_cpu_samples: () =>
     'linux.sys_stats 의 CPU 시간 표본이 트레이스에 없습니다.',
+  // 주기를 문장에 하드코딩하지 않는다. 진실의 출처는 `collectors/blocks.ts` 의
+  // `POLL_PERIOD_MS` 하나이고, 그 값이 바뀌면 이 문장도 같이 바뀌어야 한다 —
+  // `sdk_too_low` 가 "Android 12" 를 하드코딩하고 있던 것과 정확히 같은 계열이다.
   insufficient_samples: (d) =>
-    `표본이 ${String(d['samples'])}개뿐이라 구간 차이를 낼 수 없습니다 (최소 ${String(d['required'])}개 필요). 세션이 폴링 주기(1초)보다 짧았을 수 있습니다.`,
+    `표본이 ${String(d['samples'])}개뿐이라 구간 차이를 낼 수 없습니다 ` +
+    `(최소 ${String(d['required'])}개 필요). 세션이 폴링 주기(${POLL_PERIOD_MS}ms)보다 짧았을 수 있습니다.`,
   cpu_counters_did_not_advance: (d) =>
     `표본은 ${String(d['samples'])}개 있었지만 CPU 시간 카운터가 처음과 끝이 같습니다 — ` +
     `구간 전체가 절전/유휴 상태였을 수 있습니다.`,

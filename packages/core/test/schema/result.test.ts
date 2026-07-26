@@ -156,6 +156,20 @@ describe('ResultSchema', () => {
     })
   })
 
+  /**
+   * D4: "각 존은 어느 섹션에서 왔는지 `source` 로 들고 다닌다." 이 값이 없으면 소비자는
+   * cached 존의 값이 갱신되지 않은 것일 수 있다는 사실에 도달할 수 없다.
+   */
+  it('source 가 붙은 문서도 통과하고 그 값이 결과에 남는다', () => {
+    const next = minimalResult()
+    next.device.state_before.thermal_zones = [
+      { name: 'PA1THM', celsius: 27, type: 5, status: 0, source: 'cached' },
+    ] as never
+    const parsed = ResultSchema.safeParse(next)
+    expect(parsed.success).toBe(true)
+    expect(parsed.data!.device.state_before.thermal_zones[0]?.source).toBe('cached')
+  })
+
   /** 벤더가 mType/mStatus 를 안 찍는 기기의 값은 null 이지 0 이 아니다 (G2). */
   it('type/status 가 null 인 존도 통과한다', () => {
     const next = minimalResult()
@@ -410,13 +424,82 @@ describe('resultJsonSchema', () => {
     expect(d).toContain('ftrace')
   })
 
+  /** `data` 는 nullable 이라 anyOf 로 나온다 — object 쪽 가지를 찾아 들어간다. */
+  const metricDataProps = (id: string): Record<string, any> => {
+    const data = props(props(props(resultJsonSchema())['metrics'])[id])['data'] as {
+      anyOf?: Record<string, any>[]
+    }
+    const object = data.anyOf?.find((b) => b['type'] === 'object') ?? data
+    return props(object)
+  }
+
+  it('thermal 의 숫자가 기기 전역이고 델타 부호가 있다는 것을 스키마에서 말한다', () => {
+    const zones = metricDataProps('thermal')['zones'] as { description?: string }
+    expect(zones.description).toBeDefined()
+    expect(zones.description).toContain('기기 전역')
+    // 전/후 2점이므로 구간 중 최고 온도는 원리적으로 없다.
+    expect(zones.description).toMatch(/구간 중 최고 온도/)
+    // 0.0 을 해석하지 않는다.
+    expect(zones.description).toContain('0.0')
+  })
+
+  /**
+   * 실기기 대조에서 나온 사실: `Cached` 전용 존 하나가 4세션 8개 덤프 내내 27.0°C 로
+   * 고정이었고 같은 기간 HAL 존은 30.8~41.6°C 로 움직였다. 그 존의 `delta_c` 0 은
+   * "온도가 안 변했다" 가 아니라 "이 값이 갱신되지 않았다" 일 수 있다.
+   * 이 한정이 스키마 밖(소스 주석)에만 있으면 `perftracker schema` 만 읽는 소비자에게는
+   * 거짓 청정 신호가 된다 — 0 이 관측된 안정으로 읽힌다.
+   */
+  it('cached 존의 delta 가 온도 변화가 아닐 수 있다는 것을 스키마에서 말한다', () => {
+    const zoneProps = props((metricDataProps('thermal')['zones'] as { items: unknown }).items)
+    const source = (zoneProps['source'] as { description: string }).description
+    const delta = (zoneProps['delta_c'] as { description: string }).description
+
+    expect(source).toContain('cached')
+    expect(source).toMatch(/갱신/)
+    // 근거가 함께 있어야 한다 — 주장만 있으면 소비자가 무게를 못 잰다.
+    expect(source).toContain('27.0')
+    expect(source).toMatch(/구분하지 못한다/)
+    // delta_c 만 읽는 소비자도 그 사실에 도달해야 한다.
+    expect(delta).toContain('cached')
+    expect(delta).toMatch(/음수가 정상/)
+  })
+
+  it('network 의 숫자가 무엇의 합계인지를 스키마에서 말한다', () => {
+    const rx = (metricDataProps('network')['rx_bytes'] as { description: string }).description
+    expect(rx).toContain('uid 단위')
+    expect(rx).toContain('IP 계층')
+    expect(rx).toContain('loopback')
+    expect(rx).toMatch(/wifi \/ mobile 로 나뉘지 않는다/)
+    // 관측한 0 과 조회 못 한 것의 구분.
+    expect(rx).toMatch(/조회하지 못했다/)
+
+    const shared = (metricDataProps('network')['shared_uid_packages'] as { description: string })
+      .description
+    expect(shared).toMatch(/null 은 그 스냅샷을 읽지 못했다는 뜻이다/)
+  })
+
+  /**
+   * C1. 옛 문서의 `thermal_zones` 에는 중복이 남아 있다. "존 하나당 정확히 한 항목이다" 를
+   * 무조건문으로 두면 **오늘 이 저장소가 만들 수 있는 문서 일부가 그 문장을 위반한다.**
+   */
+  it('thermal_zones 의 중복 없음 보장에 한정 조건이 붙어 있다', () => {
+    const d = (props(props(props(resultJsonSchema())['device'])['state_before'])[
+      'thermal_zones'
+    ] as { description: string }).description
+
+    expect(d).toMatch(/보장은 .type.\/.source. 필드를 가진 문서에만 적용된다/)
+    expect(d).toContain('raw/thermalservice')
+    expect(d).toContain('target_app.render_process')
+  })
+
   it('JSON 으로 직렬화된다 (perftracker schema 가 그대로 출력한다)', () => {
     expect(() => JSON.parse(JSON.stringify(resultJsonSchema()))).not.toThrow()
   })
 
-  it('다섯 메트릭이 모두 JSON Schema 에 실린다 — catchall 로 뭉개지지 않는다', () => {
+  it('일곱 메트릭이 모두 JSON Schema 에 실린다 — catchall 로 뭉개지지 않는다', () => {
     const metrics = props(props(resultJsonSchema())['metrics'])
-    for (const id of ['frame', 'startup', 'cpu', 'memory', 'log']) {
+    for (const id of ['frame', 'startup', 'cpu', 'memory', 'log', 'thermal', 'network']) {
       expect(metrics[id], `${id} 가 스키마에 없음`).toBeDefined()
     }
   })

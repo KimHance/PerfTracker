@@ -112,6 +112,29 @@ function boolOrNull(text: string, re: RegExp): boolean | null {
   return m === undefined ? null : m === 'true'
 }
 
+/**
+ * `Temperature headroom thresholds:` 다음 줄의 `[...]` 안쪽을 숫자 배열로 바꾼다.
+ *
+ * 세 상태가 **서로 다른 사실**이라 셋 다 다르게 나온다:
+ *   - 절이 없다        → `null` ("이 기기는 그 절을 안 찍는다")
+ *   - `[]` 로 비었다   → `[]`   ("찍었는데 임계가 하나도 없다")
+ *   - `NaN` 이 섞였다  → 그 자리만 `null` ("이 단계에 임계가 정의되지 않았다")
+ *
+ * 가운데를 놓치면 `''.split(',')` 가 `['']` 이 되고 `Number('')` 가 **0** 이라
+ * `[0]` 이 나온다 — THERMAL_STATUS_NONE 에 임계 0 이 정의된 것처럼 보이는데
+ * 기기는 아무것도 보고하지 않았다. 없는 임계를 지어내는 것이다.
+ * `NaN` 을 null 로 접는 규칙이 이미 그 이유로 존재하는데 빈 배열만 뚫려 있었다.
+ */
+function parseHeadroom(raw: string | undefined): (number | null)[] | null {
+  if (raw === undefined) return null
+  if (raw.trim().length === 0) return []
+  return raw.split(',').map((v) => {
+    const n = Number(v.trim())
+    // JSON 은 NaN 을 실을 수 없다. 0 으로 접으면 없던 임계를 지어내는 것이다.
+    return Number.isFinite(n) ? n : null
+  })
+}
+
 export function parseThermalDump(text: string): ThermalDump {
   const lines = text.split('\n')
 
@@ -127,15 +150,7 @@ export function parseThermalDump(text: string): ThermalDump {
     halReady: boolOrNull(text, /^HAL Ready:\s*(true|false)/m),
     hal: parseReadings(sectionLines(lines, 'Current temperatures from HAL:').join('\n')),
     cached: parseReadings(sectionLines(lines, 'Cached temperatures:').join('\n')),
-    headroomThresholds:
-      headroomRaw === undefined
-        ? null
-        : headroomRaw.split(',').map((v) => {
-            const n = Number(v.trim())
-            // NaN 은 "이 단계에 임계가 정의되지 않았다" 는 기기의 진술이다. 0 으로 접으면
-            // 없던 임계를 지어내는 것이고, JSON 은 NaN 을 실을 수 없다.
-            return Number.isFinite(n) ? n : null
-          }),
+    headroomThresholds: parseHeadroom(headroomRaw),
   }
 }
 
@@ -178,15 +193,24 @@ export function mergeThermalReadings(
 /**
  * `DeviceState.thermal_zones` 로 가는 투영. `metrics.thermal` 과 **같은 파서를 쓴다** —
  * 파서가 둘이면 결함도 둘이 된다.
+ *
+ * `source` 를 함께 내보낸다. 예전에는 `mergeThermalReadings` 가 계산한 것을 여기서 버렸는데,
+ * 그러면 `cached` 전용 존의 값이 **갱신되지 않은 값일 수 있다는 사실**을 소비자가 알 방법이
+ * 없다 (실기기 실측: `PA1THM` 이 4세션 8개 덤프 내내 27.0°C 고정).
  */
-export function parseThermalZones(
-  text: string,
-): { name: string; celsius: number; type: number | null; status: number | null }[] {
+export function parseThermalZones(text: string): {
+  name: string
+  celsius: number
+  type: number | null
+  status: number | null
+  source: 'hal' | 'cached'
+}[] {
   return mergeThermalReadings(parseThermalDump(text)).map((z) => ({
     name: z.name,
     celsius: z.celsius,
     type: z.type,
     status: z.status,
+    source: z.source,
   }))
 }
 

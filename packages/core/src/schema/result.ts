@@ -329,7 +329,9 @@ export const ThermalZoneReadingSchema = z.object({
     .describe(
       'after_c − before_c. **부호 있는 값이고, 음수가 정상이다** — 실기기 4세션 중 2세션에서 ' +
         'AP 온도가 내려갔다(32.1→30.8, 32.1→31.9). 이 값을 "상승량" 이나 "발열" 로 읽으면 안 된다. ' +
-        '어느 한쪽이 null 이면 null 이다.',
+        '어느 한쪽이 null 이면 null 이다. ' +
+        '**source 가 `cached` 인 존에서는 이 값이 온도 변화가 아닐 수 있다** — 그 값은 갱신이 ' +
+        '올 때만 바뀌고, 안 오면 몇 시간이고 같은 숫자가 남는다. source 설명을 반드시 함께 읽을 것.',
     ),
   status_before: z
     .number()
@@ -344,7 +346,14 @@ export const ThermalZoneReadingSchema = z.object({
     .describe(
       '이 값이 dumpsys 의 어느 절에서 왔는지. `hal` = `Current temperatures from HAL`(덤프 시점에 ' +
         'HAL 에 직접 물은 값, 우선한다), `cached` = `Cached temperatures`(프레임워크가 콜백으로 ' +
-        '들고 있던 값). HAL 이 이번에 안 준 센서가 cached 에만 남아 있는 경우가 실기기에서 관측된다.',
+        '들고 있던 값). HAL 이 이번에 안 준 센서가 cached 에만 남아 있는 경우가 실기기에서 ' +
+        '관측되므로 버리지 않고 싣되, 출처를 함께 싣는다.\n' +
+        '**`cached` 인 존의 delta_c 를 온도 변화로 읽으면 안 된다.** 이 값은 HAL 이 콜백을 ' +
+        '보낼 때만 갱신되고, 갱신이 오지 않으면 같은 숫자가 그대로 남는다. ' +
+        '실측 근거: 어느 실기기(Android 16)의 cached 전용 존 `PA1THM` 은 약 3시간에 걸친 ' +
+        '4세션의 전/후 덤프 8개에서 소수점까지 계속 27.0°C 였고, 같은 기간 HAL 이 주는 `AP` 는 ' +
+        '30.8~41.6°C 로 움직였다. 그래서 `cached` 존의 delta_c 0 은 "온도가 안 변했다" 가 아니라 ' +
+        '"이 값이 갱신되지 않았다" 일 수 있고, **이 도구는 둘을 구분하지 못한다.**',
     ),
 })
 export type ThermalZoneReading = z.infer<typeof ThermalZoneReadingSchema>
@@ -509,9 +518,11 @@ export const DeviceStateSchema = z.object({
         name: z
           .string()
           .describe(
-            '센서 이름. **벤더가 정하는 임의 문자열이다**(`AP` / `SKIN` / `PATHM` / ' +
+            '센서 이름. **벤더가 정하는 임의 문자열이다**(`AP` / `SKIN` / ' +
               '`test temperature sensor`). 이 값으로 CPU 온도인지 피부 온도인지 판별하지 말 것 — ' +
-              '그 판별은 type 으로 한다.',
+              '그 판별은 type 으로 한다. 유일성도 보장되지 않는다: 한 실기기에 `PATHM` 과 ' +
+              '`PA1THM` 이 **둘 다** 있고 한 글자 차이의 서로 다른 센서다. ' +
+              '이 도구가 존을 동일시하는 키는 이름이 아니라 (type, name) 쌍이다.',
           ),
         celsius: z.number(),
         type: z
@@ -535,13 +546,32 @@ export const DeviceStateSchema = z.object({
               '기기 전체의 단계가 아니라 이 센서의 것이다. ' +
               '**이 필드가 아예 없는 문서는 M3 이전에 산출된 것이다.**',
           ),
+        source: z
+          .enum(['hal', 'cached'])
+          .optional()
+          .describe(
+            '이 값이 온 절. `hal` = `Current temperatures from HAL`, ' +
+              '`cached` = `Cached temperatures`(프레임워크가 콜백으로 들고 있던 값). ' +
+              '**`cached` 는 갱신이 올 때만 바뀌므로 오래된 값일 수 있다** — 실기기에서 ' +
+              'cached 전용 존 하나가 약 3시간 동안 같은 값이었다. ' +
+              '자세한 것은 metrics.thermal 의 zones[].source 설명에 있다. ' +
+              '**이 필드가 아예 없는 문서는 M3 이전에 산출된 것이다.**',
+          ),
       }),
     )
     .describe(
       '`dumpsys thermalservice` 가 이 시점에 보고한 센서별 온도. ' +
         '**기기 전역이며 대상 앱의 온도가 아니다** — 다른 앱, 화면 밝기, USB 충전이 전부 섞인다. ' +
         '`Current temperatures from HAL` 을 우선하고 거기 없는 센서는 `Cached temperatures` 에서 ' +
-        '가져오며, 존 하나당 정확히 한 항목이다. ' +
+        '가져온다.\n' +
+        '**존 하나당 한 항목이라는 보장은 `type`/`source` 필드를 가진 문서에만 적용된다.** ' +
+        'M3 이전의 파서는 두 절을 구분 없이 긁어 같은 존을 두 번 실었다(실기기 8존이 15항목). ' +
+        '이 결과는 `raw/thermalservice_{before,after}.txt` 원문이 run 디렉토리에 남아 있으면 ' +
+        'extract 가 그 원문에서 이 배열을 **다시 만들어** 중복을 없앤다 — 같은 방식의 선례가 ' +
+        '`target_app.render_process` 다(capture 때 몰랐던 것을 extract 가 더 나은 근거로 채운다). ' +
+        '원문이 없으면 capture.json 에 기록된 값을 그대로 옮기며, 그 값에는 중복이 남아 있을 수 ' +
+        '있다. 그래서 **`type`/`source` 가 없는 항목이 보이면 중복을 의심해야 한다.** ' +
+        '`capture.json` 쪽 값은 그대로 두므로 두 파일의 이 필드가 다를 수 있다.\n' +
         '값이 정확히 `0.0` 인 존이 실기기에서 관측된다(SUBBAT / SUBBATRAW). ' +
         '이 도구는 그것이 "실제 0°C" 인지 "이 기기에 그 센서가 없다" 인지 **판별하지 않는다** — ' +
         '기기가 보고한 값을 그대로 싣는다. ' +
