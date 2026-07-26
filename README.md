@@ -307,10 +307,41 @@ npm run test:device   # 실기기가 꽂혀 있어야 함
   뜨지만 값이 kHz 가 아니므로 크기에 대한 검증은 실기기에서만 가능하다.
 - **로그 수집** — 이 이미지의 SELinux 가 `traced_probes` 의 `logdr` 소켓 접근을 막아
   `android.log` 가 항상 비어 있다. 크래시·ANR 분류는 유닛 테스트로만 덮여 있다.
-- **프레임 타임라인** — 에뮬레이터 런처 조작으로는 `actual_frame_timeline_slice` 가 채워지지
-  않았다. Frame 메트릭의 실제 수집은 실기기(M1)에서만 확인됐다.
+  (에뮬레이터 6세션 전부 `partial` / `no_log_entries`.)
 - **big.LITTLE 코어별 거동** — 에뮬레이터는 4코어가 모두 같은 클러스터다.
 - **Thermal / GPU** — 물리 센서가 없다 (M3 범위).
+
+에뮬레이터에서 **검증된** 항목 (`--launch` 세션 6회 실측):
+
+- **프레임 타임라인** — `--launch` 로 앱을 콜드 스타트시킨 세션은 6회 모두 대상 앱의
+  프레임을 수집했다 (4~8 프레임, `process = com.example.streaming.debug`).
+  (예전 이 문서는 "에뮬레이터에서는 `actual_frame_timeline_slice` 가 채워지지 않는다" 고
+  적었는데, 그것은 런처만 조작한 세션의 관측이었고 지금은 사실이 아니다. 다만 프레임 **수**가
+  적으므로 분포·백분위의 통계적 의미는 실기기에서 봐야 한다.)
+- **CPU 사용률과 주파수 이벤트의 존재** — 6회 모두 `collected`, 4코어 전부에서 `cpufreq`
+  카운터가 나왔다 (값의 크기는 위 참조).
+
+### `--launch` 인데 시작 시간이 안 나오는 경우
+
+`metrics.startup` 이 `partial` + `launch_wait_timed_out` 으로 나오고 값이 없을 수 있습니다.
+**이 에뮬레이터에서는 6회 중 3회가 그랬습니다.**
+
+원인은 도구가 아니라 `am start -W` 자체입니다. 이 앱의 콜드 스타트가 이 에뮬레이터에서
+12~15초 걸리는데, 그럴 때 ActivityManager 가 실행 완료 보고를 기다리다 포기하고 이렇게
+답합니다:
+
+```
+Status: timeout
+LaunchState: UNKNOWN (-1)
+Activity: <패키지>/<런처 액티비티>
+WaitTime: 11062
+Complete
+```
+
+`TotalTime` 이 아예 찍히지 않습니다. **앱이 실행되지 않았다는 뜻이 아닙니다** — 같은
+세션에서 앱의 pid 는 확보되고 프레임·메모리도 정상 수집됩니다. 그 사실을 `target_app.pid`
+로 확인할 수 있고, 경고 `app_launch_time_unmeasured` 가 "이 세션에서 시작 시간을 못 쟀다"
+는 것만 말합니다. 느린 콜드 스타트를 가진 앱은 실기기에서도 같은 일이 일어날 수 있습니다.
 
 ### 트레이스가 앱을 `zygote64` 로 아는 경우
 
