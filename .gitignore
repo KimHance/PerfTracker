@@ -5,11 +5,12 @@ dist/
 # 측정 세션 산출물 (트레이스 원본이 커서 커밋하지 않음)
 runs/
 
-# superpowers 작업 산출물 (렛저, 리뷰 diff, 브리프, 보고서)
-.superpowers/
-
-# superpowers 스펙·계획서 (로컬 보관, 저장소에는 코드와 README 만 둔다)
-docs/superpowers/
+# 작업 맥락(렛저·설계 스펙·계획서·리뷰 보고서)은 의도적으로 커밋한다.
+# 다른 컴퓨터에서 작업을 이어받으려면 그것들이 저장소에 있어야 한다 —
+# 코드만으로는 "왜 이렇게 했는가" 를 복원할 수 없다.
+#   .superpowers/sdd/STANDING-ORDERS.md  — 모든 판단과 근거
+#   docs/superpowers/plans/              — 마일스톤 계획서
+#   docs/superpowers/specs/              — 설계 스펙
 
 # 테스트 픽스처는 예외 — fixtures/ 는 의도적으로 커밋한다
 
