@@ -15,7 +15,7 @@ import {
 import { runStart } from '../../src/commands/start.js'
 import { runStop } from '../../src/commands/stop.js'
 import { createContext } from '../../src/context.js'
-import { DEVICE_TARGET_APP } from './target.js'
+import { DEVICE_OPTS, DEVICE_TARGET_APP } from './target.js'
 
 /**
  * `mAppUidStatsMap` 표에서 uid 한 행을 **collector 와 무관하게** 다시 읽는다.
@@ -76,7 +76,7 @@ function readUidRow(
 
 describe('M3 기기 통합', () => {
   it('이 기기가 M3 의 두 지표를 낼 수 있는 조건을 갖췄다', async () => {
-    const ctx = await createAdbContext({})
+    const ctx = await createAdbContext(DEVICE_OPTS)
     const probe = await probeDevice(ctx.adb)
 
     // Thermal 은 sdk 29+, Network 는 sdk 34+ 다. 둘 다 데이터소스를 요구하지 않는다.
@@ -101,7 +101,7 @@ describe('M3 기기 통합', () => {
 
   it('start → stop 이 thermal 과 network 를 내놓고 측정 창은 여전히 깨끗하다', async () => {
     const out = mkdtempSync(join(tmpdir(), 'pt-m3-'))
-    const ctx = await createContext({})
+    const ctx = await createContext(DEVICE_OPTS)
 
     await runStart(ctx, { app: DEVICE_TARGET_APP, name: 'm3', launch: true, video: false, out, force: true })
     const active = await readActiveSession(ctx.serial)
@@ -109,17 +109,20 @@ describe('M3 기기 통합', () => {
 
     await new Promise((r) => setTimeout(r, 15_000))
 
-    const summary = await runStop(await createContext({}), { offline: false })
+    const output = await runStop(await createContext(DEVICE_OPTS), { offline: false })
     expect(await readActiveSession(ctx.serial)).toBeNull()
 
-    // 요약에 두 항목의 자리가 있어야 한다 — 값이든 사유든.
-    for (const label of ['Thermal', 'Network']) {
-      expect(summary, `${label} 줄 없음`).toContain(label)
-    }
+    // 요약을 찍지 않으므로 stop 이 남기는 것은 다음에 열 파일의 경로 하나다.
+    expect(output).toContain(`${active!.runDir}/result.json`)
 
     // 원본이 남아 있으므로 기기 없이 재산출된다.
     const result = await extractRun(active!.runDir, {})
     expect(result.schema_version).toBe('1.1.0')
+
+    // M3 의 두 메트릭이 **산출물에** 자리를 갖는다 — 값이든 사유든 (m2 와 같은 이유).
+    for (const id of ['thermal', 'network']) {
+      expect(result.metrics[id], `${id} 메트릭 없음`).toBeDefined()
+    }
 
     // ---- 가장 중요한 단언. M3 이 기기로 보내는 명령을 둘 늘렸다. ----
     // 이 값이 0 이 아니면 새 명령(`dumpsys netstats` / `pm list packages -U`) 중 하나가

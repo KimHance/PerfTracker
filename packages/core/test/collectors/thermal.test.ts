@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { thermalCollector } from '../../src/collectors/thermal.js'
+import { thermalCollector } from '../../src/collectors/thermal/index.js'
 import type { BaseExtractContext, ExtractOutcome } from '../../src/collectors/types.js'
 import type { MetricReason } from '../../src/schema/reasons.js'
 import type { ThermalData } from '../../src/schema/result.js'
@@ -69,7 +69,7 @@ describe('thermalCollector.supports', () => {
 
   /** D9: M3 는 데이터소스도 ftrace 이벤트도 늘리지 않는다. */
   it('트레이스 설정을 하나도 만들지 않는다', () => {
-    expect(thermalCollector.traceConfigBlocks()).toEqual([])
+    expect(thermalCollector.traceConfigBlocks({ sdkInt: 36, dataSources: [] })).toEqual([])
     expect(thermalCollector.needsTrace).toBe(false)
   })
 

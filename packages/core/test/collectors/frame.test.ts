@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { bucketFrames, buildFrameBuckets, frameCollector, percentile } from '../../src/collectors/frame.js'
-import { FRAME_PROCESS_SQL, frameDurationsSql } from '../../src/collectors/frame.js'
+import {
+  bucketFrames,
+  buildFrameBuckets,
+  buildFrameTimeline,
+  frameCollector,
+  frameSamplesSql,
+  percentile,
+} from '../../src/collectors/frame/index.js'
+import { FRAME_PROCESS_SQL, frameDurationsSql } from '../../src/collectors/frame/index.js'
 import type { CaptureFacts } from '../../src/collectors/types.js'
 import { buildTraceConfig } from '../../src/perfetto/config.js'
 import { TraceProcessor } from '../../src/perfetto/traceProcessor/client.js'
@@ -120,11 +127,11 @@ describe('frameCollector', () => {
   })
 
   it('TraceConfig 블록에 frametimeline 이 들어간다', () => {
-    expect(frameCollector.traceConfigBlocks().join('\n')).toContain('android.surfaceflinger.frametimeline')
+    expect(frameCollector.traceConfigBlocks({ sdkInt: 36, dataSources: [] }).join('\n')).toContain('android.surfaceflinger.frametimeline')
   })
 
   it('TraceConfig 블록에 linux.process_stats 도 들어간다 — 프로세스 이름 해석에 필요하다', () => {
-    const text = frameCollector.traceConfigBlocks().join('\n')
+    const text = frameCollector.traceConfigBlocks({ sdkInt: 36, dataSources: [] }).join('\n')
     expect(text).toContain('linux.process_stats')
     expect(text).toContain('proc_stats_poll_ms: 1000')
     expect(text).toContain('scan_all_processes_on_start: true')
@@ -132,7 +139,7 @@ describe('frameCollector', () => {
 
   it('내는 블록은 저부하 불변식을 통과한다 (폴링 주기 1000ms 이상)', () => {
     expect(() =>
-      buildTraceConfig({ dataSourceBlocks: frameCollector.traceConfigBlocks() }),
+      buildTraceConfig({ dataSourceBlocks: frameCollector.traceConfigBlocks({ sdkInt: 36, dataSources: [] }) }),
     ).not.toThrow()
   })
 
@@ -149,8 +156,9 @@ describe('frameCollector', () => {
       .on(`query /t.pftrace ${FRAME_PROCESS_SQL}`, {
         stdout: `"j"\n"[{"upid":2,"pid":24193,"name":"${pkg}","frames":4}]"\n`,
       })
-      .on(`query /t.pftrace ${frameDurationsSql(2)}`, {
-        stdout: '"j"\n"[8000000,20000000,4000000,900000000]"\n',
+      .on(`query /t.pftrace ${frameSamplesSql(2)}`, {
+        // [상대초, dur_ns] — 0초에 3장, 1초에 1장.
+        stdout: '"j"\n"[[0,8000000],[0,20000000],[0,4000000],[1,900000000]]"\n',
       })
     const tp = new TraceProcessor('/bin/tp', '/t.pftrace', runner)
 
@@ -169,7 +177,6 @@ describe('frameCollector', () => {
     expect(data!.pid).toBe(24193)
     expect(data!.total_frames).toBe(4)
     expect(data!.max_ms).toBe(900)
-    expect(data!.within_16_67ms_ratio).toBe(0.5)
     expect(data!.buckets.reduce((s, b) => s + b.count, 0)).toBe(4)
   })
 
@@ -200,7 +207,7 @@ describe('frameCollector', () => {
       .on(`query /t.pftrace ${FRAME_PROCESS_SQL}`, {
         stdout: `"j"\n"[{"upid":2,"pid":24193,"name":"${pkg}","frames":0}]"\n`,
       })
-      .on(`query /t.pftrace ${frameDurationsSql(2)}`, { stdout: '"j"\n"[]"\n' })
+      .on(`query /t.pftrace ${frameSamplesSql(2)}`, { stdout: '"j"\n"[]"\n' })
     const tp = new TraceProcessor('/bin/tp', '/t.pftrace', runner)
 
     await expect(
@@ -226,8 +233,8 @@ describe('frameCollector', () => {
       .on(`query /t.pftrace ${FRAME_PROCESS_SQL}`, {
         stdout: `"j"\n"[{"upid":2,"pid":24193,"name":"${pkg}","frames":2}]"\n`,
       })
-      .on(`query /t.pftrace ${frameDurationsSql(2)}`, {
-        stdout: '"j"\n"[8000000,-1000000]"\n',
+      .on(`query /t.pftrace ${frameSamplesSql(2)}`, {
+        stdout: '"j"\n"[[0,8000000],[0,-1000000]]"\n',
       })
     const tp = new TraceProcessor('/bin/tp', '/t.pftrace', runner)
 
@@ -259,8 +266,8 @@ describe('frameCollector', () => {
   function zygoteRunner(): FakeProcessRunner {
     return new FakeProcessRunner()
       .on(`query /t.pftrace ${FRAME_PROCESS_SQL}`, { stdout: `"j"\n"${ZYGOTE_CANDIDATES}"\n` })
-      .on(`query /t.pftrace ${frameDurationsSql(309)}`, {
-        stdout: '"j"\n"[8000000,20000000,4000000]"\n',
+      .on(`query /t.pftrace ${frameSamplesSql(309)}`, {
+        stdout: '"j"\n"[[0,8000000],[0,20000000],[0,4000000]]"\n',
       })
   }
 
@@ -309,5 +316,61 @@ describe('frameCollector', () => {
       collected: false,
       reason: { code: 'render_process_not_found', detail: { package: pkg } },
     })
+  })
+})
+
+describe('buildFrameTimeline', () => {
+  it('같은 초의 프레임을 한 점으로 묶는다', () => {
+    const t = buildFrameTimeline([
+      { second: 0, durationMs: 8 },
+      { second: 0, durationMs: 12 },
+      { second: 1, durationMs: 20 },
+    ])
+
+    expect(t).toEqual([
+      { t_s: 0, count: 2, p50_ms: 8, max_ms: 12 },
+      { t_s: 1, count: 1, p50_ms: 20, max_ms: 20 },
+    ])
+  })
+
+  /**
+   * 0 으로 채우면 "그 초에 한 장도 못 그렸다" 와 "그 초의 표본이 없다" 가 같은 모양이 된다.
+   * 앱이 화면을 안 바꾸면 프레임이 아예 안 나오는 것이 정상이라 둘 다 실제로 일어난다.
+   */
+  it('값이 없는 초를 0 으로 채우지 않는다 — 배열에서 빠진다', () => {
+    const t = buildFrameTimeline([
+      { second: 0, durationMs: 8 },
+      { second: 5, durationMs: 8 },
+    ])
+
+    expect(t.map((p) => p.t_s)).toEqual([0, 5])
+  })
+
+  it('초 순서대로 낸다 — 입력이 뒤섞여 있어도', () => {
+    const t = buildFrameTimeline([
+      { second: 3, durationMs: 8 },
+      { second: 1, durationMs: 8 },
+      { second: 2, durationMs: 8 },
+    ])
+
+    expect(t.map((p) => p.t_s)).toEqual([1, 2, 3])
+  })
+
+  it('세션 전체와 같은 백분위 함수를 쓴다', () => {
+    const durations = [1, 2, 3, 4, 5]
+    const t = buildFrameTimeline(durations.map((ms) => ({ second: 0, durationMs: ms })))
+
+    // 같은 입력을 percentile 에 직접 넣은 값과 일치해야 한다. 규칙이 갈리면 여기서 깨진다.
+    expect(t[0]!.p50_ms).toBe(percentile(durations, 50))
+  })
+
+  it('빈 입력은 빈 배열', () => {
+    expect(buildFrameTimeline([])).toEqual([])
+  })
+
+  /** 모든 시계열이 같은 0 초를 써야 겹쳐 볼 수 있다. */
+  it('SQL 이 trace_bounds 를 기준점으로 쓴다 — 지표마다 다른 0 초를 쓰지 않는다', () => {
+    expect(frameSamplesSql(7)).toContain('select start_ts from trace_bounds')
+    expect(frameSamplesSql(7)).toContain('dur >= 0')
   })
 })

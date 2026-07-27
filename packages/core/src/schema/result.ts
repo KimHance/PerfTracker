@@ -156,13 +156,68 @@ const PROCESS_NAME_DESCRIPTION =
   '말한다. 둘 중 어느 것으로도 확인되지 않으면 이 메트릭은 값을 내지 않는다 — ' +
   '확인되지 않은 이름이 이 자리에 오는 일은 없다.'
 
+/**
+ * 여기에 `within_16_67ms_ratio` 라는 필드가 있었다. 16.67ms(구글의 60fps 예산)를 **이 도구가
+ * 직접 비교해서** 낸 비율이었고, 두 가지가 잘못돼 있었다.
+ *
+ * 1. `references` 는 스스로 "여기 있는 값들은 **비교에 쓰이지 않고 그대로 기록만** 된다" 고
+ *    적어 놓고, collector 가 그중 하나를 가져다 실제로 비교했다. 도구가 판정하지 않는다는
+ *    규칙을 도구 자신이 어긴 자리다.
+ * 2. 그 숫자가 **틀린 방향으로** 읽혔다. 검증 기기(Galaxy S22)는 120Hz 이고 그 기기의 프레임
+ *    예산은 8.33ms 다. 도구는 `device.static.display.active_refresh_rate_hz` 로 그것을 **이미
+ *    알면서도** 60fps 기준으로 비율을 냈다. 그 기기에서 `0.95` 는 "95% 가 예산 안" 이 아니라
+ *    "실제 예산의 두 배 되는 선 아래가 95%" 였다.
+ *
+ * 기준선은 기기의 주사율·안드로이드 버전·앱의 목표에 따라 달라진다. 그것을 고르는 일은 이
+ * 데이터를 소비하는 쪽(CI·리포트·사람)의 몫이고, 재료는 이미 결과에 다 실려 있다.
+ */
+const BUCKETS_DESCRIPTION =
+  '프레임 소요 시간의 분포. **이 도구는 어떤 기준선과도 비교하지 않는다** — 60fps(16.67ms) 든 ' +
+  '120Hz(8.33ms) 든, 임계값을 고르고 비율을 내는 일은 이 데이터를 읽는 쪽이 한다. ' +
+  '그 판단에 필요한 기기 정보는 device.static.display 의 active_refresh_rate_hz 와 ' +
+  'supported_refresh_rates_hz 에 있고, 구글이 공개한 참고치는 references 배열에 출처와 함께 ' +
+  '있다 (기록만 되고 비교에 쓰이지 않는다). ' +
+  '경계는 [from_ms, to_ms) 반개구간이고 마지막 버킷은 to_ms 가 null (= 상한 없음) 이다. ' +
+  '버킷 폭이 구간마다 다르므로 임계값이 버킷 경계와 어긋나면 그 비율은 버킷 폭만큼 근사가 된다.'
+
+/**
+ * 시계열의 시간 축. **세션 시작(트레이스의 첫 표본)으로부터 몇 초째인가**를 정수로 센다.
+ *
+ * 벽시계 시각이 아니라 상대 초인 이유: 트레이스의 시각은 부팅 후 나노초(BOOTTIME)라
+ * 그대로 실으면 소비자가 기준점을 따로 알아야 하고, 벽시계로 환산하면 두 시계를 짝지은
+ * 스냅샷이 필요해 이 값이 그 스냅샷의 존재 여부에 묶인다. 상대 초는 둘 다 필요 없다.
+ *
+ * 구간은 `[t_s, t_s+1)` 이다. **값이 없는 초는 배열에 없다** — 0 으로 채우지 않는다.
+ * "그 초에 프레임이 0 장이었다" 와 "그 초를 관측하지 못했다" 는 다른 사실이고,
+ * 빈 자리를 0 으로 메우면 둘이 같은 모양이 된다.
+ */
+const TIMELINE_T_DESCRIPTION =
+  '세션 시작으로부터 몇 초째인지 (구간은 [t_s, t_s+1)). 값이 없는 초는 배열에 없다 — ' +
+  '0 으로 채우지 않는다. 빠진 초를 "0" 으로 읽지 말 것.'
+
+export const FrameTimelinePointSchema = z.object({
+  t_s: z.number().int().nonnegative().describe(TIMELINE_T_DESCRIPTION),
+  /** 그 1초 동안 완결된 프레임 수. 화면이 얼마나 자주 갱신됐는지에 대응한다. */
+  count: z.number().int().nonnegative(),
+  /** 그 1초 안에서의 중앙값·최댓값. 세션 전체 percentiles 와 같은 단위(ms)다. */
+  p50_ms: z.number(),
+  max_ms: z.number(),
+})
+export type FrameTimelinePoint = z.infer<typeof FrameTimelinePointSchema>
+
+const FRAME_TIMELINE_DESCRIPTION =
+  '1초 단위로 묶은 프레임 추이. 세션 전체 집계(buckets · percentiles)와 **같은 원본**에서 ' +
+  '나오며 같은 규칙으로 미완결 프레임(dur < 0)을 제외한다. 집계만으로는 구분되지 않는 것 ' +
+  '(내내 고르게 느렸는지, 특정 구간에서만 튀었는지)을 보려는 값이다. ' +
+  '이 배열이 있다고 기기에 더 많은 것을 물은 것은 아니다 — 트레이스에 이미 있던 값을 ' +
+  '접지 않고 그대로 낸 것뿐이라 측정 부하는 같다.'
+
 export const FrameDataSchema = z.object({
   process: z.string().describe(PROCESS_NAME_DESCRIPTION),
   /** 그 프로세스의 pid. target_app.render_process / target_app.pid 가 여기서 채워진다. */
   pid: z.number().int(),
   total_frames: z.number().int().nonnegative(),
-  buckets: z.array(FrameBucketSchema),
-  within_16_67ms_ratio: z.number(),
+  buckets: z.array(FrameBucketSchema).describe(BUCKETS_DESCRIPTION),
   percentiles: z.object({
     p50: z.number(),
     p90: z.number(),
@@ -171,6 +226,7 @@ export const FrameDataSchema = z.object({
   }),
   mean_ms: z.number(),
   max_ms: z.number(),
+  timeline: z.array(FrameTimelinePointSchema).optional().describe(FRAME_TIMELINE_DESCRIPTION),
 })
 export type FrameData = z.infer<typeof FrameDataSchema>
 
@@ -225,6 +281,26 @@ export const AppCpuProcessSchema = z.object({
   total_ms: z.number().int().nonnegative(),
 })
 export type AppCpuProcess = z.infer<typeof AppCpuProcessSchema>
+
+export const CpuTimelinePointSchema = z.object({
+  t_s: z.number().int().nonnegative().describe(TIMELINE_T_DESCRIPTION),
+  /** 그 1초 동안 이 앱이 쓴 CPU 시간 (user + kernel). */
+  app_cpu_ms: z.number().nonnegative(),
+})
+export type CpuTimelinePoint = z.infer<typeof CpuTimelinePointSchema>
+
+const CPU_TIMELINE_DESCRIPTION =
+  '앱이 **그 1초 동안** 쓴 CPU 시간(user+kernel). ' +
+  '`runtime.*` 는 프로세스 시작부터의 **누적값**이라, 이 배열은 이웃한 두 표본의 차이다.\n' +
+  '**첫 표본의 초는 배열에 없다** — 그 앞에 뺄 대상이 없기 때문이다. 0 으로 채우면 ' +
+  '"그 초에 CPU 를 안 썼다" 는 없던 사실이 된다.\n' +
+  '**이 배열의 합은 app.total_ms 이하다.** 두 값의 기준점이 다르기 때문이다: total_ms 는 ' +
+  '전체 첫 표본부터 재고, 이 배열은 **0 초 구간의 마지막 표본**부터 잰다. 그 구간 안에 표본이 ' +
+  '여럿이면(폴링 지터, 콜드 스타트) 그 사이의 증가분이 이 배열에는 없다 — 실측: 콜드 스타트 ' +
+  '세션에서 34,000ms(배열) vs 34,650ms(total_ms). 초당 표본이 하나뿐이면 둘은 같아진다.\n' +
+  '둘이 **함께** 놓치는 것은 첫 표본 이전(프로세스 생성부터 첫 폴링까지, 최대 1초)의 몫이고, ' +
+  '그것이 app.total_ms 가 하한인 이유다 — 이 배열은 그보다 한 겹 더 낮은 하한이다.\n' +
+  '표본 간격이 정확히 1초가 아닐 수 있으므로(폴링 지터) 이 값은 사용률(%)이 아니라 **시간(ms)** 이다.'
 
 export const AppCpuSchema = z.object({
   process: z.string().describe(PROCESS_NAME_DESCRIPTION),
@@ -293,6 +369,7 @@ export const AppCpuSchema = z.object({
         '서브프로세스는 애초에 후보에 들어오지 못한다. 합계가 필요하면 이 배열의 total_ms 를 ' +
         '직접 더하되, 그것도 하한이라는 사실과 함께 읽으라.',
     ),
+  timeline: z.array(CpuTimelinePointSchema).optional().describe(CPU_TIMELINE_DESCRIPTION),
 })
 export type AppCpuData = z.infer<typeof AppCpuSchema>
 
@@ -353,6 +430,19 @@ export const SystemMemorySchema = z.object({
 })
 export type SystemMemory = z.infer<typeof SystemMemorySchema>
 
+export const MemoryTimelinePointSchema = z.object({
+  t_s: z.number().int().nonnegative().describe(TIMELINE_T_DESCRIPTION),
+  /** 그 시점에 관측된 앱 프로세스의 RSS. 구간 평균이 아니라 **그 순간의 표본**이다. */
+  rss_kb: z.number().int().nonnegative(),
+})
+export type MemoryTimelinePoint = z.infer<typeof MemoryTimelinePointSchema>
+
+const MEMORY_TIMELINE_DESCRIPTION =
+  '1초 주기로 폴링된 앱 RSS 의 추이. 집계값(rss.avg_kb / max_kb)과 같은 원본에서 나온다. ' +
+  '평균만으로는 구분되지 않는 것 — 내내 일정했는지, 계속 우상향했는지 — 을 보려는 값이다. ' +
+  '**구간 평균이 아니라 그 순간의 표본**이므로, 표본과 표본 사이의 순간 최고점은 여기에도 없다. ' +
+  '이 배열이 있다고 기기에 더 많은 것을 물은 것은 아니다 (폴링 주기는 그대로다).'
+
 export const MemoryDataSchema = z.object({
   process: z.string().describe(PROCESS_NAME_DESCRIPTION),
   pid: z.number().int(),
@@ -360,6 +450,7 @@ export const MemoryDataSchema = z.object({
   rss: MemoryStatSchema,
   rss_anon: MemoryStatSchema.nullable(),
   rss_file: MemoryStatSchema.nullable(),
+  timeline: z.array(MemoryTimelinePointSchema).optional().describe(MEMORY_TIMELINE_DESCRIPTION),
   /**
    * `mem.rss.watermark` (= /proc/pid/status 의 VmHWM). 커널이 기억하는 최고점이다.
    * 이 필드만 세션 구간의 값이 아니라서, 그 사실이 반드시 `.describe()` 에 있어야 한다 —
@@ -432,6 +523,21 @@ const LOG_EVENT_NULL =
   'query_failed 로 그 사실을 말한다. 빈 배열([])은 "쿼리는 성공했고 관측된 것이 없다" 이다. ' +
   '둘을 같은 뜻으로 읽으면 안 된다.'
 
+export const LogTimelinePointSchema = z.object({
+  t_s: z.number().int().nonnegative().describe(TIMELINE_T_DESCRIPTION),
+  /** 그 1초에 이 앱이 찍은 줄 수 (min_prio 이상만). */
+  count: z.number().int().nonnegative(),
+  /** 그중 ERROR 이상. 나머지가 곧 WARN 은 아니다 — min_prio 아래는 애초에 안 잡힌다. */
+  error: z.number().int().nonnegative(),
+})
+export type LogTimelinePoint = z.infer<typeof LogTimelinePointSchema>
+
+const LOG_TIMELINE_DESCRIPTION =
+  '1초 단위로 묶은 **앱 프로세스**의 로그 발생 추이 (기기 전역이 아니다). ' +
+  'app.total / app.by_priority 와 같은 원본·같은 필터에서 나온다. ' +
+  '어느 구간에서 에러가 몰렸는지를 보려는 값이고, 그 구간의 프레임·메모리와 t_s 로 맞춰 볼 수 ' +
+  '있다. min_prio 아래 우선순위는 여기에도 없다.'
+
 export const AppLogSchema = z.object({
   process: z.string().describe(PROCESS_NAME_DESCRIPTION),
   pid: z.number().int(),
@@ -459,6 +565,7 @@ export const AppLogSchema = z.object({
       '이 프로세스가 찍은 W/E/F 세 우선순위의 줄 수. 세 값의 합은 total 과 다를 수 있다 — ' +
         'total 은 이 셋 밖의 우선순위까지 세기 때문이다.',
     ),
+  timeline: z.array(LogTimelinePointSchema).optional().describe(LOG_TIMELINE_DESCRIPTION),
 })
 export type AppLogData = z.infer<typeof AppLogSchema>
 
@@ -895,7 +1002,30 @@ export const TargetAppSchema = z.object({
         '안드로이드 user(시큐어 폴더 등)의 앱이 그렇다. 0 이나 -1 로 채우지 않는다.',
     ),
   install_source: z.string().nullable(),
-  launcher_activity: z.string().nullable(),
+  launcher_activity: z
+    .string()
+    .nullable()
+    .describe(
+      '`--launch` 가 `am start -n <package>/<이 값>` 으로 실제로 띄운 액티비티. ' +
+        '진입점이 여러 개인 앱에서는 이 도구가 그중 하나를 고른 것일 수 있고, 그때는 ' +
+        'launcher_activity_candidates 에 후보 전체가 들어간다.',
+    ),
+  /**
+   * 진입점이 **둘 이상**이라 그중 하나를 골라야 했을 때의 후보 전체 (기기가 준 순서 그대로).
+   * 고를 필요가 없었으면 `null` 이다 — "후보가 없었다"(`[]`)와 다른 뜻이다.
+   *
+   * 디버그 빌드에서 흔하다: LeakCanary 같은 라이브러리가 자기 런처 아이콘을 추가하면
+   * 그 앱은 LAUNCHER 액티비티를 둘 갖게 된다.
+   */
+  launcher_activity_candidates: z
+    .array(z.string())
+    .nullable()
+    .optional()
+    .describe(
+      '진입점이 여러 개여서 launcher_activity 를 이 도구가 고른 경우의 후보 전체. ' +
+        '고르지 않았으면 null. 이 값이 있으면 launcher_activity 는 기기가 지정해 준 것이 ' +
+        '아니라 선택된 것이다.',
+    ),
   render_process: z.string().nullable(),
   pid: z.number().int().nullable(),
 })

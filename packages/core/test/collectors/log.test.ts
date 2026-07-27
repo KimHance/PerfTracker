@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { appProcessSql } from '../../src/collectors/appProcess.js'
-import { ANDROID_LOG_BLOCK, ANDROID_LOG_MIN_PRIO, PROCESS_STATS_BLOCK } from '../../src/collectors/blocks.js'
+import { ANDROID_LOG_BLOCK, ANDROID_LOG_MIN_PRIO, processStatsBlock } from '../../src/collectors/blocks.js'
 import {
   appLogCountSql,
+  appLogTimelineSql,
+  buildLogTimeline,
   classifyLogEvent,
   LOG_COUNT_SQL,
   LOG_EVENT_SQL,
-  type LogCountRow,
+  type PriorityCount,
   logCollector,
   MAX_LOG_EVENTS,
-} from '../../src/collectors/log.js'
+} from '../../src/collectors/log/index.js'
 import type { ExtractContext } from '../../src/collectors/types.js'
 
 describe('classifyLogEvent', () => {
@@ -46,6 +48,9 @@ describe('classifyLogEvent', () => {
 class FakeTp {
   constructor(private readonly answers: Record<string, unknown>) {}
   async queryJson<T>(sql: string): Promise<T> {
+    // 시계열 쿼리를 명시하지 않은 테스트는 그것에 관심이 없다 — 빈 배열로 둔다.
+    // 시계열 자체는 build*Timeline 단위 테스트가 지킨다.
+    if (!(sql in this.answers) && sql.includes('trace_bounds')) return [] as T
     if (!(sql in this.answers)) throw new Error(`예상하지 못한 쿼리: ${sql.slice(0, 60)}`)
     const value = this.answers[sql]
     if (value instanceof Error) throw value
@@ -66,13 +71,13 @@ function ctx(answers: Record<string, unknown>, appPid: number | null = null): Ex
 }
 
 /** 실기기 세션의 기기 전역 개수 그대로 (WARN 1,095 / ERROR 412). */
-const COUNTS: LogCountRow[] = [
+const COUNTS: PriorityCount[] = [
   { prio: 5, count: 1095 },
   { prio: 6, count: 412 },
 ]
 
 /** 같은 세션에서 대상 앱 프로세스(pid 24193)의 줄만 센 것. 45배 / 32배 차이가 이 두 표다. */
-const APP_COUNTS: LogCountRow[] = [
+const APP_COUNTS: PriorityCount[] = [
   { prio: 5, count: 24 },
   { prio: 6, count: 13 },
 ]
@@ -123,7 +128,7 @@ describe('logCollector.traceConfigBlocks', () => {
    * `linux.process_stats` 다. 블록 텍스트는 공유 상수 그대로라 기기로 나가는 설정은 안 바뀐다.
    */
   it('android.log 와 함께 자기가 읽는 process_stats 도 선언한다', () => {
-    expect(logCollector.traceConfigBlocks()).toEqual([ANDROID_LOG_BLOCK, PROCESS_STATS_BLOCK])
+    expect(logCollector.traceConfigBlocks({ sdkInt: 36, dataSources: [] })).toEqual([ANDROID_LOG_BLOCK, processStatsBlock(36)])
   })
 })
 
@@ -252,6 +257,8 @@ describe('logCollector.extract — 대상 앱', () => {
       pid: 24193,
       total: 37,
       by_priority: { warn: 24, error: 13, fatal: 0 },
+      // 이 테스트는 개수만 본다 — 시계열은 FakeTp 가 빈 배열로 답한다.
+      timeline: [],
     })
     expect(outcome.data.device_total).toBe(1507)
   })
@@ -300,6 +307,7 @@ describe('logCollector.extract — 대상 앱', () => {
       pid: 24193,
       total: 0,
       by_priority: { warn: 0, error: 0, fatal: 0 },
+      timeline: [],
     })
     expect(outcome.partialReason).toBeUndefined()
   })
@@ -335,5 +343,33 @@ describe('logCollector.extract — 대상 앱', () => {
     expect(outcome.collected).toBe(true)
     if (!outcome.collected) return
     expect(outcome.partialReason?.code).toBe('process_not_in_trace')
+  })
+})
+
+describe('buildLogTimeline', () => {
+  it('SQL 행을 그대로 초별 점으로 옮긴다', () => {
+    expect(
+      buildLogTimeline([
+        { second: 0, count: 5, error: 2 },
+        { second: 3, count: 1, error: 0 },
+      ]),
+    ).toEqual([
+      { t_s: 0, count: 5, error: 2 },
+      { t_s: 3, count: 1, error: 0 },
+    ])
+  })
+
+  it('빈 입력은 빈 배열', () => {
+    expect(buildLogTimeline([])).toEqual([])
+  })
+
+  /** 개수와 시계열이 다른 필터를 쓰면 합이 어긋난다. 둘 다 utid → thread → upid 여야 한다. */
+  it('개수 쿼리와 같은 필터를 쓰고, frame 과 같은 기준점을 쓴다', () => {
+    const sql = appLogTimelineSql(926)
+    expect(sql).toContain('l.utid = th.utid')
+    expect(sql).toContain('th.upid = 926')
+    expect(sql).toContain('select start_ts from trace_bounds')
+    // ERROR 이상(prio >= 6)만 error 로 센다.
+    expect(sql).toContain('l.prio >= 6')
   })
 })

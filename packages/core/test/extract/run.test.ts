@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import type { NetworkData, ThermalData } from '../../src/schema/result.js'
-import { CPU_TIMES_SQL } from '../../src/collectors/cpu.js'
-import { FRAME_PROCESS_SQL, frameDurationsSql } from '../../src/collectors/frame.js'
+import { CPU_TIMES_SQL } from '../../src/collectors/cpu/index.js'
+import { FRAME_PROCESS_SQL, frameSamplesSql } from '../../src/collectors/frame/index.js'
 import { SessionStateError } from '../../src/errors.js'
 import { BUFFER_STATS_SQL, extractRun, readSnapshots } from '../../src/extract/run.js'
 import { TRACING_OVERHEAD_SQL } from '../../src/extract/overhead.js'
@@ -184,8 +184,8 @@ function runner(tracePath: string): FakeProcessRunner {
     .on(`query ${tracePath} ${FRAME_PROCESS_SQL}`, {
       stdout: `"j"\n"[{"upid":2,"pid":24193,"name":"${PKG}","frames":4}]"\n`,
     })
-    .on(`query ${tracePath} ${frameDurationsSql(2)}`, {
-      stdout: '"j"\n"[8000000,20000000,4000000,900000000]"\n',
+    .on(`query ${tracePath} ${frameSamplesSql(2)}`, {
+      stdout: '"j"\n"[[0,8000000],[0,20000000],[0,4000000],[1,900000000]]"\n',
     })
     .on(`query ${tracePath} ${BUFFER_STATS_SQL}`, { stdout: '"j"\n"[]"\n' })
     .on(`query ${tracePath} ${TRACING_OVERHEAD_SQL}`, {
@@ -276,7 +276,7 @@ describe('extractRun', () => {
   it('렌더 프로세스를 못 찾은 것과 프레임이 없는 것을 다른 코드로 구분한다', async () => {
     const runDir = await makeRun()
     const trace = join(runDir, 'trace.perfetto-trace')
-    const noFrames = runner(trace).on(`query ${trace} ${frameDurationsSql(2)}`, {
+    const noFrames = runner(trace).on(`query ${trace} ${frameSamplesSql(2)}`, {
       stdout: '"j"\n"[]"\n',
     })
 
@@ -490,8 +490,8 @@ describe('extractRun', () => {
     function staleRunner(tracePath: string): FakeProcessRunner {
       return runner(tracePath)
         .on(`query ${tracePath} ${FRAME_PROCESS_SQL}`, { stdout: `"j"\n"${STALE_CANDIDATES}"\n` })
-        .on(`query ${tracePath} ${frameDurationsSql(309)}`, {
-          stdout: '"j"\n"[8000000,20000000,4000000]"\n',
+        .on(`query ${tracePath} ${frameSamplesSql(309)}`, {
+          stdout: '"j"\n"[[0,8000000],[0,20000000],[0,4000000]]"\n',
         })
     }
 

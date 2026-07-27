@@ -32,6 +32,18 @@ export interface ActiveSession {
    * 세션 전체의 위반 횟수는 여기(포인터 파일)에 누적해야 한다.
    */
   adbCommandsDuringSession?: number
+  /**
+   * **이 기기에서 잴 수 없는 지표와 그 이유.** 세션은 정상적으로 열렸고, 다만 일부 지표가
+   * 이 기기에서 나오지 않는다는 사실이다.
+   *
+   * 왜 시작 시점에 알려야 하는가: 예전에는 이것을 `stop` 뒤 `result.json` 을 열어야 알 수
+   * 있었다. 사람이 30초 동안 앱을 조작하고 나서야 "프레임이 안 잡혔다" 를 아는 것은
+   * **측정을 한 번 더 하게 만드는 정보**이고, 그것은 시작 전에 알 수 있었던 사실이다
+   * (실측: SM-A405S / Android 11 에서 frame·network 둘 다 원리적으로 불가).
+   *
+   * 값이 하나도 없으면 빈 배열이다 — 이 필드가 없던 시절의 `session.json` 과 구분된다.
+   */
+  unsupported?: { id: string; reason: string }[]
 }
 
 export function newSessionId(rng: () => Buffer = () => randomBytes(3)): string {

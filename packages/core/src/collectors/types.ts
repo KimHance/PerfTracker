@@ -119,8 +119,19 @@ interface CollectorBase {
   /** 어떤 방법으로 잰 값인지. result.json 의 metrics[id].source 로 그대로 나간다. */
   source: string
   supports(env: CollectorEnv): SupportResult
-  /** 이 collector 가 필요로 하는 데이터소스 블록. 반드시 `collectors/blocks.ts` 의 상수를 쓴다. */
-  traceConfigBlocks(): string[]
+  /**
+   * 이 collector 가 필요로 하는 데이터소스 블록. 반드시 `collectors/blocks.ts` 의 상수(또는
+   * 그 파일의 블록 생성 함수)를 쓴다.
+   *
+   * `env` 를 받는 이유: **config 필드 중에는 기기가 모르면 config 전체를 거부시키는 것이
+   * 있다.** perfetto 는 부분 수용을 하지 않아서, 신형 필드 하나가 구형 기기에서 세션 자체를
+   * 못 열게 만든다 (`blocks.ts` 의 `PROCESS_RUNTIME_MIN_SDK` 참고). 그래서 블록은 상수가
+   * 아니라 **이 기기에서 통하는 텍스트**여야 한다.
+   *
+   * `supports()` 의 분기와는 층이 다르다 — 그쪽은 "이 지표를 낼 수 있는가"(못 내면 그 지표만
+   * skipped)이고, 이쪽은 "이 config 가 기기에서 열리는가"(못 열면 **전부** 실패)다.
+   */
+  traceConfigBlocks(env: CollectorEnv): string[]
   /**
    * capture 단계에 **시작 직전 1회 / 종료 직후 1회**씩 찍을 셸 명령. 반드시
    * `collectors/snapshots.ts` 의 상수를 쓴다. `traceConfigBlocks()` 와 대칭이고,

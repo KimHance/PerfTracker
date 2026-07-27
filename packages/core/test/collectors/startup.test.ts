@@ -26,7 +26,7 @@ describe('startupCollector.supports', () => {
 
 describe('startupCollector.traceConfigBlocks', () => {
   it('데이터소스를 하나도 요구하지 않는다', () => {
-    expect(startupCollector.traceConfigBlocks()).toEqual([])
+    expect(startupCollector.traceConfigBlocks({ sdkInt: 36, dataSources: [] })).toEqual([])
   })
 })
 

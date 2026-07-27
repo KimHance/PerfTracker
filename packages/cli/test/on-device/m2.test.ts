@@ -15,7 +15,7 @@ import {
 import { runStart } from '../../src/commands/start.js'
 import { runStop } from '../../src/commands/stop.js'
 import { createContext } from '../../src/context.js'
-import { DEVICE_TARGET_APP } from './target.js'
+import { DEVICE_OPTS, DEVICE_TARGET_APP } from './target.js'
 
 /**
  * 실기기 또는 에뮬레이터가 필요하다. `npm run test:device` 로만 실행된다.
@@ -31,7 +31,7 @@ import { DEVICE_TARGET_APP } from './target.js'
  */
 describe('M2 기기 통합', () => {
   it('M2 가 요구하는 데이터소스가 이 기기에 등록되어 있다', async () => {
-    const ctx = await createAdbContext({})
+    const ctx = await createAdbContext(DEVICE_OPTS)
     const probe = await probeDevice(ctx.adb)
 
     for (const name of [
@@ -47,7 +47,7 @@ describe('M2 기기 통합', () => {
 
   it('start → stop 이 M2 메트릭 다섯 개를 모두 내놓는다', async () => {
     const out = mkdtempSync(join(tmpdir(), 'pt-m2-'))
-    const ctx = await createContext({})
+    const ctx = await createContext(DEVICE_OPTS)
 
     await runStart(ctx, { app: DEVICE_TARGET_APP, name: 'm2', launch: true, video: false, out, force: true })
     const active = await readActiveSession(ctx.serial)
@@ -56,17 +56,21 @@ describe('M2 기기 통합', () => {
     // 폴링 주기가 1초라 delta 를 내려면 표본이 여러 개 필요하다.
     await new Promise((r) => setTimeout(r, 15_000))
 
-    const summary = await runStop(await createContext({}), { offline: false })
+    const output = await runStop(await createContext(DEVICE_OPTS), { offline: false })
     expect(await readActiveSession(ctx.serial)).toBeNull()
 
-    // 요약에 다섯 항목의 자리가 모두 있어야 한다 — 값이든 사유든.
-    for (const label of ['Frame', 'Startup', 'CPU', 'Memory', 'Log', 'Overhead']) {
-      expect(summary, `${label} 줄 없음`).toContain(label)
-    }
+    // 요약을 찍지 않으므로 stop 이 남기는 것은 다음에 열 파일의 경로 하나다.
+    expect(output).toContain(`${active!.runDir}/result.json`)
 
     // 원본이 남아 있으므로 기기 없이 재산출된다.
     const result = await extractRun(active!.runDir, {})
     expect(result.schema_version).toBe('1.1.0')
+
+    // M2 의 다섯 메트릭이 **산출물에** 자리를 갖는다 — 값이든 사유든. 예전에는 이것을 터미널
+    // 요약의 글자로 확인했는데, 그러면 렌더링이 지키던 것이 산출물의 계약처럼 읽힌다.
+    for (const id of ['frame', 'startup', 'cpu', 'memory', 'log']) {
+      expect(result.metrics[id], `${id} 메트릭 없음`).toBeDefined()
+    }
     expect(result.measurement_overhead.adb_commands_during_session).toBe(0)
 
     // --- 에뮬레이터에서도 정직하게 참인 단언들 ---
@@ -193,13 +197,13 @@ describe('M2 기기 통합', () => {
 
   it('--launch 없이 시작하면 startup 이 skipped 다', async () => {
     const out = mkdtempSync(join(tmpdir(), 'pt-m2-nolaunch-'))
-    const ctx = await createContext({})
+    const ctx = await createContext(DEVICE_OPTS)
 
     await runStart(ctx, { app: DEVICE_TARGET_APP, name: 'm2-nolaunch', launch: false, video: false, out, force: true })
     const active = await readActiveSession(ctx.serial)
 
     await new Promise((r) => setTimeout(r, 5_000))
-    await runStop(await createContext({}), { offline: false })
+    await runStop(await createContext(DEVICE_OPTS), { offline: false })
 
     const result = await extractRun(active!.runDir, {})
     expect(result.metrics.startup?.status).toBe('skipped')

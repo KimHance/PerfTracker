@@ -33,6 +33,41 @@ export const FRAMETIMELINE_BLOCK =
  * 미지원인 기기)도 이 필드를 그대로 들고 나간다 — memory/overhead 를 위해 frame 이 대신
  * 짊어지는 비용이고, 의도한 것이다.
  *
+ * **다만 그 필드는 기기가 아는 경우에만 나간다. 아래를 보라.**
+ */
+
+/**
+ * `record_process_runtime` 이 **Android 15(sdk 35)부터** 존재한다. perfetto v44(2024-04)에서
+ * 추가됐고 그 이전 플랫폼의 `ProcessStatsConfig` 에는 이 필드가 아예 없다.
+ *
+ * **모르는 필드 하나가 config 전체를 거부시킨다.** perfetto 는 config 를 부분 수용하지 않아서
+ * 이 필드 때문에 Android 14 이하에서는 **세션 자체가 열리지 않았다** — 오버헤드 자가측정
+ * 하나 때문에 지표 일곱 개가 전부 죽는 구조였다:
+ *
+ * ```
+ * error: No field named "record_process_runtime" in proto ProcessStatsConfig
+ * ```
+ *
+ * **실측 범위:** SM-A405S(Android 11) 와 에뮬레이터(Android 14) 에서 이 필드만 빼면 나머지
+ * 블록이 전부 통과하는 것을 확인했다. Android 12·13 은 이미지가 없어 AOSP proto 로만 봤지만,
+ * proto 필드는 추가만 되고 사라지지 않으므로 13 에 없으면 12 에도 없다.
+ * 반대쪽 끝은 SM-F936N(Android 16) 실측이다.
+ *
+ * 이 필드가 빠진 세션에서는 `measurement_overhead` 의 CPU 필드가 `null` 이 된다 —
+ * `extract/overhead.ts` 가 카운터를 못 찾으면 0 이 아니라 null 을 내므로 그 자리는 이미 맞다.
+ * **`null` 은 "안 쟀다" 이고, 그것이 이 기기에서 참인 문장이다.**
+ */
+export const PROCESS_RUNTIME_MIN_SDK = 35
+
+/**
+ * 소스마다 블록 하나라는 규칙은 그대로다 — 다만 이 블록만 **기기에 따라 텍스트가 달라진다.**
+ * 한 세션 안에서 sdk 는 하나이므로 이 함수를 부르는 collector 넷(frame · cpu · memory · log)은
+ * 언제나 같은 문자열을 받고, `mergeTraceConfigBlocks` 의 "같은 소스는 같은 텍스트" 검사도
+ * 그대로 성립한다.
+ *
+ * 나머지 설명(소비자 셋, scan_all_processes_on_start 의 뜻, 프로세스 이름이 낡는 문제)은
+ * 아래 그대로다.
+ *
  * `scan_all_processes_on_start: true` 는 세션 시작 시점의 전체 스냅샷을 남긴다. 폴링은
  * 매 주기마다 /proc 전체를 훑으므로(실측: 실기기 트레이스에 953개 프로세스) 대상 앱을
  * 따로 지정할 필요가 없다 — 단 이것은 **카운터** 갱신에 대한 이야기다.
@@ -40,10 +75,14 @@ export const FRAMETIMELINE_BLOCK =
  * 앱은 `Process.setArgV0()` 이전에 관측되면 트레이스에 `zygote64` 로 남는다 (실측 확인).
  * 그래서 `collectors/appProcess.ts` 가 캡처 때 받아 둔 pid 를 두 번째 근거로 쓴다.
  */
-export const PROCESS_STATS_BLOCK =
-  'data_sources { config { name: "linux.process_stats" ' +
-  `process_stats_config { proc_stats_poll_ms: ${POLL_PERIOD_MS} ` +
-  'scan_all_processes_on_start: true record_process_runtime: true } } }'
+export function processStatsBlock(sdkInt: number): string {
+  const runtime = sdkInt >= PROCESS_RUNTIME_MIN_SDK ? ' record_process_runtime: true' : ''
+  return (
+    'data_sources { config { name: "linux.process_stats" ' +
+    `process_stats_config { proc_stats_poll_ms: ${POLL_PERIOD_MS} ` +
+    `scan_all_processes_on_start: true${runtime} } } }`
+  )
+}
 
 /**
  * cpu(사용률) 와 memory(시스템 메모리) 가 공유한다.

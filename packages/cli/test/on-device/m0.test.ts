@@ -6,7 +6,7 @@ import {
   resolveTargetApp,
   runDoctor,
 } from '@perftracker/core'
-import { assertTargetAppInstalled } from './target.js'
+import { assertTargetAppInstalled, DEVICE_OPTS } from './target.js'
 
 /**
  * 시스템 앱 해석 경로 전용 대상. **세션 대상(`DEVICE_TARGET_APP`)과 일부러 다르다.**
@@ -21,13 +21,13 @@ const SYSTEM_APP = 'com.android.settings'
 /** 실기기가 필요하다. `npm run test:device` 로만 실행된다. */
 describe('M0 기기 통합', () => {
   it('doctor 의 모든 항목이 통과한다', async () => {
-    const checks = await runDoctor({})
+    const checks = await runDoctor(DEVICE_OPTS)
     const failed = checks.filter((c) => !c.ok)
     expect(failed.map((c) => `${c.name}: ${c.detail}`)).toEqual([])
   })
 
   it('앱 목록에서 라벨이 해석된다', async () => {
-    const ctx = await createAdbContext({})
+    const ctx = await createAdbContext(DEVICE_OPTS)
     const apps = await loadLabeledApps(ctx)
 
     expect(apps.length).toBeGreaterThan(0)
@@ -41,7 +41,7 @@ describe('M0 기기 통합', () => {
    * 바꾸면 되는지 말하지 않는다. 건너뛰기는 넣지 않는다 — 이유는 `./target.ts` 에 있다.
    */
   it('세션 스펙의 대상 앱이 이 기기에 설치되어 있다', async () => {
-    const ctx = await createAdbContext({})
+    const ctx = await createAdbContext(DEVICE_OPTS)
     const apps = await loadLabeledApps(ctx)
     assertTargetAppInstalled(apps.map((a) => a.packageName))
   })
@@ -60,7 +60,7 @@ describe('M0 기기 통합', () => {
    * 깨지는 조건: uid 출처가 다시 서드파티 목록이 되면 던지거나 uid 가 null 이 된다.
    */
   it('시스템 앱도 대상으로 해석되고 uid 가 나온다', async () => {
-    const ctx = await createAdbContext({})
+    const ctx = await createAdbContext(DEVICE_OPTS)
     const app = await resolveTargetApp(ctx, SYSTEM_APP)
 
     expect(app.package).toBe(SYSTEM_APP)
@@ -87,18 +87,32 @@ describe('M0 기기 통합', () => {
    * 양쪽이 똑같이 틀려서 단언이 통과한다.
    */
   it('이 기기의 dumpsys window 에서 포그라운드 패키지를 읽는다', async () => {
-    const ctx = await createAdbContext({})
+    const ctx = await createAdbContext(DEVICE_OPTS)
     const raw = await ctx.adb.tryShell('dumpsys window')
 
     // 포커스 줄 자체가 없으면 이 기기의 출력 형식이 우리가 아는 것과 다르다.
     expect(raw, 'dumpsys window 에 mCurrentFocus 줄이 없다').toMatch(/^\s*mCurrentFocus=/m)
 
-    const focus = /^\s*mCurrentFocus=(\S.*)$/m.exec(raw)![1]!
-    // 잠금화면·전환 중에는 `mCurrentFocus=null` 이 정상이고 그때 답은 null 이다.
-    const expected = focus.startsWith('null')
-      ? null
-      : (/\su0\s(\S+)\//.exec(focus)?.[1] ?? /\{[^}]*?\s(\S+)\/\S+\}/.exec(focus)?.[1] ?? null)
+    /**
+     * **줄이 하나라고 가정하지 않는다.** 폴더블은 디스플레이마다 포커스를 따로 갖는다 —
+     * 실측(SM-F936N): 커버 화면이 `mCurrentFocus=null` 이고 메인 화면이 실제 앱이라
+     * `mCurrentFocus` 줄이 **두 개** 나온다. 첫 줄만 보면 앱이 떠 있는데도 null 로 읽힌다.
+     *
+     * 파서와 같은 규칙(`null` 아닌 첫 창)을 쓰되 **다른 코드로** 구현한다 — 같은 함수를
+     * 부르면 두 번째 눈이 아니라 같은 눈이 두 번 보는 것이 된다.
+     */
+    const focusLines = [...raw.matchAll(/^\s*mCurrentFocus=(\S.*)$/gm)].map((m) => m[1]!)
+    expect(focusLines.length, 'mCurrentFocus 줄을 못 찾음').toBeGreaterThan(0)
 
-    expect(parseForegroundPackage(raw), `mCurrentFocus=${focus}`).toBe(expected)
+    const named = focusLines.find((l) => !l.startsWith('null'))
+    // 잠금화면·전환 중에는 모든 화면이 `null` 일 수 있고 그때 답은 null 이다.
+    const expected =
+      named === undefined
+        ? null
+        : (/\su0\s(\S+)\//.exec(named)?.[1] ?? /\{[^}]*?\s(\S+)\/\S+\}/.exec(named)?.[1] ?? null)
+
+    expect(parseForegroundPackage(raw), `mCurrentFocus 줄 ${focusLines.length}개: ${focusLines.join(' | ')}`).toBe(
+      expected,
+    )
   })
 })

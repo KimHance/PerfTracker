@@ -6,7 +6,7 @@ import {
   networkCollector,
   parseAppUidStats,
   parsePackageUids,
-} from '../../src/collectors/network.js'
+} from '../../src/collectors/network/index.js'
 import type { BaseExtractContext, ExtractOutcome } from '../../src/collectors/types.js'
 import { type MetricReason, renderReason } from '../../src/schema/reasons.js'
 import type { NetworkData } from '../../src/schema/result.js'
@@ -258,7 +258,7 @@ describe('networkCollector.supports', () => {
   })
 
   it('트레이스 설정을 하나도 만들지 않는다', () => {
-    expect(networkCollector.traceConfigBlocks()).toEqual([])
+    expect(networkCollector.traceConfigBlocks({ sdkInt: 36, dataSources: [] })).toEqual([])
     expect(networkCollector.needsTrace).toBe(false)
   })
 })

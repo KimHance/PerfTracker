@@ -1,0 +1,205 @@
+Not meant for machine consumption. Use --query-raw for scripts.
+producers: {
+  id: 1
+  name: "traced" 
+  uid: 0 
+}
+producers: {
+  id: 2
+  name: "perfetto.traced_probes" 
+  uid: 0 
+}
+producers: {
+  id: 3
+  name: "/system/bin/surfaceflinger" 
+  uid: 0 
+}
+producers: {
+  id: 6
+  name: "org.chromium-com.google.android.googlequicksearchbox-6653" 
+  uid: 0 
+}
+producers: {
+  id: 10
+  name: "cronet-com.google.android.googlequicksearchbox-6653" 
+  uid: 0 
+}
+producers: {
+  id: 19
+  name: "cronet-com.android.vending-29003" 
+  uid: 0 
+}
+producers: {
+  id: 23
+  name: "cronet-com.android.vending-2596" 
+  uid: 0 
+}
+producers: {
+  id: 26
+  name: "cronet-com.google.android.youtube-9210" 
+  uid: 0 
+}
+data_sources: {
+  producer_id: 1
+  descriptor: {
+    name: "android.heapprofd"
+  }
+}
+data_sources: {
+  producer_id: 1
+  descriptor: {
+    name: "android.java_hprof"
+  }
+}
+data_sources: {
+  producer_id: 2
+  descriptor: {
+    name: "android.log"
+  }
+}
+data_sources: {
+  producer_id: 2
+  descriptor: {
+    name: "android.packages_list"
+  }
+}
+data_sources: {
+  producer_id: 2
+  descriptor: {
+    name: "android.polled_state"
+  }
+}
+data_sources: {
+  producer_id: 2
+  descriptor: {
+    name: "android.power"
+  }
+}
+data_sources: {
+  producer_id: 3
+  descriptor: {
+    name: "android.surfaceflinger.frame"
+  }
+}
+data_sources: {
+  producer_id: 2
+  descriptor: {
+    name: "linux.ftrace"
+  }
+}
+data_sources: {
+  producer_id: 2
+  descriptor: {
+    name: "linux.inode_file_map"
+  }
+}
+data_sources: {
+  producer_id: 1
+  descriptor: {
+    name: "linux.perf"
+  }
+}
+data_sources: {
+  producer_id: 2
+  descriptor: {
+    name: "linux.process_stats"
+  }
+}
+data_sources: {
+  producer_id: 2
+  descriptor: {
+    name: "linux.sys_stats"
+  }
+}
+data_sources: {
+  producer_id: 2
+  descriptor: {
+    name: "linux.system_info"
+  }
+}
+data_sources: {
+  producer_id: 6
+  descriptor: {
+    name: "org.chromium.background_scenario_metadata"
+  }
+}
+data_sources: {
+  producer_id: 6
+  descriptor: {
+    name: "org.chromium.histogram_sample"
+  }
+}
+data_sources: {
+  producer_id: 6
+  descriptor: {
+    name: "org.chromium.memory_instrumentation"
+  }
+}
+data_sources: {
+  producer_id: 6
+  descriptor: {
+    name: "org.chromium.sampler_profiler"
+  }
+}
+data_sources: {
+  producer_id: 6
+  descriptor: {
+    name: "org.chromium.system_metrics"
+  }
+}
+data_sources: {
+  producer_id: 6
+  descriptor: {
+    name: "org.chromium.trace_metadata2"
+  }
+}
+data_sources: {
+  producer_id: 6
+  descriptor: {
+    name: "org.chromium.triggers"
+  }
+}
+data_sources: {
+  producer_id: 1
+  descriptor: {
+    name: "perfetto.metatrace"
+  }
+}
+data_sources: {
+  producer_id: 2
+  descriptor: {
+    name: "perfetto.metatrace"
+  }
+}
+data_sources: {
+  producer_id: 6
+  descriptor: {
+    name: "track_event"
+  }
+}
+data_sources: {
+  producer_id: 10
+  descriptor: {
+    name: "track_event"
+  }
+}
+data_sources: {
+  producer_id: 19
+  descriptor: {
+    name: "track_event"
+  }
+}
+data_sources: {
+  producer_id: 23
+  descriptor: {
+    name: "track_event"
+  }
+}
+data_sources: {
+  producer_id: 26
+  descriptor: {
+    name: "track_event"
+  }
+}
+num_sessions: 0
+num_sessions_started: 0

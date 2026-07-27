@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { frameCollector } from '../../src/collectors/frame.js'
-import { networkCollector } from '../../src/collectors/network.js'
+import { frameCollector } from '../../src/collectors/frame/index.js'
+import { networkCollector } from '../../src/collectors/network/index.js'
 import {
   COLLECTORS,
   collectSnapshotSpecs,
@@ -9,7 +9,7 @@ import {
   unsupportedReasons,
 } from '../../src/collectors/registry.js'
 import { startupCollector } from '../../src/collectors/startup.js'
-import { thermalCollector } from '../../src/collectors/thermal.js'
+import { thermalCollector } from '../../src/collectors/thermal/index.js'
 import { buildTraceConfig } from '../../src/perfetto/config.js'
 
 const OK = {
@@ -44,7 +44,7 @@ describe('COLLECTORS 레지스트리', () => {
 describe('collectTraceConfigBlocks', () => {
   it('지원되는 collector 의 블록만 모은다', () => {
     expect(collectTraceConfigBlocks(OK)).toEqual(
-      expect.arrayContaining(frameCollector.traceConfigBlocks()),
+      expect.arrayContaining(frameCollector.traceConfigBlocks({ sdkInt: 36, dataSources: [] })),
     )
     // startup 은 지원되지만 블록을 하나도 안 낸다 — 구형 기기에서는 config 가 빈다.
     expect(collectTraceConfigBlocks(OLD)).toEqual([])
@@ -56,7 +56,7 @@ describe('collectTraceConfigBlocks', () => {
 
   it('중복 데이터소스를 접는다 — 두 collector 가 같은 것을 요구해도 블록은 한 번만 나간다', () => {
     // 오늘은 collector 가 하나지만, 규칙은 지금 고정한다.
-    const doubled = [...frameCollector.traceConfigBlocks(), ...frameCollector.traceConfigBlocks()]
+    const doubled = [...frameCollector.traceConfigBlocks({ sdkInt: 36, dataSources: [] }), ...frameCollector.traceConfigBlocks({ sdkInt: 36, dataSources: [] })]
     const config = buildTraceConfig({
       dataSourceBlocks: [...new Set(doubled)],
     })

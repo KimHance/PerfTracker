@@ -4,14 +4,24 @@ import { describe, expect, it } from 'vitest'
 import { AdbClient } from '../../src/adb/client.js'
 import {
   evaluateDataSources,
+  parseDataSources,
   probeDevice,
   REQUIRED_DATA_SOURCES,
   type DeviceProbe,
 } from '../../src/device/probe.js'
 import { FakeProcessRunner } from '../support/fakeProcessRunner.js'
 
-/** 실기기(Galaxy S22 / Android 16)에서 그대로 뜬 `perfetto --query` 출력. */
+/** 실기기(Galaxy S22 / Android 16, perfetto v49)에서 그대로 뜬 `perfetto --query` 출력 — 사람용 표. */
 const QUERY = readFileSync(fileURLToPath(new URL('../fixtures/perfetto-query.txt', import.meta.url)), 'utf8')
+
+/**
+ * 실기기(Galaxy A40 / SM-A405S / Android 11)에서 그대로 뜬 출력 — **protobuf 텍스트**.
+ * 같은 명령이 안드로이드 버전에 따라 형식이 완전히 다르다는 것을 이 파일이 증거로 갖는다.
+ */
+const QUERY_LEGACY = readFileSync(
+  fileURLToPath(new URL('../fixtures/perfetto-query-legacy.txt', import.meta.url)),
+  'utf8',
+)
 
 function probe(overrides: Partial<DeviceProbe> = {}): DeviceProbe {
   return { hasPerfetto: true, dataSources: [], sdkInt: 34, ...overrides }
@@ -74,6 +84,61 @@ describe('probeDevice — 실기기 출력 파싱', () => {
     )
 
     expect(result.sdkInt).toBe(0)
+  })
+})
+
+/**
+ * **이 저장소가 실기기에서 실제로 맞은 결함이다.** 구형 안드로이드의 `perfetto --query` 는
+ * 표가 아니라 protobuf 텍스트를 내는데 파서가 표만 알았다. 그래서 A405S(Android 11)에서
+ * `dataSources` 가 **빈 배열**이 되고, 기기에 등록되어 있는 `linux.sys_stats` ·
+ * `linux.process_stats` · `android.log` 가 전부 "미등록" 으로 거부됐다 —
+ * **기기가 줄 수 있는 지표를 도구가 스스로 막았다.**
+ *
+ * 빈 배열은 "조회했더니 없었다" 처럼 보이지만 실제로는 "형식을 못 읽었다" 였다.
+ * 이 저장소의 결함 계열 2번(거짓 청정 신호)이 파서 쪽에서 나타난 모양이다.
+ */
+describe('parseDataSources — 두 출력 형식', () => {
+  it('구형 protobuf 텍스트(Android 11)에서 데이터소스를 읽는다', () => {
+    const names = parseDataSources(QUERY_LEGACY)
+
+    // 이 셋이 없어서 세션이 거부됐었다. 기기에는 처음부터 있었다.
+    expect(names).toContain('linux.sys_stats')
+    expect(names).toContain('linux.process_stats')
+    expect(names).toContain('android.log')
+  })
+
+  it('구형 형식에서 producers 절의 프로세스 이름을 데이터소스로 오해하지 않는다', () => {
+    const names = parseDataSources(QUERY_LEGACY)
+
+    // 최상위 `producers { name: "traced" }` 도 `name:` 을 갖는다 — descriptor 안의 것만 취해야 한다.
+    expect(names).not.toContain('traced')
+    expect(names).not.toContain('perfetto.traced_probes')
+    expect(names.some((n) => n.startsWith('/system/bin'))).toBe(false)
+    expect(names.some((n) => n.startsWith('cronet'))).toBe(false)
+  })
+
+  it('구형 기기가 frametimeline 을 안 주는 것은 그대로 사실로 남는다', () => {
+    const names = parseDataSources(QUERY_LEGACY)
+
+    // sdk 30 에는 frametimeline 이 없다(Android 12 부터). 파서를 고쳐도 이건 안 생긴다 —
+    // 없는 것을 있다고 만들지 않는 것이 이 수정의 경계다.
+    expect(names).not.toContain('android.surfaceflinger.frametimeline')
+    expect(names).toContain('android.surfaceflinger.frame')
+  })
+
+  it('신형 표 형식(Android 16)도 그대로 읽는다 — 한쪽을 고치며 다른 쪽을 깨지 않는다', () => {
+    const names = parseDataSources(QUERY)
+
+    for (const name of REQUIRED_DATA_SOURCES) expect(names).toContain(name)
+    expect(names).not.toContain('traced')
+  })
+
+  it('두 형식이 서로를 오염시키지 않는다', () => {
+    // 표 형식에는 `descriptor: {` 가 없고, 구형 형식의 줄은 이름 바로 뒤에 `:` 가 와서
+    // 표 정규식의 `\s{2,}` 를 만족하지 못한다. 그래서 합집합을 그대로 쓸 수 있다.
+    expect(QUERY).not.toContain('descriptor: {')
+    expect(parseDataSources(QUERY_LEGACY)).not.toContain('data_sources')
+    expect(parseDataSources(QUERY_LEGACY)).not.toContain('producer_id')
   })
 })
 

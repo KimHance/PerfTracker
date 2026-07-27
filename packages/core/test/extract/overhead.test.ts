@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CPU_TIMES_SQL, type CpuTimeRow } from '../../src/collectors/cpu.js'
+import { CPU_TIMES_SQL, type CpuTimeRow } from '../../src/collectors/cpu/index.js'
 import {
   computeOverhead,
   isTracingProcess,

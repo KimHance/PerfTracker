@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
-import { listDeviceSummaries, loadLabeledApps, PerfTrackerError, runDoctor } from '@perftracker/core'
+import { hasBlockingFailure, listDeviceSummaries, loadLabeledApps, PerfTrackerError, runDoctor } from '@perftracker/core'
 import { formatApps } from './commands/apps.js'
 import { formatDoctor } from './commands/doctor.js'
 import { formatDevices } from './commands/devices.js'
@@ -26,7 +26,8 @@ program
   .action(async (opts: { device?: string }) => {
     const checks = await runDoctor({ ...program.opts(), ...opts })
     console.log(formatDoctor(checks))
-    if (checks.some((c) => !c.ok)) process.exitCode = 1
+    // capability 실패(이 기기가 원래 못 재는 것)는 종료 코드를 바꾸지 않는다.
+    if (hasBlockingFailure(checks)) process.exitCode = 1
   })
 
 program

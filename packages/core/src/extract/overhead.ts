@@ -1,4 +1,4 @@
-import { CPU_TIMES_SQL, type CpuTimeRow, summarizeCpuTimes } from '../collectors/cpu.js'
+import { CPU_TIMES_SQL, type CpuTimeRow, summarizeCpuTimes } from '../collectors/cpu/index.js'
 import { bytesToKb, round } from '../collectors/num.js'
 import type { TraceProcessor } from '../perfetto/traceProcessor/client.js'
 

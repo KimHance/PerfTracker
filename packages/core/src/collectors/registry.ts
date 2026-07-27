@@ -1,13 +1,13 @@
 import { mergeTraceConfigBlocks } from '../perfetto/config.js'
 import { renderReason } from '../schema/reasons.js'
-import { cpuCollector } from './cpu.js'
-import { frameCollector } from './frame.js'
-import { logCollector } from './log.js'
-import { memoryCollector } from './memory.js'
-import { networkCollector } from './network.js'
+import { cpuCollector } from './cpu/index.js'
+import { frameCollector } from './frame/index.js'
+import { logCollector } from './log/index.js'
+import { memoryCollector } from './memory/index.js'
+import { networkCollector } from './network/index.js'
 import { mergeSnapshotSpecs, type SnapshotSpec } from './snapshots.js'
 import { startupCollector } from './startup.js'
-import { thermalCollector } from './thermal.js'
+import { thermalCollector } from './thermal/index.js'
 import type { Collector, CollectorEnv } from './types.js'
 
 /**
@@ -36,7 +36,7 @@ export function supportedCollectors(env: CollectorEnv): Collector<unknown>[] {
  * 그때는 **완전히 같은 블록 텍스트**여야 한다 — 규칙은 `mergeTraceConfigBlocks` 에 있다.
  */
 export function collectTraceConfigBlocks(env: CollectorEnv): string[] {
-  return mergeTraceConfigBlocks(supportedCollectors(env).flatMap((c) => c.traceConfigBlocks()))
+  return mergeTraceConfigBlocks(supportedCollectors(env).flatMap((c) => c.traceConfigBlocks(env)))
 }
 
 /**

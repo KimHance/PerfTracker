@@ -1,0 +1,42 @@
+priority=0 preferredOrder=0 match=0x0 specificIndex=-1 isDefault=false
+resolvePackageName=com.example.streaming.debug
+labelRes=0x7f150166 nonLocalizedLabel=null icon=0x7f110005
+ActivityInfo:
+  name=com.android.internal.app.ResolverActivity
+  packageName=android
+  labelRes=0x10410dd nonLocalizedLabel=null icon=0x0 banner=0x0
+  processName=system:ui
+  enabled=true exported=true directBootAware=false
+  taskAffinity=null targetActivity=null persistableMode=PERSIST_ROOT_ONLY
+  launchMode=LAUNCH_MULTIPLE flags=0x11220 privateFlags=0x0 theme=0x1030226
+  screenOrientation=-1 configChanges=0xdb0 softInputMode=0x0
+  lockTaskLaunchMode=LOCK_TASK_LAUNCH_MODE_DEFAULT
+  resizeMode=RESIZE_MODE_RESIZEABLE
+  requireContentUriPermissionFromCaller=CONTENT_URI_PERMISSION_NONE
+  ApplicationInfo:
+    packageName=android
+    labelRes=0x10401d1 nonLocalizedLabel=null icon=0x1080493 banner=0x0
+    processName=system
+    taskAffinity=android
+    uid=1000 flags=0x30c8be09 privateFlags=0x8c101078 theme=0x103013f
+    requiresSmallestWidthDp=0 compatibleWidthLimitDp=0 largestWidthLimitDp=0
+    sourceDir=/system/framework/framework-res.apk
+    resourceDirs=[/product/overlay/NavigationBarMode3Button/NavigationBarMode3ButtonOverlay.apk]
+    overlayPaths=[/product/overlay/NavigationBarMode3Button/NavigationBarMode3ButtonOverlay.apk]
+    seinfo=platform:privapp:targetSdkVersion=36:partition=system
+    seinfoUser=:complete
+    dataDir=/data/system
+    deviceProtectedDataDir=null
+    credentialProtectedDataDir=null
+    enabled=true minSdkVersion=36 targetSdkVersion=36 versionCode=36 targetSandboxVersion=1
+    supportsRtl=true
+    fullBackupContent=true
+    crossProfile=false
+    HiddenApiEnforcementPolicy=0
+    usesNonSdkApi=false
+    allowsPlaybackCapture=true
+    nativeHeapZeroInitialized=0
+    enableOnBackInvokedCallback=true
+    allowCrossUidActivitySwitchFromBelow=true
+    mPageSizeAppCompatFlags=0
+    createTimestamp=15880198

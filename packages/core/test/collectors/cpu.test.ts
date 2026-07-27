@@ -1,16 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { appProcessSql } from '../../src/collectors/appProcess.js'
-import { FTRACE_POWER_BLOCK, PROCESS_STATS_BLOCK, SYS_STATS_BLOCK } from '../../src/collectors/blocks.js'
+import { FTRACE_POWER_BLOCK, processStatsBlock, SYS_STATS_BLOCK } from '../../src/collectors/blocks.js'
 import {
   type AppCpuRow,
   appCpuSql,
+  appCpuTimelineSql,
+  buildCpuTimeline,
   CPU_FREQ_SQL,
   CPU_TIMES_SQL,
   type CpuTimeRow,
   cpuCollector,
   summarizeAppCpu,
   summarizeCpuTimes,
-} from '../../src/collectors/cpu.js'
+} from '../../src/collectors/cpu/index.js'
 import type { ExtractContext } from '../../src/collectors/types.js'
 
 /** 에뮬레이터(API 35, 4코어) 실측 트레이스에서 그대로 뜬 cpu0/cpu1 8종 카운터. */
@@ -110,6 +112,9 @@ describe('summarizeCpuTimes', () => {
 class FakeTp {
   constructor(private readonly answers: Record<string, unknown>) {}
   async queryJson<T>(sql: string): Promise<T> {
+    // 시계열 쿼리를 명시하지 않은 테스트는 그것에 관심이 없다 — 빈 배열로 둔다.
+    // 시계열 자체는 build*Timeline 단위 테스트가 지킨다.
+    if (!(sql in this.answers) && sql.includes('trace_bounds')) return [] as T
     if (!(sql in this.answers)) throw new Error(`예상하지 못한 쿼리: ${sql.slice(0, 60)}`)
     const value = this.answers[sql]
     if (value instanceof Error) throw value
@@ -224,15 +229,15 @@ describe('cpuCollector.supports', () => {
 describe('cpuCollector.traceConfigBlocks', () => {
   /**
    * process_stats 가 여기 있어야 하는 이유: 이 collector 는 이제 `runtime.*` 를 읽는다.
-   * 그 카운터는 `PROCESS_STATS_BLOCK` 의 `record_process_runtime: true` 가 만든다.
+   * 그 카운터는 `processStatsBlock` 의 `record_process_runtime: true` 가 만든다.
    * 블록 텍스트 자체는 그대로이므로 이 기기로 나가는 데이터소스는 늘지 않는다 —
    * frame/memory 가 이미 같은 상수를 요청하고 `mergeTraceConfigBlocks` 가 접는다.
    */
   it('sys_stats·ftrace 와 함께 자기가 읽는 process_stats 도 선언한다', () => {
-    expect(cpuCollector.traceConfigBlocks()).toEqual([
+    expect(cpuCollector.traceConfigBlocks({ sdkInt: 36, dataSources: [] })).toEqual([
       SYS_STATS_BLOCK,
       FTRACE_POWER_BLOCK,
-      PROCESS_STATS_BLOCK,
+      processStatsBlock(36),
     ])
   })
 })
@@ -487,5 +492,94 @@ describe('cpuCollector.extract — 대상 앱', () => {
     expect(outcome.collected).toBe(true)
     if (!outcome.collected) return
     expect(outcome.partialReason?.code).toBe('process_not_in_trace')
+  })
+})
+
+describe('buildCpuTimeline', () => {
+  /** `runtime.*` 는 누적값이라 초당 사용량은 이웃한 두 표본의 차이다. */
+  it('누적값을 초별 차이로 바꾼다', () => {
+    expect(
+      buildCpuTimeline([
+        [0, 1_000_000_000],
+        [1, 1_500_000_000],
+        [2, 1_700_000_000],
+      ]),
+    ).toEqual([
+      { t_s: 1, app_cpu_ms: 500 },
+      { t_s: 2, app_cpu_ms: 200 },
+    ])
+  })
+
+  /**
+   * 첫 표본은 기준점이라 그 초가 배열에 없다. 0 으로 채우면 "그 초에 CPU 를 안 썼다" 는
+   * 없던 사실이 된다.
+   */
+  it('첫 표본의 초는 배열에 없다 — 0 으로 채우지 않는다', () => {
+    const t = buildCpuTimeline([
+      [0, 1_000_000_000],
+      [1, 1_500_000_000],
+    ])
+
+    expect(t.map((p) => p.t_s)).toEqual([1])
+    expect(t.some((p) => p.t_s === 0)).toBe(false)
+  })
+
+  /**
+   * 초당 표본이 하나면 델타의 합 = 마지막 − 첫 표본이다.
+   * **다만 그것이 곧 app.total_ms 는 아니다** — 아래 테스트를 보라.
+   */
+  it('초당 표본이 하나면 델타의 합이 전체 구간의 증가분과 같다', () => {
+    const rows: [number, number][] = [
+      [0, 1_000_000_000],
+      [1, 1_500_000_000],
+      [2, 1_700_000_000],
+      [3, 2_400_000_000],
+    ]
+    const sum = buildCpuTimeline(rows).reduce((s, p) => s + p.app_cpu_ms, 0)
+
+    expect(sum).toBeCloseTo((rows.at(-1)![1] - rows[0]![1]) / 1e6, 1)
+  })
+
+  /** 프로세스별 누적 CPU 는 되감기지 않는다 — 음수는 그 upid 가 딴 프로세스라는 신호다. */
+  it('음수 델타 구간은 지어내지 않고 버린다', () => {
+    const t = buildCpuTimeline([
+      [0, 2_000_000_000],
+      [1, 1_000_000_000],
+      [2, 1_400_000_000],
+    ])
+
+    expect(t).toEqual([{ t_s: 2, app_cpu_ms: 400 }])
+  })
+
+  /**
+   * **실기기에서 잡힌 사실.** `total_ms` 는 전체 첫 표본부터 재는데 이 배열은 0 초 구간의
+   * **마지막** 표본부터 잰다. 그 구간에 표본이 여럿이면(콜드 스타트가 정확히 그렇다) 그
+   * 사이의 증가분이 배열에서 빠진다 — 실측 34,000ms vs 34,650ms.
+   * 스키마가 "합은 total_ms 이하" 라고 말하는 근거가 이것이다.
+   */
+  it('첫 행은 기준점이라 배열에 없다 — total_ms 와의 간극이 여기서 생긴다', () => {
+    // SQL 이 `group by t_s` 로 이미 접어 주므로 t_s 당 한 행이고, 그 값은 **그 초의 마지막**
+    // 누적값이다. total_ms 는 그보다 앞선 "전체 첫 표본" 부터 재므로 0 초 구간 내부의
+    // 증가분만큼 둘이 벌어진다 (실측: 34,000ms vs 34,650ms).
+    const rows: [number, number][] = [
+      [0, 1_500_000_000],
+      [1, 2_000_000_000],
+    ]
+    const sum = buildCpuTimeline(rows).reduce((s, p) => s + p.app_cpu_ms, 0)
+
+    // 0 초의 1.5s 는 기준점이 될 뿐 배열에 실리지 않는다.
+    expect(sum).toBe(500)
+    expect(buildCpuTimeline(rows).map((p) => p.t_s)).toEqual([1])
+  })
+
+  it('표본이 하나뿐이면 낼 수 있는 델타가 없다', () => {
+    expect(buildCpuTimeline([[0, 1_000_000_000]])).toEqual([])
+  })
+
+  it('frame 과 같은 기준점을 쓰고, 초·카운터별로 먼저 접는다', () => {
+    const sql = appCpuTimelineSql(5)
+    expect(sql).toContain('select start_ts from trace_bounds')
+    // 안쪽 group by 가 없으면 같은 초의 표본이 여럿일 때 같은 카운터가 여러 번 더해진다.
+    expect(sql).toContain('group by t_s, t.name')
   })
 })

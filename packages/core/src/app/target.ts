@@ -58,6 +58,7 @@ export async function resolveTargetApp(ctx: AdbContext, query?: string): Promise
     uid: entry?.uid ?? null,
     install_source: detail.installSource,
     launcher_activity: label.launcherActivity,
+    launcher_activity_candidates: label.launcherCandidates,
     // 렌더 프로세스와 pid 는 트레이스를 파싱해야 알 수 있다 — extract 가 채운다.
     render_process: null,
     pid: null,

@@ -6,6 +6,7 @@ import {
   collectSnapshotSpecs,
   collectTraceConfigBlocks,
   supportedCollectors,
+  COLLECTORS,
   unsupportedReasons,
 } from '../collectors/registry.js'
 import type { AmStartResult } from '../collectors/types.js'
@@ -21,6 +22,7 @@ import {
   startDetachedSession,
   stopDetachedSession,
 } from '../perfetto/session.js'
+import { renderReason } from '../schema/reasons.js'
 import type { DeviceState, TargetApp, Warning } from '../schema/result.js'
 import { CAPTURE_MANIFEST_VERSION, writeCaptureManifest } from './manifest.js'
 import { runDirName } from './paths.js'
@@ -100,6 +102,10 @@ export function buildWarnings(
     launchTimeUnmeasured?: boolean
     /** `am start -W` 의 `Status:` 원문. 있으면 경고가 추측 대신 그것을 인용한다. */
     amStartStatus?: string | null
+    /** 진입점이 여럿이라 골라야 했을 때의 후보 전체. 고르지 않았으면 null/undefined. */
+    launcherCandidates?: string[] | null
+    /** 그중 실제로 띄운 것. */
+    launcherActivity?: string | null
   },
 ): Warning[] {
   const warnings: Warning[] = []
@@ -117,6 +123,18 @@ export function buildWarnings(
     warnings.push({
       code: 'video_capture_enabled',
       message: 'screenrecord 오버헤드가 섞인 세션임',
+    })
+  }
+  // 앱에 런처 진입점이 여러 개라 이 도구가 하나를 골랐다. 고른 사실을 숨기지 않는다 —
+  // 다른 진입점을 띄웠다면 그 세션은 다른 화면을 잰 것이고, 그건 숫자만 보고는 알 수 없다.
+  // (디버그 빌드에서 흔하다: LeakCanary 가 자기 런처 아이콘을 추가한다.)
+  if (options.launcherCandidates != null && options.launcherCandidates.length > 1) {
+    const others = options.launcherCandidates.filter((a) => a !== options.launcherActivity)
+    warnings.push({
+      code: 'launcher_activity_ambiguous',
+      message:
+        `이 앱은 런처 진입점이 ${options.launcherCandidates.length}개라 ` +
+        `${options.launcherActivity} 로 실행했음 — 나머지: ${others.join(', ')}`,
     })
   }
   // 옛 코드는 `app_launch_unverified` 와 "force-stop 된 앱이 다시 실행되지 않았을 수 있음" 이었다.
@@ -316,12 +334,30 @@ export async function startSession(
       video: opts.video,
       launchTimeUnmeasured: opts.launch && startup?.totalTimeMs == null,
       amStartStatus: startup?.status ?? null,
+      // `--launch` 로 실제로 띄운 세션에서만 의미가 있다. 안 띄웠으면 무엇을 골랐든
+      // 이 세션에서 일어난 일이 아니다.
+      ...(opts.launch
+        ? {
+            launcherCandidates: app.launcher_activity_candidates ?? null,
+            launcherActivity: app.launcher_activity,
+          }
+        : {}),
     }),
     // 아직 세어 본 적이 없다. 0 은 "세어 봤더니 없었다" 는 뜻이라 여기 오면 거짓이다 —
     // 실제 누적은 측정 창이 열린 뒤 활성 세션 포인터에 쌓이고 stop 이 이 자리로 옮긴다.
     adb_commands_during_session: null,
     artifacts: { trace: null, video: null, raw: rawFiles },
   })
+  // **이 기기에서 못 재는 지표를 세션에 남긴다.** stop 뒤 result.json 을 열어야 알 수 있던
+  // 사실을 시작 시점으로 끌어올린다 — 30초를 조작하고 나서야 "프레임이 없다" 를 아는 것은
+  // 측정을 한 번 더 하게 만드는 정보이고, 그것은 시작 전에 이미 알 수 있었다.
+  session.unsupported = COLLECTORS.flatMap((c) => {
+    const support = c.supports(env)
+    return support.supported
+      ? []
+      : [{ id: c.id, reason: renderReason(support.reason) ?? support.reason.code }]
+  })
+
   await writeRunSession(runDir, session, { state: 'running' })
   await writeActiveSession(session, opts.home)
 

@@ -1,17 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { appProcessSql } from '../../src/collectors/appProcess.js'
-import { PROCESS_STATS_BLOCK, SYS_STATS_BLOCK } from '../../src/collectors/blocks.js'
+import { processStatsBlock, SYS_STATS_BLOCK } from '../../src/collectors/blocks.js'
 import {
   appMemorySql,
+  appMemoryTimelineSql,
+  buildMemoryTimeline,
   type CounterStatRow,
   memoryCollector,
   SYSTEM_MEMORY_SQL,
-} from '../../src/collectors/memory.js'
+} from '../../src/collectors/memory/index.js'
 import type { ExtractContext } from '../../src/collectors/types.js'
 
 class FakeTp {
   constructor(private readonly answers: Record<string, unknown>) {}
   async queryJson<T>(sql: string): Promise<T> {
+    // 시계열 쿼리를 명시하지 않은 테스트는 그것에 관심이 없다는 뜻이다 — 빈 배열로 둔다.
+    // 시계열 자체는 `buildMemoryTimeline` 단위 테스트와 아래 전용 테스트가 지킨다.
+    if (!(sql in this.answers) && sql.includes('trace_bounds')) return [] as T
     if (!(sql in this.answers)) throw new Error(`예상하지 못한 쿼리: ${sql.slice(0, 60)}`)
     const value = this.answers[sql]
     if (value instanceof Error) throw value
@@ -79,7 +84,7 @@ describe('memoryCollector.supports', () => {
 
 describe('memoryCollector.traceConfigBlocks', () => {
   it('공유 상수를 그대로 쓴다 — 사본을 만들면 merge 가 던진다', () => {
-    expect(memoryCollector.traceConfigBlocks()).toEqual([PROCESS_STATS_BLOCK, SYS_STATS_BLOCK])
+    expect(memoryCollector.traceConfigBlocks({ sdkInt: 36, dataSources: [] })).toEqual([processStatsBlock(36), SYS_STATS_BLOCK])
   })
 })
 
@@ -195,5 +200,69 @@ describe('memoryCollector.extract', () => {
     expect(outcome.data.rss_anon).toBeNull()
     expect(outcome.data.rss_file).toBeNull()
     expect(outcome.data.rss_watermark_peak_kb).toBeNull()
+  })
+})
+
+describe('buildMemoryTimeline', () => {
+  it('바이트를 kB 로 바꿔 초별로 낸다', () => {
+    expect(
+      buildMemoryTimeline([
+        { second: 0, rssBytes: 1024 * 1024 },
+        { second: 1, rssBytes: 2 * 1024 * 1024 },
+      ]),
+    ).toEqual([
+      { t_s: 0, rss_kb: 1024 },
+      { t_s: 1, rss_kb: 2048 },
+    ])
+  })
+
+  it('같은 초에 표본이 여럿이면 마지막이 남는다 (폴링 지터)', () => {
+    const t = buildMemoryTimeline([
+      { second: 0, rssBytes: 1024 * 1024 },
+      { second: 0, rssBytes: 3 * 1024 * 1024 },
+    ])
+
+    expect(t).toEqual([{ t_s: 0, rss_kb: 3072 }])
+  })
+
+  it('값이 없는 초를 0 으로 채우지 않는다', () => {
+    expect(
+      buildMemoryTimeline([
+        { second: 0, rssBytes: 1024 },
+        { second: 4, rssBytes: 1024 },
+      ]).map((p) => p.t_s),
+    ).toEqual([0, 4])
+  })
+
+  it('빈 입력은 빈 배열', () => {
+    expect(buildMemoryTimeline([])).toEqual([])
+  })
+
+  /** frame·log·cpu 와 같은 0 초를 써야 네 시계열을 t_s 로 맞춰 볼 수 있다. */
+  it('frame 과 같은 기준점(trace_bounds)을 쓴다', () => {
+    expect(appMemoryTimelineSql(3)).toContain('select start_ts from trace_bounds')
+    expect(appMemoryTimelineSql(3)).toContain("t.name = 'mem.rss'")
+  })
+})
+
+describe('memoryCollector 가 시계열을 싣는다', () => {
+  it('timeline 쿼리 결과가 data.timeline 에 그대로 들어간다', async () => {
+    const outcome = await memoryCollector.extract(
+      ctx({
+        [appProcessSql(PKG, null)]: [{ upid: 3, pid: 100, name: PKG }],
+        [appMemorySql(3)]: [{ counter: 'mem.rss', min: 1024, max: 2048, avg: 1536, samples: 2 }],
+        [SYSTEM_MEMORY_SQL]: [],
+        [appMemoryTimelineSql(3)]: [
+          [0, 1024 * 1024],
+          [1, 2 * 1024 * 1024],
+        ],
+      }),
+    )
+
+    const data = outcome.collected ? outcome.data : null
+    expect(data!.timeline).toEqual([
+      { t_s: 0, rss_kb: 1024 },
+      { t_s: 1, rss_kb: 2048 },
+    ])
   })
 })

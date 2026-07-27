@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -6,13 +6,13 @@ import { extractRun, readActiveSession } from '@perftracker/core'
 import { createContext } from '../../src/context.js'
 import { runStart } from '../../src/commands/start.js'
 import { runStop } from '../../src/commands/stop.js'
-import { DEVICE_TARGET_APP } from './target.js'
+import { DEVICE_OPTS, DEVICE_TARGET_APP } from './target.js'
 
 /** 실기기가 필요하다. `npm run test:device` 로만 실행된다. */
 describe('M1 end-to-end', () => {
   it('start → stop → result.json 이 완주한다', async () => {
     const out = mkdtempSync(join(tmpdir(), 'pt-e2e-'))
-    const ctx = await createContext({})
+    const ctx = await createContext(DEVICE_OPTS)
 
     await runStart(ctx, {
       app: DEVICE_TARGET_APP,
@@ -29,10 +29,13 @@ describe('M1 end-to-end', () => {
     // 실제 조작 대신 앱이 몇 프레임이라도 그릴 시간을 준다.
     await new Promise((r) => setTimeout(r, 10_000))
 
-    const stopCtx = await createContext({})
-    const summary = await runStop(stopCtx, { offline: false })
+    const stopCtx = await createContext(DEVICE_OPTS)
+    const output = await runStop(stopCtx, { offline: false })
 
-    expect(summary).toContain('Frame')
+    // 요약을 찍지 않으므로 stop 이 사람에게 남기는 것은 **다음에 열 파일의 경로 하나**다.
+    // 경로만 확인하고 끝내지 않는다 — 그 자리에 파일이 실제로 있어야 이 줄이 사실이 된다.
+    expect(output).toContain(`${active!.runDir}/result.json`)
+    expect(existsSync(join(active!.runDir, 'result.json'))).toBe(true)
     expect(await readActiveSession(ctx.serial)).toBeNull()
 
     // 원본이 남아 있으므로 기기 없이 재산출된다.

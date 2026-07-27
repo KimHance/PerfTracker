@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { CPU_TIMES_SQL, cpuCollector, type CpuTimeRow } from '../../src/collectors/cpu.js'
+import { CPU_TIMES_SQL, cpuCollector, type CpuTimeRow } from '../../src/collectors/cpu/index.js'
 import { COLLECTORS } from '../../src/collectors/registry.js'
-import { thermalCollector } from '../../src/collectors/thermal.js'
+import { thermalCollector } from '../../src/collectors/thermal/index.js'
 import { resultJsonSchema } from '../../src/schema/jsonSchema.js'
 import { REFERENCES } from '../../src/schema/references.js'
 import { METRIC_REASON_CODES } from '../../src/schema/reasons.js'
@@ -86,7 +86,6 @@ function minimalResult() {
           pid: 24193,
           total_frames: 450,
           buckets: [{ from_ms: 0, to_ms: 5, count: 12 }],
-          within_16_67ms_ratio: 0.874,
           percentiles: { p50: 9.2, p90: 21.4, p95: 28.1, p99: 96.3 },
           mean_ms: 12.8,
           max_ms: 312.4,
@@ -133,6 +132,31 @@ describe('ResultSchema', () => {
     const r = minimalResult()
     r.metrics.frame.data!.buckets = [{ from_ms: 700, to_ms: null, count: 3 }] as never
     expect(() => ResultSchema.parse(r)).not.toThrow()
+  })
+
+  /**
+   * frame 은 **어떤 기준선과도 비교한 값을 싣지 않는다.** 여기 있던 `within_16_67ms_ratio` 는
+   * `references` 의 60fps 예산(16.67ms)을 collector 가 직접 비교해 낸 비율이었는데, 그 배열은
+   * 스스로 "비교에 쓰이지 않고 기록만 된다" 고 선언한다. 게다가 120Hz 기기(예산 8.33ms)에서
+   * 그 비율은 예산의 두 배 되는 선 아래 비율이었고, 도구는 주사율을 이미 알면서 그렇게 냈다.
+   *
+   * `.strict()` 가 아니라 zod 의 기본 strip 동작을 근거로 삼는다 — 스키마에 필드를 되살리면
+   * 그 키가 결과에 남아 이 단언이 실패한다. 통과하는 조건은 "스키마가 그 필드를 모른다" 뿐이다.
+   */
+  it('임계값과 비교한 비율을 결과에 싣지 않는다 — 기준선을 고르는 일은 소비자의 몫이다', () => {
+    const r = minimalResult()
+    const withRatio = {
+      ...r,
+      metrics: {
+        ...r.metrics,
+        frame: { ...r.metrics.frame, data: { ...r.metrics.frame.data!, within_16_67ms_ratio: 0.874 } },
+      },
+    }
+    const parsed = ResultSchema.parse(withRatio)
+    expect(parsed.metrics.frame!.data).not.toHaveProperty('within_16_67ms_ratio')
+    // 비교의 재료는 그대로 있어야 한다 — 분포와 주사율 둘 다.
+    expect(parsed.metrics.frame!.data!.buckets.length).toBeGreaterThan(0)
+    expect(parsed.device.static.display).toHaveProperty('active_refresh_rate_hz')
   })
 
   /**
@@ -368,6 +392,28 @@ describe('resultJsonSchema', () => {
 
     expect(d).toContain('상계')
     expect(d).toMatch(/1초|1,000ms|1000ms/)
+  })
+
+  /**
+   * `within_16_67ms_ratio` 를 뺀 자리에 **왜 없는지**가 남아야 한다. 스키마만 읽는 소비자
+   * (CI · LLM)는 소스 주석을 못 보므로, 그쪽에서 보면 필드가 그냥 없는 것과 "이 도구는
+   * 비교하지 않기로 했다" 가 구별되지 않는다. 후자를 모르면 소비자는 임계 비율을 이 도구에
+   * 다시 요구하게 된다.
+   */
+  it('buckets 설명이 비교는 소비자 몫임을 말하고, 그 재료가 어디 있는지까지 가리킨다', () => {
+    const data = props(props(props(resultJsonSchema())['metrics'])['frame'])['data'] as {
+      anyOf?: Record<string, any>[]
+    }
+    const object = data.anyOf?.find((b) => b['type'] === 'object') ?? data
+    const d = (props(object)['buckets'] as { description?: string }).description
+
+    expect(d, 'buckets 에 설명이 없다').toBeDefined()
+    expect(d, '비교하지 않는다는 사실이 없다').toMatch(/비교하지 않는다/)
+    // 재료가 어디 있는지 가리키지 않으면 "비교하지 마세요" 로만 읽힌다.
+    expect(d, '주사율 필드를 가리키지 않는다').toContain('active_refresh_rate_hz')
+    expect(d, 'references 를 가리키지 않는다').toContain('references')
+    // 버킷 경계와 어긋나는 임계값은 근사가 된다는 한계까지 말한다.
+    expect(d, '근사가 된다는 한계가 없다').toContain('근사')
   })
 
   /**

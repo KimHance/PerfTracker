@@ -43,6 +43,22 @@
 export const DEVICE_TARGET_APP = process.env['PERFTRACKER_TEST_APP'] ?? 'com.nhn.android.webtoon'
 
 /**
+ * 어느 기기에서 돌릴지. **기기가 두 대 이상 꽂혀 있으면 지정해야 한다** —
+ * 안 그러면 `selectDevice` 가 `AmbiguousDeviceError` 로 막고 11개 스펙이 전부 그 자리에서 죽는다
+ * (실측: 실기기 두 대를 동시에 연결한 상태에서 11/11 실패).
+ *
+ * `undefined` 를 그대로 넘기면 기기가 한 대인 환경의 기존 동작(자동 선택)이 유지된다.
+ *
+ * ```bash
+ * PERFTRACKER_TEST_DEVICE=R3CT0000003 PERFTRACKER_TEST_APP=<패키지명> npm run test:device
+ * ```
+ */
+export const DEVICE_SERIAL = process.env['PERFTRACKER_TEST_DEVICE']
+
+/** `createContext` 에 그대로 펼쳐 넣는다. 지정이 없으면 빈 객체라 기존 경로와 같다. */
+export const DEVICE_OPTS: { device?: string } = DEVICE_SERIAL ? { device: DEVICE_SERIAL } : {}
+
+/**
  * 대상 앱이 이 기기에 **설치되어 있는지** 확인한다. 없으면 던진다.
  *
  * 왜 필요한가: 없는 앱으로 `runStart` 를 부르면 `AppNotFoundError` 가 나는데, 그 메시지는

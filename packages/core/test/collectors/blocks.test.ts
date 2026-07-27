@@ -5,14 +5,28 @@ import {
   FRAMETIMELINE_BLOCK,
   FTRACE_POWER_BLOCK,
   POLL_PERIOD_MS,
-  PROCESS_STATS_BLOCK,
+  PROCESS_RUNTIME_MIN_SDK,
+  processStatsBlock,
   SYS_STATS_BLOCK,
 } from '../../src/collectors/blocks.js'
 import { ALLOWED_FTRACE_EVENTS, buildTraceConfig, mergeTraceConfigBlocks } from '../../src/perfetto/config.js'
 
+/** 최신 기기(A15+). `record_process_runtime` 이 들어간다. */
+const PROCESS_STATS_NEW = processStatsBlock(PROCESS_RUNTIME_MIN_SDK)
+/** 그 아래(A14 이하). 그 필드가 빠진다 — 넣으면 config 전체가 거부된다. */
+const PROCESS_STATS_OLD = processStatsBlock(PROCESS_RUNTIME_MIN_SDK - 1)
+
 const ALL = [
   FRAMETIMELINE_BLOCK,
-  PROCESS_STATS_BLOCK,
+  PROCESS_STATS_NEW,
+  SYS_STATS_BLOCK,
+  FTRACE_POWER_BLOCK,
+  ANDROID_LOG_BLOCK,
+]
+
+const ALL_OLD = [
+  FRAMETIMELINE_BLOCK,
+  PROCESS_STATS_OLD,
   SYS_STATS_BLOCK,
   FTRACE_POWER_BLOCK,
   ANDROID_LOG_BLOCK,
@@ -57,8 +71,43 @@ describe('데이터소스 블록', () => {
     expect(FTRACE_POWER_BLOCK).not.toContain('suspend_resume')
   })
 
-  it('process_stats 가 record_process_runtime 을 켠다 — 없으면 overhead CPU 가 영원히 null 이다', () => {
-    expect(PROCESS_STATS_BLOCK).toContain('record_process_runtime: true')
+  it('A15+ 는 record_process_runtime 을 켠다 — 없으면 overhead CPU 가 영원히 null 이다', () => {
+    expect(PROCESS_STATS_NEW).toContain('record_process_runtime: true')
+  })
+
+  /**
+   * **이 저장소가 실기기에서 맞은 결함이다.** `record_process_runtime` 은 perfetto v44 에서
+   * 생겼고 **Android 15(sdk 35)부터** 플랫폼에 들어갔다. 그 아래 기기의 `ProcessStatsConfig`
+   * 에는 필드가 아예 없는데, perfetto 는 config 를 부분 수용하지 않으므로 모르는 필드 하나가
+   * **세션 전체를 거부시킨다:**
+   *
+   * ```
+   * error: No field named "record_process_runtime" in proto ProcessStatsConfig
+   * ```
+   *
+   * 그래서 오버헤드 자가측정 하나 때문에 **Android 14 이하에서 지표 일곱 개가 전부** 죽었다.
+   * 실측: SM-A405S(A11)·에뮬레이터(A14) 에서 이 필드만 빼면 나머지 블록이 전부 통과했고,
+   * SM-F936N(A16) 에서는 넣은 채로 통과했다.
+   */
+  it('A14 이하에는 record_process_runtime 을 보내지 않는다 — 보내면 세션이 안 열린다', () => {
+    expect(PROCESS_STATS_OLD).not.toContain('record_process_runtime')
+    // 나머지는 그대로다. 필드 하나만 빠지고 데이터소스가 사라지지는 않는다.
+    expect(PROCESS_STATS_OLD).toContain('name: "linux.process_stats"')
+    expect(PROCESS_STATS_OLD).toContain('scan_all_processes_on_start: true')
+    expect(PROCESS_STATS_OLD).toContain(`proc_stats_poll_ms: ${POLL_PERIOD_MS}`)
+  })
+
+  it('경계는 sdk 35 다 — 34 에서 빠지고 35 에서 들어간다', () => {
+    expect(PROCESS_RUNTIME_MIN_SDK).toBe(35)
+    expect(processStatsBlock(34)).not.toContain('record_process_runtime')
+    expect(processStatsBlock(35)).toContain('record_process_runtime: true')
+    expect(processStatsBlock(36)).toContain('record_process_runtime: true')
+    // sdk 를 못 읽어 0 이 온 기기에는 보내지 않는다 — 모르면 보수적으로 간다.
+    expect(processStatsBlock(0)).not.toContain('record_process_runtime')
+  })
+
+  it('구형 기기용 조합도 저부하 불변식을 통과한다', () => {
+    expect(() => buildTraceConfig({ dataSourceBlocks: ALL_OLD })).not.toThrow()
   })
 
   it('sys_stats 가 CPU 시간과 meminfo 를 한 블록에서 요청한다', () => {
@@ -92,11 +141,22 @@ describe('데이터소스 블록 — 전체 텍스트 고정', () => {
     )
   })
 
-  it('PROCESS_STATS_BLOCK', () => {
-    expect(PROCESS_STATS_BLOCK).toBe(
+  it('processStatsBlock — A15+ (record_process_runtime 포함)', () => {
+    expect(PROCESS_STATS_NEW).toBe(
       'data_sources { config { name: "linux.process_stats" process_stats_config { ' +
         'proc_stats_poll_ms: 1000 scan_all_processes_on_start: true ' +
         'record_process_runtime: true } } }',
+    )
+  })
+
+  /**
+   * **이 문자열이 Android 11~14 기기로 실제로 나가는 바이트다.** 실측으로 통과를 확인한
+   * 그 텍스트이므로, 여기가 바뀌면 그 기기들에서 세션이 열리는지 다시 확인해야 한다.
+   */
+  it('processStatsBlock — A14 이하 (필드 없음)', () => {
+    expect(PROCESS_STATS_OLD).toBe(
+      'data_sources { config { name: "linux.process_stats" process_stats_config { ' +
+        'proc_stats_poll_ms: 1000 scan_all_processes_on_start: true } } }',
     )
   })
 

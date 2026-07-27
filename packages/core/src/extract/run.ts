@@ -2,7 +2,7 @@ import { access, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ProcessRunner } from '../adb/process.js'
 import { findPackageUid } from '../app/list.js'
-import { frameCollector } from '../collectors/frame.js'
+import { frameCollector } from '../collectors/frame/index.js'
 import { COLLECTORS } from '../collectors/registry.js'
 import { parseSnapshotRawPath, type SnapshotPair, snapshotText } from '../collectors/snapshots.js'
 import type {
