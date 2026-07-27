@@ -103,7 +103,7 @@ describe('M3 기기 통합', () => {
     const out = mkdtempSync(join(tmpdir(), 'pt-m3-'))
     const ctx = await createContext(DEVICE_OPTS)
 
-    await runStart(ctx, { app: DEVICE_TARGET_APP, name: 'm3', launch: true, video: false, out, force: true })
+    await runStart(ctx, { app: DEVICE_TARGET_APP, name: 'm3', launch: true, out, force: true })
     const active = await readActiveSession(ctx.serial)
     expect(active).not.toBeNull()
 

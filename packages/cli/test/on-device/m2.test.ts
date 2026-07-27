@@ -49,7 +49,7 @@ describe('M2 기기 통합', () => {
     const out = mkdtempSync(join(tmpdir(), 'pt-m2-'))
     const ctx = await createContext(DEVICE_OPTS)
 
-    await runStart(ctx, { app: DEVICE_TARGET_APP, name: 'm2', launch: true, video: false, out, force: true })
+    await runStart(ctx, { app: DEVICE_TARGET_APP, name: 'm2', launch: true, out, force: true })
     const active = await readActiveSession(ctx.serial)
     expect(active).not.toBeNull()
 
@@ -199,7 +199,7 @@ describe('M2 기기 통합', () => {
     const out = mkdtempSync(join(tmpdir(), 'pt-m2-nolaunch-'))
     const ctx = await createContext(DEVICE_OPTS)
 
-    await runStart(ctx, { app: DEVICE_TARGET_APP, name: 'm2-nolaunch', launch: false, video: false, out, force: true })
+    await runStart(ctx, { app: DEVICE_TARGET_APP, name: 'm2-nolaunch', launch: false, out, force: true })
     const active = await readActiveSession(ctx.serial)
 
     await new Promise((r) => setTimeout(r, 5_000))

@@ -18,7 +18,6 @@ describe('M1 end-to-end', () => {
       app: DEVICE_TARGET_APP,
       name: 'e2e',
       launch: true,
-      video: false,
       out,
       force: true,
     })

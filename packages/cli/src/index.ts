@@ -64,7 +64,7 @@ program
   .option('--force', '이 기기의 기존 세션을 버리고 시작한다', false)
   .action(async (opts: { app?: string; name?: string; launch: boolean; out: string; force: boolean; device?: string }) => {
     const ctx = await createContext({ ...program.opts(), device: opts.device })
-    console.log(await runStart(ctx, { ...opts, video: false }))
+    console.log(await runStart(ctx, opts))
   })
 
 program

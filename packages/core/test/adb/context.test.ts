@@ -37,7 +37,6 @@ async function startedSession(): Promise<{ session: ActiveSession; home: string 
   const adb = clientFor(startableDevice())
   const session = await startSession({ adb, serial: SERIAL }, targetApp(), {
     launch: false,
-    video: false,
     outDir: out,
     force: false,
     now: NOW,
@@ -160,7 +159,6 @@ describe('--force 는 창을 닫고 새 세션을 연다', () => {
     const first = clientFor(startableDevice())
     const previous = await startSession({ adb: first, serial: SERIAL }, targetApp(), {
       launch: false,
-      video: false,
       outDir: out,
       force: false,
       now: NOW,
@@ -177,7 +175,6 @@ describe('--force 는 창을 닫고 새 세션을 연다', () => {
 
     const next = await startSession(ctx, targetApp(), {
       launch: false,
-      video: false,
       outDir: out,
       force: true,
       now: NOW,

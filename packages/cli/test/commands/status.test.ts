@@ -18,7 +18,7 @@ function session(overrides: Partial<ActiveSession> = {}): ActiveSession {
     remoteTracePath: '/data/misc/perfetto-traces/perftracker_a3f9c1.pftrace',
     startedAt: '2026-07-25T14:32:10.000Z',
     configuredDurationMs: 1_800_000,
-    options: { launch: true, video: false },
+    options: { launch: true },
     startup: null,
     ...overrides,
   }

@@ -30,7 +30,7 @@ export const CPU_FREQ_SQL =
 
 /**
  * upid 목록으로 runtime 카운터를 가져온다. upid 는 숫자라 인터폴레이션이 안전하다
- * (`memory.ts` 의 `appMemorySql`, `frame.ts` 의 `frameDurationsSql` 과 같은 규칙).
+ * (`memory/sources` 의 `appMemorySql`, `frame/sources` 의 `frameSamplesSql` 과 같은 규칙).
  *
  * `mem.rss` 는 일부러 조회하지 않는다 — 이 collector 가 쓰지 않는 값을 한 배열에 섞어
  * 오면 접는 쪽에서 CPU 합에 메모리 값이 들어갈 자리가 생긴다.

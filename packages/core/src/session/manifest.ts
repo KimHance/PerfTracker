@@ -37,7 +37,7 @@ export interface CaptureManifest {
    * (`extract/run.ts` 의 `countAdbCommands`).
    */
   adb_commands_during_session: number | null
-  artifacts: { trace: string | null; video: string | null; raw: string[] }
+  artifacts: { trace: string | null; raw: string[] }
 }
 
 const FILE = 'capture.json'

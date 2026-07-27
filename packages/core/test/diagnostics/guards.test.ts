@@ -18,7 +18,6 @@ async function withActiveSession(): Promise<string> {
   const { home, out } = tempDirs()
   await startSession({ adb: clientFor(startableDevice()), serial: SERIAL }, targetApp(), {
     launch: false,
-    video: false,
     outDir: out,
     force: false,
     now: NOW,

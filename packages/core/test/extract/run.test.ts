@@ -118,7 +118,7 @@ async function makeRun(
       remoteTracePath: '/data/misc/perfetto-traces/perftracker_a3f9c1.pftrace',
       startedAt: '2026-07-25T14:32:10.000Z',
       configuredDurationMs: 1_800_000,
-      options: { launch: overrides.launch ?? true, video: false },
+      options: { launch: overrides.launch ?? true },
       startup:
         (overrides.launch ?? true) ? { totalTimeMs: 1842, launchState: 'COLD' } : null,
       ...(overrides.appPid !== undefined ? { appPid: overrides.appPid } : {}),
@@ -173,7 +173,7 @@ async function makeRun(
     },
     warnings: [{ code: 'charging_during_session', message: 'USB 충전 중이었음' }],
     adb_commands_during_session: overrides.adbCommandsDuringSession ?? 0,
-    artifacts: { trace, video: null, raw: rawFiles },
+    artifacts: { trace, raw: rawFiles },
   })
 
   return runDir
@@ -805,7 +805,7 @@ describe('readSnapshots', () => {
   })
 
   it('트레이스 같은 비-스냅샷 항목은 무시한다', async () => {
-    expect(await readSnapshots('/nonexistent', ['trace.perfetto-trace', 'video.mp4'])).toEqual({})
+    expect(await readSnapshots('/nonexistent', ['trace.perfetto-trace', 'raw/missing.txt'])).toEqual({})
   })
 })
 
@@ -829,7 +829,7 @@ describe('아직 stop 하지 않은 run 에 extract 를 돌렸을 때', () => {
       remoteTracePath: `/data/misc/perfetto-traces/perftracker_${RUN_ID}.pftrace`,
       startedAt: '2026-07-25T14:32:10.000Z',
       configuredDurationMs: 1_800_000,
-      options: { launch: true, video: false },
+      options: { launch: true },
       startup: null,
       ...overrides,
     }

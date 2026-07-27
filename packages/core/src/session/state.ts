@@ -16,7 +16,7 @@ export interface ActiveSession {
   remoteTracePath: string
   startedAt: string
   configuredDurationMs: number
-  options: { launch: boolean; video: boolean }
+  options: { launch: boolean }
   startup: AmStartResult | null
   /**
    * `am start -W` 직후 `pidof` 가 알려 준 앱 프로세스의 pid. `--launch` 없이 시작했거나

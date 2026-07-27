@@ -23,7 +23,6 @@ async function startedSession(): Promise<{ session: Awaited<ReturnType<typeof st
   const adb = clientFor(startableDevice())
   const session = await startSession({ adb, serial: SERIAL }, targetApp(), {
     launch: false,
-    video: false,
     outDir: out,
     force: false,
     now: NOW,

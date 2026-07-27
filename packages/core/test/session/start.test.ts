@@ -107,35 +107,29 @@ describe('parsePidof', () => {
 
 describe('buildWarnings', () => {
   it('충전 중이면 사실을 기록한다', () => {
-    const warnings = buildWarnings(state, { video: false })
+    const warnings = buildWarnings(state, {})
     expect(warnings.map((w) => w.code)).toContain('charging_during_session')
   })
 
-  it('비디오 캡처를 켜면 오염 사실을 기록한다', () => {
-    expect(buildWarnings({ ...state, charging: false }, { video: true }).map((w) => w.code)).toEqual([
-      'video_capture_enabled',
-    ])
-  })
-
   it('저전력 모드를 기록한다', () => {
-    const warnings = buildWarnings({ ...state, charging: false, power_save_mode: true }, { video: false })
+    const warnings = buildWarnings({ ...state, charging: false, power_save_mode: true }, {})
     expect(warnings.map((w) => w.code)).toContain('power_save_mode_on')
   })
 
   it('평가가 아니라 관측만 담는다', () => {
-    for (const w of buildWarnings(state, { video: true })) {
+    for (const w of buildWarnings(state, {})) {
       expect(w.message).not.toMatch(/느림|나쁨|권장|개선/)
     }
   })
 
   it('아무 조건도 없으면 빈 배열', () => {
-    expect(buildWarnings({ ...state, charging: false }, { video: false })).toEqual([])
+    expect(buildWarnings({ ...state, charging: false }, {})).toEqual([])
   })
 
   it('시작 시간을 못 잰 --launch 는 사실로 기록한다', () => {
     const warnings = buildWarnings(
       { ...state, charging: false },
-      { video: false, launchTimeUnmeasured: true },
+      { launchTimeUnmeasured: true },
     )
     expect(warnings.map((w) => w.code)).toEqual(['app_launch_time_unmeasured'])
   })
@@ -148,7 +142,7 @@ describe('buildWarnings', () => {
   it('경고는 관측한 것만 말한다 — 실행 실패를 추측하지 않는다', () => {
     const [warning] = buildWarnings(
       { ...state, charging: false },
-      { video: false, launchTimeUnmeasured: true, amStartStatus: 'timeout' },
+      { launchTimeUnmeasured: true, amStartStatus: 'timeout' },
     )
     expect(warning!.message).toContain('timeout')
     expect(warning!.message).not.toMatch(/실행되지 않았|않았을 수 있음/)
@@ -180,7 +174,6 @@ function start(
     out,
     result: startSession({ adb, serial: SERIAL }, targetApp(opts.app ?? {}), {
       launch: opts.launch ?? false,
-      video: false,
       outDir: out,
       force: opts.force ?? false,
       now: NOW,

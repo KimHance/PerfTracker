@@ -98,7 +98,6 @@ export function parsePidof(text: string): number | null {
 export function buildWarnings(
   stateBefore: DeviceState,
   options: {
-    video: boolean
     launchTimeUnmeasured?: boolean
     /** `am start -W` 의 `Status:` 원문. 있으면 경고가 추측 대신 그것을 인용한다. */
     amStartStatus?: string | null
@@ -118,12 +117,6 @@ export function buildWarnings(
   }
   if (stateBefore.power_save_mode === true) {
     warnings.push({ code: 'power_save_mode_on', message: '저전력 모드가 켜져 있었음' })
-  }
-  if (options.video) {
-    warnings.push({
-      code: 'video_capture_enabled',
-      message: 'screenrecord 오버헤드가 섞인 세션임',
-    })
   }
   // 앱에 런처 진입점이 여러 개라 이 도구가 하나를 골랐다. 고른 사실을 숨기지 않는다 —
   // 다른 진입점을 띄웠다면 그 세션은 다른 화면을 잰 것이고, 그건 숫자만 보고는 알 수 없다.
@@ -203,7 +196,6 @@ export async function beginStart(
 export interface StartOptions {
   name?: string
   launch: boolean
-  video: boolean
   outDir: string
   force: boolean
   now: Date
@@ -315,7 +307,7 @@ export async function startSession(
     remoteTracePath: remotePath,
     startedAt: opts.now.toISOString(),
     configuredDurationMs: DEFAULT_MAX_DURATION_MS,
-    options: { launch: opts.launch, video: opts.video },
+    options: { launch: opts.launch },
     startup,
     appPid,
   }
@@ -331,7 +323,6 @@ export async function startSession(
     target_app: app,
     env,
     warnings: buildWarnings(before.state, {
-      video: opts.video,
       launchTimeUnmeasured: opts.launch && startup?.totalTimeMs == null,
       amStartStatus: startup?.status ?? null,
       // `--launch` 로 실제로 띄운 세션에서만 의미가 있다. 안 띄웠으면 무엇을 골랐든
@@ -346,7 +337,7 @@ export async function startSession(
     // 아직 세어 본 적이 없다. 0 은 "세어 봤더니 없었다" 는 뜻이라 여기 오면 거짓이다 —
     // 실제 누적은 측정 창이 열린 뒤 활성 세션 포인터에 쌓이고 stop 이 이 자리로 옮긴다.
     adb_commands_during_session: null,
-    artifacts: { trace: null, video: null, raw: rawFiles },
+    artifacts: { trace: null, raw: rawFiles },
   })
   // **이 기기에서 못 재는 지표를 세션에 남긴다.** stop 뒤 result.json 을 열어야 알 수 있던
   // 사실을 시작 시점으로 끌어올린다 — 30초를 조작하고 나서야 "프레임이 없다" 를 아는 것은

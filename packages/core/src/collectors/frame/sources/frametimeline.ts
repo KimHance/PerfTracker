@@ -39,11 +39,6 @@ export function frameSamplesSql(upid: number): string {
   )
 }
 
-/** 옛 이름 — 이 쿼리를 직접 쓰는 코드는 없지만 `dur >= 0` 규칙의 문서 역할로 남긴다. */
-export function frameDurationsSql(upid: number): string {
-  return `select json_group_array(dur) as j from actual_frame_timeline_slice where upid = ${upid} and dur >= 0`
-}
-
 export interface FrametimelineResult {
   collection: FrameCollection | null
   /** 프로세스를 특정했으나 트레이스가 다른 이름으로 알고 있는 경우의 근거. */

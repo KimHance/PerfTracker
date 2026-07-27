@@ -37,7 +37,7 @@ function minimalResult() {
       started_at: '2026-07-25T14:32:10.000+09:00',
       ended_at: '2026-07-25T14:32:52.735+09:00',
       duration_ms: 42735,
-      options: { launch: true, video: false },
+      options: { launch: true },
     },
     device: {
       serial: 'R3CY0000002',
@@ -101,7 +101,7 @@ function minimalResult() {
     },
     references: REFERENCES,
     warnings: [{ code: 'charging_during_session', message: 'USB 충전 중이었음' }],
-    artifacts: { trace: 'trace.perfetto-trace', video: null, raw: ['raw/battery_before.txt'] },
+    artifacts: { trace: 'trace.perfetto-trace', raw: ['raw/battery_before.txt'] },
   }
 }
 

@@ -7,7 +7,7 @@ import {
   frameSamplesSql,
   percentile,
 } from '../../src/collectors/frame/index.js'
-import { FRAME_PROCESS_SQL, frameDurationsSql } from '../../src/collectors/frame/index.js'
+import { FRAME_PROCESS_SQL } from '../../src/collectors/frame/index.js'
 import type { CaptureFacts } from '../../src/collectors/types.js'
 import { buildTraceConfig } from '../../src/perfetto/config.js'
 import { TraceProcessor } from '../../src/perfetto/traceProcessor/client.js'
@@ -81,9 +81,13 @@ describe('bucketFrames', () => {
   })
 })
 
-describe('frameDurationsSql', () => {
+describe('frameSamplesSql', () => {
+  /**
+   * 이 필터가 없으면 미완결 프레임(`dur = -1`)이 **가장 빠른 버킷에 앉는다** — 끝나지 않은
+   * 프레임이 0ms 대의 초고속 프레임으로 집계되어 분포가 실제보다 좋은 쪽으로 기운다.
+   */
   it('미완결 slice(dur = -1) 를 SQL 단계에서 거른다', () => {
-    expect(frameDurationsSql(2)).toContain('dur >= 0')
+    expect(frameSamplesSql(2)).toContain('dur >= 0')
   })
 })
 

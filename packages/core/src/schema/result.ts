@@ -1059,7 +1059,7 @@ export const SessionInfoSchema = z.object({
         '진행 중인 세션의 경과 시간이 필요하면 started_at 과 지금 시각으로 직접 구하라. ' +
         '이 도구는 그것을 세션의 길이라고 부르지 않는다.',
     ),
-  options: z.object({ launch: z.boolean(), video: z.boolean() }),
+  options: z.object({ launch: z.boolean() }),
 })
 export type SessionInfo = z.infer<typeof SessionInfoSchema>
 
@@ -1163,7 +1163,6 @@ export type Warning = z.infer<typeof WarningSchema>
 
 export const ArtifactsSchema = z.object({
   trace: z.string().nullable(),
-  video: z.string().nullable(),
   raw: z.array(z.string()),
 })
 export type Artifacts = z.infer<typeof ArtifactsSchema>
