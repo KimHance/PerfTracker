@@ -105,6 +105,29 @@ describe('parseResolveActivity', () => {
     expect(parseResolveActivity(text).labelRes).toBeNull()
   })
 
+
+  /**
+   * **실측으로 잡힌 결함.** 진입점이 둘 이상이면 `resolve-activity` 가 시스템 선택창을
+   * 돌려주고, 딸려 오는 `ApplicationInfo` 도 `packageName=android` 인 **시스템의 것**이 된다.
+   * 그 절의 `labelRes=0x104…` 를 대상 앱 APK 에서 찾으면 못 찾아 라벨이 패키지명으로
+   * 폴백했다 — 같은 앱인데 릴리스는 `Stream`, 디버그 빌드만 패키지명으로 나오던 원인이다.
+   *
+   * 맨 위 `ResolveInfo` 레벨의 `labelRes` 는 그때도 대상 앱의 것이다.
+   */
+  it('선택창이 오면 시스템 ApplicationInfo 의 labelRes 를 쓰지 않는다', () => {
+    const info = parseResolveActivity(RESOLVE_AMBIGUOUS)
+
+    // 실기기 원문의 ResolveInfo 레벨 값 = 릴리스 빌드와 같은 0x7f150166.
+    expect(info.labelRes).toBe(0x7f150166)
+    // 시스템 리소스(0x0104…)를 집어 오면 APK 에서 못 찾고 패키지명으로 폴백한다.
+    expect(info.labelRes).not.toBe(0x10401d1)
+  })
+
+  it('진입점이 하나면 ApplicationInfo 의 값을 그대로 쓴다', () => {
+    // 이 원문의 ApplicationInfo 는 대상 앱의 것이다 — 기존 동작이 바뀌지 않았다.
+    expect(parseResolveActivity(RESOLVE).labelRes).toBe(0x7f140047)
+  })
+
   it('아무것도 못 찾으면 전부 null', () => {
     expect(parseResolveActivity('No activity found')).toEqual({
       launcherActivity: null,

@@ -36,8 +36,25 @@ export function parseResolveActivity(text: string): ResolveActivityInfo {
   const pair = /^\s*name=([\w.$]+)\s*$\s*^\s*packageName=([\w.$]+)\s*$/m.exec(text)
   const activity = pair?.[1] ?? /^\s*name=([\w.$]+)\s*$/m.exec(text)?.[1] ?? null
 
+  /**
+   * **어느 `ApplicationInfo` 절인지가 중요하다.**
+   *
+   * 진입점이 하나인 앱은 그 절이 대상 앱의 것이라 `labelRes` 가 앱 리소스(`0x7f……`)다.
+   * 그런데 **진입점이 둘 이상이면 `resolve-activity` 가 시스템 선택창을 돌려주고**, 딸려 오는
+   * `ApplicationInfo` 도 `packageName=android` 인 시스템의 것이 된다 — 그 절의
+   * `labelRes=0x104…` 를 대상 앱의 APK 에서 찾으면 당연히 못 찾고, 라벨이 패키지명으로
+   * 폴백한다. 실측(Stream 디버그 빌드): 릴리스는 `Stream` 으로 나오는데 같은 앱의 디버그 빌드만
+   * 패키지명으로 나오던 원인이 이것이었다.
+   *
+   * **맨 위의 `ResolveInfo` 레벨 `labelRes` 는 그때도 대상 앱의 것이다** (실측: 디버그
+   * `0x7f150166` = 릴리스와 같은 값). 그래서 시스템 절이면 그쪽으로 물러선다.
+   */
   const appInfoIndex = text.indexOf('ApplicationInfo:')
-  const scope = appInfoIndex >= 0 ? text.slice(appInfoIndex) : text
+  const appInfoScope = appInfoIndex >= 0 ? text.slice(appInfoIndex) : text
+  const appInfoPackage = /^\s*packageName=([\w.$]+)\s*$/m.exec(appInfoScope)?.[1] ?? null
+  // ApplicationInfo 가 대상 앱의 것이 아니면(선택창이 돌아온 경우) 그 절의 값을 쓰지 않는다.
+  const ownsAppInfo = appInfoPackage !== null && appInfoPackage !== 'android'
+  const scope = ownsAppInfo ? appInfoScope : text
 
   const labelResMatch = /labelRes=0x([0-9a-fA-F]+)/.exec(scope)
   const labelRes = labelResMatch ? Number.parseInt(labelResMatch[1]!, 16) : null
