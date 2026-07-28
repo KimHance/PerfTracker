@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-web/
 *.tsbuildinfo
 
 # 측정 세션 산출물 (트레이스 원본이 커서 커밋하지 않음)
@@ -21,3 +22,9 @@ runs/
 
 # 실기기 조사용 스크래치 (커밋하지 않는다)
 .scratch/
+
+# 에이전트 툴링 상태 (기계가 쓰는 캐시 — 작업 맥락이 아니다)
+.super-soop/
+
+# 디자인 핸드오프 원본 zip — 푼 내용이 docs/design/gui/ 에 있으므로 zip 은 커밋하지 않는다
+*.zip

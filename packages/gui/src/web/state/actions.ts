@@ -1,0 +1,49 @@
+import type { AppView, DeviceView, DoctorCheckView, RunView } from '../../contract/api.js'
+import type { AppState, Confirm, Loading, Tab } from './model.js'
+
+/**
+ * 상태를 바꾸는 모든 방법. 화면은 이 목록 밖의 방법으로 상태를 바꾸지 못한다.
+ *
+ * 부수효과(fetch, 타이머)는 여기 없다 — 그것은 `effects/` 의 일이고, effects 는
+ * 결과를 다시 이 액션으로만 반영한다. 그래서 리듀서는 순수하게 남는다.
+ */
+export type Action =
+  // 환경 · 목록
+  | { type: 'env/loaded'; env: AppState['env'] }
+  | { type: 'devices/loaded'; devices: DeviceView[] }
+  | { type: 'apps/loaded'; serial: string; apps: AppView[] }
+  | { type: 'runs/loaded'; runs: RunView[] }
+  | { type: 'doctor/loaded'; checks: DoctorCheckView[] }
+  | { type: 'doctor/dismissed' }
+  // 탭
+  | { type: 'tab/added'; key: string }
+  | { type: 'tab/selected'; key: string }
+  | { type: 'tab/closed'; key: string }
+  | { type: 'tab/patched'; key: string; patch: Partial<Tab> }
+  // 마킹
+  | { type: 'mark/added'; tabKey: string; key: string; label: string; offsetMs: number }
+  | { type: 'mark/removed'; tabKey: string; key: string }
+  // 세션
+  | { type: 'session/started'; tabKey: string; sessionId: string; name: string; startedAt: number }
+  | { type: 'session/stopped'; tabKey: string; run: RunView | null }
+  | { type: 'session/aborted'; tabKey: string }
+  // 기록
+  | { type: 'run/renamed'; runId: string; name: string }
+  | { type: 'run/removed'; runId: string }
+  | { type: 'runs/cleared' }
+  | { type: 'run/opened'; runId: string }
+  | { type: 'run/editStarted'; runId: string; draft: string }
+  | { type: 'run/editChanged'; draft: string }
+  | { type: 'run/editCancelled' }
+  // 화면 상태
+  | { type: 'drawer/toggled' }
+  | { type: 'drawer/opened' }
+  | { type: 'cli/toggled' }
+  | { type: 'cli/logged'; at: string; command: string }
+  | { type: 'loading/began'; loading: Loading }
+  | { type: 'loading/ended' }
+  | { type: 'confirm/asked'; confirm: Confirm }
+  | { type: 'confirm/dismissed' }
+  | { type: 'error/raised'; message: string }
+  | { type: 'error/dismissed' }
+  | { type: 'clock/ticked'; now: number }

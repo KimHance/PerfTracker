@@ -245,6 +245,23 @@ npx perftracker extract runs/2026-07-26T02-31-40_홈-스크롤_a3f9c1
 - **이미 세션이 있다고 한다** — `perftracker stop` 으로 끝내거나 `--force` 로 시작하세요.
   `--force` 는 기기 쪽에 남은 Perfetto 세션까지 정리합니다.
 
+### 화면으로 하고 싶다면 (GUI, 만드는 중)
+
+같은 흐름을 브라우저에서 하는 로컬 GUI 가 `packages/gui` 에 있습니다. 세션을 **동시에 여러 개**
+돌릴 수 있게 브라우저 탭처럼 상단 탭바로 나뉘고, 측정 중에는 경과 시간과 정지 버튼만 두되
+사람이 **마킹**(이벤트 라벨)을 남길 수 있습니다 — 마킹은 기기로 나가지 않고 정지할 때
+`result.json` 의 `marks[]` 가 됩니다.
+
+**아직 서버가 없어서 실제 측정은 되지 않습니다.** 화면만 보려면:
+
+```bash
+npm run gui
+# http://localhost:5173/?mock         목업 데이터로 화면 전체
+# http://localhost:5173/?mock=empty   기기가 한 대도 없을 때
+```
+
+디자인 정본은 `docs/design/gui/HANDOFF.md`, 구현 규율은 `packages/gui/AGENTS.md` 입니다.
+
 ---
 
 ## `result.json` 읽는 법

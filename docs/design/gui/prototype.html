@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/industry-dead3d66-f6b4-48d1-8e80-511171bc624a/styles.css">
+<script src="_ds/industry-dead3d66-f6b4-48d1-8e80-511171bc624a/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* 어두운 그라운드로 반전 — 토큰만 갈아끼워 DS 클래스가 그대로 따라오게 한다.
+   스틸 액센트는 그대로, 램프는 지각 밝기 순서만 뒤집는다. */
+:root{
+  --color-bg:#1d1f20;
+  --color-surface:#26282a;
+  --color-text:#eef0f2;
+  --color-accent:#749dc4;
+  --color-accent-2:#7e9cb8;
+  --color-divider:color-mix(in srgb,#eef0f2 18%,transparent);
+  --color-neutral-100:#26282a;
+  --color-neutral-200:#2f3133;
+  --color-neutral-300:#3b3d40;
+  --color-neutral-400:#55585b;
+  --color-neutral-500:#7e8285;
+  --color-neutral-600:#9a9ea1;
+  --color-neutral-700:#b6babd;
+  --color-neutral-800:#d3d6d8;
+  --color-neutral-900:#eef0f2;
+  --color-accent-100:#1f2b36;
+  --color-accent-200:#26374a;
+  --color-accent-300:#3d5f80;
+  --color-accent-400:#6d97bf;
+  --color-accent-500:#749dc4;
+  --color-accent-600:#8fb2d3;
+  --color-accent-700:#a9c8e6;
+  --color-accent-800:#cfe1f3;
+  --color-accent-900:#e7f1fb;
+  --radius-sm:6px;
+  --radius-md:10px;
+  --radius-lg:16px;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.5);
+  --shadow-md:0 3px 10px rgba(0,0,0,.55);
+  --shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}
+html,body{margin:0;height:100%}
+body{background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);-webkit-font-smoothing:antialiased}
+a{color:var(--color-accent-700);text-decoration:none}
+a:hover{color:var(--color-accent-800);text-decoration:underline}
+*{box-sizing:border-box}
+input{font-family:inherit}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--color-neutral-300);border-radius:99px}
+.btn,.input,.card,.dialog,.tag{border-radius:var(--radius-md)}
+.btn{border-radius:99px}
+@keyframes pt-spin{to{transform:rotate(360deg)}}
+@keyframes pt-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+</style>
+</helmet>
+
+<div style="display:flex;flex-direction:column;height:100vh;min-width:0;overflow:hidden;background:var(--color-bg)">
+
+  <header style="display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-2) var(--space-4);padding:var(--space-2) clamp(12px,2vw,20px);min-height:52px;border-bottom:1px solid var(--color-divider);flex:none">
+    <div style="display:flex;align-items:baseline;gap:var(--space-2)">
+      <span style="font-family:var(--font-heading);font-weight:700;font-size:19px;letter-spacing:.14em;text-transform:uppercase">PerfTracker</span>
+      <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-600)">v0.1.0</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:var(--space-2);font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-700);border:1px solid var(--color-divider);padding:3px var(--space-3);border-radius:99px;white-space:nowrap;flex:none">
+      <span style="width:6px;height:6px;background:var(--color-accent);display:inline-block;border-radius:50%"></span>
+      <span>adb</span>
+      <span style="color:var(--color-neutral-500)">{{ adbPath }}</span>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:var(--space-2)">
+      <button class="btn btn-ghost" style="height:32px;font-size:12px;white-space:nowrap;flex:none" onClick="{{ runDoctor }}">환경 점검 (doctor)</button>
+      <button class="btn btn-secondary" style="height:32px;font-size:12px;display:flex;align-items:center;gap:var(--space-2);white-space:nowrap;flex:none" onClick="{{ toggleDrawer }}">
+        기록
+        <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;background:var(--color-accent-200);color:var(--color-accent-800);padding:1px 7px;border-radius:99px">{{ historyCount }}</span>
+      </button>
+    </div>
+  </header>
+
+  <div style="display:flex;align-items:stretch;height:38px;flex:none;border-bottom:1px solid var(--color-divider);background:var(--color-neutral-100);padding-left:var(--space-2);overflow-x:auto;overflow-y:hidden">
+    <sc-for list="{{ tabs }}" as="tab" hint-placeholder-count="2">
+      <div style="{{ tab.rowStyle }}" onClick="{{ tab.select }}">
+        <span style="{{ tab.dotStyle }}"></span>
+        <span style="font-size:12.5px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ tab.label }}</span>
+        <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--color-neutral-600)">{{ tab.badge }}</span>
+        <span style="{{ tab.closeStyle }}" onClick="{{ tab.close }}" title="탭 닫기">×</span>
+      </div>
+    </sc-for>
+    <button class="btn btn-ghost" style="align-self:center;height:26px;width:26px;padding:0;margin-left:var(--space-2);font-size:15px;line-height:1" title="탭 추가" onClick="{{ addTab }}">+</button>
+    <div style="margin-left:auto;align-self:center;padding-right:var(--space-4);font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--color-neutral-600)">{{ tabsSummary }}</div>
+  </div>
+
+  <div style="display:flex;flex:1;min-height:0">
+
+    <main style="flex:1;min-width:0;overflow:auto;position:relative">
+
+      <sc-if value="{{ isSetup }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:clamp(14px,2.4vw,24px) clamp(14px,3vw,30px);display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:clamp(20px,3vw,34px);align-items:start">
+
+          <section>
+            <div style="display:flex;align-items:baseline;gap:var(--space-3);border-bottom:1px solid var(--color-text);padding-bottom:var(--space-2);margin-bottom:var(--space-4)">
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-accent-700)">01</span>
+              <h2 style="font-family:var(--font-heading);font-weight:600;font-size:20px;margin:0;letter-spacing:.03em;white-space:nowrap;flex:none">기기 선택</h2>
+              <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-600);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right">perftracker devices</span>
+              <button class="btn btn-ghost" style="height:24px;font-size:11px;padding:0 var(--space-2);white-space:nowrap;flex:none" onClick="{{ refreshDevices }}">새로고침</button>
+            </div>
+            <sc-if value="{{ devicesEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:var(--space-6);border:1px dashed var(--color-divider);border-radius:var(--radius-lg);text-align:center">
+                <div style="font-family:var(--font-heading);font-size:19px;font-weight:600;letter-spacing:.02em">연결된 기기가 없습니다</div>
+                <div style="font-size:12px;color:var(--color-neutral-700);line-height:1.7;margin-top:var(--space-2);text-wrap:pretty">USB 로 연결하고 기기 화면의 <b>USB 디버깅 허용</b>을 눌러 주세요. 이미 연결했다면 <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px">unauthorized / offline</span> 상태일 수 있습니다.</div>
+                <div style="display:flex;flex-wrap:wrap;gap:var(--space-2);justify-content:center;margin-top:var(--space-4)">
+                  <button class="btn btn-primary" style="height:32px;font-size:12px;white-space:nowrap" onClick="{{ refreshDevices }}">다시 조회</button>
+                  <button class="btn btn-secondary" style="height:32px;font-size:12px;white-space:nowrap" onClick="{{ runDoctor }}">환경 점검</button>
+                </div>
+              </div>
+            </sc-if>
+            <div style="display:flex;flex-direction:column;gap:var(--space-2)">
+              <sc-for list="{{ devices }}" as="d" hint-placeholder-count="4">
+                <div style="{{ d.rowStyle }}" onClick="{{ d.select }}">
+                  <div style="display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-2)">
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-600);flex:none">{{ d.serial }}</span>
+                    <span style="font-family:var(--font-heading);font-size:16px;font-weight:600;letter-spacing:.02em;white-space:nowrap;flex:none">{{ d.model }}</span>
+                    <span style="{{ d.badgeStyle }}">{{ d.badge }}</span>
+                  </div>
+                  <div style="font-size:11.5px;color:var(--color-neutral-700);margin-top:2px;min-width:0">{{ d.spec }}</div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="display:flex;align-items:baseline;gap:var(--space-3);border-bottom:1px solid var(--color-text);padding-bottom:var(--space-2);margin:var(--space-8) 0 var(--space-4)">
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-accent-700)">02</span>
+              <h2 style="font-family:var(--font-heading);font-weight:600;font-size:20px;margin:0;letter-spacing:.03em;white-space:nowrap;flex:none">이 기기에서 측정 가능한 지표</h2>
+              <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-600);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right">{{ metricSummary }}</span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:var(--space-2)">
+              <sc-for list="{{ metrics }}" as="m" hint-placeholder-count="7">
+                <span style="{{ m.chipStyle }}" title="{{ m.reason }}">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px">{{ m.mark }}</span>
+                  <span>{{ m.id }}</span>
+                </span>
+              </sc-for>
+            </div>
+            <p style="font-size:11.5px;color:var(--color-neutral-700);margin:var(--space-3) 0 0;max-width:52ch;text-wrap:pretty">{{ metricNote }}</p>
+          </section>
+
+          <section>
+            <div style="display:flex;align-items:baseline;gap:var(--space-3);border-bottom:1px solid var(--color-text);padding-bottom:var(--space-2);margin-bottom:var(--space-4)">
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-accent-700)">03</span>
+              <h2 style="font-family:var(--font-heading);font-weight:600;font-size:20px;margin:0;letter-spacing:.03em;white-space:nowrap;flex:none">앱 선택</h2>
+              <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-600);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right">perftracker apps</span>
+            </div>
+            <input class="input" placeholder="{{ appPlaceholder }}" value="{{ appQuery }}" onInput="{{ onAppQuery }}" disabled="{{ appSearchDisabled }}" style="width:100%;margin-bottom:var(--space-2)">
+            <sc-if value="{{ appsBlocked }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:var(--space-6);border:1px dashed var(--color-divider);border-radius:var(--radius-lg);text-align:center;font-size:12px;color:var(--color-neutral-700);line-height:1.7;text-wrap:pretty">{{ appsBlockedText }}</div>
+            </sc-if>
+            <sc-if value="{{ appsNoResult }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:var(--space-6);border:1px dashed var(--color-divider);border-radius:var(--radius-lg);text-align:center">
+                <div style="font-size:12.5px">검색 결과가 없습니다</div>
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-600);margin-top:4px;word-break:break-all">"{{ appQuery }}"</div>
+                <button class="btn btn-ghost" style="height:28px;font-size:11.5px;margin-top:var(--space-3);white-space:nowrap" onClick="{{ clearAppQuery }}">검색어 지우기</button>
+              </div>
+            </sc-if>
+            <div style="{{ appListStyle }}">
+              <sc-for list="{{ apps }}" as="a" hint-placeholder-count="7">
+                <div style="{{ a.rowStyle }}" onClick="{{ a.select }}">
+                  <span style="font-size:13px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.label }}</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-600);flex:none;white-space:nowrap">{{ a.pkg }}</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-500);min-width:52px;text-align:right;flex:none">{{ a.version }}</span>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="display:flex;align-items:baseline;gap:var(--space-3);border-bottom:1px solid var(--color-text);padding-bottom:var(--space-2);margin:var(--space-8) 0 var(--space-4)">
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-accent-700)">04</span>
+              <h2 style="font-family:var(--font-heading);font-weight:600;font-size:20px;margin:0;letter-spacing:.03em;white-space:nowrap;flex:none">세션</h2>
+            </div>
+            <div class="field" style="margin-bottom:var(--space-4)">
+              <label for="pt-name">세션 이름</label>
+              <input class="input" id="pt-name" placeholder="예: 홈 스크롤" value="{{ sessionName }}" onInput="{{ onSessionName }}" style="width:100%">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:var(--space-2)">
+              <sc-for list="{{ options }}" as="o" hint-placeholder-count="4">
+                <div style="{{ o.rowStyle }}" onClick="{{ o.toggle }}">
+                  <span style="{{ o.boxStyle }}">{{ o.mark }}</span>
+                  <div>
+                    <div style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px">{{ o.flag }}</div>
+                    <div style="font-size:11.5px;color:var(--color-neutral-700)">{{ o.desc }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+        </div>
+
+        <div style="position:sticky;bottom:0;display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3);padding:var(--space-3) clamp(14px,3vw,30px);border-top:1px solid var(--color-divider);background:var(--color-neutral-100)">
+          <div style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--color-neutral-700);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:180px">{{ startCommand }}</div>
+          <button class="btn btn-primary blueprint" style="margin-left:auto;height:40px;min-width:150px;font-size:14px;white-space:nowrap;flex:none" disabled="{{ startDisabled }}" onClick="{{ startSession }}">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            측정 시작
+          </button>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isRunning }}" hint-placeholder-val="{{ false }}">
+        <div style="min-height:100%;display:flex;flex-direction:column;align-items:center;gap:clamp(12px,2.4vh,26px);padding:clamp(16px,4vh,40px) clamp(16px,3vw,32px);margin-block:auto">
+          <div style="display:flex;align-items:center;gap:var(--space-2);font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--color-accent-700)">
+            <span style="width:7px;height:7px;background:var(--color-accent);display:inline-block;border-radius:50%;animation:pt-pulse 1.4s ease-in-out infinite"></span>
+            측정 중
+          </div>
+          <div style="font-family:var(--font-heading);font-weight:600;font-size:min(108px,max(52px,14vw,12vh));line-height:.9;letter-spacing:.02em;font-variant-numeric:tabular-nums">{{ elapsed }}</div>
+          <div style="text-align:center;font-size:13px;color:var(--color-neutral-700);line-height:1.7">
+            <div style="font-family:var(--font-heading);font-size:19px;color:var(--color-text);letter-spacing:.02em">{{ runningName }}</div>
+            <div>{{ runningApp }}</div>
+            <div style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px">{{ runningDevice }} · 시작 {{ runningStartedAt }}</div>
+          </div>
+          <div style="width:min(520px,92%);display:flex;flex-direction:column;gap:var(--space-2)">
+            <div style="display:flex;align-items:baseline;gap:var(--space-2)">
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-neutral-600);flex:none">마킹</span>
+              <span style="font-size:11.5px;color:var(--color-neutral-600);min-width:0">이벤트가 일어난 순간에 이름을 남기면 경과 시간과 함께 기록됩니다</span>
+            </div>
+            <div style="display:flex;gap:var(--space-2)">
+              <input class="input" placeholder="예: 홈 진입, 스크롤 시작, 광고 재생" value="{{ markDraft }}" onInput="{{ onMarkDraft }}" onKeyDown="{{ onMarkKey }}" style="flex:1;min-width:0">
+              <button class="btn btn-secondary" style="height:40px;min-width:96px;font-size:12.5px;white-space:nowrap;flex:none" disabled="{{ markDisabled }}" onClick="{{ addMark }}">마킹 {{ markHint }}</button>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:var(--space-2)">
+              <sc-for list="{{ quickMarks }}" as="q" hint-placeholder-count="4">
+                <button class="btn btn-ghost" style="height:28px;font-size:11.5px;padding:0 var(--space-3);white-space:nowrap" onClick="{{ q.add }}">+ {{ q.label }}</button>
+              </sc-for>
+            </div>
+            <sc-if value="{{ hasMarks }}" hint-placeholder-val="{{ false }}">
+              <div style="border:1px solid var(--color-divider);border-radius:var(--radius-lg);max-height:150px;overflow:auto;margin-top:var(--space-1)">
+                <sc-for list="{{ marks }}" as="m" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:var(--space-3);padding:6px 12px;border-bottom:1px solid var(--color-divider)">
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--color-accent-700);flex:none;min-width:46px">{{ m.at }}</span>
+                    <span style="font-size:12.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left">{{ m.label }}</span>
+                    <span style="font-size:14px;line-height:1;color:var(--color-neutral-600);cursor:pointer;flex:none" title="삭제" onClick="{{ m.remove }}">×</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-600);text-align:right">{{ markCountLabel }}</div>
+            </sc-if>
+          </div>
+          <button class="btn btn-primary blueprint" style="height:52px;min-width:190px;font-size:15px;white-space:nowrap;flex:none" onClick="{{ stopSession }}">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            정지 · 기록 생성
+          </button>
+          <p style="max-width:46ch;text-align:center;font-size:11.5px;color:var(--color-neutral-600);margin:0;text-wrap:pretty">측정 중에는 기기에 어떤 adb 명령도 보내지 않습니다. 다른 탭의 세션은 이 탭과 독립적으로 흘러갑니다.</p>
+        </div>
+      </sc-if>
+    </main>
+
+    <sc-if value="{{ drawerOpen }}" hint-placeholder-val="{{ false }}">
+      <aside style="width:clamp(280px,32vw,392px);flex:none;border-left:1px solid var(--color-divider);display:flex;flex-direction:column;background:var(--color-neutral-100)">
+        <div style="display:flex;align-items:center;gap:var(--space-2);padding:var(--space-4);border-bottom:1px solid var(--color-divider)">
+          <span style="font-family:var(--font-heading);font-size:18px;font-weight:600;letter-spacing:.06em;text-transform:uppercase">기록</span>
+          <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-600)">{{ historyCount }}건 · 항상 최신</span>
+          <button class="btn btn-ghost" style="margin-left:auto;height:26px;font-size:11px;padding:0 var(--space-2);white-space:nowrap;flex:none" onClick="{{ askClearAll }}">전체 지우기</button>
+          <button class="btn btn-ghost" style="height:26px;width:26px;padding:0;font-size:14px" title="닫기" onClick="{{ toggleDrawer }}">×</button>
+        </div>
+        <div style="flex:1;overflow:auto;padding:var(--space-3);display:flex;flex-direction:column;gap:var(--space-2)">
+          <sc-for list="{{ history }}" as="h" hint-placeholder-count="5">
+            <div style="{{ h.rowStyle }}">
+              <div style="display:flex;align-items:center;gap:var(--space-2)">
+                <sc-if value="{{ h.editing }}" hint-placeholder-val="{{ false }}">
+                  <input class="input" style="height:28px;font-size:13px;flex:1" value="{{ h.draft }}" onInput="{{ h.onDraft }}" onKeyDown="{{ h.onKey }}" onBlur="{{ h.commit }}">
+                </sc-if>
+                <sc-if value="{{ h.notEditing }}" hint-placeholder-val="{{ true }}">
+                  <span style="font-family:var(--font-heading);font-size:17px;font-weight:600;letter-spacing:.02em;cursor:pointer;flex:1" onClick="{{ h.open }}">{{ h.name }}</span>
+                </sc-if>
+                <span style="{{ h.freshStyle }}">{{ h.freshLabel }}</span>
+              </div>
+              <div style="display:flex;align-items:flex-end;gap:var(--space-2);margin-top:var(--space-1)">
+                <div style="font-size:11.5px;color:var(--color-neutral-700);line-height:1.55;cursor:pointer;min-width:0;flex:1" onClick="{{ h.open }}">
+                  <div>{{ h.device }}</div>
+                  <div>{{ h.app }}</div>
+                  <div style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-600)">{{ h.when }} · {{ h.duration }} · {{ h.flags }}</div>
+                </div>
+                <div style="margin-left:auto;display:flex;gap:var(--space-1);flex:none">
+                  <button class="btn btn-ghost" style="height:24px;font-size:10.5px;padding:0 var(--space-2);white-space:nowrap;flex:none" onClick="{{ h.rename }}">이름 변경</button>
+                  <button class="btn btn-ghost" style="height:24px;font-size:10.5px;padding:0 var(--space-2);white-space:nowrap;flex:none" onClick="{{ h.askDelete }}">삭제</button>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ historyEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:var(--space-8) var(--space-4);text-align:center;font-size:12px;color:var(--color-neutral-600);border:1px dashed var(--color-divider);border-radius:var(--radius-lg)">기록이 없습니다. 세션을 정지하면 여기에 쌓입니다.</div>
+          </sc-if>
+        </div>
+      </aside>
+    </sc-if>
+  </div>
+
+  <footer style="flex:none;border-top:1px solid var(--color-divider);background:var(--color-neutral-100)">
+    <div style="display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) clamp(12px,2vw,20px);cursor:pointer" onClick="{{ toggleCli }}">
+      <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-neutral-600);white-space:nowrap;flex:none">CLI 로그</span>
+      <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-700);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{{ lastCommand }}</span>
+      <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-600);white-space:nowrap;flex:none">{{ cliToggleLabel }}</span>
+    </div>
+    <sc-if value="{{ cliOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="max-height:168px;overflow:auto;padding:0 clamp(12px,2vw,20px) var(--space-4);font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:1.7;color:var(--color-neutral-700)">
+        <sc-for list="{{ cliLog }}" as="l" hint-placeholder-count="4">
+          <div style="display:flex;gap:var(--space-3)">
+            <span style="color:var(--color-neutral-500)">{{ l.at }}</span>
+            <span style="color:var(--color-accent-700)">$</span>
+            <span>{{ l.cmd }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+  </footer>
+</div>
+
+<sc-if value="{{ confirmOpen }}" hint-placeholder-val="{{ false }}">
+  <div class="dialog-backdrop" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:40">
+    <div class="dialog blueprint" style="width:min(400px,92vw);padding:var(--space-6)">
+      <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+      <div class="dialog-title" style="font-family:var(--font-heading);font-size:22px;font-weight:600;letter-spacing:.02em">{{ confirmTitle }}</div>
+      <div class="dialog-body" style="font-size:13px;color:var(--color-neutral-700);margin:var(--space-3) 0 var(--space-6);line-height:1.6">{{ confirmBody }}</div>
+      <div class="dialog-actions" style="display:flex;gap:var(--space-2);justify-content:flex-end">
+        <button class="btn btn-secondary" style="height:34px;font-size:12.5px" onClick="{{ closeConfirm }}">취소</button>
+        <button class="btn btn-primary" style="height:34px;font-size:12.5px" onClick="{{ acceptConfirm }}">{{ confirmAccept }}</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ loadingOpen }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-4);background:color-mix(in srgb, var(--color-bg) 88%, transparent);backdrop-filter:blur(2px)">
+    <div style="width:34px;height:34px;border-radius:50%;border:2px solid var(--color-accent-300);border-top-color:var(--color-accent-700);animation:pt-spin .8s linear infinite"></div>
+    <div style="font-family:var(--font-heading);font-size:20px;font-weight:600;letter-spacing:.03em">{{ loadingLabel }}</div>
+    <div style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--color-neutral-700);max-width:88vw;text-align:center;word-break:break-all">$ {{ loadingCommand }}</div>
+  </div>
+</sc-if>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;showNoDeviceState&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;빈 상태 미리보기&quot;},&quot;drawerOpenByDefault&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;기본 동작&quot;}}">
+const DEVICES = [
+  { serial: 'R3CT0000003', model: 'SM-F936N', release: '16', sdk: 36, soc: 'SM8475', cores: 8, ramGb: 11, res: '904x2316', hz: 60 },
+  { serial: 'R5CT0000001', model: 'SM-S901N', release: '16', sdk: 36, soc: 'SM8450', cores: 8, ramGb: 7, res: '1080x2340', hz: 120 },
+  { serial: 'R38M20ABCDE', model: 'SM-A405S', release: '11', sdk: 30, soc: 'Exynos 7904', cores: 8, ramGb: 4, res: '1080x2340', hz: 60 },
+  { serial: 'emulator-5554', model: 'sdk_gphone64_arm64', release: '15', sdk: 35, soc: null, cores: 4, ramGb: 8, res: '1080x2400', hz: 60 },
+]
+
+const METRICS = [
+  { id: 'frame', min: 31, label: 'Android 12' },
+  { id: 'startup', min: 0, label: null },
+  { id: 'cpu', min: 30, label: 'Android 11' },
+  { id: 'memory', min: 30, label: 'Android 11' },
+  { id: 'log', min: 30, label: 'Android 11' },
+  { id: 'thermal', min: 29, label: 'Android 10' },
+  { id: 'network', min: 34, label: 'Android 14' },
+]
+
+const APPS = [
+  { label: 'Stream (debug)', pkg: 'com.example.streaming.debug', version: '2026.7.1' },
+  { label: 'Haze Sample', pkg: 'dev.chrisbanes.haze.sample', version: '1.6.10' },
+  { label: 'com.streamlive.blur.test', pkg: 'com.streamlive.blur.test', version: '0.1' },
+  { label: 'StreamingSDK', pkg: 'com.example.sdk.sample', version: '1.4.2' },
+  { label: 'Airbnb', pkg: 'com.airbnb.android', version: '26.30' },
+  { label: 'Android Performance Analyzer', pkg: 'com.google.android.apps.nbu.perf', version: '3.11' },
+  { label: 'Compose Material Catalog', pkg: 'androidx.compose.material.catalog', version: '1.8.0' },
+  { label: 'Now in Android', pkg: 'com.google.samples.apps.nowinandroid', version: '0.1.2' },
+  { label: 'Instagram', pkg: 'com.instagram.android', version: '412.0' },
+  { label: 'Samsung Browser', pkg: 'com.sec.android.app.sbrowser', version: '28.0' },
+  { label: 'Samsung Kids', pkg: 'com.sec.android.app.kidshome', version: '4.4' },
+  { label: 'Google TV', pkg: 'com.google.android.videos', version: '4.41' },
+  { label: 'Calculator', pkg: 'com.sec.android.app.popupcalculator', version: '12.6' },
+  { label: 'Galaxy Wearable', pkg: 'com.samsung.android.app.watchmanager', version: '2.2.66' },
+]
+
+const SEED_HISTORY = [
+  { id: 'eb6d24', name: '클린업 검증', serial: 'R3CT0000003', model: 'SM-F936N', pkg: 'com.example.streaming.debug', app: 'Stream (debug) v2026.7.1', at: '2026-07-27T18:05:39', durationMs: 14921, launch: true, unsupported: 0, warnings: 2 },
+  { id: 'e601ba', name: '동시-A16', serial: 'R5CT0000001', model: 'SM-S901N', pkg: 'com.airbnb.android', app: 'Airbnb v26.30', at: '2026-07-27T17:46:42', durationMs: 62310, launch: true, unsupported: 0, warnings: 1 },
+  { id: '90458b', name: '동시-A11', serial: 'R38M20ABCDE', model: 'SM-A405S', pkg: 'com.airbnb.android', app: 'Airbnb v26.30', at: '2026-07-27T17:46:47', durationMs: 61044, launch: true, unsupported: 2, warnings: 3 },
+  { id: '297874', name: '고지 확인', serial: 'R3CT0000003', model: 'SM-F936N', pkg: 'dev.chrisbanes.haze.sample', app: 'Haze Sample v1.6.10', at: '2026-07-27T17:21:06', durationMs: 33502, launch: false, unsupported: 0, warnings: 1 },
+  { id: 'cda944', name: '시계열 검증', serial: 'R3CT0000003', model: 'SM-F936N', pkg: 'com.example.streaming.debug', app: 'Stream (debug) v2026.7.1', at: '2026-07-27T16:12:46', durationMs: 122304, launch: true, unsupported: 0, warnings: 2 },
+]
+
+const pad2 = (n) => String(n).padStart(2, '0')
+const fmtElapsed = (ms) => {
+  const t = Math.max(0, Math.floor(ms / 1000))
+  const h = Math.floor(t / 3600)
+  const s = `${pad2(Math.floor((t % 3600) / 60))}:${pad2(t % 60)}`
+  return h > 0 ? `${h}:${s}` : s
+}
+const fmtClock = (d) => `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`
+const fmtWhen = (iso) => {
+  const [date, time] = iso.split('T')
+  const [, m, d] = date.split('-')
+  return `${m}/${d} ${time.slice(0, 5)}`
+}
+const specLine = (d) =>
+  `Android ${d.release} (SDK ${d.sdk}) · ${d.soc ?? 'SoC 미상'} · ${d.cores}코어 · ${d.ramGb}GB · ${d.res}@${d.hz}Hz`
+const metricStateFor = (sdk) =>
+  METRICS.map((m) => ({
+    id: m.id,
+    ok: sdk >= m.min,
+    reason: sdk >= m.min ? '측정 가능' : `sdk_int=${sdk} 로는 수집할 수 없습니다 (최소 ${m.min}, ${m.label})`,
+  }))
+
+let tabSeq = 1
+let runSeq = 0
+const newTab = (name) => ({
+  key: `t${tabSeq++}`,
+  name: name ?? '',
+  serial: null,
+  pkg: null,
+  launch: true,
+  force: true,
+  offline: false,
+  outDir: 'runs',
+  marks: [],
+  markDraft: '',
+  state: 'setup',
+  startedAt: null,
+  appQuery: '',
+})
+
+class Component extends DCLogic {
+  state = {
+    tabs: [newTab('홈 스크롤')],
+    activeKey: null,
+    history: SEED_HISTORY,
+    drawerOpen: true,
+    cliOpen: false,
+    cliLog: [{ at: '18:05:12', cmd: 'perftracker doctor' }, { at: '18:05:14', cmd: 'perftracker devices' }],
+    loading: null,
+    confirm: null,
+    editingId: null,
+    editDraft: '',
+    now: Date.now(),
+  }
+
+  componentDidMount() {
+    this.timer = setInterval(() => {
+      if (this.state.tabs.some((t) => t.state === 'running')) this.setState({ now: Date.now() })
+    }, 500)
+  }
+  componentWillUnmount() { clearInterval(this.timer) }
+
+  log(cmd) {
+    this.setState((s) => ({ cliLog: [...s.cliLog, { at: fmtClock(new Date()), cmd }].slice(-40) }))
+  }
+
+  withLoading(label, cmd, ms, done) {
+    this.log(cmd)
+    this.setState({ loading: { label, cmd } })
+    setTimeout(() => {
+      this.setState({ loading: null })
+      if (done) done()
+    }, ms)
+  }
+
+  active() {
+    const { tabs, activeKey } = this.state
+    return tabs.find((t) => t.key === activeKey) ?? tabs[0]
+  }
+  patchActive(patch) {
+    const key = this.active().key
+    this.setState((s) => ({ tabs: s.tabs.map((t) => (t.key === key ? { ...t, ...patch } : t)) }))
+  }
+
+  busySerials(exceptKey) {
+    return this.state.tabs.filter((t) => t.state === 'running' && t.key !== exceptKey).map((t) => t.serial)
+  }
+
+  pushMark(key, raw) {
+    const label = raw.trim()
+    if (label === '') return
+    this.setState((p) => ({
+      tabs: p.tabs.map((t) =>
+        t.key === key
+          ? {
+              ...t,
+              markDraft: '',
+              marks: [...t.marks, { id: `m${Date.now()}${t.marks.length}`, label, offsetMs: Date.now() - t.startedAt }],
+            }
+          : t,
+      ),
+    }))
+    this.log(`mark "${label}" @ ${fmtElapsed(Date.now() - (this.state.tabs.find((t) => t.key === key) ?? {}).startedAt)}`)
+  }
+
+  renderVals() {
+    const s = this.state
+    const tab = this.active()
+    const dev = this.props.showNoDeviceState === true ? null : DEVICES.find((d) => d.serial === tab.serial) ?? null
+    const app = APPS.find((a) => a.pkg === tab.pkg) ?? null
+    const noDevices = this.props.showNoDeviceState === true
+    const busy = this.busySerials(tab.key)
+    const appQ = tab.appQuery.trim().toLowerCase()
+    const matchedApps = APPS.filter(
+      (a) => appQ === '' || a.label.toLowerCase().includes(appQ) || a.pkg.toLowerCase().includes(appQ),
+    )
+
+    const tabRow = (t, isActive) => ({
+      key: t.key,
+      label: t.name === '' ? '새 세션' : t.name,
+      badge: t.state === 'running' ? fmtElapsed(s.now - t.startedAt) : t.state === 'setup' ? '준비' : '',
+      rowStyle:
+        'display:flex;align-items:center;gap:6.8px;padding:0 10.2px;height:100%;cursor:pointer;flex:none;white-space:nowrap;border-radius:12px 12px 0 0;' +
+        (isActive
+          ? 'background:var(--color-bg);box-shadow:inset 0 -2px 0 var(--color-accent);'
+          : 'background:transparent;color:var(--color-neutral-700);'),
+      dotStyle:
+        'width:6px;height:6px;flex:none;display:inline-block;border-radius:50%;' +
+        (t.state === 'running'
+          ? 'background:var(--color-accent);animation:pt-pulse 1.4s ease-in-out infinite;'
+          : 'background:var(--color-neutral-400);'),
+      closeStyle:
+        'font-size:14px;line-height:1;padding:0 2px;color:var(--color-neutral-600);' +
+        (s.tabs.length > 1 ? 'cursor:pointer;' : 'opacity:.25;pointer-events:none;'),
+      select: () => this.setState({ activeKey: t.key }),
+      close: (e) => {
+        e.stopPropagation()
+        if (s.tabs.length <= 1) return
+        if (t.state === 'running') {
+          this.setState({ confirm: { kind: 'closeTab', key: t.key } })
+          return
+        }
+        this.setState((prev) => {
+          const tabs = prev.tabs.filter((x) => x.key !== t.key)
+          return { tabs, activeKey: prev.activeKey === t.key ? tabs[0].key : prev.activeKey }
+        })
+      },
+    })
+
+    const metricList = dev === null ? [] : metricStateFor(dev.sdk)
+    const okCount = metricList.filter((m) => m.ok).length
+
+    const optionDefs = [
+      { flag: '--launch', desc: '앱을 콜드로 띄우고 시작 시간을 측정 (기본 켬)', on: tab.launch, key: 'launch' },
+      { flag: '--force', desc: '이 기기에 남은 기존 세션을 버리고 시작 (기본 켬)', on: tab.force, key: 'force' },
+      { flag: '--offline', desc: 'trace_processor 를 내려받지 않음 (캐시만 사용)', on: tab.offline, key: 'offline' },
+    ]
+
+    const cmdParts = [
+      'npx perftracker start',
+      tab.pkg !== null ? `--app "${tab.pkg}"` : '--app <미선택>',
+      tab.name.trim() !== '' ? `--name "${tab.name.trim()}"` : '',
+      tab.serial !== null ? `-d ${tab.serial}` : '-d <미선택>',
+      tab.launch ? '--launch' : '',
+      tab.force ? '--force' : '',
+      `-o ${tab.outDir}`,
+    ].filter((x) => x !== '')
+
+    return {
+      adbPath: '~/Library/Android/sdk/platform-tools/adb',
+      historyCount: s.history.length,
+      historyEmpty: s.history.length === 0,
+      toggleDrawer: () => this.setState((p) => ({ drawerOpen: !p.drawerOpen })),
+      drawerOpen: s.drawerOpen && this.props.drawerOpenByDefault !== false,
+      runDoctor: () => this.withLoading('환경과 기기를 점검하고 있습니다', 'npx perftracker doctor', 1100),
+      refreshDevices: () => this.withLoading('연결된 기기를 조회하고 있습니다', 'npx perftracker devices', 900),
+      devicesEmpty: noDevices,
+
+      tabs: s.tabs.map((t) => tabRow(t, t.key === tab.key)),
+      tabsSummary: `${s.tabs.length}개 탭 · 측정 중 ${s.tabs.filter((t) => t.state === 'running').length}`,
+      addTab: () => {
+        const t = newTab('')
+        this.setState((p) => ({ tabs: [...p.tabs, t], activeKey: t.key }))
+      },
+
+      isSetup: tab.state === 'setup',
+      isRunning: tab.state === 'running',
+
+      devices: (noDevices ? [] : DEVICES).map((d) => {
+        const isBusy = busy.includes(d.serial)
+        const selected = tab.serial === d.serial
+        const ms = metricStateFor(d.sdk)
+        const bad = ms.filter((m) => !m.ok).map((m) => m.id)
+        return {
+          serial: d.serial,
+          model: d.model,
+          spec: specLine(d) + (bad.length > 0 ? ` — ${bad.join('·')} 미지원` : ''),
+          badge: isBusy ? '다른 탭에서 측정 중' : selected ? '선택됨' : bad.length > 0 ? `지표 ${bad.length}개 미지원` : '',
+          badgeStyle:
+            'font-family:ui-monospace,Menlo,monospace;font-size:10px;padding:1px 7px;border-radius:99px;white-space:nowrap;flex:none;' +
+            (isBusy
+              ? 'background:var(--color-neutral-300);color:var(--color-neutral-800);'
+              : selected
+                ? 'background:var(--color-accent);color:#fff;'
+                : bad.length > 0
+                  ? 'background:var(--color-accent-200);color:var(--color-accent-800);'
+                  : 'display:none;'),
+          rowStyle:
+            'padding:10.2px 13.6px;border-radius:var(--radius-lg);min-width:0;border:1px solid ' +
+            (selected ? 'var(--color-accent)' : 'var(--color-divider)') +
+            ';' +
+            (isBusy
+              ? 'opacity:.45;cursor:not-allowed;background:var(--color-neutral-200);'
+              : 'cursor:pointer;background:' + (selected ? 'var(--color-accent-100)' : 'transparent') + ';'),
+          select: () => { if (!isBusy) this.patchActive({ serial: d.serial }) },
+        }
+      }),
+
+      metrics: metricList.map((m) => ({
+        id: m.id,
+        mark: m.ok ? '✓' : '✗',
+        reason: m.reason,
+        chipStyle:
+          'display:inline-flex;align-items:center;gap:5px;padding:4px 11px;font-size:12px;border-radius:99px;white-space:nowrap;border:1px solid;' +
+          (m.ok
+            ? 'border-color:var(--color-accent-400);background:var(--color-accent-100);color:var(--color-accent-800);'
+            : 'border-color:var(--color-neutral-400);background:transparent;color:var(--color-neutral-600);text-decoration:line-through;'),
+      })),
+      metricSummary: dev === null ? '기기를 먼저 선택하세요' : `${okCount}/7 측정 가능 · SDK ${dev.sdk}`,
+      metricNote:
+        dev === null
+          ? '기기를 선택하면 doctor 와 같은 판정으로 7개 지표의 측정 가능 여부를 표시합니다.'
+          : okCount === 7
+            ? '이 기기는 7개 지표를 모두 측정할 수 있습니다.'
+            : '칩에 마우스를 올리면 이유가 보입니다. 못 재는 지표가 있어도 세션은 막히지 않고 나머지는 정상 수집됩니다 — 고칠 수 없는 기기의 성질입니다.',
+
+      appQuery: tab.appQuery,
+      onAppQuery: (e) => this.patchActive({ appQuery: e.target.value }),
+      clearAppQuery: () => this.patchActive({ appQuery: '' }),
+      appSearchDisabled: dev === null,
+      appPlaceholder: dev === null ? '기기를 먼저 선택하세요' : '라벨 또는 패키지명으로 검색',
+      appsBlocked: dev === null,
+      appsBlockedText:
+        '설치된 앱 목록은 선택한 기기에서 읽어옵니다. 위에서 기기를 먼저 고르면 pm list packages 결과가 여기에 채워집니다.',
+      appsNoResult: dev !== null && matchedApps.length === 0,
+      appListStyle:
+        dev === null || matchedApps.length === 0
+          ? 'display:none;'
+          : 'border:1px solid var(--color-divider);border-radius:var(--radius-md);max-height:clamp(180px,32vh,300px);overflow:auto;',
+      apps: matchedApps.map((a) => ({
+        label: a.label,
+        pkg: a.pkg,
+        version: a.version,
+        rowStyle:
+          'display:flex;align-items:baseline;gap:10.2px;padding:6.8px 10.2px;cursor:pointer;border-bottom:1px solid var(--color-divider);' +
+          (tab.pkg === a.pkg ? 'background:var(--color-accent);color:#fff;' : ''),
+        select: () => this.patchActive({ pkg: a.pkg }),
+      })),
+
+      sessionName: tab.name,
+      onSessionName: (e) => this.patchActive({ name: e.target.value }),
+      options: optionDefs.map((o) => ({
+        flag: o.flag,
+        desc: o.desc,
+        mark: o.on ? '✓' : '',
+        rowStyle:
+          'display:flex;align-items:flex-start;gap:10.2px;padding:6.8px 10.2px;cursor:pointer;border-radius:var(--radius-md);border:1px solid ' +
+          (o.on ? 'var(--color-accent-400)' : 'var(--color-divider)') + ';' +
+          (o.on ? 'background:var(--color-accent-100);' : ''),
+        boxStyle:
+          'width:16px;height:16px;flex:none;display:flex;align-items:center;justify-content:center;font-size:11px;border-radius:5px;border:1px solid ' +
+          (o.on ? 'var(--color-accent-700);background:var(--color-accent);color:#fff;' : 'var(--color-neutral-500);'),
+        toggle: () => this.patchActive({ [o.key]: !o.on }),
+      })),
+
+      startCommand: `$ ${cmdParts.join(' ')}`,
+      startDisabled: tab.serial === null || tab.pkg === null,
+      startSession: () => {
+        if (tab.serial === null || tab.pkg === null) return
+        const key = tab.key
+        const name = tab.name.trim() === '' ? `세션-${++runSeq}` : tab.name.trim()
+        this.withLoading('세션을 시작하고 트레이스를 켜고 있습니다', cmdParts.join(' '), 1400, () => {
+          this.setState((p) => ({
+            tabs: p.tabs.map((t) => (t.key === key ? { ...t, name, state: 'running', startedAt: Date.now() } : t)),
+            now: Date.now(),
+          }))
+        })
+      },
+
+      elapsed: tab.startedAt === null ? '00:00' : fmtElapsed(s.now - tab.startedAt),
+      runningName: tab.name === '' ? '이름 없는 세션' : tab.name,
+      runningApp: app === null ? '' : `${app.label} · ${app.pkg}`,
+      runningDevice: dev === null ? '' : `${dev.model} (${dev.serial})`,
+      runningStartedAt: tab.startedAt === null ? '' : fmtClock(new Date(tab.startedAt)),
+      markDraft: tab.markDraft,
+      onMarkDraft: (e) => this.patchActive({ markDraft: e.target.value }),
+      markDisabled: tab.markDraft.trim() === '',
+      markHint: tab.startedAt === null ? '' : `@ ${fmtElapsed(s.now - tab.startedAt)}`,
+      addMark: () => this.pushMark(tab.key, tab.markDraft),
+      onMarkKey: (e) => { if (e.key === 'Enter') this.pushMark(tab.key, e.target.value) },
+      quickMarks: ['앱 진입', '스크롤 시작', '영상 재생', '화면 전환'].map((label) => ({
+        label,
+        add: () => this.pushMark(tab.key, label),
+      })),
+      hasMarks: tab.marks.length > 0,
+      markCountLabel: `${tab.marks.length}개 · result.json 의 marks[] 로 저장됩니다`,
+      marks: [...tab.marks].reverse().map((m) => ({
+        at: fmtElapsed(m.offsetMs),
+        label: m.label,
+        remove: () => this.patchActive({ marks: this.active().marks.filter((x) => x.id !== m.id) }),
+      })),
+
+      stopSession: () => {
+        const key = tab.key
+        const t = this.state.tabs.find((x) => x.key === key)
+        const durationMs = Date.now() - t.startedAt
+        this.withLoading('트레이스를 회수하고 result.json 을 만들고 있습니다', `npx perftracker stop -d ${t.serial}`, 1800, () => {
+          const d = DEVICES.find((x) => x.serial === t.serial)
+          const a = APPS.find((x) => x.pkg === t.pkg)
+          const rec = {
+            id: Math.random().toString(16).slice(2, 8),
+            name: t.name,
+            serial: t.serial,
+            model: d.model,
+            pkg: t.pkg,
+            app: `${a.label} v${a.version}`,
+            at: new Date().toISOString().slice(0, 19),
+            durationMs,
+            launch: t.launch,
+            unsupported: metricStateFor(d.sdk).filter((m) => !m.ok).length,
+            marks: t.marks.length,
+            warnings: 2,
+            fresh: true,
+          }
+          this.setState((p) => ({
+            history: [rec, ...p.history],
+            drawerOpen: true,
+            tabs: p.tabs.map((x) => (x.key === key ? { ...newTab(''), key: x.key, serial: x.serial, launch: x.launch, force: x.force } : x)),
+          }))
+        })
+      },
+
+      history: s.history.map((h) => ({
+        name: h.name,
+        device: `${h.model} · ${h.serial}`,
+        app: h.app,
+        when: fmtWhen(h.at),
+        duration: fmtElapsed(h.durationMs),
+        flags: `${h.launch ? 'launch' : 'attach'} · 경고 ${h.warnings}${h.unsupported > 0 ? ` · 미지원 ${h.unsupported}` : ''}${h.marks > 0 ? ` · 마킹 ${h.marks}` : ''}`,
+        editing: s.editingId === h.id,
+        notEditing: s.editingId !== h.id,
+        draft: s.editDraft,
+        freshLabel: h.fresh === true ? 'NEW' : '',
+        freshStyle:
+          'font-family:ui-monospace,Menlo,monospace;font-size:9.5px;padding:1px 6px;border-radius:99px;flex:none;' +
+          (h.fresh === true ? 'background:var(--color-accent);color:#fff;' : 'display:none;'),
+        rowStyle:
+          'padding:10.2px 13.6px;border-radius:var(--radius-lg);border:1px solid var(--color-divider);background:var(--color-bg);',
+        open: () => {
+          this.setState((p) => ({ history: p.history.map((x) => (x.id === h.id ? { ...x, fresh: false } : x)) }))
+          this.log(`open runs/${h.at.slice(0, 10)}_${h.id}/result.json — 대시보드 미구현`)
+        },
+        rename: () => this.setState({ editingId: h.id, editDraft: h.name }),
+        onDraft: (e) => this.setState({ editDraft: e.target.value }),
+        onKey: (e) => {
+          if (e.key === 'Enter') e.target.blur()
+          if (e.key === 'Escape') this.setState({ editingId: null })
+        },
+        commit: () => {
+          const next = this.state.editDraft.trim()
+          this.setState((p) => ({
+            editingId: null,
+            history: p.history.map((x) => (x.id === h.id && next !== '' ? { ...x, name: next } : x)),
+          }))
+        },
+        askDelete: () => this.setState({ confirm: { kind: 'delete', id: h.id, name: h.name } }),
+      })),
+      askClearAll: () => this.setState({ confirm: { kind: 'clear' } }),
+
+      confirmOpen: s.confirm !== null,
+      confirmTitle:
+        s.confirm === null ? '' :
+        s.confirm.kind === 'delete' ? '기록을 삭제할까요?' :
+        s.confirm.kind === 'clear' ? '기록을 전체 지울까요?' : '측정 중인 탭을 닫을까요?',
+      confirmBody:
+        s.confirm === null ? '' :
+        s.confirm.kind === 'delete' ? `“${s.confirm.name}” 의 run 디렉토리와 result.json 이 함께 삭제됩니다. 되돌릴 수 없습니다.` :
+        s.confirm.kind === 'clear' ? `기록 ${s.history.length}건의 run 디렉토리가 모두 삭제됩니다. 되돌릴 수 없습니다.` :
+        '진행 중인 세션이 버려지고 기록이 남지 않습니다. 기기의 Perfetto 세션도 정리합니다.',
+      confirmAccept: s.confirm === null ? '' : s.confirm.kind === 'closeTab' ? '세션 버리고 닫기' : '삭제',
+      closeConfirm: () => this.setState({ confirm: null }),
+      acceptConfirm: () => {
+        const c = s.confirm
+        this.setState({ confirm: null })
+        if (c === null) return
+        if (c.kind === 'delete') {
+          this.log(`rm -rf runs/*_${c.id}`)
+          this.setState((p) => ({ history: p.history.filter((x) => x.id !== c.id) }))
+        } else if (c.kind === 'clear') {
+          this.log('rm -rf runs/*')
+          this.setState({ history: [] })
+        } else {
+          this.log(`npx perftracker stop -d ${(s.tabs.find((t) => t.key === c.key) ?? {}).serial} --force`)
+          this.setState((p) => {
+            const tabs = p.tabs.filter((x) => x.key !== c.key)
+            return { tabs, activeKey: p.activeKey === c.key ? tabs[0].key : p.activeKey }
+          })
+        }
+      },
+
+      loadingOpen: s.loading !== null,
+      loadingLabel: s.loading === null ? '' : s.loading.label,
+      loadingCommand: s.loading === null ? '' : s.loading.cmd,
+
+      cliOpen: s.cliOpen,
+      cliLog: [...s.cliLog].reverse(),
+      lastCommand: s.cliLog.length === 0 ? '' : `$ ${s.cliLog[s.cliLog.length - 1].cmd}`,
+      cliToggleLabel: s.cliOpen ? '접기 ▾' : `펼치기 ▴ (${s.cliLog.length})`,
+      toggleCli: () => this.setState((p) => ({ cliOpen: !p.cliOpen })),
+
+
+    }
+  }
+
+}
+
+</script>
+</body>
+</html>

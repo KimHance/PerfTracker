@@ -10,7 +10,8 @@
   },
   "scripts": {
     "build": "tsc --build",
-    "typecheck": "tsc --build && tsc -p tsconfig.test.json",
+    "gui": "npm run dev -w @perftracker/gui",
+    "typecheck": "tsc --build && tsc -p tsconfig.test.json && tsc -p packages/gui/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:device": "vitest run --config vitest.device.config.ts"

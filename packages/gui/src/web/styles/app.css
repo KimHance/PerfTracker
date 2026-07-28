@@ -1,0 +1,1073 @@
+/*
+ * 컴포넌트 클래스. 값은 전부 tokens.css 의 var() 에서 온다.
+ *
+ * 프로토타입(docs/design/gui/prototype.html)은 인라인 스타일로 그려졌지만, 여기서는
+ * 클래스로 옮긴다 — 같은 규칙이 여러 자리에 흩어져 있으면 하나를 고칠 때 나머지가 남는다.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+input,
+button {
+  font-family: inherit;
+}
+
+:focus {
+  outline: none;
+}
+/* 브라우저 기본 파란 링을 쓰지 않는다 — 액센트로 통일한다. */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-neutral-300);
+  border-radius: var(--radius-pill);
+}
+
+@keyframes pt-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes pt-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+/* 애니메이션은 딱 둘(스피너·상태 도트)이고, 줄여 달라는 사람에게는 끈다. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── 활자 ──────────────────────────────────────────────────────────────── */
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.heading {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  margin: 0;
+}
+
+.kicker {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+}
+
+.muted {
+  color: var(--color-neutral-700);
+}
+
+/*
+ * 한국어 산문은 어절 안에서 끊지 않는다. 기본값(word-break:normal)은 한글을 글자 단위로
+ * 끊어서 "다른 탭의 세 / 션은" 같은 줄바꿈을 만든다 — 읽는 속도가 눈에 띄게 떨어진다.
+ * 기계값(serial·패키지명·명령)에는 쓰지 않는다: 그쪽은 어디서든 끊겨야 한다.
+ */
+.empty-body,
+.section-note,
+.dialog-body,
+.running-note,
+.marks-hint,
+.option-desc,
+.banner-text {
+  word-break: keep-all;
+}
+
+.truncate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── 버튼 ──────────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--color-text);
+  background: transparent;
+  border: 1px solid transparent;
+  padding: var(--space-2) calc(var(--space-3) * 1.2);
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+.btn-primary:not(:disabled):hover {
+  background: var(--color-accent-400);
+  border-color: var(--color-accent-400);
+}
+.btn-primary:not(:disabled):active {
+  background: var(--color-accent-300);
+  border-color: var(--color-accent-300);
+}
+
+.btn-secondary {
+  border-color: var(--color-divider);
+}
+.btn-secondary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+.btn-secondary:not(:disabled):active {
+  background: color-mix(in srgb, var(--color-text) 14%, transparent);
+}
+
+.btn-ghost {
+  color: var(--color-accent-700);
+  padding-inline: var(--space-2);
+}
+.btn-ghost:not(:disabled):hover {
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+}
+.btn-ghost:not(:disabled):active {
+  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
+
+.btn-sm {
+  height: 24px;
+  font-size: 11px;
+  padding-inline: var(--space-2);
+}
+.btn-md {
+  height: 32px;
+  font-size: 12px;
+}
+.btn-lg {
+  height: 40px;
+  font-size: 14px;
+}
+.btn-xl {
+  height: 52px;
+  font-size: 15px;
+}
+
+/*
+ * blueprint: Industry 의 등록 표식. primary 버튼과 다이얼로그에만 남긴다 —
+ * 원본 시스템에서 "이건 판 위의 물건" 이라고 말하는 유일한 장치다.
+ */
+.blueprint {
+  position: relative;
+}
+.blueprint > .corner {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  pointer-events: none;
+}
+.blueprint > .corner::before,
+.blueprint > .corner::after {
+  content: '';
+  position: absolute;
+  background: currentColor;
+}
+.blueprint > .corner::before {
+  left: 5px;
+  top: 0;
+  width: 1px;
+  height: 100%;
+}
+.blueprint > .corner::after {
+  top: 5px;
+  left: 0;
+  width: 100%;
+  height: 1px;
+}
+.blueprint > .corner.tl {
+  top: -6px;
+  left: -6px;
+}
+.blueprint > .corner.tr {
+  top: -6px;
+  right: -6px;
+}
+.blueprint > .corner.bl {
+  bottom: -6px;
+  left: -6px;
+}
+.blueprint > .corner.br {
+  bottom: -6px;
+  right: -6px;
+}
+
+/* ── 입력 ──────────────────────────────────────────────────────────────── */
+
+.input {
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  font-size: 14px;
+  color: var(--color-text);
+  caret-color: var(--color-accent);
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+}
+.input::placeholder {
+  color: var(--color-neutral-500);
+}
+.input:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-text) 45%, transparent);
+}
+.input:focus-visible {
+  border-color: var(--color-accent);
+  outline-offset: 0;
+}
+.input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.field > label {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 5px;
+  color: var(--color-neutral-700);
+}
+
+/* ── 배지 · 칩 ─────────────────────────────────────────────────────────── */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  flex: none;
+}
+.badge-accent {
+  background: var(--color-accent-200);
+  color: var(--color-accent-800);
+}
+.badge-solid {
+  background: var(--color-accent);
+  color: #fff;
+}
+.badge-neutral {
+  background: var(--color-neutral-300);
+  color: var(--color-neutral-800);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  font-size: 12px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  border: 1px solid transparent;
+  background: transparent;
+}
+.chip-ok {
+  border-color: var(--color-accent-400);
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+}
+.chip-off {
+  border-color: var(--color-neutral-400);
+  color: var(--color-neutral-600);
+  text-decoration: line-through;
+}
+
+/* 상태 도트 — 측정 중이면 맥박이 뛴다. */
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--color-neutral-400);
+}
+.dot-live {
+  background: var(--color-accent);
+  animation: pt-pulse 1.4s ease-in-out infinite;
+}
+
+/* ── 셸 ────────────────────────────────────────────────────────────────── */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--color-bg);
+}
+.shell-middle {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.shell-main {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  position: relative;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-2) clamp(12px, 2vw, 20px);
+  min-height: 52px;
+  border-bottom: 1px solid var(--color-divider);
+  flex: none;
+}
+.wordmark {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.adb-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--color-neutral-700);
+  border: 1px solid var(--color-divider);
+  padding: 3px var(--space-3);
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  flex: none;
+  min-width: 0;
+}
+
+/* ── 탭 스트립 ─────────────────────────────────────────────────────────── */
+
+.tabstrip {
+  display: flex;
+  align-items: stretch;
+  height: 38px;
+  flex: none;
+  border-bottom: 1px solid var(--color-divider);
+  background: var(--color-neutral-100);
+  padding-left: var(--space-2);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.tab {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6.8px;
+  padding: 0 10.2px;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--color-neutral-700);
+  border-radius: 12px 12px 0 0;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-family: inherit;
+}
+.tab:hover {
+  color: var(--color-text);
+}
+.tab[aria-selected='true'] {
+  background: var(--color-bg);
+  color: var(--color-text);
+  box-shadow: inset 0 -2px 0 var(--color-accent);
+}
+.tab-label {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tab-close {
+  font-size: 14px;
+  line-height: 1;
+  color: var(--color-neutral-600);
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0 2px;
+  border-radius: var(--radius-sm);
+}
+.tab-close:hover {
+  color: var(--color-text);
+}
+.tab-close:disabled {
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+/* ── 설정 화면 ─────────────────────────────────────────────────────────── */
+
+.setup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: clamp(20px, 3vw, 34px);
+  padding: clamp(14px, 2.4vw, 24px) clamp(14px, 3vw, 30px);
+  align-items: start;
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  border-bottom: 1px solid var(--color-text);
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.section-num {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--color-accent-700);
+  flex: none;
+}
+.section-title {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 20px;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  flex: none;
+  margin: 0;
+}
+.section-aside {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--color-neutral-600);
+  text-align: right;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.device-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: 10.2px 13.6px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-divider);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  font: inherit;
+}
+.device-row:hover:not(:disabled) {
+  border-color: var(--color-neutral-400);
+}
+.device-row[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-100);
+}
+.device-row:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: var(--color-neutral-200);
+}
+.device-row-top {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.device-serial {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-neutral-600);
+}
+.device-model {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 16px;
+}
+.device-spec {
+  font-size: 11.5px;
+  color: var(--color-neutral-700);
+}
+
+.empty {
+  padding: var(--space-6);
+  border: 1px dashed var(--color-divider);
+  border-radius: var(--radius-lg);
+  text-align: center;
+}
+.empty-title {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 19px;
+  letter-spacing: 0.02em;
+}
+.empty-body {
+  font-size: 12px;
+  color: var(--color-neutral-700);
+  line-height: 1.7;
+  margin-top: var(--space-2);
+  text-wrap: pretty;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.section-note {
+  font-size: 11.5px;
+  color: var(--color-neutral-700);
+  max-width: 52ch;
+  text-wrap: pretty;
+  margin-top: var(--space-3);
+}
+
+.applist {
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  max-height: clamp(180px, 32vh, 300px);
+  overflow: auto;
+  margin-top: var(--space-2);
+}
+.app-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10.2px;
+  padding: 6.8px 10.2px;
+  border: 0;
+  border-bottom: 1px solid var(--color-divider);
+  background: transparent;
+  color: inherit;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.app-row:last-child {
+  border-bottom: 0;
+}
+.app-row:hover {
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+}
+.app-row[aria-pressed='true'] {
+  background: var(--color-accent);
+  color: #fff;
+}
+.app-row[aria-pressed='true'] .app-pkg,
+.app-row[aria-pressed='true'] .app-version {
+  color: color-mix(in srgb, #fff 80%, transparent);
+}
+.app-label {
+  font-size: 13px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-pkg {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--color-neutral-600);
+  flex: none;
+}
+.app-version {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--color-neutral-500);
+  min-width: 52px;
+  text-align: right;
+}
+
+.option-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10.2px;
+  padding: 6.8px 10.2px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-divider);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  font: inherit;
+}
+.option-row[aria-pressed='true'] {
+  border-color: var(--color-accent-400);
+  background: var(--color-accent-100);
+}
+.checkbox {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: 5px;
+  border: 1px solid var(--color-neutral-500);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+  margin-top: 2px;
+}
+.checkbox-on {
+  border-color: var(--color-accent-700);
+  background: var(--color-accent);
+  color: #fff;
+}
+.option-flag {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.option-desc {
+  font-size: 11.5px;
+  color: var(--color-neutral-700);
+}
+
+.startbar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) clamp(14px, 3vw, 30px);
+  border-top: 1px solid var(--color-divider);
+  background: var(--color-neutral-100);
+}
+.startbar-command {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-neutral-700);
+  flex: 1;
+  min-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── 측정 중 ───────────────────────────────────────────────────────────── */
+
+.running {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(12px, 2.4vh, 26px);
+  padding: clamp(16px, 4vh, 40px) clamp(16px, 3vw, 32px);
+  /* height:100% + center 를 쓰면 내용이 넘칠 때 위아래가 잘린다.
+     margin-block:auto 는 짧을 때만 가운데로 온다. */
+  margin-block: auto;
+}
+.running-kicker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-accent-700);
+}
+.running-kicker .dot {
+  width: 7px;
+  height: 7px;
+}
+.timer {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  /* 폭과 높이 **둘 다** 따른다. 핸드오프 원안(max(52px,14vw,12vh))은 넓고 낮은 창에서
+     14vw 가 이겨 타이머가 화면 밖으로 밀렸다 — 가장 좁은 쪽에 맞춰야 잘리지 않는다. */
+  font-size: clamp(44px, min(14vw, 16vh), 108px);
+  line-height: 0.9;
+  font-variant-numeric: tabular-nums;
+}
+.running-meta {
+  text-align: center;
+  line-height: 1.7;
+}
+.running-name {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 19px;
+}
+.running-app {
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+.running-device {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-neutral-600);
+}
+.running-note {
+  max-width: 46ch;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--color-neutral-600);
+}
+
+.marks {
+  width: min(520px, 92%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.marks-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.marks-hint {
+  font-size: 11.5px;
+  color: var(--color-neutral-600);
+}
+.marks-input-row {
+  display: flex;
+  gap: var(--space-2);
+}
+.marks-list {
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-lg);
+  /* 목록이 길어져도 정지 버튼을 밀어내지 않는다 — 핸드오프의 "알려진 이슈" 를 여기서 막는다.
+     정지 버튼도 마킹 블록 위로 올렸다 (RunningScreen 참조). */
+  max-height: 118px;
+  overflow: auto;
+}
+.mark-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--color-divider);
+}
+.mark-row:last-child {
+  border-bottom: 0;
+}
+.mark-offset {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-accent-700);
+  min-width: 46px;
+  flex: none;
+}
+.mark-label {
+  font-size: 12.5px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mark-remove {
+  font-size: 14px;
+  line-height: 1;
+  color: var(--color-neutral-600);
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.mark-remove:hover {
+  color: var(--color-text);
+}
+.marks-foot {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--color-neutral-600);
+}
+
+/* ── 기록 드로어 ───────────────────────────────────────────────────────── */
+
+.drawer {
+  width: clamp(280px, 32vw, 392px);
+  flex: none;
+  border-left: 1px solid var(--color-divider);
+  background: var(--color-neutral-100);
+  display: flex;
+  flex-direction: column;
+}
+.drawer-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--color-divider);
+}
+.drawer-title {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.drawer-list {
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.run-row {
+  padding: 10.2px 13.6px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-divider);
+  background: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.run-name {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 17px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.run-name:hover {
+  color: var(--color-accent-700);
+}
+.run-body {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+.run-meta {
+  font-size: 11.5px;
+  color: var(--color-neutral-700);
+  line-height: 1.55;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+.run-meta-mono {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--color-neutral-600);
+}
+.run-actions {
+  display: flex;
+  gap: var(--space-1);
+  flex: none;
+}
+
+/* ── CLI 로그 ──────────────────────────────────────────────────────────── */
+
+.cli {
+  flex: none;
+  border-top: 1px solid var(--color-divider);
+  background: var(--color-neutral-100);
+}
+.cli-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) clamp(12px, 2vw, 20px);
+  cursor: pointer;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.cli-last {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-neutral-700);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cli-body {
+  max-height: 168px;
+  overflow: auto;
+  padding: 0 clamp(12px, 2vw, 20px) var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.cli-time {
+  color: var(--color-neutral-500);
+}
+.cli-sigil {
+  color: var(--color-accent-700);
+}
+
+/* ── 오버레이 · 다이얼로그 ─────────────────────────────────────────────── */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  background: color-mix(in srgb, var(--color-bg) 88%, transparent);
+  backdrop-filter: blur(2px);
+}
+.spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid var(--color-accent-300);
+  border-top-color: var(--color-accent-700);
+  animation: pt-spin 0.8s linear infinite;
+}
+.overlay-label {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 20px;
+}
+.overlay-command {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-neutral-700);
+  max-width: 88vw;
+  text-align: center;
+  word-break: break-all;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: color-mix(in srgb, #000 55%, transparent);
+}
+.dialog {
+  width: min(400px, 92vw);
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+.dialog-title {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 22px;
+}
+.dialog-body {
+  font-size: 13px;
+  color: var(--color-neutral-700);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+/* ── 알림 줄 ───────────────────────────────────────────────────────────── */
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) clamp(12px, 2vw, 20px);
+  font-size: 12.5px;
+  flex: none;
+  border-bottom: 1px solid var(--color-divider);
+}
+.banner-error {
+  background: color-mix(in srgb, #c2554f 22%, var(--color-bg));
+  color: var(--color-neutral-900);
+}
+.banner-mock {
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+}
+.banner-text {
+  flex: 1;
+  min-width: 0;
+}
