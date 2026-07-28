@@ -1,6 +1,6 @@
 import type { RunView } from '../../contract/api.js'
 import { renameRun } from '../effects/effects.js'
-import { formatElapsed, formatRunAt } from '../format/time.js'
+import { formatClock, formatElapsed, formatRunAt } from '../format/time.js'
 import { useStore } from '../state/StoreContext.jsx'
 
 /**
@@ -66,7 +66,7 @@ function RunRow({ run }: { run: RunView }) {
     dispatch({ type: 'run/opened', runId: run.id })
     dispatch({
       type: 'cli/logged',
-      at: new Date().toTimeString().slice(0, 8),
+      at: formatClock(new Date()),
       command: `open ${run.runDir}  # 대시보드는 아직 없습니다`,
     })
   }

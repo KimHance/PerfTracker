@@ -16,6 +16,8 @@ export const API = {
   doctor: '/api/doctor',
   devices: '/api/devices',
   apps: (serial: string) => `/api/devices/${encodeURIComponent(serial)}/apps`,
+  appDetail: (serial: string, pkg: string) =>
+    `/api/devices/${encodeURIComponent(serial)}/apps/${encodeURIComponent(pkg)}`,
   start: '/api/sessions',
   sessions: '/api/sessions',
   stop: (serial: string) => `/api/sessions/${encodeURIComponent(serial)}/stop`,
@@ -100,15 +102,22 @@ export interface MetricSupportView {
 export interface AppView {
   packageName: string
   label: string
-  /**
-   * `pm list packages` 가 목록과 함께 주는 값이라 공짜다.
-   *
-   * **`versionName`("2026.7.1")이 아니라 `versionCode`(정수)인 이유:** 사람이 읽는 버전 이름은
-   * `dumpsys package <pkg>` 한 번을 앱마다 따로 불러야 나온다. 설치된 앱이 200개면 왕복 200번이고,
-   * CLI 의 `apps` 도 같은 이유로 그것을 하지 않는다. 대상 앱 하나가 정해진 뒤에는
-   * `result.json` 의 `target_app.version_name` 에 이름이 실린다 — 기록 목록이 보여 주는 것이 그것이다.
-   */
-  versionCode: number | null
+}
+
+/**
+ * **고른 앱 하나에 대해서만** 읽는 정보.
+ *
+ * 목록에 버전을 싣지 않는 이유: 사람이 읽는 버전 이름(`2026.7.1`)은 `dumpsys package <pkg>` 를
+ * 앱마다 따로 불러야 나온다. 설치된 앱이 82개면 왕복 82번이고, CLI 의 `apps` 도 같은 이유로
+ * 그것을 하지 않는다. 대신 `versionCode`(정수)를 실어 봤더니 `2126060861` 같은 값이 사람이
+ * 읽는 자리에 앉아 아무에게도 쓸모가 없었다 — 그래서 목록에서는 아예 뺐다.
+ *
+ * 대상이 하나로 정해진 뒤에는 왕복 한 번이면 되므로 그때 읽는다.
+ */
+export interface AppDetailView {
+  packageName: string
+  /** 사람이 읽는 버전. 못 읽었으면 null (`-` 로 그린다). */
+  versionName: string | null
 }
 
 // ─── 진단 ──────────────────────────────────────────────────────────────────
@@ -206,10 +215,6 @@ export interface RunView {
   unsupportedCount: number
   warningCount: number
   markCount: number
-}
-
-export interface RenameRequest {
-  name: string
 }
 
 // ─── 오류 ──────────────────────────────────────────────────────────────────

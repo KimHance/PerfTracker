@@ -134,6 +134,23 @@ export async function selectDevice(
   if (apps) deps.dispatch({ type: 'apps/loaded', serial, apps })
 }
 
+/**
+ * 앱을 고르면 그 앱 **하나의** 버전을 읽는다.
+ *
+ * 오버레이를 띄우지 않는다 — 고르는 동작은 즉시 반응해야 하고, 버전은 늦게 도착해도 되는
+ * 부가 정보다. 실패해도 조용히 넘긴다: 버전을 못 읽은 것이 측정을 막을 이유가 없고,
+ * 화면은 그때 `-` 를 그린다 (모르는 것을 모른다고 쓰는 자리다).
+ */
+export async function selectApp(deps: EffectDeps, tabKey: string, serial: string, packageName: string): Promise<void> {
+  deps.dispatch({ type: 'tab/patched', key: tabKey, patch: { packageName } })
+  try {
+    const detail = await deps.api.appDetail(serial, packageName)
+    deps.dispatch({ type: 'appVersion/loaded', serial, packageName, versionName: detail.versionName })
+  } catch {
+    deps.dispatch({ type: 'appVersion/loaded', serial, packageName, versionName: null })
+  }
+}
+
 // ─── 세션 ──────────────────────────────────────────────────────────────────
 
 export async function startSession(deps: EffectDeps, tab: Tab, outDir: string): Promise<void> {

@@ -53,8 +53,8 @@ describe('시작 가능 여부', () => {
 
 describe('앱 검색', () => {
   const apps: AppView[] = [
-    { label: 'Stream (debug)', packageName: 'com.example.streaming.debug', versionCode: 1 },
-    { label: 'Airbnb', packageName: 'com.airbnb.android', versionCode: 2 },
+    { label: 'Stream (debug)', packageName: 'com.example.streaming.debug' },
+    { label: 'Airbnb', packageName: 'com.airbnb.android' },
   ]
 
   it('라벨과 패키지명 둘 다로 찾힌다', () => {

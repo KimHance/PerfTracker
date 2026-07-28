@@ -27,6 +27,11 @@ function resetAfterStop(tab: Tab): Tab {
   }
 }
 
+/** `appVersions` 의 키. 같은 패키지라도 기기가 다르면 버전이 다를 수 있다. */
+export function appVersionKey(serial: string, packageName: string): string {
+  return `${serial}|${packageName}`
+}
+
 /** 아직 아무것도 고르지 않은 빈 탭. 세션을 되살릴 때 새 탭을 만드는 대신 이 자리를 쓴다. */
 function isPristine(tab: Tab): boolean {
   return (
@@ -115,6 +120,15 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'apps/loaded':
       return { ...state, appsBySerial: { ...state.appsBySerial, [action.serial]: action.apps } }
 
+    case 'appVersion/loaded':
+      return {
+        ...state,
+        appVersions: {
+          ...state.appVersions,
+          [appVersionKey(action.serial, action.packageName)]: action.versionName,
+        },
+      }
+
     case 'runs/loaded':
       return { ...state, runs: action.runs }
 
@@ -176,12 +190,6 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...next, runs, freshRunIds: [action.run.id, ...next.freshRunIds], drawerOpen: true }
     }
 
-    case 'session/aborted': {
-      const tab = state.tabs.find((t) => t.key === action.tabKey)
-      if (!tab) return state
-      return patchTab(state, action.tabKey, resetAfterStop(tab))
-    }
-
     case 'run/renamed':
       return {
         ...state,
@@ -216,9 +224,6 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'drawer/toggled':
       return { ...state, drawerOpen: !state.drawerOpen }
-
-    case 'drawer/opened':
-      return { ...state, drawerOpen: true }
 
     case 'cli/toggled':
       return { ...state, cliOpen: !state.cliOpen }

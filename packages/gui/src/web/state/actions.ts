@@ -19,6 +19,7 @@ export type Action =
   | { type: 'env/loaded'; env: AppState['env'] }
   | { type: 'devices/loaded'; devices: DeviceView[] }
   | { type: 'apps/loaded'; serial: string; apps: AppView[] }
+  | { type: 'appVersion/loaded'; serial: string; packageName: string; versionName: string | null }
   | { type: 'runs/loaded'; runs: RunView[] }
   | { type: 'doctor/loaded'; checks: DoctorCheckView[] }
   | { type: 'doctor/dismissed' }
@@ -46,7 +47,6 @@ export type Action =
       unsupported: { id: string; reason: string }[]
     }
   | { type: 'session/stopped'; tabKey: string; run: RunView | null }
-  | { type: 'session/aborted'; tabKey: string }
   // 기록
   | { type: 'run/renamed'; runId: string; name: string }
   | { type: 'run/removed'; runId: string }
@@ -57,7 +57,6 @@ export type Action =
   | { type: 'run/editCancelled' }
   // 화면 상태
   | { type: 'drawer/toggled' }
-  | { type: 'drawer/opened' }
   | { type: 'cli/toggled' }
   | { type: 'cli/logged'; at: string; command: string }
   | { type: 'loading/began'; loading: Loading }

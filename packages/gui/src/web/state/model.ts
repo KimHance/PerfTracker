@@ -65,6 +65,11 @@ export interface AppState {
   devices: DeviceView[]
   /** 기기별 앱 목록. 기기를 바꿀 때마다 다시 받지 않기 위해 serial 로 캐시한다. */
   appsBySerial: Record<string, AppView[]>
+  /**
+   * **고른 앱**의 버전. `serial|package` 를 키로 캐시한다.
+   * 목록에는 버전이 없다 — 앱마다 기기에 따로 물어야 나오는 값이라 82개를 한꺼번에 읽지 않는다.
+   */
+  appVersions: Record<string, string | null>
   runs: RunView[]
   /** 방금 만들어져 아직 열어 보지 않은 기록 id. `NEW` 배지가 붙는다. */
   freshRunIds: string[]
@@ -114,6 +119,7 @@ export function initialState(
     activeTabKey: first.key,
     devices: [],
     appsBySerial: {},
+    appVersions: {},
     runs: [],
     freshRunIds: [],
     doctor: null,

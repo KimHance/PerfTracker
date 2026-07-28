@@ -1,5 +1,6 @@
 import type {
   ActiveSessionView,
+  AppDetailView,
   AppView,
   DeviceView,
   DoctorCheckView,
@@ -28,6 +29,8 @@ export interface ApiClient {
   /** 지금 돌고 있는 세션 전부. 기기에 접촉하지 않으므로 측정 중에도 부를 수 있다. */
   sessions(): Promise<ActiveSessionView[]>
   apps(serial: string): Promise<AppView[]>
+  /** 고른 앱 하나의 버전. 목록 전체에는 돌리지 않는다 (계약의 AppDetailView 주석 참조). */
+  appDetail(serial: string, packageName: string): Promise<AppDetailView>
   start(req: StartRequest): Promise<StartedSessionView>
   /** 측정 중 마킹. 서버 파일이 정본이라 매번 전체 목록을 돌려받는다. */
   marks(serial: string): Promise<MarkView[]>

@@ -4,6 +4,7 @@ import {
   createAdbContext,
   createBaseAdb,
   extractRun,
+  getAppDetail,
   listDeviceSummaries,
   loadLabeledApps,
   PerfTrackerError,
@@ -20,6 +21,7 @@ import {
 } from '@perftracker/core'
 import type {
   ActiveSessionView,
+  AppDetailView,
   AppView,
   DeviceView,
   DoctorCheckView,
@@ -113,6 +115,16 @@ export class GuiApi {
   async apps(serial: string): Promise<AppView[]> {
     const ctx = await createAdbContext({ adb: this.opts.adb, device: serial })
     return (await loadLabeledApps(ctx)).map(toAppView)
+  }
+
+  /**
+   * 고른 앱 하나의 버전. **목록 전체에는 절대 돌리지 않는다** — core 의 `getAppDetail` 이
+   * 주석으로 그렇게 못 박고 있고, 설치된 앱 수만큼 adb 왕복이 생긴다.
+   */
+  async appDetail(serial: string, packageName: string): Promise<AppDetailView> {
+    const ctx = await createAdbContext({ adb: this.opts.adb, device: serial })
+    const detail = await getAppDetail(ctx.adb, packageName)
+    return { packageName, versionName: detail.versionName }
   }
 
   async start(req: StartRequest): Promise<StartedSessionView> {

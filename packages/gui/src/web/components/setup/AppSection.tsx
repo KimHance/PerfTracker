@@ -1,13 +1,20 @@
-import { filterApps } from '../../state/derive.js'
+import { selectApp } from '../../effects/effects.js'
+import { filterApps, selectedApp } from '../../state/derive.js'
+import { appVersionKey } from '../../state/reducer.js'
 import type { Tab } from '../../state/model.js'
 import { useStore } from '../../state/StoreContext.jsx'
 import { SectionHead } from '../ui/SectionHead.jsx'
 
 export function AppSection({ tab }: { tab: Tab }) {
-  const { state, dispatch } = useStore()
+  const { state, dispatch, deps } = useStore()
   const hasDevice = tab.serial !== null
   const apps = hasDevice ? (state.appsBySerial[tab.serial!] ?? []) : []
   const filtered = filterApps(apps, tab.appQuery)
+  const selected = selectedApp(state, tab)
+  const version =
+    tab.serial !== null && tab.packageName !== null
+      ? state.appVersions[appVersionKey(tab.serial, tab.packageName)]
+      : undefined
 
   const patch = (p: Partial<Tab>): void => dispatch({ type: 'tab/patched', key: tab.key, patch: p })
 
@@ -61,17 +68,25 @@ export function AppSection({ tab }: { tab: Tab }) {
               key={app.packageName}
               className="app-row"
               aria-pressed={app.packageName === tab.packageName}
-              onClick={() => patch({ packageName: app.packageName })}
+              onClick={() => void selectApp(deps, tab.key, tab.serial!, app.packageName)}
             >
               <span className="app-label">{app.label}</span>
+              {/* 버전은 여기 없다 — 앱마다 기기에 따로 물어야 나오는 값이라 목록에 싣지 않는다.
+                  고른 앱 하나만 아래에 표시한다. */}
               <span className="app-pkg">{app.packageName}</span>
-              {/* 못 읽었으면 빈칸이 아니라 `-` 다. 빈칸은 "버전이 없다" 로 읽힌다.
-                  versionCode 인 이유는 contract 의 AppView 주석에 있다. */}
-              <span className="app-version" title="versionCode">
-                {app.versionCode ?? '-'}
-              </span>
             </button>
           ))}
+        </div>
+      )}
+
+      {selected !== null && (
+        <div className="app-selected">
+          선택 <b>{selected.label}</b>{' '}
+          <span className="mono">
+            {/* 아직 안 왔으면 `읽는 중`, 못 읽었으면 `버전 미상`. 빈칸으로 두면
+                "버전이 없다" 로 읽힌다. */}
+            {version === undefined ? '버전 읽는 중…' : version === null ? '버전 미상' : `v${version}`}
+          </span>
         </div>
       )}
     </section>

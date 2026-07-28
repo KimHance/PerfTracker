@@ -1,6 +1,7 @@
 import { stopSession } from '../../effects/effects.js'
 import { formatClock, formatElapsed } from '../../format/time.js'
 import { elapsedMs, selectedApp, selectedDevice } from '../../state/derive.js'
+import { appVersionKey } from '../../state/reducer.js'
 import type { Tab } from '../../state/model.js'
 import { useStore } from '../../state/StoreContext.jsx'
 import { BlueprintCorners } from '../ui/Blueprint.jsx'
@@ -15,6 +16,10 @@ export function RunningScreen({ tab }: { tab: Tab }) {
   const device = selectedDevice(state, tab)
   const app = selectedApp(state, tab)
   const elapsed = elapsedMs(tab, state.now)
+  const version =
+    tab.serial !== null && tab.packageName !== null
+      ? state.appVersions[appVersionKey(tab.serial, tab.packageName)]
+      : undefined
 
   return (
     <div className="running">
@@ -31,6 +36,7 @@ export function RunningScreen({ tab }: { tab: Tab }) {
         <div className="running-name">{tab.name.trim() === '' ? '새 세션' : tab.name}</div>
         <div className="running-app">
           {app !== null ? `${app.label} · ${app.packageName}` : (tab.packageName ?? '앱 미상')}
+          {version !== undefined && version !== null ? ` v${version}` : ''}
         </div>
         <div className="running-device">
           {device?.model ?? '모델 미상'} ({tab.serial}) · 시작{' '}

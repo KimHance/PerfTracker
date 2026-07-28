@@ -82,6 +82,11 @@ const ROUTES: Route[] = [
   { method: 'GET', pattern: /^\/api\/sessions$/, handle: (api) => api.sessions() },
   { method: 'GET', pattern: /^\/api\/devices\/([^/]+)\/apps$/, handle: (api, _r, p) => api.apps(decode(p[0])) },
   {
+    method: 'GET',
+    pattern: /^\/api\/devices\/([^/]+)\/apps\/([^/]+)$/,
+    handle: (api, _r, p) => api.appDetail(decode(p[0]), decode(p[1])),
+  },
+  {
     method: 'POST',
     pattern: /^\/api\/sessions$/,
     handle: async (api, req) => api.start(await readBody(req)),

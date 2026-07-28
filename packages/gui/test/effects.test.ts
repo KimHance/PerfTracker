@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { MarkView, RunView, StartRequest, StopRequest } from '../src/contract/api.js'
 import type { ApiClient } from '../src/web/api/client.js'
-import { addMark, startSession, stopSession } from '../src/web/effects/effects.js'
+import { addMark, selectApp, startSession, stopSession } from '../src/web/effects/effects.js'
 import type { Action } from '../src/web/state/actions.js'
 import { newTab, type Tab } from '../src/web/state/model.js'
 
@@ -21,6 +21,7 @@ function spyApi(overrides: Partial<ApiClient> = {}): { api: ApiClient; calls: st
     devices: note('devices', []),
     sessions: note('sessions', []),
     apps: note('apps', []),
+    appDetail: note('appDetail', { packageName: 'com.x', versionName: null }),
     start: note('start', {
       id: 's1',
       name: 'n',
@@ -49,6 +50,42 @@ function collector(): { dispatch: (a: Action) => void; actions: Action[] } {
 }
 
 const running = (): Tab => ({ ...newTab('t1'), serial: 'S1', packageName: 'com.x', phase: 'running', startedAt: 1000 })
+
+describe('앱 선택', () => {
+  it('고른 앱 하나만 버전을 읽는다', async () => {
+    const asked: string[] = []
+    const { api } = spyApi({
+      appDetail: async (_serial: string, pkg: string) => {
+        asked.push(pkg)
+        return { packageName: pkg, versionName: '30.0.0.67' }
+      },
+    })
+    const { dispatch, actions } = collector()
+
+    await selectApp({ api, dispatch }, 't1', 'S1', 'com.sec.android.app.sbrowser')
+
+    // 목록 전체가 아니라 딱 하나다 — 82개에 돌리면 adb 왕복이 82번이다.
+    expect(asked).toEqual(['com.sec.android.app.sbrowser'])
+    expect(actions.find((a) => a.type === 'appVersion/loaded')).toMatchObject({ versionName: '30.0.0.67' })
+  })
+
+  it('버전을 못 읽어도 선택은 유지된다', async () => {
+    // 버전은 부가 정보다. 못 읽었다고 앱을 못 고르게 하면 측정 자체가 막힌다.
+    const { api } = spyApi({
+      appDetail: async () => {
+        throw new Error('dumpsys 실패')
+      },
+    })
+    const { dispatch, actions } = collector()
+
+    await selectApp({ api, dispatch }, 't1', 'S1', 'com.x')
+
+    expect(actions.find((a) => a.type === 'tab/patched')).toMatchObject({ patch: { packageName: 'com.x' } })
+    // 모르는 것은 null 이다 — 오류 배너를 띄우지도, 없는 버전을 지어내지도 않는다.
+    expect(actions.find((a) => a.type === 'appVersion/loaded')).toMatchObject({ versionName: null })
+    expect(actions.map((a) => a.type)).not.toContain('error/raised')
+  })
+})
 
 describe('마킹', () => {
   it('서버가 준 목록으로 통째로 바뀐다', async () => {

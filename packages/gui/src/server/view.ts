@@ -65,10 +65,5 @@ export function toDeviceView(summary: DeviceSummary, metrics: MetricSupportView[
 }
 
 export function toAppView(app: LabeledApp): AppView {
-  return {
-    packageName: app.packageName,
-    label: app.label,
-    // 못 읽은 것과 없는 것을 구분한다 — 화면은 전자를 `-` 로 그린다.
-    versionCode: app.versionCode,
-  }
+  return { packageName: app.packageName, label: app.label }
 }

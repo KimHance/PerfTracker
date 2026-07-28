@@ -91,18 +91,18 @@ const MOCK_DEVICES: DeviceView[] = [
 ]
 
 const MOCK_APPS: AppView[] = [
-  { label: 'Stream (debug)', packageName: 'com.example.streaming.debug', versionCode: 202671 },
-  { label: 'Haze Sample', packageName: 'dev.chrisbanes.haze.sample', versionCode: 1610 },
-  { label: 'com.streamlive.blur.test', packageName: 'com.streamlive.blur.test', versionCode: 1 },
-  { label: 'StreamingSDK', packageName: 'com.example.sdk.sample', versionCode: 142 },
-  { label: 'Airbnb', packageName: 'com.airbnb.android', versionCode: 2630 },
-  { label: 'Compose Material Catalog', packageName: 'androidx.compose.material.catalog', versionCode: 180 },
-  { label: 'Now in Android', packageName: 'com.google.samples.apps.nowinandroid', versionCode: 12 },
-  { label: 'Instagram', packageName: 'com.instagram.android', versionCode: 4120 },
-  { label: 'Samsung Browser', packageName: 'com.sec.android.app.sbrowser', versionCode: 280 },
-  { label: 'Google TV', packageName: 'com.google.android.videos', versionCode: 441 },
-  { label: 'Calculator', packageName: 'com.sec.android.app.popupcalculator', versionCode: 126 },
-  { label: 'Galaxy Wearable', packageName: 'com.samsung.android.app.watchmanager', versionCode: 2266 },
+  { label: 'Stream (debug)', packageName: 'com.example.streaming.debug' },
+  { label: 'Haze Sample', packageName: 'dev.chrisbanes.haze.sample' },
+  { label: 'com.streamlive.blur.test', packageName: 'com.streamlive.blur.test' },
+  { label: 'StreamingSDK', packageName: 'com.example.sdk.sample' },
+  { label: 'Airbnb', packageName: 'com.airbnb.android' },
+  { label: 'Compose Material Catalog', packageName: 'androidx.compose.material.catalog' },
+  { label: 'Now in Android', packageName: 'com.google.samples.apps.nowinandroid' },
+  { label: 'Instagram', packageName: 'com.instagram.android' },
+  { label: 'Samsung Browser', packageName: 'com.sec.android.app.sbrowser' },
+  { label: 'Google TV', packageName: 'com.google.android.videos' },
+  { label: 'Calculator', packageName: 'com.sec.android.app.popupcalculator' },
+  { label: 'Galaxy Wearable', packageName: 'com.samsung.android.app.watchmanager' },
 ]
 
 const MOCK_RUNS: RunView[] = [
@@ -252,6 +252,9 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
             .map((m) => ({ id: m.id, reason: m.reason })),
         })),
       ),
+
+    appDetail: (serial, packageName) =>
+      wait({ packageName, versionName: serial.startsWith('emulator') ? null : '2026.7.1 (목업)' }),
 
     apps: (serial) => {
       // serial 별로 다른 목록을 낼 이유가 없지만, 인자를 무시하면 "기기를 바꿔도 같은 목록"

@@ -2,6 +2,7 @@ import {
   API,
   type ActiveSessionView,
   type ApiErrorBody,
+  type AppDetailView,
   type AppView,
   type DeviceView,
   type DoctorCheckView,
@@ -40,6 +41,7 @@ export function createHttpClient(): ApiClient {
     devices: () => request<DeviceView[]>(API.devices),
     sessions: () => request<ActiveSessionView[]>(API.sessions),
     apps: (serial) => request<AppView[]>(API.apps(serial)),
+    appDetail: (serial, pkg) => request<AppDetailView>(API.appDetail(serial, pkg)),
     start: (req: StartRequest) =>
       request<StartedSessionView>(API.start, { method: 'POST', body: JSON.stringify(req) }),
     marks: (serial) => request<MarkView[]>(API.marks(serial)),
