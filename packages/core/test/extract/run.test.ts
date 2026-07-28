@@ -434,7 +434,7 @@ describe('extractRun', () => {
     })
 
     expect(result.metrics.startup?.status).toBe('collected')
-    expect(result.metrics.startup?.data).toEqual({ total_time_ms: 1842, launch_state: 'COLD' })
+    expect(result.metrics.startup?.data).toEqual({ total_time_ms: 1842, launch_state: 'COLD', status: null, wait_time_ms: null })
   })
 
   it('트레이스가 없어도 startup 은 살아남는다 — 트레이스에서 나온 값이 아니다', async () => {
@@ -447,7 +447,7 @@ describe('extractRun', () => {
 
     expect(result.metrics.frame.status).toBe('failed')
     expect(result.metrics.startup?.status).toBe('collected')
-    expect(result.metrics.startup?.data).toEqual({ total_time_ms: 1842, launch_state: 'COLD' })
+    expect(result.metrics.startup?.data).toEqual({ total_time_ms: 1842, launch_state: 'COLD', status: null, wait_time_ms: null })
   })
 
   it('--launch 없이 시작한 세션의 startup 은 skipped 다', async () => {

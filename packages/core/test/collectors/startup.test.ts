@@ -37,7 +37,7 @@ describe('startupCollector.extract', () => {
     )
     expect(outcome).toEqual({
       collected: true,
-      data: { total_time_ms: 1842, launch_state: 'COLD' },
+      data: { total_time_ms: 1842, launch_state: 'COLD', status: null, wait_time_ms: null },
     })
   })
 
@@ -47,7 +47,7 @@ describe('startupCollector.extract', () => {
     )
     expect(outcome).toEqual({
       collected: true,
-      data: { total_time_ms: 903, launch_state: null },
+      data: { total_time_ms: 903, launch_state: null, status: null, wait_time_ms: null },
     })
   })
 
@@ -75,7 +75,16 @@ describe('startupCollector.extract', () => {
    * 그것을 "앱이 이미 떠 있었거나 액티비티가 바로 끝났을 수 있습니다" 로 렌더하면 도구가
    * 관측하지 않은 원인을 지어낸다. 실측(에뮬레이터)에서 이 경로가 흔하게 잡힌다.
    */
-  it('Status: timeout 은 별도 사유로 낸다 — 원인을 지어내지 않는다', async () => {
+  it('Status: timeout 이면 시작 시간은 null 이되 기기가 말한 것은 남긴다', async () => {
+    /**
+     * **못 잰 것과 아무것도 모르는 것은 다르다.** TotalTime 은 없지만 기기는 두 가지를
+     * 말해 줬다 — 스스로 `timeout` 이라고 했고, 얼마나 기다렸는지도 찍었다. 예전에는 그 둘이
+     * 한국어 `reason` 문장 안에만 있어서 `result.json` 만 읽는 소비자가 쓸 수 없었다.
+     *
+     * **`wait_time_ms` 를 `total_time_ms` 자리에 넣지 않는다.** 실측(SM-A405S / Android 11,
+     * 같은 앱 4회): 10182 · 10150 · 10147 · 10163ms — 편차 0.3%. 앱이 11초 걸리든 60초
+     * 걸리든 같은 값이 나오는, 기기의 임계치이지 측정값이 아니다.
+     */
     const outcome = await startupCollector.extract(
       ctx({
         launchRequested: true,
@@ -83,8 +92,14 @@ describe('startupCollector.extract', () => {
       }),
     )
     expect(outcome).toEqual({
-      collected: false,
-      reason: { code: 'launch_wait_timed_out', detail: { wait_time_ms: 11062 } },
+      collected: true,
+      data: {
+        total_time_ms: null,
+        launch_state: 'UNKNOWN',
+        status: 'timeout',
+        wait_time_ms: 11062,
+      },
+      partialReason: { code: 'launch_wait_timed_out', detail: { wait_time_ms: 11062 } },
     })
   })
 

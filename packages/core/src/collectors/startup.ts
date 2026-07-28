@@ -44,9 +44,29 @@ export const startupCollector: CaptureCollector<StartupData> = {
       // 기기가 `Status: timeout` 을 냈다면 TotalTime 이 없는 이유를 **기기가 이미 말한 것**이다.
       // 그걸 "앱이 이미 떠 있었을 수 있습니다" 로 렌더하면 도구가 원인을 지어낸다.
       if (startup?.status === 'timeout') {
+        /**
+         * **못 잰 것과 아무것도 모르는 것은 다르다.**
+         *
+         * TotalTime 은 없지만 기기는 두 가지를 말해 줬다: 스스로 `timeout` 이라고 했고,
+         * 얼마나 기다렸는지도 찍었다. 예전에는 그 둘이 한국어 `reason` 문장 안에만 있어서
+         * `result.json` 만 읽는 소비자(CI · LLM)가 쓸 수 없었다.
+         *
+         * `data` 를 채우되 `total_time_ms` 는 **null 로 남긴다** — `wait_time_ms` 를 그 자리에
+         * 넣으면 기기의 임계치가 측정값으로 둔갑한다 (스키마의 `wait_time_ms` 주석에 실측이 있다).
+         * status 는 여전히 `partial` 이다: 값이 있는 것이 아니라 정황이 있는 것이다.
+         */
         return {
-          collected: false,
-          reason: {
+          // `collected: true` + `partialReason` 은 **값이 나왔지만 일부만 나온** 자리다
+          // (types.ts 의 ExtractOutcome). 여기가 정확히 그것이다: 시작 시간은 없지만
+          // 기기가 무엇을 했는지는 있다. status 는 `partial` 로 나간다.
+          collected: true,
+          data: {
+            total_time_ms: null,
+            launch_state: startup.launchState ?? null,
+            status: startup.status ?? null,
+            wait_time_ms: startup.waitTimeMs ?? null,
+          },
+          partialReason: {
             code: 'launch_wait_timed_out',
             detail: { wait_time_ms: startup.waitTimeMs ?? null },
           },
@@ -60,7 +80,12 @@ export const startupCollector: CaptureCollector<StartupData> = {
 
     return {
       collected: true,
-      data: { total_time_ms: startup.totalTimeMs, launch_state: startup.launchState },
+      data: {
+        total_time_ms: startup.totalTimeMs,
+        launch_state: startup.launchState ?? null,
+        status: startup.status ?? null,
+        wait_time_ms: startup.waitTimeMs ?? null,
+      },
     }
   },
 }

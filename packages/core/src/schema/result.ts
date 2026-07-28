@@ -231,13 +231,38 @@ export const FrameDataSchema = z.object({
 export type FrameData = z.infer<typeof FrameDataSchema>
 
 export const StartupDataSchema = z.object({
-  /** `am start -W` 의 TotalTime — 프로세스 시작부터 첫 프레임까지. */
-  total_time_ms: z.number().int().nonnegative(),
+  /**
+   * `am start -W` 의 TotalTime — 프로세스 시작부터 첫 프레임까지.
+   *
+   * **`null` 은 기기가 이 값을 내지 않았다는 뜻이다** (보통 `status: "timeout"`).
+   * 0 과 혼동하면 안 된다 — 0 은 "0ms 만에 떴다" 이고, 그런 일은 없다.
+   * 이 자리가 `null` 이어도 앱은 떴을 수 있다: `target_app.pid` 와 다른 metrics 를 보라.
+   */
+  total_time_ms: z.number().int().nonnegative().nullable(),
   /**
    * `am start -W` 의 LaunchState 원문 (COLD / WARM / HOT). 기기가 보고하지 않으면 null.
    * enum 으로 좁히지 않는다 — 우리가 정하는 값이 아니라 기기가 뱉는 문자열이다.
    */
   launch_state: z.string().nullable(),
+  /**
+   * `am start -W` 의 `Status:` 원문. 정상은 `"ok"`, 기다리다 포기하면 `"timeout"`.
+   * 기기가 안 찍으면 null. 이것도 우리가 정하는 값이 아니라 기기가 뱉는 문자열이다.
+   */
+  status: z.string().nullable(),
+  wait_time_ms: z
+    .number()
+    .int()
+    .nonnegative()
+    .nullable()
+    .describe(
+      '`am start -W` 의 WaitTime — **호출자가 기다린 시간**이지 앱의 시작 시간이 아니다. ' +
+        '`status` 가 `"ok"` 면 TotalTime 에 ActivityManager 자신의 오버헤드가 더해진 값이고, ' +
+        '**`status` 가 `"timeout"` 이면 ActivityManager 가 포기한 시점**이다 — 그때 이 값은 ' +
+        '앱을 잰 것이 아니라 기기의 임계치다. 실측(SM-A405S / Android 11, 같은 앱 4회): ' +
+        '10182 · 10150 · 10147 · 10163ms 로 편차 0.3% — 앱이 11초 걸리든 60초 걸리든 같은 값이 나온다. ' +
+        '**그러므로 timeout 일 때 이 값을 시작 시간으로 읽지 말 것.** ' +
+        '읽을 수 있는 것은 하한 하나다: "이 앱은 이 기기에서 wait_time_ms 안에 뜨지 못했다".',
+    ),
 })
 export type StartupData = z.infer<typeof StartupDataSchema>
 

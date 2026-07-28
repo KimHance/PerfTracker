@@ -428,6 +428,36 @@ CLI 와 GUI 는 나란히 그것을 부르는 형제입니다. 다만 그 형제
 텍스트와 JSON 이 **같은 규칙으로 답하는지**가 이 작업의 핵심이었습니다. `status` 의 세션 선택
 규칙을 `pick()` 하나로 모았습니다 — 두 곳에 적으면 사람이 보는 답과 기계가 받는 답이 갈립니다.
 
+### ✅ startup 이 timeout 일 때 아는 것을 버리지 않는다 (2026-07-28)
+
+SM-A405S(Android 11)에서 `am start -W` 가 매번 `Status: timeout` 을 냅니다. 그때 `startup` 은
+`data: null` 이었고, 기기가 말해 준 두 가지(`Status`, `WaitTime`)는 **한국어 `reason` 문장
+안에만** 있어서 `result.json` 만 읽는 소비자가 쓸 수 없었습니다.
+
+`StartupData` 에 `status` 와 `wait_time_ms` 를 더하고, `total_time_ms` 를 nullable 로 넓혔습니다.
+
+```json
+// timeout (A405S)                          // 정상 (F936N)
+{ "total_time_ms": null,                    { "total_time_ms": 2743,
+  "launch_state": "UNKNOWN",                  "launch_state": "COLD",
+  "status": "timeout",                        "status": "ok",
+  "wait_time_ms": 10163 }                     "wait_time_ms": 2748 }
+```
+
+`ExtractOutcome` 의 `collected: true` + `partialReason` 자리를 씁니다 — **값이 나왔지만 일부만
+나온** 경우가 정확히 이것입니다. status 는 여전히 `partial` 입니다.
+
+**`wait_time_ms` 를 `total_time_ms` 자리에 넣지 않은 이유**는 재 봤기 때문입니다. 같은 앱·같은
+기기에서 4회: **10182 · 10150 · 10147 · 10163ms — 편차 0.3%.** ActivityManager 가 포기하는
+임계치이지 앱을 잰 값이 아닙니다. 넣었다면 A405S 로 잰 모든 세션의 startup 이 "10.1초" 로
+나왔을 겁니다. 정상 세션에서는 2,743 → 2,748ms (5ms 차)로 TotalTime + AM 오버헤드입니다.
+
+**트레이스에서 직접 뽑는 안은 접었습니다.** A16 에서는 트레이스의 첫 프레임(2.753초)이
+`am start -W` 의 TotalTime(2.743초)과 10ms 안에 맞습니다. 그런데 정작 timeout 이 나는 A405S 는
+`frametimeline` 이 없어(sdk 30) **끝점을 잡을 수단이 없습니다.** `process.start_ts` 도 NULL 이라
+시작점도 없습니다 — 켜려면 ftrace 이벤트를 늘려야 하고 오버헤드 예산을 다시 봐야 합니다.
+즉 "이미 되는 기기를 더 정확하게" 는 되지만 "안 되는 기기를 되게" 는 못 합니다.
+
 ### 그 밖의 후보 (우선순위 낮음)
 
 - **Power** — 배터리 델타는 **구조적으로 불가능**합니다. adb 는 USB 연결을 전제하고 USB 는

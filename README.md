@@ -472,20 +472,32 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 
 ```json
 {
-  "total_time_ms": 509,
-  "launch_state": "COLD"
+  "total_time_ms": 2743,
+  "launch_state": "COLD",
+  "status": "ok",
+  "wait_time_ms": 2748
 }
 ```
 
-실기기(SM-S901N / Android 16 / sdk 36)에서 `com.nhn.android.webtoon` 을 `--launch` 로
-콜드 스타트한 세션 `da49c4` 의 실측값입니다.
+실기기(SM-F936N / Android 16 / sdk 36)에서 `com.example.streaming.debug` 를
+`--launch` 로 콜드 스타트한 세션 `d62a76` 의 실측값입니다.
 
 - `total_time_ms` — `am start -W` 의 `TotalTime`. 프로세스 시작부터 첫 프레임까지입니다.
   **ActivityManager 가 보고한 숫자를 그대로 옮긴 것**이지 이 도구가 트레이스에서 잰 값이
   아닙니다. 그래서 같은 세션의 `metrics.frame` 과는 출처가 다릅니다.
+  **`null` 은 기기가 이 값을 내지 않았다는 뜻입니다** (아래 `status` 참조) — 0 이 아닙니다.
 - `launch_state` — 기기가 준 `LaunchState` 원문 (`COLD` / `WARM` / `HOT`).
   **enum 으로 좁히지 않습니다** — 우리가 정하는 값이 아니라 기기가 뱉는 문자열이기
   때문입니다. 기기가 보고하지 않으면 `null` 입니다.
+- `status` — `am start -W` 의 `Status:` 원문. 정상은 `ok`, 기다리다 포기하면 `timeout`.
+- `wait_time_ms` — `WaitTime`, 즉 **호출자가 기다린 시간**입니다. 시작 시간이 아닙니다.
+  `status` 가 `ok` 면 `TotalTime` 에 ActivityManager 자신의 오버헤드가 더해진 값이고
+  (위 실측: 2,743 → 2,748ms, 5ms 차), **`timeout` 이면 ActivityManager 가 포기한 시점**입니다.
+
+> **`timeout` 일 때 `wait_time_ms` 를 시작 시간으로 읽지 마세요.** 그때 이 값은 앱을 잰 것이
+> 아니라 기기의 임계치입니다. 실측(SM-A405S / Android 11, 같은 앱 4회): **10182 · 10150 ·
+> 10147 · 10163ms — 편차 0.3%.** 앱이 11초 걸리든 60초 걸리든 같은 값이 나옵니다.
+> 읽을 수 있는 것은 하한 하나입니다: *"이 앱은 이 기기에서 `wait_time_ms` 안에 뜨지 못했다."*
 
 한정 조건:
 
@@ -496,8 +508,14 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 - **`am start -W` 가 `TotalTime` 을 아예 안 찍는 경우가 있습니다.** 기기가
   `Status: timeout` 을 내면 `TotalTime` 줄이 통째로 없습니다. **앱이 실행되지 않았다는 뜻이
   아닙니다** — 같은 세션에서 pid 는 확보되고 프레임·메모리도 정상 수집됩니다. 에뮬레이터에서
-  **11세션 중 4회** 실측했습니다. 자세한 원문과 근거는 아래
-  "`--launch` 인데 시작 시간이 안 나오는 경우" 를 보세요.
+  **11세션 중 4회**, 실기기 SM-A405S(Android 11)에서는 **매번** 그랬습니다.
+  그때도 `data` 는 `null` 이 아니라 **아는 것을 담습니다**:
+
+  ```json
+  { "total_time_ms": null, "launch_state": "UNKNOWN", "status": "timeout", "wait_time_ms": 10163 }
+  ```
+
+  자세한 원문과 근거는 아래 "`--launch` 인데 시작 시간이 안 나오는 경우" 를 보세요.
 - **한 세션에 한 번뿐입니다.** 이 지표에는 분포도 표본 수도 없습니다. 값 하나가 그 세션의
   전부이므로, 편차를 보려면 세션을 여러 번 돌려 비교해야 합니다. 참고로 같은 실기기·같은 앱의
   콜드 스타트 4세션이 **509 / 747 / 822 / 3,199ms** 였습니다 — 한 번의 값으로 결론을 내지
