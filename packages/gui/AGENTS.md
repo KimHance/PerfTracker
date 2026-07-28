@@ -22,11 +22,12 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
 | `src/contract/` | 서버와 웹이 공유하는 유일한 계약 | **core 를 모른다.** core 타입을 그대로 흘리면 화면이 수집 사정에 묶인다 |
 | `src/server/` | HTTP · 라우팅 · core 호출 | 웹을 모른다. `view.ts` 가 core → 계약 번역의 **유일한** 자리다 |
 | `src/web/state/` | 전역 상태 · 리듀서 · 파생값 | React 를 모른다 (`StoreContext.tsx` 만 예외). DOM 없이 테스트된다 |
-| `src/web/format/` | 시간 · 명령 · 스펙 문자열 | 순수 함수. 상태도 API 도 모른다 |
+| `src/web/format/` | 시간 · 스펙 문자열 · 시작 **예고** | 순수 함수. 상태도 API 도 모른다. 실행된 명령은 서버가 적는다 |
 | `src/web/api/` | `ApiClient` 인터페이스 + `http` / `mock` 두 구현 | 화면을 모른다 |
 | `src/web/effects/` | **기기에 닿는 모든 흐름** | 컴포넌트를 모른다. 결과를 액션으로만 되돌린다 |
 | `src/web/components/` | 표시 | `fetch` 를 모른다. `useStore()` 로 상태를 읽고 effects 를 부른다 |
 | `src/web/styles/` | 토큰 + 컴포넌트 클래스 | 값은 전부 `var(--*)`. 컴포넌트에 hex 를 적지 않는다 |
+| `src/web/fonts/` | 자체 호스팅 글꼴 (latin subset 6개 · 89KB) + OFL 라이선스 | 이 페이지는 외부로 요청을 보내지 않는다 |
 
 ## 깨면 안 되는 것
 
