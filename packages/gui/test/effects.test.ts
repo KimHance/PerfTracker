@@ -29,11 +29,12 @@ function spyApi(overrides: Partial<ApiClient> = {}): { api: ApiClient; calls: st
       runDir: 'runs/x',
       startedAt: '2026-07-27T10:00:00.000Z',
       unsupported: [],
+      command: 'perftracker start (가짜)',
     }),
     marks: note('marks', [] as MarkView[]),
     addMark: note('addMark', [] as MarkView[]),
     removeMark: note('removeMark', [] as MarkView[]),
-    stop: note('stop', {} as RunView),
+    stop: note('stop', { run: {} as RunView, command: 'perftracker stop (가짜)' }),
     abort: note('abort', undefined),
     runs: note('runs', []),
     renameRun: note('renameRun', {} as RunView),
@@ -97,7 +98,7 @@ describe('마킹', () => {
     const { api } = spyApi({ addMark: async () => server })
     const { dispatch, actions } = collector()
 
-    await addMark({ api, dispatch }, running(), '스크롤 시작', 4000)
+    await addMark({ api, dispatch }, running(), '스크롤 시작')
 
     expect(actions.find((a) => a.type === 'marks/loaded')).toMatchObject({ marks: server })
   })
@@ -112,7 +113,7 @@ describe('마킹', () => {
     })
     const { dispatch } = collector()
 
-    await addMark({ api, dispatch }, running(), '  광고 재생  ', 4000)
+    await addMark({ api, dispatch }, running(), '  광고 재생  ')
 
     expect(sent).toEqual(['광고 재생'])
   })
@@ -121,7 +122,7 @@ describe('마킹', () => {
     const { api, calls } = spyApi()
     const { dispatch, actions } = collector()
 
-    await addMark({ api, dispatch }, running(), '   ', 4000)
+    await addMark({ api, dispatch }, running(), '   ')
 
     expect(calls).toEqual([])
     expect(actions).toEqual([])
@@ -135,7 +136,7 @@ describe('마킹', () => {
     })
     const { dispatch, actions } = collector()
 
-    await addMark({ api, dispatch }, running(), '진입', 4000)
+    await addMark({ api, dispatch }, running(), '진입')
 
     expect(actions.map((a) => a.type)).toContain('error/raised')
     expect(actions.map((a) => a.type)).not.toContain('marks/loaded')
@@ -148,7 +149,7 @@ describe('정지', () => {
     const { api } = spyApi({
       stop: async (_serial: string, req: StopRequest) => {
         sent.push(req)
-        return {} as RunView
+        return { run: {} as RunView, command: 'perftracker stop -d S1' }
       },
     })
     const { dispatch } = collector()
@@ -172,6 +173,7 @@ describe('시작', () => {
           runDir: 'runs/x',
           startedAt: '2026-07-27T10:00:00.000Z',
           unsupported: [],
+          command: 'perftracker start (가짜)',
         }
       },
     })

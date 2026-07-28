@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative as relativePath } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { ApiErrorBody, EnvView, RunView } from '../src/contract/api.js'
+import { listRuns, renameRun } from '@perftracker/core'
 import { startGuiServer, type GuiServer } from '../src/server/index.js'
-import { listRuns, renameRun } from '../src/server/runs.js'
 
 /**
  * 서버는 실제로 띄운다 — 라우팅·정적 서빙·오류 형식은 함수를 직접 불러서는 확인되지 않는다.

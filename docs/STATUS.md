@@ -15,7 +15,7 @@
 - **PerfTracker 는 안드로이드 앱 성능을 앱을 고치지 않고 재는 CLI 입니다.**
   adb 로 붙어 Perfetto 트레이스를 남기고 호스트에서 파싱해 세션마다 `result.json` 하나를 냅니다.
 - **M0 ~ M3 이 끝났고 실기기 검증까지 마쳤습니다.** 지표 7개가 전부 돕니다.
-- **기준선:** `npm test` **813/813** (49 파일, 1초 남짓) · `npm run typecheck` · `npm run build`
+- **기준선:** `npm test` **841/841** (52 파일, 1초 남짓) · `npm run typecheck` · `npm run build`
   클린 · 온-디바이스 `npm run test:device` **11 스펙**.
   **`npm test` 전에 `npm run build` 가 필요합니다** — `packages/cli` 테스트가
   `@perftracker/core` 를 `dist/` 로 해석하므로, 갓 클론한 저장소에서 곧바로 `npm test` 를
@@ -360,6 +360,34 @@ perfetto v44 라 **sdk 35 미만에는 존재하지 않습니다**. `measurement
 **"cpu 는 되는데 앱 단위만 안 되는 기기가 있다"** 는 지표 7개 지원표에 안 잡히는 축이라
 `packages/cli/AGENTS.md` 에 표로 적어 뒀습니다.
 
+### ✅ GUI 에만 있던 기능을 CLI 에도 / 로그가 지어낸 문자열이던 것 (2026-07-28)
+
+**사용자 지적: "GUI는 UI 인터페이스일 뿐 실제 로직은 전부 CLI를 호출해서 발생되어야 하는 거
+아냐?"** 방향은 맞고 대상이 한 칸 어긋난 것이었습니다 — 로직은 CLI 가 아니라 **core** 에 있고
+CLI 와 GUI 는 나란히 그것을 부르는 형제입니다. 다만 그 형제 관계가 두 군데서 기울어 있었습니다.
+
+**① 기록 관리가 GUI 에만 있었습니다.** 목록·이름변경·삭제가 `packages/gui/src/server/runs.ts`
+안에 있어서 CLI 로는 `runs/` 를 직접 `ls`/`rm` 해야 했습니다. 로직을 **core 의
+`session/runs.ts`** 로 옮기고(같은 파일을 읽는 `extract/run.ts` 의 이웃입니다) CLI 에
+`runs list/rename/rm` 을 냈습니다. GUI 서버는 `view.ts` 에서 core 타입을 계약으로 옮기므로
+**계약 경계는 그대로**입니다.
+
+`rm --all` 은 `--yes` 없이 **거부**합니다. 되묻지 않는 이유는 CI 입니다 — 입력을 기다리면
+빌드가 타임아웃까지 매달립니다.
+
+**② CLI 로그가 화면이 지어낸 문자열이었습니다.** 브라우저가 `startCommand()` 로 조립했고,
+그래서 `gui -o /tmp/x` 로 띄워도 로그에는 `-o runs` 가 찍혔습니다 — 그 줄을 복사해 실행하면
+다른 곳에 저장됐습니다. 이제 **서버가 자기가 한 일을 응답에 실어 보내고**(`command` 필드)
+화면은 받은 것만 찍습니다. `format/command.ts` 는 삭제했고, 남은 것은 시작 바의
+**예고**(`format/preview.ts`) 하나입니다 — 아직 실행 전이라 서버에게 물어볼 것이 없습니다.
+
+마킹 로그의 경과도 브라우저 시계가 아니라 **서버가 저장한 값**을 찍습니다. 같은 사건을 두 번
+다르게 적지 않습니다.
+
+실기기 확인: `gui -o /tmp/내결과2` → start 응답의 명령이 `-o /tmp/내결과2` → 터미널에서 마킹 →
+정지 → `perftracker runs -o /tmp/내결과2` 로 같은 기록이 보이고, CLI 로 이름을 바꾸니 GUI 목록에도
+그대로 반영됐습니다.
+
 ### 그 밖의 후보 (우선순위 낮음)
 
 - **Power** — 배터리 델타는 **구조적으로 불가능**합니다. adb 는 USB 연결을 전제하고 USB 는
@@ -537,7 +565,7 @@ RED 가 나는지 확인하고 원복합니다.** 통과하는 테스트는 증�
   - `perftracker extract` 로 재산출해 볼 대상도 없습니다. **새 기기에서 세션을 하나 떠서
     만드세요** — `npx perftracker start --app <앱> --launch` 후 조작하고 `stop`.
   - 유닛 테스트는 `runs/` 에 의존하지 않습니다. **합성 픽스처만 커밋한다**는 규칙이 있어서
-    `npm test` 813개는 **`npm run build` 만 먼저 돌리면** 아무 데서나 그대로 돕니다
+    `npm test` 841개는 **`npm run build` 만 먼저 돌리면** 아무 데서나 그대로 돕니다
     (`packages/cli` 테스트가 core 를 `dist/` 로 해석합니다 — §0 참고).
 
 ---

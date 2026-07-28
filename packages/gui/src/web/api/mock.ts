@@ -293,6 +293,7 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
         unsupported: (devices.find((d) => d.serial === req.serial)?.metrics ?? [])
           .filter((m) => !m.ok)
           .map((m) => ({ id: m.id, reason: m.reason })),
+        command: `perftracker start --app "${req.packageName}" -d ${req.serial} -o runs (목업)`,
       })
     },
 
@@ -317,7 +318,8 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
         markCount: (marksBySerial.get(serial) ?? []).length,
       }
       runs = [run, ...runs]
-      return wait(run)
+      // 실제 서버가 그렇듯 목업도 "내가 한 일" 을 함께 낸다.
+      return wait({ run, command: `perftracker stop -d ${serial} (목업)` })
     },
 
     abort: (serial) => {

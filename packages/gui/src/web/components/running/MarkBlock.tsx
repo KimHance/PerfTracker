@@ -21,7 +21,7 @@ export function MarkBlock({ tab }: { tab: Tab }) {
   const elapsed = elapsedMs(tab, state.now)
   const canAdd = tab.markDraft.trim() !== ''
 
-  const submit = (label: string): void => void addMark(deps, tab, label, state.now)
+  const submit = (label: string): void => void addMark(deps, tab, label)
 
   return (
     <div className="marks">

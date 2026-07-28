@@ -12,6 +12,7 @@ import {
   type StartRequest,
   type StartedSessionView,
   type StopRequest,
+  type StopResult,
 } from '../../contract/api.js'
 import { ApiError, type ApiClient } from './client.js'
 
@@ -49,7 +50,7 @@ export function createHttpClient(): ApiClient {
       request<MarkView[]>(API.marks(serial), { method: 'POST', body: JSON.stringify({ label }) }),
     removeMark: (serial, index) => request<MarkView[]>(API.mark(serial, index), { method: 'DELETE' }),
     stop: (serial, req: StopRequest) =>
-      request<RunView>(API.stop(serial), { method: 'POST', body: JSON.stringify(req) }),
+      request<StopResult>(API.stop(serial), { method: 'POST', body: JSON.stringify(req) }),
     abort: (serial) => request<void>(API.abort(serial), { method: 'DELETE' }),
     runs: () => request<RunView[]>(API.runs),
     renameRun: (id, name) =>

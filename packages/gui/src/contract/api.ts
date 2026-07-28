@@ -146,6 +146,11 @@ export interface StartedSessionView {
   name: string
   serial: string
   runDir: string
+  /**
+   * **서버가 실제로 한 일**을 CLI 의 말로 옮긴 줄. 화면은 이것을 그대로 찍고 조립하지 않는다.
+   * 예전에는 브라우저가 스스로 만들었고, 그래서 `-o` 처럼 서버만 아는 값이 어긋났다.
+   */
+  command: string
   /** 서버 시각 기준 시작 시각(ISO). 경과 시간은 웹이 이것으로 센다. */
   startedAt: string
   /** 이 기기에서 못 재는 지표 — `start` 시점에 이미 아는 사실이다. */
@@ -154,6 +159,12 @@ export interface StartedSessionView {
 
 export interface StopRequest {
   offline: boolean
+}
+
+export interface StopResult {
+  run: RunView
+  /** 서버가 실제로 한 일. `StartedSessionView.command` 와 같은 이유로 서버가 적는다. */
+  command: string
 }
 
 /**

@@ -7,13 +7,17 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
 
 | 경로 | 무엇 |
 | --- | --- |
-| `src/index.ts` | 명령 10개 등록 · 최상위 오류 처리 |
+| `src/index.ts` | 명령 11개 등록 (`runs` 는 하위 셋) · 최상위 오류 처리 |
 | `src/context.ts` | `--adb` / `--device` 를 core 의 컨텍스트로 |
 | `src/commands/` | 명령 하나당 파일 하나 |
 | `test/on-device/` | **실기기가 있어야 도는 스펙.** `npm run test:device` 로만 실행 |
 
-명령: `doctor` `devices` `apps` `schema` · `start` `mark` `status` `stop` `extract` · `gui`.
-실제 측정은 `start` / `stop` 둘뿐이고 나머지는 점검·조회·마킹이다.
+명령: `doctor` `devices` `apps` `schema` · `start` `mark` `status` `stop` `extract` ·
+`runs`(`list`/`rename`/`rm`) · `gui`.
+실제 측정은 `start` / `stop` 둘뿐이고 나머지는 점검·조회·마킹·기록 관리다.
+
+**기기에 접촉하지 않는 명령**은 `createContext` 를 부르지 않는다 — `mark` 와 `runs` 가 그렇다.
+그것이 규칙 1 을 지키는 방식이다: 조심해서 안 부르는 것이 아니라 **부를 수단이 없는 것**.
 
 ## 제약
 
@@ -27,6 +31,11 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
 - **`mark` 는 `createContext` 를 부르지 않는다.** 마킹은 활성 세션 포인터(호스트의 파일)만
   고치므로 측정 창 안에서 불려도 규칙 1 이 깨지지 않는다. `AdbContext` 를 받는 순간 그 보증이
   사라진다 — 다른 명령과 달리 `commands/mark.ts` 만 컨텍스트를 안 받는 이유다.
+- **GUI 로 되는 일은 CLI 로도 된다.** 기록 목록·이름변경·삭제가 한동안 GUI 에만 있었고,
+  그 상태를 두면 GUI 가 조금씩 자기만의 로직을 갖는다. 판정과 파일 조작은 core 의
+  `session/runs.ts` 에 있고 CLI 와 GUI 는 나란히 그것을 부른다.
+- **`runs rm --all` 은 `--yes` 없이 거부한다.** 되묻지 않는 이유는 CI 다 — 입력을 기다리면
+  빌드가 타임아웃까지 매달린다. id 를 직접 적은 삭제는 그 자체가 의사 표시라 묻지 않는다.
 - **`gui` 는 끝나지 않는 명령이다.** 문자열을 돌려주지 않고 Ctrl-C 까지 서버를 붙잡는다.
   서버 구현은 `@perftracker/gui` 에 있고 CLI 는 그것을 부르기만 한다.
 - **core 의 판정을 다시 구현하지 않는다.** `doctor` 의 지표 지원 여부도 collector 의

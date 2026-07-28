@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DeviceView } from '../src/contract/api.js'
-import { markCommand, startCommand, stopCommand } from '../src/web/format/command.js'
+import { startPreview } from '../src/web/format/preview.js'
 import { formatSpecLine, unsupportedCount } from '../src/web/format/device.js'
 import { formatClock, formatElapsed, formatRunAt } from '../src/web/format/time.js'
 import { newTab } from '../src/web/state/model.js'
@@ -36,11 +36,11 @@ describe('기록 시각', () => {
   })
 })
 
-describe('실행될 명령', () => {
+describe('시작 예고', () => {
   it('아직 고르지 않은 자리는 <미선택> 으로 남는다', () => {
     // 사람이 그 줄을 복사해 터미널에서 재현할 수 있어야 하고, 빈칸은 재현되지 않는다.
-    expect(startCommand(newTab('t'), 'runs')).toBe(
-      'npx perftracker start --app "<미선택>" -d <미선택> --launch --force -o runs',
+    expect(startPreview(newTab('t'), 'runs')).toBe(
+      'perftracker start --app "<미선택>" -d <미선택> --launch --force -o runs',
     )
   })
 
@@ -48,30 +48,28 @@ describe('실행될 명령', () => {
     // 화면이 자기 값을 들고 있으면 여기 찍히는 -o 와 실제 저장 위치가 어긋난다.
     // 그게 정확히 예전 결함이었다: 로그에는 `-o runs` 인데 서버는 다른 곳을 봤다.
     const tab = { ...newTab('t'), serial: 'S1', packageName: 'com.x' }
-    expect(startCommand(tab, '/tmp/내결과')).toContain('-o /tmp/내결과')
+    expect(startPreview(tab, '/tmp/내결과')).toContain('-o /tmp/내결과')
+  })
+
+  it('예고는 실행 기록이 아니다 — 실행된 줄은 서버가 적는다', () => {
+    // 이 파일에 stopCommand / markCommand 가 없는 것이 그 사실이다. 정지·마킹은 실행 뒤에만
+    // 존재하고, 그때는 서버가 자기가 한 일을 응답에 실어 보낸다 (contract 의 command 필드).
+    expect(startPreview(newTab('t'), 'runs')).toContain('<미선택>')
   })
 
   it('이름이 비면 --name 을 붙이지 않는다', () => {
     const tab = { ...newTab('t'), serial: 'S1', packageName: 'com.x', name: '   ' }
-    expect(startCommand(tab, 'runs')).not.toContain('--name')
+    expect(startPreview(tab, 'runs')).not.toContain('--name')
   })
 
   it('끈 플래그는 나타나지 않는다', () => {
     const tab = { ...newTab('t'), serial: 'S1', packageName: 'com.x', launch: false, force: false }
-    const command = startCommand(tab, 'runs')
+    const command = startPreview(tab, 'runs')
     expect(command).not.toContain('--launch')
     expect(command).not.toContain('--force')
   })
 
-  it('정지 명령은 --offline 을 켠 만큼만 담는다', () => {
-    const tab = { ...newTab('t'), serial: 'S1' }
-    expect(stopCommand(tab)).toBe('npx perftracker stop -d S1')
-    expect(stopCommand({ ...tab, offline: true })).toBe('npx perftracker stop -d S1 --offline')
-  })
 
-  it('마킹은 라벨과 경과를 함께 남긴다', () => {
-    expect(markCommand('스크롤 시작', '00:07')).toBe('mark "스크롤 시작" @ 00:07')
-  })
 })
 
 describe('기기 스펙 한 줄', () => {

@@ -1,10 +1,35 @@
 import { readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import type { RunView } from '../contract/api.js'
+
+/**
+ * 끝난 세션 하나. `result.json` 이 있으면 그것이 정본이고, 없으면 `session.json` 으로
+ * 채운다 — 그 경우 못 잰 지표 수·경고 수는 **셀 수 없으므로 0 이다** (파일이 없다).
+ */
+export interface RunSummary {
+  id: string
+  name: string
+  runDir: string
+  serial: string
+  model: string | null
+  packageName: string
+  appLabel: string
+  appVersion: string | null
+  /** 세션 시작 시각(ISO). */
+  startedAt: string
+  durationMs: number
+  launch: boolean
+  unsupportedCount: number
+  warningCount: number
+  markCount: number
+}
 
 /**
  * `runs/` 디렉토리를 읽어 기록 목록을 만든다. **기기에 접촉하지 않는다** — 기록은 이미
  * 호스트에 있는 파일이고, 그것을 보려고 기기를 깨울 이유가 없다.
+ *
+ * **core 에 있는 이유:** CLI 의 `runs` 명령과 GUI 가 둘 다 쓴다. 한동안 GUI 안에만 있었고
+ * 그래서 "GUI 로는 지울 수 있는데 CLI 로는 못 지우는" 비대칭이 생겼다 — 그 상태를 두면
+ * GUI 가 조금씩 자기만의 로직을 갖게 된다. 같은 파일을 읽는 `extract/run.ts` 의 이웃이다.
  *
  * 정본은 `result.json` 이다. 그것이 없으면(정지는 됐는데 산출이 실패한 run) `session.json`
  * 만으로 최소한을 채우고 **`result.json` 이 없다는 사실을 지운 척하지 않는다** —
@@ -54,7 +79,7 @@ function countUnsupported(metrics: ResultFile['metrics']): number {
   return Object.values(metrics).filter((m) => m?.status === 'unsupported' || m?.status === 'skipped').length
 }
 
-export async function listRuns(dir: string): Promise<RunView[]> {
+export async function listRuns(dir: string): Promise<RunSummary[]> {
   // **절대 경로로 맞춘다.** `-o runs` 처럼 상대 경로로 들어오는데 core 는 `runDir` 을 절대
   // 경로로 돌려준다 — 그대로 두면 정지 직후 방금 만든 기록을 목록에서 못 찾는다 (실측).
   const outDir = resolve(dir)
@@ -66,7 +91,7 @@ export async function listRuns(dir: string): Promise<RunView[]> {
     return []
   }
 
-  const runs: RunView[] = []
+  const runs: RunSummary[] = []
   for (const entry of entries) {
     const dir = join(outDir, entry)
     const session = await readJson<StoredSessionFile>(join(dir, 'session.json'))
@@ -105,7 +130,7 @@ export async function listRuns(dir: string): Promise<RunView[]> {
       packageName: result?.target_app?.package ?? session.packageName ?? '',
       appLabel: result?.target_app?.label ?? result?.target_app?.package ?? session.packageName ?? '',
       appVersion: result?.target_app?.version_name ?? null,
-      at: startedAt,
+      startedAt,
       durationMs: Math.max(0, durationMs),
       launch: result?.session?.options?.launch ?? session.options?.launch ?? false,
       unsupportedCount: countUnsupported(result?.metrics),
@@ -115,10 +140,10 @@ export async function listRuns(dir: string): Promise<RunView[]> {
   }
 
   // 항상 최신순. 화면이 다시 정렬하지 않아도 되게 서버가 정한다.
-  return runs.sort((a, b) => b.at.localeCompare(a.at))
+  return runs.sort((a, b) => b.startedAt.localeCompare(a.startedAt))
 }
 
-export async function findRun(outDir: string, id: string): Promise<RunView | null> {
+export async function findRun(outDir: string, id: string): Promise<RunSummary | null> {
   return (await listRuns(outDir)).find((r) => r.id === id) ?? null
 }
 
@@ -126,7 +151,7 @@ export async function findRun(outDir: string, id: string): Promise<RunView | nul
  * 이름만 바꾼다. **디렉토리 이름은 건드리지 않는다** — 경로가 바뀌면 이미 그 경로를 적어 둔
  * 사람의 메모와 CLI 로그가 전부 죽는다. 이름은 `session.json` 과 `result.json` 안의 값이다.
  */
-export async function renameRun(outDir: string, id: string, name: string): Promise<RunView | null> {
+export async function renameRun(outDir: string, id: string, name: string): Promise<RunSummary | null> {
   const run = await findRun(outDir, id)
   if (run === null) return null
 

@@ -1,6 +1,5 @@
 import type { StartRequest } from '../../contract/api.js'
 import type { ApiClient } from '../api/client.js'
-import { markCommand, startCommand, stopCommand } from '../format/command.js'
 import { formatClock, formatElapsed } from '../format/time.js'
 import type { Action } from '../state/actions.js'
 import type { Tab } from '../state/model.js'
@@ -33,17 +32,23 @@ function log(deps: EffectDeps, command: string): void {
 /**
  * 대기 구간을 오버레이로 덮는다.
  * 실패는 삼키지 않는다 — 오류를 올리고 `null` 을 돌려 호출한 쪽이 후속 동작을 멈추게 한다.
+ *
+ * `command` 는 **읽기 요청**에만 화면이 안다 (인자가 serial 하나뿐이라 틀릴 여지가 없다).
+ * 실제로 뭔가를 실행하는 start/stop 은 서버가 자기가 한 일을 응답에 실어 보내므로
+ * `commandFrom` 으로 그것을 받아 로그에 남긴다 — 화면이 조립하지 않는다.
  */
 async function withLoading<T>(
   deps: EffectDeps,
   label: string,
   command: string,
   run: () => Promise<T>,
+  commandFrom?: (result: T) => string,
 ): Promise<T | null> {
-  log(deps, command)
+  if (commandFrom === undefined) log(deps, command)
   deps.dispatch({ type: 'loading/began', loading: { label, command } })
   try {
     const result = await run()
+    if (commandFrom !== undefined) log(deps, commandFrom(result))
     deps.dispatch({ type: 'loading/ended' })
     return result
   } catch (e) {
@@ -167,8 +172,10 @@ export async function startSession(deps: EffectDeps, tab: Tab, outDir: string): 
   const session = await withLoading(
     deps,
     '세션을 시작하고 트레이스를 켜고 있습니다',
-    startCommand(tab, outDir),
+    // 오버레이에는 "무엇을 기다리는지" 만 띄운다. 실제로 실행된 줄은 응답이 알려 준다.
+    `perftracker start --app "${req.packageName}" -d ${req.serial} -o ${outDir}`,
     () => deps.api.start(req),
+    (s) => s.command,
   )
   if (!session) return
 
@@ -191,14 +198,15 @@ export async function startSession(deps: EffectDeps, tab: Tab, outDir: string): 
 export async function stopSession(deps: EffectDeps, tab: Tab): Promise<void> {
   if (tab.serial === null) return
 
-  const run = await withLoading(
+  const result = await withLoading(
     deps,
     '트레이스를 회수하고 result.json 을 만들고 있습니다',
-    stopCommand(tab),
+    `perftracker stop -d ${tab.serial}`,
     () => deps.api.stop(tab.serial!, { offline: tab.offline }),
+    (r) => r.command,
   )
 
-  deps.dispatch({ type: 'session/stopped', tabKey: tab.key, run })
+  deps.dispatch({ type: 'session/stopped', tabKey: tab.key, run: result?.run ?? null })
   const devices = await deps.api.devices().catch(() => null)
   if (devices) deps.dispatch({ type: 'devices/loaded', devices })
 }
@@ -206,8 +214,11 @@ export async function stopSession(deps: EffectDeps, tab: Tab): Promise<void> {
 /** 측정 중인 탭을 닫는다 — 기록을 남기지 않고 기기의 Perfetto 세션만 정리한다. */
 export async function abortSession(deps: EffectDeps, tab: Tab): Promise<void> {
   if (tab.serial !== null) {
-    await withLoading(deps, '세션을 정리하고 있습니다', `perftracker stop -d ${tab.serial} (기록 없이 버림)`, () =>
-      deps.api.abort(tab.serial!),
+    await withLoading(
+      deps,
+      '세션을 정리하고 있습니다',
+      `perftracker stop -d ${tab.serial}   # 기록을 만들지 않고 버림`,
+      () => deps.api.abort(tab.serial!),
     )
   }
   deps.dispatch({ type: 'tab/closed', key: tab.key })
@@ -227,16 +238,18 @@ export async function abortSession(deps: EffectDeps, tab: Tab): Promise<void> {
  * 정본은 한 곳(포인터 파일)이고 화면은 그 사본을 그린다.
  *
  * 경과는 **서버가 계산한다.** 브라우저 시계로 계산하면 CLI 로 남긴 마킹과 기준이 달라진다.
- * 로그에 찍는 경과는 화면이 보고 있던 값이라 표시용이고, 저장되는 값은 서버의 것이다.
  */
-export async function addMark(deps: EffectDeps, tab: Tab, label: string, now: number): Promise<void> {
+export async function addMark(deps: EffectDeps, tab: Tab, label: string): Promise<void> {
   const trimmed = label.trim()
   if (trimmed === '' || tab.serial === null) return
 
-  log(deps, markCommand(trimmed, formatElapsed(tab.startedAt === null ? 0 : now - tab.startedAt)))
   try {
     const marks = await deps.api.addMark(tab.serial, trimmed)
     deps.dispatch({ type: 'marks/loaded', tabKey: tab.key, marks })
+    // **경과는 서버가 저장한 값**을 찍는다. 화면의 시계로 찍으면 파일에 들어간 값과 다른
+    // 숫자가 로그에 남는다 (같은 사건을 두 번 다르게 적는 셈이다).
+    const saved = marks[marks.length - 1]
+    if (saved !== undefined) log(deps, `perftracker mark "${saved.label}" @ ${formatElapsed(saved.offsetMs)}`)
   } catch (e) {
     deps.dispatch({ type: 'error/raised', message: e instanceof Error ? e.message : String(e) })
   }

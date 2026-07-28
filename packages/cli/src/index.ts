@@ -4,6 +4,7 @@ import { hasBlockingFailure, listDeviceSummaries, loadLabeledApps, PerfTrackerEr
 import { formatApps } from './commands/apps.js'
 import { runGui } from './commands/gui.js'
 import { runMark } from './commands/mark.js'
+import { runRunsList, runRunsRemove, runRunsRename } from './commands/runs.js'
 import { formatDoctor } from './commands/doctor.js'
 import { formatDevices } from './commands/devices.js'
 import { runExtract } from './commands/extract.js'
@@ -78,6 +79,41 @@ program
   .action(async (label: string, opts: { session?: string; device?: string }) => {
     // createContext 를 부르지 않는다 — 이 명령은 호스트의 파일만 고친다 (규칙 1).
     console.log(await runMark(label, opts))
+  })
+
+/**
+ * 기록 관리. **기기에 접촉하지 않는다** — `createContext` 를 부르지 않는 것이 그 증거다.
+ * GUI 에만 있던 기능을 CLI 에도 낸다: "GUI 로는 되는데 CLI 로는 안 되는 일" 을 만들지 않는다.
+ */
+const runs = program.command('runs').description('측정 기록을 보고 정리한다 (기기 불필요)')
+
+runs
+  .command('list', { isDefault: true })
+  .description('기록 목록')
+  .option('-o, --out <dir>', '기록이 있는 디렉토리', 'runs')
+  .action(async (opts: { out: string }) => {
+    console.log(await runRunsList(opts))
+  })
+
+runs
+  .command('rename')
+  .description('기록 이름을 바꾼다 (디렉토리 경로는 그대로)')
+  .argument('<id>', '기록 id')
+  .argument('<이름>', '새 이름')
+  .option('-o, --out <dir>', '기록이 있는 디렉토리', 'runs')
+  .action(async (id: string, name: string, opts: { out: string }) => {
+    console.log(await runRunsRename(id, name, opts))
+  })
+
+runs
+  .command('rm')
+  .description('기록을 지운다 (run 디렉토리째, 되돌릴 수 없음)')
+  .argument('[id]', '기록 id')
+  .option('--all', '전부 지운다 (--yes 필요)', false)
+  .option('--yes', '--all 을 실제로 실행한다', false)
+  .option('-o, --out <dir>', '기록이 있는 디렉토리', 'runs')
+  .action(async (id: string | undefined, opts: { all: boolean; yes: boolean; out: string }) => {
+    console.log(await runRunsRemove(id, opts))
   })
 
 program

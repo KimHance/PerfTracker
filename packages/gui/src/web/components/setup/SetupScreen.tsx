@@ -1,5 +1,5 @@
 import { startSession } from '../../effects/effects.js'
-import { startCommand } from '../../format/command.js'
+import { startPreview } from '../../format/preview.js'
 import { canStart } from '../../state/derive.js'
 import type { Tab } from '../../state/model.js'
 import { useStore } from '../../state/StoreContext.jsx'
@@ -30,8 +30,11 @@ export function SetupScreen({ tab }: { tab: Tab }) {
       </div>
 
       <div className="startbar">
-        {/* 실행될 명령을 그대로 보여 준다 — 사람이 그 줄을 복사해 터미널에서 재현할 수 있어야 한다. */}
-        <span className="startbar-command">$ {startCommand(tab, state.env.outDir)}</span>
+        {/*
+          아직 실행 전이라 서버에게 물어볼 것이 없다 — 이 줄은 "누르면 이렇게 된다" 는 예고다.
+          실제로 실행된 줄은 서버가 응답에 실어 보내고 하단 CLI 로그에 남는다.
+        */}
+        <span className="startbar-command">$ {startPreview(tab, state.env.outDir)}</span>
         <button
           className="btn btn-primary btn-lg blueprint"
           style={{ minWidth: 150 }}

@@ -3,14 +3,18 @@ import {
   appendMark,
   createAdbContext,
   createBaseAdb,
+  clearRuns,
+  deleteRun,
   extractRun,
   getAppDetail,
+  listRuns,
   listDeviceSummaries,
   loadLabeledApps,
   PerfTrackerError,
   listActiveSessions,
   readActiveSession,
   removeMark,
+  renameRun,
   resolveTargetApp,
   runDoctor,
   SessionStateError,
@@ -31,9 +35,10 @@ import type {
   StartRequest,
   StartedSessionView,
   StopRequest,
+  StopResult,
 } from '../contract/api.js'
-import { clearRuns, deleteRun, listRuns, renameRun } from './runs.js'
-import { toAppView, toDeviceView, toDoctorView, toMetricViews } from './view.js'
+import { abortCommandLine, startCommandLine, stopCommandLine } from './command.js'
+import { toAppView, toDeviceView, toDoctorView, toMetricViews, toRunView } from './view.js'
 
 /**
  * GUI 서버가 하는 일 전부. **CLI 의 로직을 다시 쓰지 않고 core 를 그대로 부른다** —
@@ -149,6 +154,7 @@ export class GuiApi {
       runDir: session.runDir,
       startedAt: session.startedAt,
       unsupported: session.unsupported ?? [],
+      command: startCommandLine(req, this.opts.outDir),
     }
   }
 
@@ -175,7 +181,7 @@ export class GuiApi {
    * 정지 → 회수 → 산출. CLI 의 `stop` 과 **같은 순서, 같은 실패 처리**다.
    * 원본을 회수한 뒤 산출이 실패하면 run 디렉토리를 알려 준다 — 원본은 이미 안전하다.
    */
-  async stop(serial: string, req: StopRequest): Promise<RunView> {
+  async stop(serial: string, req: StopRequest): Promise<StopResult> {
     const session = await readActiveSession(serial)
     if (session === null) throw new SessionStateError(`기기 ${serial} 에 실행 중인 세션이 없습니다.`)
 
@@ -199,7 +205,7 @@ export class GuiApi {
     if (run === undefined) {
       throw new SessionStateError(`기록을 만들었지만 목록에서 찾지 못했습니다: ${runDir}`)
     }
-    return run
+    return { run: toRunView(run), command: stopCommandLine(serial, req.offline) }
   }
 
   /**
@@ -216,14 +222,19 @@ export class GuiApi {
     await rm(runDir, { recursive: true, force: true })
   }
 
-  runs(): Promise<RunView[]> {
-    return listRuns(this.opts.outDir)
+  async runs(): Promise<RunView[]> {
+    return (await listRuns(this.opts.outDir)).map(toRunView)
+  }
+
+  /** 측정 중인 세션을 버릴 때 화면이 찍을 줄. 실행한 쪽이 적는다. */
+  abortCommand(serial: string): string {
+    return abortCommandLine(serial)
   }
 
   async renameRun(id: string, name: string): Promise<RunView> {
     const run = await renameRun(this.opts.outDir, id, name)
     if (run === null) throw new SessionStateError(`기록 ${id} 을(를) 찾지 못했습니다.`)
-    return run
+    return toRunView(run)
   }
 
   async deleteRun(id: string): Promise<void> {

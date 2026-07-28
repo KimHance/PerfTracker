@@ -1,5 +1,13 @@
-import type { DeviceSummary, DoctorCheck, LabeledApp } from '@perftracker/core'
-import { METRIC_ORDER, type AppView, type DeviceView, type DoctorCheckView, type MetricId, type MetricSupportView } from '../contract/api.js'
+import type { DeviceSummary, DoctorCheck, LabeledApp, RunSummary } from '@perftracker/core'
+import {
+  METRIC_ORDER,
+  type AppView,
+  type DeviceView,
+  type DoctorCheckView,
+  type MetricId,
+  type MetricSupportView,
+  type RunView,
+} from '../contract/api.js'
 
 /**
  * core → 계약. **여기가 유일한 번역 자리다.**
@@ -66,4 +74,27 @@ export function toDeviceView(summary: DeviceSummary, metrics: MetricSupportView[
 
 export function toAppView(app: LabeledApp): AppView {
   return { packageName: app.packageName, label: app.label }
+}
+
+/**
+ * core 의 기록 요약 → 계약. 필드 이름 하나(`startedAt` → `at`)만 다르다 —
+ * 계약은 화면이 읽는 말이고, core 는 자기 말을 쓴다. 그 번역이 이 파일의 일이다.
+ */
+export function toRunView(run: RunSummary): RunView {
+  return {
+    id: run.id,
+    name: run.name,
+    runDir: run.runDir,
+    serial: run.serial,
+    model: run.model,
+    packageName: run.packageName,
+    appLabel: run.appLabel,
+    appVersion: run.appVersion,
+    at: run.startedAt,
+    durationMs: run.durationMs,
+    launch: run.launch,
+    unsupportedCount: run.unsupportedCount,
+    warningCount: run.warningCount,
+    markCount: run.markCount,
+  }
 }

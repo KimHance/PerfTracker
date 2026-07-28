@@ -10,6 +10,7 @@ import type {
   StartRequest,
   StartedSessionView,
   StopRequest,
+  StopResult,
 } from '../../contract/api.js'
 
 /**
@@ -36,7 +37,7 @@ export interface ApiClient {
   marks(serial: string): Promise<MarkView[]>
   addMark(serial: string, label: string): Promise<MarkView[]>
   removeMark(serial: string, index: number): Promise<MarkView[]>
-  stop(serial: string, req: StopRequest): Promise<RunView>
+  stop(serial: string, req: StopRequest): Promise<StopResult>
   /** 측정 중인 세션을 기록 없이 버린다 (측정 중 탭 닫기). */
   abort(serial: string): Promise<void>
   runs(): Promise<RunView[]>
