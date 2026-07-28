@@ -1,3 +1,6 @@
+import { expect } from 'vitest'
+import { COLLECTORS, createAdbContext, probeDevice, renderReason } from '@perftracker/core'
+
 /**
  * 온-디바이스 세션 스펙이 쓰는 **대상 앱**.
  *
@@ -73,4 +76,63 @@ export function assertTargetAppInstalled(installedPackages: readonly string[]): 
       `  PERFTRACKER_TEST_APP=<패키지명> npm run test:device\n` +
       `(고를 앱은 런처 액티비티가 있어야 합니다 — --launch 가 그것으로 콜드 스타트합니다.)`,
   )
+}
+
+/**
+ * **이 기기가 무엇을 잴 수 있는가.** 판정은 core 의 `collector.supports(env)` 를 그대로 부른다 —
+ * 여기서 sdk 표를 다시 쓰면 그 표가 core 와 어긋나는 날 스펙이 틀린 것을 통과시킨다.
+ *
+ * ## 왜 필요한가
+ *
+ * 온-디바이스 스펙은 한동안 **"모든 기기가 지표 7개를 다 잰다"** 고 가정했다. 그래서
+ * SM-A405S(Android 11, sdk 30)에서 4개가 실패했는데, 그 실패는 도구의 결함이 아니라
+ * **기기의 성질**이었다: `frame` 은 sdk 31, `network` 는 sdk 34 가 하한이다. 도구는 정확히
+ * `unsupported` 라고 정직하게 말하고 있었고 스펙만 그것을 결함으로 읽었다.
+ *
+ * 실패가 "고칠 수 없는 사실" 을 가리키면 그 신호는 곧 무시된다 — 4건이 늘 빨간 채로 있으면
+ * 5번째로 생긴 **진짜** 결함도 같은 색이라 아무도 못 본다.
+ *
+ * `doctor` 가 이미 `requirement`(사람이 고쳐야 함) 와 `capability`(기기가 원래 그럼)를
+ * 가르고 있다. 스펙도 같은 선을 쓴다: **"이 기기가 다 잰다" 가 아니라 "이 도구가 이 기기에
+ * 대해 참말을 한다"** 를 검증한다. 그러면 A405S 에서도 F936N 에서도 같은 스펙이 돈다.
+ */
+export interface DeviceCapability {
+  sdkInt: number
+  dataSources: readonly string[]
+  /** 이 기기에서 잴 수 있다고 core 가 판정한 지표 id. */
+  supported: ReadonlySet<string>
+  /** 못 재는 지표 id → 그 이유. 비어 있으면 이 기기는 7개를 다 잰다. */
+  unsupported: ReadonlyMap<string, string>
+}
+
+export async function deviceCapabilities(): Promise<DeviceCapability> {
+  const ctx = await createAdbContext(DEVICE_OPTS)
+  const probe = await probeDevice(ctx.adb)
+  const env = { sdkInt: probe.sdkInt, dataSources: probe.dataSources }
+
+  const supported = new Set<string>()
+  const unsupported = new Map<string, string>()
+  for (const collector of COLLECTORS) {
+    const result = collector.supports(env)
+    if (result.supported) supported.add(collector.id)
+    else unsupported.set(collector.id, renderReason(result.reason) ?? result.reason.code)
+  }
+
+  return { sdkInt: probe.sdkInt, dataSources: probe.dataSources, supported, unsupported }
+}
+
+/**
+ * 못 재는 지표가 산출물에서 **정직하게** 보고되는지. 값이 없는 것과 값이 0 인 것은 다르다.
+ * 이유를 안 달고 사라지면 소비자는 "0 이었다" 로 읽는다.
+ */
+export function expectHonestlyUnsupported(
+  metric: { status: string; data: unknown; reason_code: string | null } | undefined,
+  id: string,
+  caps: DeviceCapability,
+): void {
+  expect(metric, `${id} 메트릭 자리가 없음`).toBeDefined()
+  expect(metric!.status, `${id}: 못 재는데 status 가 unsupported 가 아님`).toBe('unsupported')
+  expect(metric!.data, `${id}: 못 재는데 data 가 null 이 아님`).toBeNull()
+  expect(metric!.reason_code, `${id}: 못 재는데 사유가 없음`).not.toBeNull()
+  expect(caps.unsupported.get(id), `${id}: 사유 문장이 비어 있음`).toBeTruthy()
 }

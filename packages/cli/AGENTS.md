@@ -43,3 +43,24 @@ PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지> npm run test:d
 
 기기가 둘 이상이면 `PERFTRACKER_TEST_DEVICE` 가 없으면 11개가 전부 실패한다.
 대상 앱이 없으면 **조용히 건너뛰지 않고 실패한다** — 건너뛴 스펙은 통과한 스펙과 같은 색이다.
+
+### 못 재는 기기에서 실패시키지 않는다
+
+스펙은 **"이 기기가 다 잰다"** 가 아니라 **"이 도구가 이 기기에 대해 참말을 한다"** 를 본다.
+`doctor` 의 `requirement`(사람이 고쳐야 함) / `capability`(기기가 원래 그럼) 와 같은 선이다.
+
+판정은 `target.ts` 의 `deviceCapabilities()` 가 core 의 `collector.supports(env)` 를 그대로
+불러서 만든다 — **여기에 sdk 표를 다시 쓰지 말 것.** 표가 core 와 어긋나는 날 스펙이 틀린
+것을 통과시킨다.
+
+기기에 따라 갈리는 자리 (전부 core 의 상수로 가른다):
+
+| 자리 | 하한 | 없으면 |
+| --- | --- | --- |
+| `frame` | sdk 31 (`frametimeline`) | `unsupported` + 사유를 단언 |
+| `network` · `netstats`/`packages` 스냅샷 | sdk 34 | 스냅샷 파일 자체가 없는 것이 정상 |
+| **`cpu.app` · `measurement_overhead` 의 CPU 두 필드** | **sdk 35** (`PROCESS_RUNTIME_MIN_SDK`) | `null` 이어야 한다. 0 이면 없던 사실을 만든 것 |
+
+마지막 줄이 함정이다: `cpu` 는 **지원되는 지표인데도** 앱 자리가 비는 기기가 있다.
+`record_process_runtime` 이 perfetto v44 필드라 sdk 35 미만에는 없기 때문이고,
+`collectors/blocks.ts` 가 그 사실을 이미 적어 두고 있다.

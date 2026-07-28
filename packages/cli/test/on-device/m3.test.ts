@@ -15,7 +15,7 @@ import {
 import { runStart } from '../../src/commands/start.js'
 import { runStop } from '../../src/commands/stop.js'
 import { createContext } from '../../src/context.js'
-import { DEVICE_OPTS, DEVICE_TARGET_APP } from './target.js'
+import { DEVICE_OPTS, DEVICE_TARGET_APP, deviceCapabilities } from './target.js'
 
 /**
  * `mAppUidStatsMap` 표에서 uid 한 행을 **collector 와 무관하게** 다시 읽는다.
@@ -100,6 +100,7 @@ describe('M3 기기 통합', () => {
   })
 
   it('start → stop 이 thermal 과 network 를 내놓고 측정 창은 여전히 깨끗하다', async () => {
+    const caps = await deviceCapabilities()
     const out = mkdtempSync(join(tmpdir(), 'pt-m3-'))
     const ctx = await createContext(DEVICE_OPTS)
 
@@ -129,9 +130,18 @@ describe('M3 기기 통합', () => {
     // 측정 창 안으로 새어 들어간 것이다.
     expect(result.measurement_overhead.adb_commands_during_session).toBe(0)
 
-    // 스냅샷 원본이 전/후 짝으로 남아 있다. 파일 이름 규약(`raw/<key>_<phase>.txt`)이
-    // 바뀌거나 stop 이 종료 스냅샷을 안 찍으면 여기서 깨진다.
-    for (const key of ['thermalservice', 'netstats', 'packages']) {
+    /**
+     * 스냅샷 원본이 전/후 짝으로 남아 있다. 파일 이름 규약(`raw/<key>_<phase>.txt`)이
+     * 바뀌거나 stop 이 종료 스냅샷을 안 찍으면 여기서 깨진다.
+     *
+     * **못 재는 지표의 스냅샷은 찍지 않는다.** `netstats` / `packages` 는 network collector 가
+     * 요청하는 것이라, network 가 미지원인 기기(sdk 34 미만)에서는 그 파일이 없는 것이 정상이다.
+     * 예전에는 이 목록이 고정이라 SM-A405S 에서 `netstats_before.txt 없음` 으로 실패했는데,
+     * 그것은 도구가 **재지도 않을 것을 기기에 물어보지 않았다**는 뜻이라 오히려 옳은 동작이다.
+     */
+    const snapshotKeys = ['thermalservice']
+    if (caps.supported.has('network')) snapshotKeys.push('netstats', 'packages')
+    for (const key of snapshotKeys) {
       for (const phase of ['before', 'after']) {
         const rel = join('raw', `${key}_${phase}.txt`)
         expect(existsSync(join(active!.runDir, rel)), `${rel} 없음`).toBe(true)

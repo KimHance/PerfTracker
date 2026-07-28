@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   createAdbContext,
+  hasBlockingFailure,
   loadLabeledApps,
   parseForegroundPackage,
   resolveTargetApp,
@@ -20,10 +21,25 @@ const SYSTEM_APP = 'com.android.settings'
 
 /** 실기기가 필요하다. `npm run test:device` 로만 실행된다. */
 describe('M0 기기 통합', () => {
-  it('doctor 의 모든 항목이 통과한다', async () => {
+  /**
+   * **막힌 것이 없다**를 본다. "전부 통과" 가 아니다.
+   *
+   * `capability` 실패(이 기기가 원래 못 재는 것)까지 실패로 세면 SM-A405S 같은 기기에서
+   * 스펙이 늘 빨갛고, 그러면 나중에 생긴 **진짜** 결함도 같은 색이라 아무도 못 본다.
+   * 종료 코드를 가르는 기준이 `hasBlockingFailure` 이므로 스펙도 같은 선을 쓴다.
+   */
+  it('doctor 에 측정을 막는 항목이 없다', async () => {
     const checks = await runDoctor(DEVICE_OPTS)
-    const failed = checks.filter((c) => !c.ok)
-    expect(failed.map((c) => `${c.name}: ${c.detail}`)).toEqual([])
+
+    const blocking = checks.filter((c) => !c.ok && c.kind === 'requirement')
+    expect(blocking.map((c) => `${c.name}: ${c.detail}`)).toEqual([])
+    expect(hasBlockingFailure(checks)).toBe(false)
+
+    // 못 재는 항목이 있다면 **이유가 적혀 있어야** 한다. 이유 없이 ✗ 만 있으면
+    // 사용자는 고칠 수 있는 것인지 아닌지 판단할 수 없다.
+    for (const check of checks.filter((c) => !c.ok)) {
+      expect(check.detail, `${check.name}: 사유가 비어 있음`).not.toBe('')
+    }
   })
 
   it('앱 목록에서 라벨이 해석된다', async () => {

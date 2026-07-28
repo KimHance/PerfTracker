@@ -3,19 +3,18 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  createAdbContext,
   type CpuData,
+  PROCESS_RUNTIME_MIN_SDK,
   extractRun,
   type LogData,
   type MemoryData,
-  probeDevice,
   readActiveSession,
   type StartupData,
 } from '@perftracker/core'
 import { runStart } from '../../src/commands/start.js'
 import { runStop } from '../../src/commands/stop.js'
 import { createContext } from '../../src/context.js'
-import { DEVICE_OPTS, DEVICE_TARGET_APP } from './target.js'
+import { deviceCapabilities, DEVICE_OPTS, DEVICE_TARGET_APP, expectHonestlyUnsupported } from './target.js'
 
 /**
  * 실기기 또는 에뮬레이터가 필요하다. `npm run test:device` 로만 실행된다.
@@ -31,21 +30,30 @@ import { DEVICE_OPTS, DEVICE_TARGET_APP } from './target.js'
  */
 describe('M2 기기 통합', () => {
   it('M2 가 요구하는 데이터소스가 이 기기에 등록되어 있다', async () => {
-    const ctx = await createAdbContext(DEVICE_OPTS)
-    const probe = await probeDevice(ctx.adb)
+    const caps = await deviceCapabilities()
 
-    for (const name of [
-      'android.surfaceflinger.frametimeline',
-      'linux.process_stats',
-      'linux.sys_stats',
-      'linux.ftrace',
-      'android.log',
-    ]) {
-      expect(probe.dataSources, `${name} 미등록`).toContain(name)
+    /**
+     * 이 넷은 **sdk 와 무관하다.** cpu / memory / log 는 데이터소스 등록 여부만 보고,
+     * sdk 30 인 SM-A405S 에서도 셋 다 실제로 수집된다 (실측). 하나라도 없으면 회귀다.
+     */
+    for (const name of ['linux.process_stats', 'linux.sys_stats', 'linux.ftrace', 'android.log']) {
+      expect(caps.dataSources, `${name} 미등록`).toContain(name)
+    }
+
+    /**
+     * `frametimeline` 만 sdk 하한(31)이 있다. 이 기기가 frame 을 잰다고 판정됐으면 소스가
+     * 있어야 하고, 못 잰다고 판정됐으면 **왜 못 재는지 말해야** 한다 — 조용히 빠지는 것과
+     * 이유를 대는 것은 다르다.
+     */
+    if (caps.supported.has('frame')) {
+      expect(caps.dataSources, 'frametimeline 미등록').toContain('android.surfaceflinger.frametimeline')
+    } else {
+      expect(caps.unsupported.get('frame'), 'frame 이 미지원인데 사유가 없음').toMatch(/sdk|데이터소스/)
     }
   })
 
-  it('start → stop 이 M2 메트릭 다섯 개를 모두 내놓는다', async () => {
+  it('start → stop 이 M2 메트릭 다섯 개를 값이든 사유든 내놓는다', async () => {
+    const caps = await deviceCapabilities()
     const out = mkdtempSync(join(tmpdir(), 'pt-m2-'))
     const ctx = await createContext(DEVICE_OPTS)
 
@@ -80,10 +88,15 @@ describe('M2 기기 통합', () => {
     // 세션의 관측이었다. --launch 세션 11회 연속으로 대상 앱의 프레임이 잡혔다.)
     // 프레임 **수**는 단언하지 않는다 — 15초 세션에 4~9개라 통계적 의미는 실기기 몫이다.
     const frame = result.metrics.frame
-    expect(frame.status, `frame: ${frame.reason ?? ''}`).toMatch(/^(collected|partial)$/)
-    expect(frame.data, `frame: ${frame.reason ?? ''}`).not.toBeNull()
-    expect(frame.data!.process.startsWith(result.target_app.package)).toBe(true)
-    expect(frame.data!.total_frames).toBeGreaterThan(0)
+    if (caps.supported.has('frame')) {
+      expect(frame.status, `frame: ${frame.reason ?? ''}`).toMatch(/^(collected|partial)$/)
+      expect(frame.data, `frame: ${frame.reason ?? ''}`).not.toBeNull()
+      expect(frame.data!.process.startsWith(result.target_app.package)).toBe(true)
+      expect(frame.data!.total_frames).toBeGreaterThan(0)
+    } else {
+      // sdk 31 미만. 못 재는 것 자체는 기기의 성질이고, 스펙이 볼 것은 **정직하게 보고하는가** 다.
+      expectHonestlyUnsupported(frame, 'frame', caps)
+    }
 
     // Startup.
     //
@@ -130,15 +143,35 @@ describe('M2 기기 통합', () => {
     expect(cpuData.device_frequency, `cpu: ${cpu?.reason ?? ''}`).not.toBeNull()
     expect(cpuData.device_frequency!.length).toBeGreaterThan(0)
 
-    // CPU 앱 단위: **이 세션은 `--launch` 라 대상 앱이 반드시 떠 있다.** 그러니 앱 자리가
-    // null 이면 그건 회귀다 (기기 전역 값만 내던 옛 동작이 그 모양이었다).
-    expect(cpuData.app, `cpu: ${cpu?.reason ?? ''}`).not.toBeNull()
-    expect(cpuData.app!.process.startsWith(result.target_app.package)).toBe(true)
-    expect(cpuData.app!.total_ms).toBe(cpuData.app!.user_ms + cpuData.app!.kernel_ms)
-    // 한 프로세스가 기기 전체 CPU 시간보다 많이 쓸 수는 없다. 분모가 벽시계였다면
-    // (또는 코어 하나였다면) 이 상계가 성립하지 않는다.
-    expect(cpuData.app!.share_of_device_cpu_pct).toBeGreaterThanOrEqual(0)
-    expect(cpuData.app!.share_of_device_cpu_pct).toBeLessThanOrEqual(100)
+    /**
+     * CPU **앱 단위**는 지표 지원 여부와 별개의 하한을 갖는다.
+     *
+     * 앱별 CPU 시간은 트레이스의 `runtime.user_ns` / `runtime.kernel_ns` 카운터에서 나오고,
+     * 그 카운터는 process_stats 의 `record_process_runtime` 을 켜야 찍힌다. 그런데 그 필드는
+     * perfetto v44 에 들어와서 **sdk 35 미만 기기에는 존재하지 않는다** — 넣으면 기기가
+     * config 전체를 거부하므로 `processStatsBlock` 이 sdk 로 가른다 (`PROCESS_RUNTIME_MIN_SDK`).
+     *
+     * 그래서 sdk 30 인 SM-A405S 에서 `cpu` 는 **지원되는 지표**이면서도 앱 자리는 비어 있다.
+     * 스펙이 볼 것은 "값이 있다" 가 아니라 **"기기 전역은 실었고 앱 자리는 0 으로 채우지
+     * 않았으며 왜 비었는지 말한다"** 이다.
+     */
+    if (caps.sdkInt >= PROCESS_RUNTIME_MIN_SDK) {
+      // 이 세션은 `--launch` 라 대상 앱이 반드시 떠 있다. 앱 자리가 null 이면 회귀다
+      // (기기 전역 값만 내던 옛 동작이 그 모양이었다).
+      expect(cpuData.app, `cpu: ${cpu?.reason ?? ''}`).not.toBeNull()
+      expect(cpuData.app!.process.startsWith(result.target_app.package)).toBe(true)
+      expect(cpuData.app!.total_ms).toBe(cpuData.app!.user_ms + cpuData.app!.kernel_ms)
+      // 한 프로세스가 기기 전체 CPU 시간보다 많이 쓸 수는 없다. 분모가 벽시계였다면
+      // (또는 코어 하나였다면) 이 상계가 성립하지 않는다.
+      expect(cpuData.app!.share_of_device_cpu_pct).toBeGreaterThanOrEqual(0)
+      expect(cpuData.app!.share_of_device_cpu_pct).toBeLessThanOrEqual(100)
+    } else {
+      expect(cpuData.app, 'sdk 35 미만인데 앱 단위 CPU 가 채워졌다').toBeNull()
+      // 비어 있는 이유를 말해야 한다 — 조용히 null 이면 소비자는 "안 썼다" 로 읽는다.
+      expect(cpu?.reason_code, 'cpu 앱 자리가 비었는데 사유가 없음').not.toBeNull()
+      // 기기 전역은 그대로 실린다. 앱을 못 쟀다고 전체를 버리지 않는다.
+      expect(cpuData.device_total_busy_pct).toBeGreaterThanOrEqual(0)
+    }
 
     // Memory: 앱 RSS 와 시스템 메모리 둘 다 나와야 한다.
     //
@@ -160,15 +193,29 @@ describe('M2 기기 통합', () => {
     expect(memData.system).not.toBeNull()
     expect(memData.system!.mem_total_kb).toBeGreaterThan(0)
 
-    // Overhead: 두 필드가 null 이 아니어야 한다. 크기는 보지 않는다 —
-    // runtime.* 는 10ms 단위라 짧은 세션에서 0 이 정당하다.
+    /**
+     * Overhead. 크기는 보지 않는다 — `runtime.*` 는 10ms 단위라 짧은 세션에서 0 이 정당하다.
+     *
+     * **CPU 두 필드는 앱 단위 CPU 와 같은 카운터에서 나온다** (`record_process_runtime`,
+     * sdk 35+). `collectors/blocks.ts` 가 그 사실을 이미 적어 두고 있다:
+     * "이 필드가 빠진 세션에서는 measurement_overhead 의 CPU 필드가 null 이 된다 —
+     *  null 은 '안 쟀다' 이고, 그것이 이 기기에서 참인 문장이다."
+     * RSS 는 다른 카운터라 sdk 와 무관하게 나온다.
+     */
     const o = result.measurement_overhead
-    expect(o.tracing_processes_cpu_time_ms).not.toBeNull()
-    expect(o.tracing_processes_cpu_time_ms).toBeGreaterThanOrEqual(0)
     expect(o.tracing_processes_peak_rss_kb).not.toBeNull()
     expect(o.tracing_processes_peak_rss_kb).toBeGreaterThan(0)
-    expect(o.tracing_processes_cpu_share_pct).not.toBeNull()
-    expect(o.tracing_processes_cpu_share_pct).toBeLessThan(100)
+
+    if (caps.sdkInt >= PROCESS_RUNTIME_MIN_SDK) {
+      expect(o.tracing_processes_cpu_time_ms).not.toBeNull()
+      expect(o.tracing_processes_cpu_time_ms).toBeGreaterThanOrEqual(0)
+      expect(o.tracing_processes_cpu_share_pct).not.toBeNull()
+      expect(o.tracing_processes_cpu_share_pct).toBeLessThan(100)
+    } else {
+      // 0 이 아니라 null 이어야 한다. 0 이면 "트레이싱이 CPU 를 안 썼다" 는 없던 사실이 된다.
+      expect(o.tracing_processes_cpu_time_ms, 'sdk 35 미만인데 0 으로 채워졌다').toBeNull()
+      expect(o.tracing_processes_cpu_share_pct, 'sdk 35 미만인데 0 으로 채워졌다').toBeNull()
+    }
 
     // Log: 이 에뮬레이터 이미지는 SELinux 가 logdr 를 막아 항상 비어 있다.
     // 그래서 "개수가 맞다" 가 아니라 "빈 것을 0 이라고 우기지 않는다" 를 검증한다.
@@ -189,9 +236,10 @@ describe('M2 기기 통합', () => {
       expect(logData.app!.total).toBeLessThan(logData.device_total)
     }
 
-    // **세 지표가 같은 프로세스를 가리킨다.** 이것이 `resolveAppProcess` 를 공유하는 이유이고,
-    // 어느 collector 하나가 자기만의 규칙으로 되돌아가면 여기서 깨진다.
-    expect(cpuData.app!.pid).toBe(memData.pid)
+    // **여러 지표가 같은 프로세스를 가리킨다.** 이것이 `resolveAppProcess` 를 공유하는
+    // 이유이고, 어느 collector 하나가 자기만의 규칙으로 되돌아가면 여기서 깨진다.
+    // (cpu 앱 자리는 sdk 35 미만에서 비어 있으므로 있을 때만 본다 — 위 주석 참조.)
+    if (cpuData.app != null) expect(cpuData.app.pid).toBe(memData.pid)
     if (logData?.app != null) expect(logData.app.pid).toBe(memData.pid)
   })
 
