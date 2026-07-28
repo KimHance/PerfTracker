@@ -7,6 +7,7 @@ import {
   listDeviceSummaries,
   loadLabeledApps,
   PerfTrackerError,
+  listActiveSessions,
   readActiveSession,
   removeMark,
   resolveTargetApp,
@@ -18,6 +19,7 @@ import {
   beginStart,
 } from '@perftracker/core'
 import type {
+  ActiveSessionView,
   AppView,
   DeviceView,
   DoctorCheckView,
@@ -54,11 +56,31 @@ export class GuiApi {
   env(): EnvView {
     try {
       const { located } = createBaseAdb({ adb: this.opts.adb })
-      return { version: this.opts.version, adbPath: located.path }
+      return { version: this.opts.version, adbPath: located.path, outDir: this.opts.outDir }
     } catch {
       // adb 를 못 찾은 것은 화면이 알아야 할 사실이다. 서버가 죽을 이유는 아니다.
-      return { version: this.opts.version, adbPath: null }
+      return { version: this.opts.version, adbPath: null, outDir: this.opts.outDir }
     }
+  }
+
+  /**
+   * 진행 중인 세션 전부. **기기에 접촉하지 않는다** — 활성 세션 포인터 파일만 읽는다.
+   * 그래서 측정 중에 몇 초마다 불러도 규칙 1 을 깨지 않는다.
+   *
+   * GUI 가 연 세션과 CLI 가 연 세션을 구분하지 않는다. 같은 파일이 정본이기 때문이다.
+   */
+  async sessions(): Promise<ActiveSessionView[]> {
+    return (await listActiveSessions()).map((s) => ({
+      id: s.id,
+      name: s.name,
+      serial: s.serial,
+      packageName: s.packageName,
+      runDir: s.runDir,
+      startedAt: s.startedAt,
+      launch: s.options.launch,
+      marks: sortedMarks(s).map((m) => ({ offsetMs: m.offsetMs, label: m.label })),
+      unsupported: s.unsupported ?? [],
+    }))
   }
 
   async doctor(serial: string | null): Promise<DoctorCheckView[]> {
@@ -102,7 +124,8 @@ export class GuiApi {
     const session = await startSession(ctx, app, {
       ...(req.name !== null ? { name: req.name } : {}),
       launch: req.launch,
-      outDir: req.outDir === '' ? this.opts.outDir : req.outDir,
+      // 저장 위치는 서버만 정한다 — 브라우저가 보내던 값을 없앤 이유는 계약의 주석에 있다.
+      outDir: this.opts.outDir,
       force: req.force,
       now,
     })

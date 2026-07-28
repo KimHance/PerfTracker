@@ -1,5 +1,6 @@
 import {
   API,
+  type ActiveSessionView,
   type ApiErrorBody,
   type AppView,
   type DeviceView,
@@ -37,6 +38,7 @@ export function createHttpClient(): ApiClient {
     doctor: (serial) =>
       request<DoctorCheckView[]>(serial === null ? API.doctor : `${API.doctor}?device=${encodeURIComponent(serial)}`),
     devices: () => request<DeviceView[]>(API.devices),
+    sessions: () => request<ActiveSessionView[]>(API.sessions),
     apps: (serial) => request<AppView[]>(API.apps(serial)),
     start: (req: StartRequest) =>
       request<StartedSessionView>(API.start, { method: 'POST', body: JSON.stringify(req) }),

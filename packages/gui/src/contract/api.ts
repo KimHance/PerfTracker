@@ -17,6 +17,7 @@ export const API = {
   devices: '/api/devices',
   apps: (serial: string) => `/api/devices/${encodeURIComponent(serial)}/apps`,
   start: '/api/sessions',
+  sessions: '/api/sessions',
   stop: (serial: string) => `/api/sessions/${encodeURIComponent(serial)}/stop`,
   marks: (serial: string) => `/api/sessions/${encodeURIComponent(serial)}/marks`,
   mark: (serial: string, index: number) => `/api/sessions/${encodeURIComponent(serial)}/marks/${index}`,
@@ -31,6 +32,14 @@ export interface EnvView {
   version: string
   /** 찾아낸 adb 실행 파일 경로. 못 찾았으면 null. */
   adbPath: string | null
+  /**
+   * 결과가 저장되는 디렉토리 (`perftracker gui -o` 로 정해진 값).
+   *
+   * **화면은 이 값을 표시만 하고 정하지 않는다.** 예전에는 브라우저가 `'runs'` 를 박아
+   * 보냈는데, `-o` 로 다른 곳을 지정하면 파일은 `runs/` 에 쌓이고 목록은 지정한 곳을 읽어서
+   * **측정은 성공했는데 기록이 하나도 안 보이는** 상태가 됐다. 정하는 곳은 하나여야 한다.
+   */
+  outDir: string
 }
 
 // ─── 기기 ──────────────────────────────────────────────────────────────────
@@ -120,7 +129,7 @@ export interface StartRequest {
   name: string | null
   launch: boolean
   force: boolean
-  outDir: string
+  // outDir 은 없다 — 서버가 `EnvView.outDir` 로 이미 알고 있다. 위 주석 참조.
 }
 
 export interface StartedSessionView {
@@ -151,6 +160,31 @@ export interface MarkView {
   /** 세션 시작으로부터의 경과(ms). 절대 시각이 아니라 경과인 것은 세션 사이 비교를 위해서다. */
   offsetMs: number
   label: string
+}
+
+/**
+ * **지금 기기에서 돌고 있는 세션.** 정본은 서버(활성 세션 포인터 파일)다.
+ *
+ * 왜 필요한가: 브라우저를 새로고침하면 화면의 탭 상태가 통째로 사라진다. 그런데 기기의
+ * 측정은 계속 돌고 있어서, 화면은 그 기기를 "다른 탭에서 측정 중" 으로 잠그면서도 정작
+ * 그 탭이 없어 **정지시킬 방법이 없는 막다른 길**이 됐다. 화면이 물어볼 곳이 필요하다.
+ *
+ * 덤으로 터미널에서 `perftracker start` 로 연 세션도 화면에 나타난다 — 같은 파일을 보므로
+ * GUI 가 연 것인지 CLI 가 연 것인지 구분하지 않는다.
+ */
+export interface ActiveSessionView {
+  id: string
+  name: string
+  serial: string
+  packageName: string
+  runDir: string
+  /** 세션 시작 시각(ISO). 경과 시간은 화면이 이것으로 이어서 센다 — 0 부터 다시 세지 않는다. */
+  startedAt: string
+  launch: boolean
+  /** 지금까지 쌓인 마킹. GUI 가 남긴 것과 `perftracker mark` 로 남긴 것이 함께 온다. */
+  marks: MarkView[]
+  /** 이 기기에서 못 재는 지표. `start` 때 확정된 사실을 그대로 들고 있다. */
+  unsupported: { id: string; reason: string }[]
 }
 
 // ─── 기록 ──────────────────────────────────────────────────────────────────

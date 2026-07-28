@@ -16,9 +16,10 @@ function spyApi(overrides: Partial<ApiClient> = {}): { api: ApiClient; calls: st
     }
 
   const api: ApiClient = {
-    env: note('env', { version: '0.1.0', adbPath: null }),
+    env: note('env', { version: '0.1.0', adbPath: null, outDir: 'runs' }),
     doctor: note('doctor', []),
     devices: note('devices', []),
+    sessions: note('sessions', []),
     apps: note('apps', []),
     start: note('start', {
       id: 's1',
@@ -139,7 +140,7 @@ describe('시작', () => {
     })
     const { dispatch, actions } = collector()
 
-    await startSession({ api, dispatch }, { ...newTab('t1'), serial: 'S1', packageName: 'com.x', name: '  ' })
+    await startSession({ api, dispatch }, { ...newTab('t1'), serial: 'S1', packageName: 'com.x', name: '  ' }, 'runs')
 
     expect(sent[0]?.name).toBeNull()
     // 경과 시간의 기준은 브라우저 시계가 아니라 서버가 준 시작 시각이다.
@@ -151,7 +152,7 @@ describe('시작', () => {
     const { api, calls } = spyApi()
     const { dispatch } = collector()
 
-    await startSession({ api, dispatch }, newTab('t1'))
+    await startSession({ api, dispatch }, newTab('t1'), 'runs')
 
     expect(calls).toEqual([])
   })
@@ -164,7 +165,7 @@ describe('시작', () => {
     })
     const { dispatch, actions } = collector()
 
-    await startSession({ api, dispatch }, { ...newTab('t1'), serial: 'S1', packageName: 'com.x' })
+    await startSession({ api, dispatch }, { ...newTab('t1'), serial: 'S1', packageName: 'com.x' }, 'runs')
 
     expect(actions.map((a) => a.type)).toContain('error/raised')
     // 실패했는데 측정 중 화면으로 넘어가면 있지도 않은 세션의 타이머가 돈다.

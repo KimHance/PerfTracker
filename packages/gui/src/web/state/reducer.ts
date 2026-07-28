@@ -1,3 +1,4 @@
+import type { ActiveSessionView } from '../../contract/api.js'
 import type { Action } from './actions.js'
 import { type AppState, CLI_LOG_LIMIT, type Tab, newTab } from './model.js'
 
@@ -24,6 +25,83 @@ function resetAfterStop(tab: Tab): Tab {
     marks: [],
     markDraft: '',
   }
+}
+
+/** 아직 아무것도 고르지 않은 빈 탭. 세션을 되살릴 때 새 탭을 만드는 대신 이 자리를 쓴다. */
+function isPristine(tab: Tab): boolean {
+  return (
+    tab.phase === 'setup' &&
+    tab.serial === null &&
+    tab.packageName === null &&
+    tab.name.trim() === '' &&
+    tab.marks.length === 0
+  )
+}
+
+function tabFromSession(key: string, session: ActiveSessionView): Tab {
+  return {
+    ...newTab(key),
+    name: session.name,
+    serial: session.serial,
+    packageName: session.packageName,
+    launch: session.launch,
+    phase: 'running',
+    // 경과는 **서버가 준 시작 시각**부터 이어서 센다. 0 부터 다시 세면 새로고침 한 번에
+    // 그 세션의 길이가 화면에서 거짓이 된다.
+    startedAt: Date.parse(session.startedAt),
+    sessionId: session.id,
+    unsupported: session.unsupported,
+    marks: session.marks,
+  }
+}
+
+/**
+ * 화면의 측정 중 탭을 **서버가 아는 세션 목록에 맞춘다.**
+ *
+ * 세 가지를 한 번에 한다:
+ *   1. 서버에는 있는데 화면에 없는 세션 → 탭을 되살린다 (새로고침 복구, CLI 로 연 세션 표시)
+ *   2. 화면에는 측정 중인데 서버에 없는 세션 → 밖에서 끝났다. 탭을 설정 화면으로 되돌린다
+ *   3. 둘 다 있는 세션 → 마킹을 갱신한다 (`perftracker mark` 로 남긴 것이 여기서 들어온다)
+ *
+ * 몇 초마다 불리므로 **여러 번 불려도 결과가 같아야 한다** — 기기(serial)로 짝을 맞추는
+ * 이유가 그것이다. 탭을 새로 만드는 판단은 짝이 없을 때만 한다.
+ */
+function syncSessions(state: AppState, sessions: ActiveSessionView[]): AppState {
+  const bySerial = new Map(sessions.map((s) => [s.serial, s]))
+  const matched = new Set<string>()
+
+  let tabs = state.tabs.map((tab) => {
+    if (tab.serial !== null && bySerial.has(tab.serial)) {
+      const session = bySerial.get(tab.serial)!
+      matched.add(tab.serial)
+      if (tab.phase === 'running') {
+        return { ...tab, marks: session.marks, unsupported: session.unsupported }
+      }
+      // 설정 화면인데 그 기기에 세션이 있다 = 이 탭이 잃어버린 세션이다. 되살린다.
+      return tabFromSession(tab.key, session)
+    }
+    // 측정 중이었는데 서버에 없다 = 밖에서 끝났거나 버려졌다.
+    if (tab.phase === 'running') {
+      return { ...tab, phase: 'setup' as const, startedAt: null, sessionId: null, marks: [], unsupported: [] }
+    }
+    return tab
+  })
+
+  let seq = 0
+  for (const session of sessions) {
+    if (matched.has(session.serial)) continue
+    const key = `s-${session.id}-${seq++}`
+    const pristine = tabs.findIndex(isPristine)
+    // 빈 탭이 있으면 그 자리를 쓴다 — 새로고침 직후처럼 탭이 하나뿐일 때 유령 탭이 남지 않게.
+    if (pristine >= 0) tabs = tabs.map((t, i) => (i === pristine ? tabFromSession(t.key, session) : t))
+    else tabs = [...tabs, tabFromSession(key, session)]
+  }
+
+  const activeTabKey = tabs.some((t) => t.key === state.activeTabKey)
+    ? state.activeTabKey
+    : (tabs[0]?.key ?? state.activeTabKey)
+
+  return { ...state, tabs, activeTabKey }
 }
 
 export function reducer(state: AppState, action: Action): AppState {
@@ -70,6 +148,9 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'tab/patched':
       return patchTab(state, action.key, action.patch)
 
+    case 'sessions/loaded':
+      return syncSessions(state, action.sessions)
+
     case 'marks/loaded':
       // 초안도 함께 비운다 — 서버가 받아들였다는 뜻이므로 입력칸에 남아 있을 이유가 없다.
       return patchTab(state, action.tabKey, { marks: action.marks, markDraft: '' })
@@ -80,6 +161,7 @@ export function reducer(state: AppState, action: Action): AppState {
         sessionId: action.sessionId,
         name: action.name,
         startedAt: action.startedAt,
+        unsupported: action.unsupported,
         marks: [],
         markDraft: '',
       })

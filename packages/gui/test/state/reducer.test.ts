@@ -63,7 +63,7 @@ describe('세션 정지', () => {
       key,
       patch: { serial: 'S1', packageName: 'com.x', name: '홈 스크롤', launch: false, force: true },
     })
-    return apply(state, { type: 'session/started', tabKey: key, sessionId: 'a', name: '홈 스크롤', startedAt: 1000 })
+    return apply(state, { type: 'session/started', tabKey: key, sessionId: 'a', name: '홈 스크롤', startedAt: 1000, unsupported: [] })
   }
 
   it('기기와 --launch/--force 는 남고 앱·이름·마킹은 비워진다', () => {
@@ -89,7 +89,7 @@ describe('세션 정지', () => {
 
     // 늦게 끝난 세션이 먼저 도착하고, 먼저 시작된 세션이 뒤에 도착하는 순서를 만든다.
     state = apply(state, { type: 'session/stopped', tabKey: key, run: run('late', '2026-07-27T10:00:00') })
-    state = apply(state, { type: 'session/started', tabKey: key, sessionId: 'b', name: 'x', startedAt: 2000 })
+    state = apply(state, { type: 'session/started', tabKey: key, sessionId: 'b', name: 'x', startedAt: 2000, unsupported: [] })
     state = apply(state, { type: 'session/stopped', tabKey: key, run: run('early', '2026-07-27T09:00:00') })
 
     expect(state.runs.map((r) => r.id)).toEqual(['late', 'early'])
@@ -172,6 +172,6 @@ describe('기록', () => {
     expect(tab.launch).toBe(true)
     expect(tab.force).toBe(true)
     expect(tab.offline).toBe(false)
-    expect(tab.outDir).toBe('runs')
+    // 저장 위치는 탭이 들고 있지 않다 — 서버가 정하고 화면은 env 로 받아 표시만 한다.
   })
 })

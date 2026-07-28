@@ -79,6 +79,7 @@ const ROUTES: Route[] = [
     handle: (api, _req, _p, url) => api.doctor(url.searchParams.get('device')),
   },
   { method: 'GET', pattern: /^\/api\/devices$/, handle: (api) => api.devices() },
+  { method: 'GET', pattern: /^\/api\/sessions$/, handle: (api) => api.sessions() },
   { method: 'GET', pattern: /^\/api\/devices\/([^/]+)\/apps$/, handle: (api, _r, p) => api.apps(decode(p[0])) },
   {
     method: 'POST',

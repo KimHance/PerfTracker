@@ -29,12 +29,22 @@ function relativeTo(absolute: string): string {
   return relativePath(process.cwd(), absolute)
 }
 
+/** 끝난 run — `stop` 이 `endedAt` 을 쓴 상태. */
 async function makeRun(dir: string, id: string, at: string, name = id): Promise<void> {
+  await writeSession(dir, { id, name, startedAt: at, endedAt: at })
+}
+
+/** 아직 끝나지 않은 run — `start` 가 디렉토리만 만든 상태. */
+async function makeRunningRun(dir: string, id: string, at: string): Promise<void> {
+  await writeSession(dir, { id, name: id, startedAt: at })
+}
+
+async function writeSession(dir: string, extra: Record<string, unknown>): Promise<void> {
   const runDir = join(out, dir)
   await mkdir(runDir, { recursive: true })
   await writeFile(
     join(runDir, 'session.json'),
-    JSON.stringify({ version: 1, id, name, serial: 'S1', packageName: 'com.x', startedAt: at }),
+    JSON.stringify({ version: 1, serial: 'S1', packageName: 'com.x', ...extra }),
     'utf8',
   )
 }
@@ -66,15 +76,29 @@ describe('기록', () => {
     expect(runs.map((r) => r.id)).toEqual(['bbb', 'ccc', 'aaa'])
   })
 
-  it('result.json 이 없는 run 도 감추지 않는다', async () => {
-    // 정지는 됐는데 산출이 실패한 run 이다. 목록에서 사라지면 사용자가 extract 를 돌릴
-    // 대상을 찾지 못한다.
+  it('정지는 됐는데 산출이 실패한 run 은 감추지 않는다', async () => {
+    // 목록에서 사라지면 사용자가 extract 를 돌릴 대상을 찾지 못한다.
     await makeRun('a', 'aaa', '2026-07-27T10:00:00')
 
     const runs = (await (await fetch(`${server.url}/api/runs`)).json()) as RunView[]
 
     expect(runs).toHaveLength(1)
     expect(runs[0]!.markCount).toBe(0)
+  })
+
+  it('아직 끝나지 않은 세션은 기록이 아니다', async () => {
+    /**
+     * `start` 가 run 디렉토리를 먼저 만들기 때문에, 그냥 훑으면 **지금 돌고 있는 세션**이
+     * `길이 0ms · 경고 0` 인 완료된 기록처럼 목록에 뜬다 (실기기에서 실제로 그랬다).
+     * 그 0 들은 "재 봤더니 없었다" 가 아니라 "아직 안 끝났다" 이고, 그것을 0 으로 적는 것이
+     * 이 저장소가 금지하는 거짓 청정 신호다.
+     */
+    await makeRunningRun('running', 'run1', '2026-07-27T10:00:00')
+    await makeRun('done', 'done1', '2026-07-27T09:00:00')
+
+    const runs = (await (await fetch(`${server.url}/api/runs`)).json()) as RunView[]
+
+    expect(runs.map((r) => r.id)).toEqual(['done1'])
   })
 
   it('이름을 바꿔도 디렉토리 경로는 그대로다', async () => {

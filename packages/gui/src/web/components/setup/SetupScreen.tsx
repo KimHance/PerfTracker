@@ -14,7 +14,7 @@ import { SessionSection } from './SessionSection.jsx'
  * 좌단은 기기·지표, 우단은 앱·세션이지만 그것은 폭이 넓을 때의 결과일 뿐 순서는 01→04 다.
  */
 export function SetupScreen({ tab }: { tab: Tab }) {
-  const { deps } = useStore()
+  const { state, deps } = useStore()
 
   return (
     <>
@@ -31,12 +31,12 @@ export function SetupScreen({ tab }: { tab: Tab }) {
 
       <div className="startbar">
         {/* 실행될 명령을 그대로 보여 준다 — 사람이 그 줄을 복사해 터미널에서 재현할 수 있어야 한다. */}
-        <span className="startbar-command">$ {startCommand(tab)}</span>
+        <span className="startbar-command">$ {startCommand(tab, state.env.outDir)}</span>
         <button
           className="btn btn-primary btn-lg blueprint"
           style={{ minWidth: 150 }}
           disabled={!canStart(tab)}
-          onClick={() => void startSession(deps, tab)}
+          onClick={() => void startSession(deps, tab, state.env.outDir)}
         >
           측정 시작
           <BlueprintCorners />

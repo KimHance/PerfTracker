@@ -39,19 +39,26 @@ describe('기록 시각', () => {
 describe('실행될 명령', () => {
   it('아직 고르지 않은 자리는 <미선택> 으로 남는다', () => {
     // 사람이 그 줄을 복사해 터미널에서 재현할 수 있어야 하고, 빈칸은 재현되지 않는다.
-    expect(startCommand(newTab('t'))).toBe(
+    expect(startCommand(newTab('t'), 'runs')).toBe(
       'npx perftracker start --app "<미선택>" -d <미선택> --launch --force -o runs',
     )
   })
 
+  it('저장 위치는 서버가 준 값을 그대로 찍는다', () => {
+    // 화면이 자기 값을 들고 있으면 여기 찍히는 -o 와 실제 저장 위치가 어긋난다.
+    // 그게 정확히 예전 결함이었다: 로그에는 `-o runs` 인데 서버는 다른 곳을 봤다.
+    const tab = { ...newTab('t'), serial: 'S1', packageName: 'com.x' }
+    expect(startCommand(tab, '/tmp/내결과')).toContain('-o /tmp/내결과')
+  })
+
   it('이름이 비면 --name 을 붙이지 않는다', () => {
     const tab = { ...newTab('t'), serial: 'S1', packageName: 'com.x', name: '   ' }
-    expect(startCommand(tab)).not.toContain('--name')
+    expect(startCommand(tab, 'runs')).not.toContain('--name')
   })
 
   it('끈 플래그는 나타나지 않는다', () => {
     const tab = { ...newTab('t'), serial: 'S1', packageName: 'com.x', launch: false, force: false }
-    const command = startCommand(tab)
+    const command = startCommand(tab, 'runs')
     expect(command).not.toContain('--launch')
     expect(command).not.toContain('--force')
   })

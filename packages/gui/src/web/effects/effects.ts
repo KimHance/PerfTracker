@@ -54,15 +54,46 @@ async function withLoading<T>(
 
 // ─── 조회 ──────────────────────────────────────────────────────────────────
 
-/** 첫 화면. 오버레이 없이 조용히 채운다 — 아직 사람이 기다리고 있는 동작이 아니다. */
+/**
+ * 첫 화면. 오버레이 없이 조용히 채운다 — 아직 사람이 기다리고 있는 동작이 아니다.
+ *
+ * **진행 중인 세션도 함께 묻는다.** 이것이 없으면 브라우저를 새로고침한 순간 측정 중이던
+ * 세션이 화면에서 사라지고, 기기는 "다른 탭에서 측정 중" 으로 잠긴 채 그 탭이 존재하지 않는
+ * 막다른 길이 된다 (터미널로만 탈출 가능했다).
+ */
 export async function bootstrap(deps: EffectDeps): Promise<void> {
   try {
-    const [env, devices, runs] = await Promise.all([deps.api.env(), deps.api.devices(), deps.api.runs()])
+    const [env, devices, runs, sessions] = await Promise.all([
+      deps.api.env(),
+      deps.api.devices(),
+      deps.api.runs(),
+      deps.api.sessions(),
+    ])
     deps.dispatch({ type: 'env/loaded', env })
     deps.dispatch({ type: 'devices/loaded', devices })
     deps.dispatch({ type: 'runs/loaded', runs })
+    deps.dispatch({ type: 'sessions/loaded', sessions })
   } catch (e) {
     deps.dispatch({ type: 'error/raised', message: e instanceof Error ? e.message : String(e) })
+  }
+}
+
+/**
+ * 측정 중일 때 주기적으로 부른다. **기기에 접촉하지 않는다** — 서버가 활성 세션 포인터
+ * 파일만 읽으므로 측정에 영향이 없다.
+ *
+ * 이걸로 세 가지가 한 번에 맞춰진다:
+ *   - `perftracker mark` 로 터미널에서 남긴 마킹이 화면에 나타난다
+ *   - 터미널에서 `stop` 으로 끝낸 세션의 탭이 접힌다
+ *   - 다른 창에서 연 세션이 나타난다
+ *
+ * 실패는 조용히 넘긴다 — 주기 작업이라 오류 배너를 띄우면 잠깐의 끊김에 화면이 시끄러워진다.
+ */
+export async function syncSessions(deps: EffectDeps): Promise<void> {
+  try {
+    deps.dispatch({ type: 'sessions/loaded', sessions: await deps.api.sessions() })
+  } catch {
+    // 다음 주기에 다시 시도한다.
   }
 }
 
@@ -105,7 +136,7 @@ export async function selectDevice(
 
 // ─── 세션 ──────────────────────────────────────────────────────────────────
 
-export async function startSession(deps: EffectDeps, tab: Tab): Promise<void> {
+export async function startSession(deps: EffectDeps, tab: Tab, outDir: string): Promise<void> {
   if (tab.serial === null || tab.packageName === null) return
 
   const req: StartRequest = {
@@ -114,13 +145,12 @@ export async function startSession(deps: EffectDeps, tab: Tab): Promise<void> {
     name: tab.name.trim() === '' ? null : tab.name.trim(),
     launch: tab.launch,
     force: tab.force,
-    outDir: tab.outDir,
   }
 
   const session = await withLoading(
     deps,
     '세션을 시작하고 트레이스를 켜고 있습니다',
-    startCommand(tab),
+    startCommand(tab, outDir),
     () => deps.api.start(req),
   )
   if (!session) return
@@ -130,6 +160,8 @@ export async function startSession(deps: EffectDeps, tab: Tab): Promise<void> {
     tabKey: tab.key,
     sessionId: session.id,
     name: session.name,
+    // 서버가 보내 주는데 화면이 버리던 값이다. 측정 중 화면에 그대로 띄운다.
+    unsupported: session.unsupported,
     // 경과 시간은 **서버가 준 시작 시각**에서 센다. 브라우저 시계를 쓰면 두 탭이 서로 다른
     // 기준으로 세고, 새로 고치면 경과가 0 으로 돌아간다.
     startedAt: Date.parse(session.startedAt),

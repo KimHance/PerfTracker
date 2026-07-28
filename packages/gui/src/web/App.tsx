@@ -8,7 +8,7 @@ import { LoadingOverlay } from './components/LoadingOverlay.jsx'
 import { RunningScreen } from './components/running/RunningScreen.jsx'
 import { SetupScreen } from './components/setup/SetupScreen.jsx'
 import { TabStrip } from './components/TabStrip.jsx'
-import { bootstrap } from './effects/effects.js'
+import { bootstrap, syncSessions } from './effects/effects.js'
 import { activeTab, needsClock } from './state/derive.js'
 import { useStore } from './state/StoreContext.jsx'
 
@@ -30,6 +30,19 @@ export function App({ mock = false }: { mock?: boolean }) {
     const id = setInterval(() => dispatch({ type: 'clock/ticked', now: Date.now() }), 500)
     return () => clearInterval(id)
   }, [clockRunning, dispatch])
+
+  useEffect(() => {
+    /**
+     * 측정 중에는 서버에 세션 상태를 되묻는다. **기기가 아니라 서버의 파일을 읽는 것**이라
+     * 측정에 영향이 없다 (규칙 1 은 기기 접촉을 금지하는 것이지 호스트 파일을 금지하지 않는다).
+     *
+     * 3초인 이유: 터미널에서 `perftracker mark` 를 친 사람이 화면을 봤을 때 "안 들어갔나?"
+     * 하고 다시 치지 않을 정도면 충분하다. 더 짧게 할 이유가 없다.
+     */
+    if (!clockRunning) return
+    const id = setInterval(() => void syncSessions(deps), 3000)
+    return () => clearInterval(id)
+  }, [clockRunning, deps])
 
   return (
     <div className="shell">

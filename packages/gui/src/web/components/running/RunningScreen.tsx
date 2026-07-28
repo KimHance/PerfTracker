@@ -36,6 +36,18 @@ export function RunningScreen({ tab }: { tab: Tab }) {
           {device?.model ?? '모델 미상'} ({tab.serial}) · 시작{' '}
           {tab.startedAt !== null ? formatClock(new Date(tab.startedAt)) : '-'}
         </div>
+        {/*
+          **이 기기에서 못 재는 지표를 측정 중에도 말한다.** 기기를 고를 때 02 섹션에서 이미
+          보여 주지만, 시작 버튼을 누른 뒤로는 아무 말도 하지 않았다 — 사람이 30초 조작하고
+          나서야 "프레임이 안 잡혔다" 를 아는 것은 측정을 한 번 더 하게 만드는 정보다.
+          세션을 막지는 않으므로 경고가 아니라 사실로 적는다.
+        */}
+        {tab.unsupported.length > 0 && (
+          <div className="running-unsupported">
+            ✗ 이 기기에서 못 재는 지표 {tab.unsupported.length}개 —{' '}
+            {tab.unsupported.map((u) => u.id).join(' · ')} (나머지는 정상 수집)
+          </div>
+        )}
       </div>
 
       {/*

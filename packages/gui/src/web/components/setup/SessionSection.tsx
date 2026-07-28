@@ -10,12 +10,12 @@ const OPTIONS: { key: 'launch' | 'force' | 'offline'; flag: string; desc: string
 ]
 
 export function SessionSection({ tab }: { tab: Tab }) {
-  const { dispatch } = useStore()
+  const { state, dispatch } = useStore()
   const patch = (p: Partial<Tab>): void => dispatch({ type: 'tab/patched', key: tab.key, patch: p })
 
   return (
     <section>
-      <SectionHead num="04" title="세션" aside={`-o ${tab.outDir}`} />
+      <SectionHead num="04" title="세션" aside={`-o ${state.env.outDir}`} />
 
       <div className="field" style={{ marginBottom: 'var(--space-4)' }}>
         <label htmlFor={`name-${tab.key}`}>세션 이름</label>

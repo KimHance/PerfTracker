@@ -1,5 +1,6 @@
 import {
   METRIC_ORDER,
+  type ActiveSessionView,
   type AppView,
   type DeviceView,
   type DoctorCheckView,
@@ -216,7 +217,11 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
   }
 
   return {
-    env: () => wait<EnvView>({ version: '0.1.0', adbPath: '~/Library/Android/sdk/platform-tools/adb (목업)' }),
+    env: () => wait<EnvView>({
+        version: '0.1.0',
+        adbPath: '~/Library/Android/sdk/platform-tools/adb (목업)',
+        outDir: 'runs (목업)',
+      }),
 
     doctor: (serial) =>
       wait<DoctorCheckView[]>([
@@ -230,6 +235,23 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
       ]),
 
     devices: () => wait(devices.map((d) => ({ ...d }))),
+
+    sessions: () =>
+      wait<ActiveSessionView[]>(
+        [...startedAtBySerial.entries()].map(([serial, startedAt]) => ({
+          id: `mock${serial}`,
+          name: `목업 세션 (${serial})`,
+          serial,
+          packageName: 'com.example.streaming.debug',
+          runDir: `runs/mock_${serial}`,
+          startedAt: new Date(startedAt).toISOString(),
+          launch: true,
+          marks: [...(marksBySerial.get(serial) ?? [])],
+          unsupported: (devices.find((d) => d.serial === serial)?.metrics ?? [])
+            .filter((m) => !m.ok)
+            .map((m) => ({ id: m.id, reason: m.reason })),
+        })),
+      ),
 
     apps: (serial) => {
       // serial 별로 다른 목록을 낼 이유가 없지만, 인자를 무시하면 "기기를 바꿔도 같은 목록"
@@ -263,7 +285,7 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
         id: `mock${String(seq).padStart(2, '0')}`,
         name: req.name ?? `세션-${seq}`,
         serial: req.serial,
-        runDir: `${req.outDir}/mock_${req.serial}_${seq}`,
+        runDir: `runs/mock_${req.serial}_${seq}`,
         startedAt: new Date().toISOString(),
         unsupported: (devices.find((d) => d.serial === req.serial)?.metrics ?? [])
           .filter((m) => !m.ok)
@@ -273,6 +295,7 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
 
     stop: (serial, _req: StopRequest) => {
       setMeasuring(serial, false)
+      startedAtBySerial.delete(serial)
       const device = devices.find((d) => d.serial === serial)
       const run: RunView = {
         id: `mock${String(seq).padStart(2, '0')}`,
@@ -296,6 +319,7 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
 
     abort: (serial) => {
       setMeasuring(serial, false)
+      startedAtBySerial.delete(serial)
       return wait(undefined)
     },
 

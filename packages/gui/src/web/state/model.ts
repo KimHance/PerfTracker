@@ -19,13 +19,18 @@ export interface Tab {
   launch: boolean
   force: boolean
   offline: boolean
-  outDir: string
   appQuery: string
   phase: TabPhase
   /** 측정 중일 때만 값이 있다 (epoch ms). */
   startedAt: number | null
   /** 서버가 준 세션 id — 정지할 때 쓴다. */
   sessionId: string | null
+  /**
+   * 이 기기에서 못 재는 지표. `start` 응답이 준 것을 그대로 들고 있다가 측정 중 화면에 띄운다.
+   * 예전에는 서버가 보내 주는데도 화면이 버렸다 — 사람이 30초 조작하고 나서야
+   * "프레임이 안 잡혔다" 를 아는 것은 측정을 한 번 더 하게 만드는 정보다.
+   */
+  unsupported: { id: string; reason: string }[]
   /**
    * 서버가 준 마킹 목록의 사본. **시간순(오름차순)이다** — 화면이 최신순으로 그릴 뿐이다.
    * 삭제할 때 쓰는 인덱스가 서버의 인덱스와 같아야 하므로 순서를 여기서 바꾸지 않는다.
@@ -53,7 +58,8 @@ export interface CliLogEntry {
 }
 
 export interface AppState {
-  env: { version: string; adbPath: string | null }
+  /** 서버가 알려 준 환경. **화면은 이것을 표시만 하고 정하지 않는다** (특히 `outDir`). */
+  env: { version: string; adbPath: string | null; outDir: string }
   tabs: Tab[]
   activeTabKey: string
   devices: DeviceView[]
@@ -88,17 +94,19 @@ export function newTab(key: string, name = ''): Tab {
     launch: true,
     force: true,
     offline: false,
-    outDir: 'runs',
     appQuery: '',
     phase: 'setup',
     startedAt: null,
     sessionId: null,
+    unsupported: [],
     marks: [],
     markDraft: '',
   }
 }
 
-export function initialState(env: AppState['env'] = { version: '0.1.0', adbPath: null }): AppState {
+export function initialState(
+  env: AppState['env'] = { version: '0.1.0', adbPath: null, outDir: 'runs' },
+): AppState {
   const first = newTab('t1')
   return {
     env,

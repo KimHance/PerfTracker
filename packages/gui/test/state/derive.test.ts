@@ -16,7 +16,7 @@ describe('busySerials', () => {
     let state = initialState()
     state = apply(state, { type: 'tab/added', key: 't2' })
     state = apply(state, { type: 'tab/patched', key: 't1', patch: { serial: 'S1' } })
-    state = apply(state, { type: 'session/started', tabKey: 't1', sessionId: 'a', name: 'n', startedAt: 0 })
+    state = apply(state, { type: 'session/started', tabKey: 't1', sessionId: 'a', name: 'n', startedAt: 0, unsupported: [] })
 
     // 한 기기에 두 세션을 걸면 나중 것이 앞 것의 Perfetto 세션을 밀어낸다.
     expect(busySerials(state, 't2').has('S1')).toBe(true)
@@ -25,7 +25,7 @@ describe('busySerials', () => {
   it('자기 탭이 쓰는 기기는 점유로 세지 않는다', () => {
     let state = initialState()
     state = apply(state, { type: 'tab/patched', key: 't1', patch: { serial: 'S1' } })
-    state = apply(state, { type: 'session/started', tabKey: 't1', sessionId: 'a', name: 'n', startedAt: 0 })
+    state = apply(state, { type: 'session/started', tabKey: 't1', sessionId: 'a', name: 'n', startedAt: 0, unsupported: [] })
 
     expect(busySerials(state, 't1').has('S1')).toBe(false)
   })
@@ -81,7 +81,7 @@ describe('시계', () => {
     expect(needsClock(state)).toBe(false)
     expect(runningCount(state)).toBe(0)
 
-    const running = apply(state, { type: 'session/started', tabKey: 't1', sessionId: 'a', name: 'n', startedAt: 0 })
+    const running = apply(state, { type: 'session/started', tabKey: 't1', sessionId: 'a', name: 'n', startedAt: 0, unsupported: [] })
     expect(needsClock(running)).toBe(true)
   })
 })

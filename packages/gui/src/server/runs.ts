@@ -29,6 +29,7 @@ interface ResultFile {
     id?: string
     name?: string
     started_at?: string
+    ended_at?: string | null
     duration_ms?: number | null
     options?: { launch?: boolean }
     marks?: unknown[]
@@ -75,9 +76,25 @@ export async function listRuns(dir: string): Promise<RunView[]> {
     const startedAt = result?.session?.started_at ?? session.startedAt ?? null
     if (startedAt === null) continue
 
+    /**
+     * **끝나지 않은 세션은 기록이 아니다.**
+     *
+     * `start` 가 run 디렉토리를 먼저 만들기 때문에, 그냥 훑으면 **지금 돌고 있는 세션**이
+     * `길이 0ms · 경고 0 · 미지원 0` 인 완료된 기록처럼 목록에 뜬다 (실측). 그 0 들은
+     * "재 봤더니 없었다" 가 아니라 "아직 안 끝났다" 이고, 그것을 0 으로 적는 것이 정확히
+     * 이 저장소가 금지하는 거짓 청정 신호다.
+     *
+     * 기준은 `endedAt` 이다. `stop` 이 그것을 쓰므로:
+     *   - `endedAt` 있음, `result.json` 없음 → 정지는 됐고 산출만 실패. **보여준다**
+     *     (사용자가 `extract` 를 돌릴 대상을 찾아야 한다)
+     *   - `endedAt` 없음 → 진행 중이거나 `--force` 로 버려진 것. 기록이 아니다
+     *     (진행 중인 세션은 측정 중 화면이 이미 보여 주고 있다)
+     */
+    const endedAt = result?.session?.ended_at ?? session.endedAt ?? null
+    if (endedAt === null) continue
+
     const durationMs =
-      result?.session?.duration_ms ??
-      (session.endedAt !== undefined ? Date.parse(session.endedAt) - Date.parse(startedAt) : 0)
+      result?.session?.duration_ms ?? Date.parse(endedAt) - Date.parse(startedAt)
 
     runs.push({
       id: result?.session?.id ?? session.id ?? entry,

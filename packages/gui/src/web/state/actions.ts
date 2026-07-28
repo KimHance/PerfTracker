@@ -1,4 +1,11 @@
-import type { AppView, DeviceView, DoctorCheckView, MarkView, RunView } from '../../contract/api.js'
+import type {
+  ActiveSessionView,
+  AppView,
+  DeviceView,
+  DoctorCheckView,
+  MarkView,
+  RunView,
+} from '../../contract/api.js'
 import type { AppState, Confirm, Loading, Tab } from './model.js'
 
 /**
@@ -24,8 +31,20 @@ export type Action =
   // 마킹의 정본은 서버다. 화면은 부분 갱신하지 않고 서버가 준 목록으로 통째로 바꾼다 —
   // 두 벌을 각자 고치면 CLI 로 남긴 마킹과 어긋난다.
   | { type: 'marks/loaded'; tabKey: string; marks: MarkView[] }
+  /**
+   * 서버가 아는 **진행 중인 세션 전부**. 화면의 측정 중 탭을 여기에 맞춘다:
+   * 새로고침으로 잃어버린 탭을 되살리고, 밖에서 끝난 세션의 탭을 접고, 마킹을 갱신한다.
+   */
+  | { type: 'sessions/loaded'; sessions: ActiveSessionView[] }
   // 세션
-  | { type: 'session/started'; tabKey: string; sessionId: string; name: string; startedAt: number }
+  | {
+      type: 'session/started'
+      tabKey: string
+      sessionId: string
+      name: string
+      startedAt: number
+      unsupported: { id: string; reason: string }[]
+    }
   | { type: 'session/stopped'; tabKey: string; run: RunView | null }
   | { type: 'session/aborted'; tabKey: string }
   // 기록

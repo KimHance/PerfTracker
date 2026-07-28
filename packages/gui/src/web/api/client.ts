@@ -1,4 +1,5 @@
 import type {
+  ActiveSessionView,
   AppView,
   DeviceView,
   DoctorCheckView,
@@ -24,6 +25,8 @@ export interface ApiClient {
   env(): Promise<EnvView>
   doctor(serial: string | null): Promise<DoctorCheckView[]>
   devices(): Promise<DeviceView[]>
+  /** 지금 돌고 있는 세션 전부. 기기에 접촉하지 않으므로 측정 중에도 부를 수 있다. */
+  sessions(): Promise<ActiveSessionView[]>
   apps(serial: string): Promise<AppView[]>
   start(req: StartRequest): Promise<StartedSessionView>
   /** 측정 중 마킹. 서버 파일이 정본이라 매번 전체 목록을 돌려받는다. */
