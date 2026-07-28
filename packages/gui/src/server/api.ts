@@ -9,10 +9,12 @@ import {
   getAppDetail,
   listRuns,
   listDeviceSummaries,
+  metricSupportChecks,
   loadLabeledApps,
   PerfTrackerError,
   listActiveSessions,
   readActiveSession,
+  probeDevice,
   removeMark,
   renameRun,
   resolveTargetApp,
@@ -97,24 +99,31 @@ export class GuiApi {
   /**
    * 기기 목록 + 기기별 지표 판정.
    *
-   * 지표 판정을 얻으려면 기기마다 `doctor` 를 한 번씩 돌려야 한다 — 비싸 보이지만 이것이
-   * **판정의 출처를 하나로 유지하는 값**이다. 화면이 SDK 표를 들고 스스로 판단하면 그 표가
-   * core 와 어긋나는 날 "된다고 했는데 안 되는" 상태가 생긴다.
+   * **판정은 core 의 `metricSupportChecks` 를 그대로 부른다** — `doctor` 와 같은 함수다.
+   * 화면이 SDK 표를 들고 스스로 판단하면 그 표가 core 와 어긋나는 날 "된다고 했는데 안 되는"
+   * 상태가 생긴다. 출처는 하나여야 한다.
    *
-   * 측정 중인 기기는 건너뛴다: `doctor` 자체가 진행 중이면 프로브를 안 하고, 그 결과
-   * 지표 항목이 하나도 없어 `metrics` 는 빈 배열이 된다 — "전부 가능" 이 아니라 "모른다" 다.
+   * 한동안 기기마다 `doctor` 를 **통째로** 돌렸다. 판정 출처를 하나로 두려던 것인데, doctor 는
+   * adb 버전 확인·기기 목록·trace_processor 캐시 조회까지 하는 "환경 전체 점검" 이라
+   * 여기 필요한 것(sdk + 데이터소스)에 비해 훨씬 크다 — 기기 2대에 새로고침 한 번이 약 2초였다.
+   * 이제 `probeDevice` 만 부른다. 판정 함수는 그대로이므로 답은 같다.
+   *
+   * 측정 중인 기기는 프로브하지 않는다 (규칙 1). 그때 `metrics` 는 빈 배열이고,
+   * 그것은 "전부 가능" 이 아니라 **"모른다"** 다.
    */
   async devices(): Promise<DeviceView[]> {
+    const { adb } = createBaseAdb({ adb: this.opts.adb })
     const summaries = await listDeviceSummaries({ adb: this.opts.adb })
-    const views: DeviceView[] = []
-    for (const summary of summaries) {
-      const checks =
-        summary.state === 'device' && !summary.measurementInProgress
-          ? await runDoctor({ adb: this.opts.adb, device: summary.serial })
-          : []
-      views.push(toDeviceView(summary, toMetricViews(checks)))
-    }
-    return views
+
+    // 기기끼리 나란히 — `listDeviceSummaries` 와 같은 이유다 (기기 하나의 프로브가 ~150ms).
+    return Promise.all(
+      summaries.map(async (summary) => {
+        if (summary.state !== 'device' || summary.measurementInProgress) return toDeviceView(summary, [])
+        const probe = await probeDevice(adb.withSerial(summary.serial))
+        const checks = metricSupportChecks({ sdkInt: probe.sdkInt, dataSources: probe.dataSources })
+        return toDeviceView(summary, toMetricViews(checks))
+      }),
+    )
   }
 
   async apps(serial: string): Promise<AppView[]> {

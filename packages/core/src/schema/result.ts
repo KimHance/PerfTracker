@@ -1200,8 +1200,30 @@ export const ArtifactsSchema = z.object({
 })
 export type Artifacts = z.infer<typeof ArtifactsSchema>
 
+/**
+ * **이 파일만 받은 사람에게 어디를 봐야 하는지 알려 준다.**
+ *
+ * 필드의 함정은 전부 스키마의 `.describe()` 에 있는데, `result.json` 자체에는 `schema_version`
+ * 숫자만 있었다. 그래서 이 파일만 건네받은 소비자(특히 LLM)는 이런 결론을 낼 수 있었다:
+ * `adb_commands_during_session: 0` → "측정이 깨끗했다". 실제로는 "perftracker 가 아무것도
+ * 보내지 않았다" 일 뿐이고 다른 프로세스가 기기를 만졌는지는 이 도구가 모른다.
+ *
+ * 값이 상수인데도 파일에 싣는 이유가 그것이다 — 스키마를 **읽으러 가는 길**은 파일 안에
+ * 있어야 하고, 밖에 있으면 그 길을 모르는 사람이 함정을 그대로 밟는다.
+ */
+export const SCHEMA_HELP =
+  '필드의 뜻과 함정(특히 null 과 0 의 차이)은 `perftracker schema` 가 내는 JSON Schema 에 있습니다. ' +
+  '값을 해석하기 전에 그것부터 읽으세요.'
+
 export const ResultSchema = z.object({
   schema_version: z.string(),
+  schema_help: z
+    .string()
+    .optional()
+    .describe(
+      '이 파일을 해석하려면 무엇을 먼저 읽어야 하는지. **값은 항상 같다** — 안내이지 데이터가 아니다. ' +
+        'optional 인 것은 이 필드가 없던 시절의 result.json 을 그대로 읽기 위해서다.',
+    ),
   tool: z.object({ name: z.string(), version: z.string() }),
   session: SessionInfoSchema,
   device: z.object({

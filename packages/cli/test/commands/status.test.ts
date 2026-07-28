@@ -67,3 +67,53 @@ describe('runStatus — 기기에 접촉하지 않는다', () => {
     expect(await runStatus('NOPE', home)).toBe('실행 중인 세션이 없습니다.')
   })
 })
+
+describe('runStatus — 지금 알아야 할 것', () => {
+  it('누적 adb 위반 횟수를 보여준다', async () => {
+    /**
+     * 포인터에 이미 쌓여 있는데 보여주지 않아 왔다. 세션이 오염된 것을 `stop` 뒤
+     * `result.json` 을 열어야 아는 것은 그때까지의 조작을 통째로 버리게 만든다.
+     */
+    const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
+    await writeActiveSession(session({ adbCommandsDuringSession: 3 }), home)
+
+    const text = await runStatus(undefined, home)
+
+    expect(text).toContain('3번 차단')
+    expect(text).toContain('오염')
+  })
+
+  it('위반이 없으면 그 줄을 아예 안 낸다', async () => {
+    // "0회 위반" 은 정상이고, 정상을 매번 보고하면 진짜 신호가 묻힌다.
+    const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
+    await writeActiveSession(session(), home)
+
+    expect(await runStatus(undefined, home)).not.toContain('차단')
+  })
+
+  it('마킹 수와 마지막 마킹 시각을 보여준다', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
+    await writeActiveSession(
+      session({
+        marks: [
+          { offsetMs: 61_000, label: '스크롤' },
+          { offsetMs: 5_000, label: '진입' },
+        ],
+      }),
+      home,
+    )
+
+    const text = await runStatus(undefined, home)
+
+    // 저장 순서가 뒤집혀 있어도 "마지막" 은 시간순의 마지막이다.
+    expect(text).toContain('Marks     2개')
+    expect(text).toContain('01:01')
+  })
+
+  it('마킹이 없으면 그 줄도 없다', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
+    await writeActiveSession(session(), home)
+
+    expect(await runStatus(undefined, home)).not.toContain('Marks')
+  })
+})

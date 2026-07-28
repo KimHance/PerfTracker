@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import type { NetworkData, ThermalData } from '../../src/schema/result.js'
+import { SCHEMA_HELP, type NetworkData, type ThermalData } from '../../src/schema/result.js'
 import { CPU_TIMES_SQL } from '../../src/collectors/cpu/index.js'
 import { FRAME_PROCESS_SQL, frameSamplesSql } from '../../src/collectors/frame/index.js'
 import { SessionStateError } from '../../src/errors.js'
@@ -232,6 +232,18 @@ describe('extractRun', () => {
 
     const written = JSON.parse(readFileSync(join(runDir, 'result.json'), 'utf8')) as Record<string, unknown>
     expect(written['schema_version']).toBe('1.1.0')
+
+    /**
+     * **이 파일만 받은 사람에게 어디를 봐야 하는지 알려 준다.**
+     *
+     * 함정은 전부 스키마의 `.describe()` 에 있는데 `result.json` 에는 버전 숫자만 있었다.
+     * 그래서 이 파일만 건네받은 소비자(특히 LLM)는 `adb_commands_during_session: 0` 을 보고
+     * "측정이 깨끗했다" 고 결론낼 수 있었다 — 실제로는 "perftracker 가 안 보냈다" 일 뿐이다.
+     * 스키마를 읽으러 가는 길은 파일 **안**에 있어야 한다.
+     */
+    expect(written['schema_help']).toBe(SCHEMA_HELP)
+    expect(String(written['schema_help'])).toContain('perftracker schema')
+    expect(String(written['schema_help'])).toContain('null')
   })
 
   it('Android 12 미만이면 frame 을 unsupported 로 남긴다', async () => {

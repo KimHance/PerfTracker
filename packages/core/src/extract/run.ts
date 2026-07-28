@@ -24,6 +24,7 @@ import {
   type MetricStatus,
   type Result,
   ResultSchema,
+  SCHEMA_HELP,
   SCHEMA_VERSION,
 } from '../schema/result.js'
 import { type CaptureManifest, parseVersionedJson, readCaptureManifest } from '../session/manifest.js'
@@ -319,6 +320,7 @@ export async function extractRun(
 
   const result: Result = {
     schema_version: SCHEMA_VERSION,
+    schema_help: SCHEMA_HELP,
     tool: { name: 'perftracker', version: opts.toolVersion ?? '0.1.0' },
     session: {
       id: session.id,

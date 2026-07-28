@@ -84,6 +84,30 @@ describe('진단 명령은 측정 중인 기기를 건드리지 않는다', () =
   })
 })
 
+describe('여러 기기', () => {
+  it('나란히 훑어도 순서는 목록이 준 그대로다', async () => {
+    /**
+     * 기기 하나의 스펙 수집은 여러 왕복이라 기기 수만큼 곱하면 느려진다 (실측: 2대 순차
+     * 1,532ms — GUI 의 기기 목록 새로고침이 2초였던 것의 대부분). 그래서 나란히 훑는데,
+     * 그때 **순서가 흔들리면** 화면의 기기 목록이 새로고침할 때마다 뒤바뀐다.
+     * `Promise.all` 이 입력 순서를 지키는 것에 기대고 있고, 이 단언이 그 기대를 고정한다.
+     */
+    const { home } = tempDirs()
+    const r = new FakeProcessRunner()
+      .on('devices -l', {
+        stdout: `List of devices attached\nAAA\tdevice model:M1\nBBB\tunauthorized\nCCC\tdevice model:M3\n`,
+      })
+      .on('shell wm size', { stdout: 'Physical size: 1080x2340\n' })
+
+    const summaries = await listDeviceSummaries({ adb: process.execPath, runner: r, home })
+
+    expect(summaries.map((s) => s.serial)).toEqual(['AAA', 'BBB', 'CCC'])
+    // 쓸 수 없는 기기는 스펙을 조회하지 않는다 — 목록에서 감추지도 않는다.
+    expect(summaries[1]?.state).toBe('unauthorized')
+    expect(summaries[1]?.spec).toBeNull()
+  })
+})
+
 describe('metricSupportChecks — 기기가 못 재는 지표를 미리 말한다', () => {
   const A11 = { sdkInt: 30, dataSources: ['linux.process_stats', 'linux.sys_stats', 'android.log'] }
   const A16 = {

@@ -4,6 +4,7 @@ import {
   formatElapsed,
   listActiveSessions,
   readActiveSession,
+  sortedMarks,
 } from '@perftracker/core'
 
 /**
@@ -33,12 +34,36 @@ export async function runStatus(serial?: string, home?: string): Promise<string>
   if (session === null) return '실행 중인 세션이 없습니다.'
 
   const status = computeStatus(session, new Date())
+  const marks = sortedMarks(session)
+  const violations = session.adbCommandsDuringSession ?? 0
+
   const lines = [
     `Session   ${session.name}  (${session.id})`,
     `App       ${session.packageName}`,
     `Elapsed   ${formatElapsed(status.elapsedMs)}`,
     `Run dir   ${session.runDir}`,
   ]
+
+  // 마킹은 이 순간의 사실이고 세션이 끝나야 result.json 으로 간다.
+  if (marks.length > 0) {
+    lines.push(`Marks     ${marks.length}개 · 마지막 ${formatElapsed(marks[marks.length - 1]!.offsetMs)}`)
+  }
+
+  /**
+   * **누적 adb 위반 횟수.** 포인터에 이미 쌓여 있는데 보여주지 않아 왔다 — 거짓말은 아니지만,
+   * 세션이 이미 오염된 것을 `stop` 뒤 `result.json` 을 열어야 아는 것은 그때까지의 조작을
+   * 통째로 버리게 만든다. 지금 알면 지금 다시 시작할 수 있다.
+   *
+   * 0 은 감춘다: "0 회 위반" 은 정상이고, 정상을 매번 보고하면 진짜 신호가 묻힌다.
+   */
+  if (violations > 0) {
+    lines.push(
+      '',
+      `⚠ 측정 창 안에서 adb 호출이 ${violations}번 차단됐습니다. 이 세션의 데이터는 오염됐습니다.`,
+      `  차단됐으므로 기기에 나가지는 않았지만, 무언가가 측정 중에 기기를 만지려 했습니다.`,
+      `  다시 재려면 perftracker stop 후 start 하세요.`,
+    )
+  }
 
   if (status.durationExceeded) {
     lines.push(
