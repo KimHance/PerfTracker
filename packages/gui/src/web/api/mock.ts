@@ -4,6 +4,7 @@ import {
   type DeviceView,
   type DoctorCheckView,
   type EnvView,
+  type MarkView,
   type MetricSupportView,
   type RunView,
   type StartRequest,
@@ -89,18 +90,18 @@ const MOCK_DEVICES: DeviceView[] = [
 ]
 
 const MOCK_APPS: AppView[] = [
-  { label: 'Stream (debug)', packageName: 'com.example.streaming.debug', versionName: '2026.7.1' },
-  { label: 'Haze Sample', packageName: 'dev.chrisbanes.haze.sample', versionName: '1.6.10' },
-  { label: 'com.streamlive.blur.test', packageName: 'com.streamlive.blur.test', versionName: '0.1' },
-  { label: 'StreamingSDK', packageName: 'com.example.sdk.sample', versionName: '1.4.2' },
-  { label: 'Airbnb', packageName: 'com.airbnb.android', versionName: '26.30' },
-  { label: 'Compose Material Catalog', packageName: 'androidx.compose.material.catalog', versionName: '1.8.0' },
-  { label: 'Now in Android', packageName: 'com.google.samples.apps.nowinandroid', versionName: '0.1.2' },
-  { label: 'Instagram', packageName: 'com.instagram.android', versionName: '412.0' },
-  { label: 'Samsung Browser', packageName: 'com.sec.android.app.sbrowser', versionName: '28.0' },
-  { label: 'Google TV', packageName: 'com.google.android.videos', versionName: '4.41' },
-  { label: 'Calculator', packageName: 'com.sec.android.app.popupcalculator', versionName: '12.6' },
-  { label: 'Galaxy Wearable', packageName: 'com.samsung.android.app.watchmanager', versionName: '2.2.66' },
+  { label: 'Stream (debug)', packageName: 'com.example.streaming.debug', versionCode: 202671 },
+  { label: 'Haze Sample', packageName: 'dev.chrisbanes.haze.sample', versionCode: 1610 },
+  { label: 'com.streamlive.blur.test', packageName: 'com.streamlive.blur.test', versionCode: 1 },
+  { label: 'StreamingSDK', packageName: 'com.example.sdk.sample', versionCode: 142 },
+  { label: 'Airbnb', packageName: 'com.airbnb.android', versionCode: 2630 },
+  { label: 'Compose Material Catalog', packageName: 'androidx.compose.material.catalog', versionCode: 180 },
+  { label: 'Now in Android', packageName: 'com.google.samples.apps.nowinandroid', versionCode: 12 },
+  { label: 'Instagram', packageName: 'com.instagram.android', versionCode: 4120 },
+  { label: 'Samsung Browser', packageName: 'com.sec.android.app.sbrowser', versionCode: 280 },
+  { label: 'Google TV', packageName: 'com.google.android.videos', versionCode: 441 },
+  { label: 'Calculator', packageName: 'com.sec.android.app.popupcalculator', versionCode: 126 },
+  { label: 'Galaxy Wearable', packageName: 'com.samsung.android.app.watchmanager', versionCode: 2266 },
 ]
 
 const MOCK_RUNS: RunView[] = [
@@ -201,6 +202,9 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
   let devices = options.noDevices === true ? [] : MOCK_DEVICES.map((d) => ({ ...d }))
   let runs = MOCK_RUNS.map((r) => ({ ...r }))
   let seq = 0
+  // 실제 서버에서는 활성 세션 포인터 파일이 정본이다. 목업은 그 자리를 메모리로 흉내 낸다.
+  const marksBySerial = new Map<string, MarkView[]>()
+  const startedAtBySerial = new Map<string, number>()
 
   const wait = async <T>(value: T): Promise<T> => {
     await sleep(latency)
@@ -234,8 +238,26 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
       return wait(list.map((a) => ({ ...a })))
     },
 
+    marks: (serial) => wait([...(marksBySerial.get(serial) ?? [])]),
+
+    addMark: (serial, label) => {
+      const startedAt = startedAtBySerial.get(serial) ?? Date.now()
+      const marks = [...(marksBySerial.get(serial) ?? []), { offsetMs: Date.now() - startedAt, label }]
+      marksBySerial.set(serial, marks)
+      return wait([...marks])
+    },
+
+    removeMark: (serial, index) => {
+      const marks = [...(marksBySerial.get(serial) ?? [])]
+      marks.splice(index, 1)
+      marksBySerial.set(serial, marks)
+      return wait([...marks])
+    },
+
     start: (req: StartRequest) => {
       setMeasuring(req.serial, true)
+      marksBySerial.set(req.serial, [])
+      startedAtBySerial.set(req.serial, Date.now())
       seq += 1
       return wait<StartedSessionView>({
         id: `mock${String(seq).padStart(2, '0')}`,
@@ -249,7 +271,7 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
       })
     },
 
-    stop: (serial, req: StopRequest) => {
+    stop: (serial, _req: StopRequest) => {
       setMeasuring(serial, false)
       const device = devices.find((d) => d.serial === serial)
       const run: RunView = {
@@ -266,7 +288,7 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
         launch: true,
         unsupportedCount: (device?.metrics ?? []).filter((m) => !m.ok).length,
         warningCount: 1,
-        markCount: req.marks.length,
+        markCount: (marksBySerial.get(serial) ?? []).length,
       }
       runs = [run, ...runs]
       return wait(run)

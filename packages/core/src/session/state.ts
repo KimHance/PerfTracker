@@ -44,6 +44,14 @@ export interface ActiveSession {
    * 값이 하나도 없으면 빈 배열이다 — 이 필드가 없던 시절의 `session.json` 과 구분된다.
    */
   unsupported?: { id: string; reason: string }[]
+  /**
+   * 측정 중 사람이 남긴 마킹. **`stop` 이 이것을 `session.json` 에 쓰고 `extract` 가 읽는다.**
+   *
+   * 왜 세션 포인터가 아니라 여기(run 디렉토리의 session.json)에 실리는가: 마킹은 측정 창이
+   * 닫힌 뒤에야 도착한다 (측정 중에는 GUI 가 브라우저 안에만 들고 있다 — 규칙 1).
+   * CLI 세션은 마킹을 남길 경로가 없어 항상 비어 있다.
+   */
+  marks?: { offsetMs: number; label: string }[]
 }
 
 export function newSessionId(rng: () => Buffer = () => randomBytes(3)): string {

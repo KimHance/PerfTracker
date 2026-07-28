@@ -1,15 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "composite": false,
-    "declaration": false,
-    "noEmit": true,
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"],
-    "jsx": "react-jsx",
-    "module": "preserve",
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true
-  },
-  "include": ["src", "vite.config.ts"]
+  "compilerOptions": { "rootDir": "src", "outDir": "dist" },
+  "include": ["src/server", "src/contract"],
+  "references": [{ "path": "../core" }]
 }

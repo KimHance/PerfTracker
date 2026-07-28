@@ -1031,6 +1031,25 @@ export const TargetAppSchema = z.object({
 })
 export type TargetApp = z.infer<typeof TargetAppSchema>
 
+/**
+ * 측정 중 **사람이** 남긴 사건 하나. 도구가 관측한 것이 아니라 사람이 적은 것이다.
+ *
+ * 왜 필요한가: `metrics.*.timeline` 은 초 단위 시계열이지만 그 안의 어느 구간이 "홈 진입"
+ * 이고 어느 구간이 "스크롤" 인지는 데이터에 없다. 그 대응을 아는 것은 기기 앞에 있던
+ * 사람뿐이고, 그 사람이 그 순간에 적어 두지 않으면 다시는 복원되지 않는다.
+ *
+ * 절대 시각이 아니라 **세션 시작으로부터의 경과**인 것은 시계열과 같은 축에 놓기 위해서다 —
+ * `timeline[].second` 와 `offset_ms / 1000` 이 같은 0 을 기준으로 한다.
+ */
+export const MarkSchema = z.object({
+  offset_ms: z
+    .number()
+    .int()
+    .describe('세션 시작(session.started_at)으로부터의 경과(ms). timeline 의 second 와 같은 축이다.'),
+  label: z.string().describe('사람이 적은 이름. 이 도구는 내용을 해석하지 않는다.'),
+})
+export type Mark = z.infer<typeof MarkSchema>
+
 export const SessionInfoSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -1060,6 +1079,20 @@ export const SessionInfoSchema = z.object({
         '이 도구는 그것을 세션의 길이라고 부르지 않는다.',
     ),
   options: z.object({ launch: z.boolean() }),
+  /**
+   * `[]` 는 **"아무도 아무것도 적지 않았다"** 는 사실이다 (규칙 3 의 예외가 아니라 그 자체다).
+   * CLI 로 잰 세션은 마킹을 남길 방법이 없으므로 항상 비어 있고, GUI 세션만 값을 가진다.
+   *
+   * optional 인 것은 이 필드가 없던 시절의 run 디렉토리를 그대로 다시 산출하기 위해서다.
+   */
+  marks: z
+    .array(MarkSchema)
+    .optional()
+    .describe(
+      '측정 중 사람이 남긴 이벤트 라벨. 시간순(오름차순). ' +
+        '**도구가 관측한 것이 아니라 사람이 적은 것이다** — 정확도는 적은 사람의 손에 달려 있다. ' +
+        '빈 배열은 아무도 적지 않았다는 뜻이고, 필드 자체가 없으면 마킹 개념이 없던 시절의 문서다.',
+    ),
 })
 export type SessionInfo = z.infer<typeof SessionInfoSchema>
 

@@ -5,6 +5,7 @@ import {
   type DeviceView,
   type DoctorCheckView,
   type EnvView,
+  type MarkView,
   type RunView,
   type StartRequest,
   type StartedSessionView,
@@ -39,6 +40,10 @@ export function createHttpClient(): ApiClient {
     apps: (serial) => request<AppView[]>(API.apps(serial)),
     start: (req: StartRequest) =>
       request<StartedSessionView>(API.start, { method: 'POST', body: JSON.stringify(req) }),
+    marks: (serial) => request<MarkView[]>(API.marks(serial)),
+    addMark: (serial, label) =>
+      request<MarkView[]>(API.marks(serial), { method: 'POST', body: JSON.stringify({ label }) }),
+    removeMark: (serial, index) => request<MarkView[]>(API.mark(serial, index), { method: 'DELETE' }),
     stop: (serial, req: StopRequest) =>
       request<RunView>(API.stop(serial), { method: 'POST', body: JSON.stringify(req) }),
     abort: (serial) => request<void>(API.abort(serial), { method: 'DELETE' }),

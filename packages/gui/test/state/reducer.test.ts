@@ -69,7 +69,7 @@ describe('세션 정지', () => {
   it('기기와 --launch/--force 는 남고 앱·이름·마킹은 비워진다', () => {
     let state = started()
     const key = state.tabs[0]!.key
-    state = apply(state, { type: 'mark/added', tabKey: key, key: 'm1', label: '진입', offsetMs: 500 })
+    state = apply(state, { type: 'marks/loaded', tabKey: key, marks: [{ offsetMs: 500, label: '진입' }] })
 
     const next = apply(state, { type: 'session/stopped', tabKey: key, run: run('r1', '2026-07-27T10:00:00') })
     const tab = next.tabs[0]!
@@ -105,15 +105,23 @@ describe('세션 정지', () => {
 })
 
 describe('마킹', () => {
-  it('최신이 위로 오고 입력 초안이 비워진다', () => {
+  it('서버 목록을 그대로 싣고 입력 초안을 비운다', () => {
     let state = initialState()
     const key = state.tabs[0]!.key
     state = apply(state, { type: 'tab/patched', key, patch: { markDraft: '스크롤' } })
 
-    state = apply(state, { type: 'mark/added', tabKey: key, key: 'm1', label: '앱 진입', offsetMs: 100 })
-    state = apply(state, { type: 'mark/added', tabKey: key, key: 'm2', label: '스크롤', offsetMs: 900 })
+    state = apply(state, {
+      type: 'marks/loaded',
+      tabKey: key,
+      // 서버는 시간순으로 준다. 화면이 최신순으로 뒤집어 그릴 뿐 저장 순서는 건드리지 않는다 —
+      // 삭제에 쓰는 인덱스가 서버의 인덱스와 같아야 한다.
+      marks: [
+        { offsetMs: 100, label: '앱 진입' },
+        { offsetMs: 900, label: '스크롤' },
+      ],
+    })
 
-    expect(state.tabs[0]!.marks.map((m) => m.label)).toEqual(['스크롤', '앱 진입'])
+    expect(state.tabs[0]!.marks.map((m) => m.label)).toEqual(['앱 진입', '스크롤'])
     expect(state.tabs[0]!.markDraft).toBe('')
   })
 })

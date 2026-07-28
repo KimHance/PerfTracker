@@ -3,6 +3,7 @@ import type {
   DeviceView,
   DoctorCheckView,
   EnvView,
+  MarkView,
   RunView,
   StartRequest,
   StartedSessionView,
@@ -25,6 +26,10 @@ export interface ApiClient {
   devices(): Promise<DeviceView[]>
   apps(serial: string): Promise<AppView[]>
   start(req: StartRequest): Promise<StartedSessionView>
+  /** 측정 중 마킹. 서버 파일이 정본이라 매번 전체 목록을 돌려받는다. */
+  marks(serial: string): Promise<MarkView[]>
+  addMark(serial: string, label: string): Promise<MarkView[]>
+  removeMark(serial: string, index: number): Promise<MarkView[]>
   stop(serial: string, req: StopRequest): Promise<RunView>
   /** 측정 중인 세션을 기록 없이 버린다 (측정 중 탭 닫기). */
   abort(serial: string): Promise<void>

@@ -70,19 +70,9 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'tab/patched':
       return patchTab(state, action.key, action.patch)
 
-    case 'mark/added': {
-      const tab = state.tabs.find((t) => t.key === action.tabKey)
-      if (!tab) return state
-      // 최신이 위로 오게 앞에 붙인다 — 방금 남긴 마킹을 스크롤 없이 확인할 수 있어야 한다.
-      const marks = [{ key: action.key, label: action.label, offsetMs: action.offsetMs }, ...tab.marks]
-      return patchTab(state, action.tabKey, { marks, markDraft: '' })
-    }
-
-    case 'mark/removed': {
-      const tab = state.tabs.find((t) => t.key === action.tabKey)
-      if (!tab) return state
-      return patchTab(state, action.tabKey, { marks: tab.marks.filter((m) => m.key !== action.key) })
-    }
+    case 'marks/loaded':
+      // 초안도 함께 비운다 — 서버가 받아들였다는 뜻이므로 입력칸에 남아 있을 이유가 없다.
+      return patchTab(state, action.tabKey, { marks: action.marks, markDraft: '' })
 
     case 'session/started':
       return patchTab(state, action.tabKey, {

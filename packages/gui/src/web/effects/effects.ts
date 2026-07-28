@@ -146,13 +146,7 @@ export async function stopSession(deps: EffectDeps, tab: Tab): Promise<void> {
     deps,
     '트레이스를 회수하고 result.json 을 만들고 있습니다',
     stopCommand(tab),
-    () =>
-      deps.api.stop(tab.serial!, {
-        offline: tab.offline,
-        // 마킹은 측정 내내 브라우저와 서버 메모리에만 있었다. 여기서 처음 파일로 나간다 —
-        // 측정 중에 기기로 나간 것은 아무것도 없다.
-        marks: tab.marks.map((m) => ({ offsetMs: m.offsetMs, label: m.label })),
-      }),
+    () => deps.api.stop(tab.serial!, { offline: tab.offline }),
   )
 
   deps.dispatch({ type: 'session/stopped', tabKey: tab.key, run })
@@ -175,22 +169,39 @@ export async function abortSession(deps: EffectDeps, tab: Tab): Promise<void> {
 // ─── 마킹 ──────────────────────────────────────────────────────────────────
 
 /**
- * 마킹은 **기기에 나가지 않는다.** 브라우저 상태에 넣고 CLI 로그에 사람이 남긴 사건으로
- * 적을 뿐이다. 정지할 때 한 번에 서버로 보낸다.
+ * 마킹 하나를 남긴다.
+ *
+ * **기기에 나가는 명령은 없다.** 서버는 활성 세션 포인터(호스트의 파일)만 고친다 —
+ * core 의 `appendMark` 가 `AdbClient` 를 아예 받지 않는 것이 그 보증이다.
+ *
+ * 왜 브라우저에 들고 있지 않는가: 같은 세션에 `perftracker mark` 로 남긴 마킹과 어긋난다.
+ * 정본은 한 곳(포인터 파일)이고 화면은 그 사본을 그린다.
+ *
+ * 경과는 **서버가 계산한다.** 브라우저 시계로 계산하면 CLI 로 남긴 마킹과 기준이 달라진다.
+ * 로그에 찍는 경과는 화면이 보고 있던 값이라 표시용이고, 저장되는 값은 서버의 것이다.
  */
-export function addMark(deps: EffectDeps, tab: Tab, label: string, now: number): void {
+export async function addMark(deps: EffectDeps, tab: Tab, label: string, now: number): Promise<void> {
   const trimmed = label.trim()
-  if (trimmed === '' || tab.startedAt === null) return
+  if (trimmed === '' || tab.serial === null) return
 
-  const offsetMs = Math.max(0, now - tab.startedAt)
-  deps.dispatch({
-    type: 'mark/added',
-    tabKey: tab.key,
-    key: `${tab.key}-${offsetMs}-${tab.marks.length}`,
-    label: trimmed,
-    offsetMs,
-  })
-  log(deps, markCommand(trimmed, formatElapsed(offsetMs)))
+  log(deps, markCommand(trimmed, formatElapsed(tab.startedAt === null ? 0 : now - tab.startedAt)))
+  try {
+    const marks = await deps.api.addMark(tab.serial, trimmed)
+    deps.dispatch({ type: 'marks/loaded', tabKey: tab.key, marks })
+  } catch (e) {
+    deps.dispatch({ type: 'error/raised', message: e instanceof Error ? e.message : String(e) })
+  }
+}
+
+/** 마킹 하나를 지운다. 인덱스는 서버가 준 목록의 인덱스다. */
+export async function removeMark(deps: EffectDeps, tab: Tab, index: number): Promise<void> {
+  if (tab.serial === null) return
+  try {
+    const marks = await deps.api.removeMark(tab.serial, index)
+    deps.dispatch({ type: 'marks/loaded', tabKey: tab.key, marks })
+  } catch (e) {
+    deps.dispatch({ type: 'error/raised', message: e instanceof Error ? e.message : String(e) })
+  }
 }
 
 // ─── 기록 ──────────────────────────────────────────────────────────────────

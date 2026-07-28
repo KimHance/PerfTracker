@@ -2,6 +2,8 @@
 import { Command } from 'commander'
 import { hasBlockingFailure, listDeviceSummaries, loadLabeledApps, PerfTrackerError, runDoctor } from '@perftracker/core'
 import { formatApps } from './commands/apps.js'
+import { runGui } from './commands/gui.js'
+import { runMark } from './commands/mark.js'
 import { formatDoctor } from './commands/doctor.js'
 import { formatDevices } from './commands/devices.js'
 import { runExtract } from './commands/extract.js'
@@ -65,6 +67,27 @@ program
   .action(async (opts: { app?: string; name?: string; launch: boolean; out: string; force: boolean; device?: string }) => {
     const ctx = await createContext({ ...program.opts(), device: opts.device })
     console.log(await runStart(ctx, opts))
+  })
+
+program
+  .command('mark')
+  .description('측정 중인 세션에 마킹을 남긴다 (기기에 접촉하지 않음)')
+  .argument('<라벨>', '이벤트 이름 (예: "스크롤 시작")')
+  .option('-s, --session <id>', '세션 고유값. status 가 괄호 안에 보여 주는 값이다')
+  .option('-d, --device <serial>', '대상 기기 serial')
+  .action(async (label: string, opts: { session?: string; device?: string }) => {
+    // createContext 를 부르지 않는다 — 이 명령은 호스트의 파일만 고친다 (규칙 1).
+    console.log(await runMark(label, opts))
+  })
+
+program
+  .command('gui')
+  .description('로컬 웹 GUI 를 띄운다 (화면 + JSON API)')
+  .option('-p, --port <포트>', '고정 포트 (생략 시 빈 포트를 고른다)')
+  .option('-o, --out <dir>', '결과를 저장할 디렉토리', 'runs')
+  .option('--no-open', '브라우저를 자동으로 열지 않는다')
+  .action(async (opts: { port?: string; out: string; open: boolean }) => {
+    await runGui({ ...opts, ...program.opts() })
   })
 
 program

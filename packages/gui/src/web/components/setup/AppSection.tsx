@@ -65,8 +65,11 @@ export function AppSection({ tab }: { tab: Tab }) {
             >
               <span className="app-label">{app.label}</span>
               <span className="app-pkg">{app.packageName}</span>
-              {/* 버전을 못 읽었으면 빈칸이 아니라 `-` 다. 빈칸은 "버전이 없다" 로 읽힌다. */}
-              <span className="app-version">{app.versionName ?? '-'}</span>
+              {/* 못 읽었으면 빈칸이 아니라 `-` 다. 빈칸은 "버전이 없다" 로 읽힌다.
+                  versionCode 인 이유는 contract 의 AppView 주석에 있다. */}
+              <span className="app-version" title="versionCode">
+                {app.versionCode ?? '-'}
+              </span>
             </button>
           ))}
         </div>

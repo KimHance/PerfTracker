@@ -18,6 +18,8 @@ export const API = {
   apps: (serial: string) => `/api/devices/${encodeURIComponent(serial)}/apps`,
   start: '/api/sessions',
   stop: (serial: string) => `/api/sessions/${encodeURIComponent(serial)}/stop`,
+  marks: (serial: string) => `/api/sessions/${encodeURIComponent(serial)}/marks`,
+  mark: (serial: string, index: number) => `/api/sessions/${encodeURIComponent(serial)}/marks/${index}`,
   abort: (serial: string) => `/api/sessions/${encodeURIComponent(serial)}`,
   runs: '/api/runs',
   run: (id: string) => `/api/runs/${encodeURIComponent(id)}`,
@@ -89,7 +91,15 @@ export interface MetricSupportView {
 export interface AppView {
   packageName: string
   label: string
-  versionName: string | null
+  /**
+   * `pm list packages` 가 목록과 함께 주는 값이라 공짜다.
+   *
+   * **`versionName`("2026.7.1")이 아니라 `versionCode`(정수)인 이유:** 사람이 읽는 버전 이름은
+   * `dumpsys package <pkg>` 한 번을 앱마다 따로 불러야 나온다. 설치된 앱이 200개면 왕복 200번이고,
+   * CLI 의 `apps` 도 같은 이유로 그것을 하지 않는다. 대상 앱 하나가 정해진 뒤에는
+   * `result.json` 의 `target_app.version_name` 에 이름이 실린다 — 기록 목록이 보여 주는 것이 그것이다.
+   */
+  versionCode: number | null
 }
 
 // ─── 진단 ──────────────────────────────────────────────────────────────────
@@ -126,10 +136,17 @@ export interface StartedSessionView {
 
 export interface StopRequest {
   offline: boolean
-  /** 측정 중 사람이 남긴 마킹. 기기에 보내지 않고 result.json 에만 들어간다. */
-  marks: MarkView[]
 }
 
+/**
+ * 측정 중 사람이 남긴 마킹.
+ *
+ * **저장소는 브라우저가 아니라 서버(활성 세션 포인터 파일)다.** 브라우저에 들고 있으면
+ * 새로고침에 사라지고, 무엇보다 같은 세션에 `perftracker mark` 로 남긴 마킹을 GUI 가
+ * 정지할 때 덮어써 버린다. 두 입구가 같은 자리에 쓴다.
+ *
+ * 서버에 쓰는 것은 기기 접촉이 아니다 — core 의 `appendMark` 는 `AdbClient` 를 받지 않는다.
+ */
 export interface MarkView {
   /** 세션 시작으로부터의 경과(ms). 절대 시각이 아니라 경과인 것은 세션 사이 비교를 위해서다. */
   offsetMs: number

@@ -1,7 +1,6 @@
 {
   "name": "@perftracker/gui",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -18,5 +17,13 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
     "vite": "^8.1.5"
+  },
+  "main": "./dist/server/index.js",
+  "types": "./dist/server/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/server/index.d.ts",
+      "default": "./dist/server/index.js"
+    }
   }
 }

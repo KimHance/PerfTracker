@@ -15,7 +15,7 @@
 - **PerfTracker 는 안드로이드 앱 성능을 앱을 고치지 않고 재는 CLI 입니다.**
   adb 로 붙어 Perfetto 트레이스를 남기고 호스트에서 파싱해 세션마다 `result.json` 하나를 냅니다.
 - **M0 ~ M3 이 끝났고 실기기 검증까지 마쳤습니다.** 지표 7개가 전부 돕니다.
-- **기준선:** `npm test` **767/767** (46 파일, 1초 미만) · `npm run typecheck` · `npm run build`
+- **기준선:** `npm test` **800/800** (48 파일, 1초 남짓) · `npm run typecheck` · `npm run build`
   클린 · 온-디바이스 `npm run test:device` **11 스펙**.
   **`npm test` 전에 `npm run build` 가 필요합니다** — `packages/cli` 테스트가
   `@perftracker/core` 를 `dist/` 로 해석하므로, 갓 클론한 저장소에서 곧바로 `npm test` 를
@@ -25,9 +25,11 @@
   **측정 불가 사전 고지**.
 - **지금 이 도구는 Android 11 부터 돕니다** (그 전에는 Android 15 이상에서만 세션이 열렸습니다).
   다만 기기에 따라 못 재는 지표가 있고, 그것을 `doctor` 와 `start` 가 미리 말합니다 (§7).
-- **2026-07-28 에 GUI 착수** (§3): 클로드 디자인 핸드오프(`docs/design/gui/`)를 받아
-  `packages/gui` 에 화면 전체를 만들었습니다. **다음은 `perftracker gui` HTTP 서버**입니다 —
-  지금은 목업(`npm run gui` 뒤 `?mock`)으로만 돕니다.
+- **2026-07-28 에 GUI 가 실제로 돕니다** (§3): 클로드 디자인 핸드오프(`docs/design/gui/`)를
+  받아 `packages/gui` 에 화면과 HTTP 서버를 만들고 **실기기로 세션 전체를 검증**했습니다.
+  `npx perftracker gui` 하나로 서버가 뜨고 브라우저가 열립니다.
+- **마킹이 생겼습니다** — `perftracker mark "스크롤 시작"` 과 GUI 가 **같은 자리**에 쌓고,
+  `result.json` 의 `session.marks[]` 로 나갑니다. 기기에 아무것도 보내지 않습니다.
 - 판단의 근거가 궁금하면 **`.superpowers/sdd/STANDING-ORDERS.md`** 를 여세요 (§5).
 
 새 기기에서 처음 돌린다면 README 의 **"설치"** 와 **"온-디바이스 테스트를 다른 기기에서
@@ -181,7 +183,7 @@ serial `R5CT0000001`.
 채로 깨져 있을 수 있었습니다 — **요약 같은 CLI 출력을 고칠 때 온-디바이스 스펙을 함께
 grep 하세요.**)
 
-### 🔄 GUI (2026-07-28 착수 — 화면까지 끝, 서버 남음)
+### ✅ GUI (2026-07-28 — 화면 + 서버, 실기기 검증 완료)
 
 **사용자 지시였던 "GUI 는 젤 마지막에, 프로젝트 정리되면 클로드 디자인한테 시킬 것" 이
 실행됐습니다.** 클로드 디자인이 낸 핸드오프(`docs/design/gui/`)를 받아 착수했습니다.
@@ -194,8 +196,20 @@ grep 하세요.**)
 | 화면 전체 (설정 4절 · 측정 중 · 마킹 · 기록 드로어 · 확인 다이얼로그 · 로딩 오버레이 · CLI 로그 · doctor) | ✅ |
 | 빈 상태 3종 (기기 0대 · 기기 미선택 · 검색 결과 없음) | ✅ |
 | 목업 클라이언트 (`?mock`) 로 기기 없이 화면 전체 확인 | ✅ |
-| **`perftracker gui` HTTP 서버 (`src/server/`)** | ❌ **다음 차례** |
+| **`perftracker gui` HTTP 서버 (`src/server/`)** | ✅ |
+| `perftracker mark` — 세션 고유값 기반 마킹 | ✅ |
+| `result.json` 의 `session.marks[]` | ✅ |
 | 세션 대시보드 | ❌ 핸드오프 범위 밖 (기록을 열면 자리만 잡아 둠) |
+
+**실기기 검증 (SM-F936N / Android 16, 2026-07-28):**
+`gui` 로 서버 기동 → 기기 2대 목록 + 지표 판정(A405S 가 frame·network 미지원으로 정확히
+표시) → 세션 시작 → **CLI 로 2건 · GUI API 로 1건 마킹** → 정지 → `result.json` 의
+`session.marks[]` 에 3건이 시간순으로, `adb_commands_during_session` 은 **0**.
+
+거기서 결함 하나를 잡았습니다: CLI 는 `-o runs` 처럼 **상대 경로**를 넘기는데 core 의
+`startSession` 은 `runDir` 을 **절대 경로**로 돌려줘서, 정지 직후 방금 만든 기록을 목록에서
+못 찾았습니다 (측정은 성공했는데 화면에는 실패로 보임). `listRuns` 가 경로를 정규화하도록
+고치고 상대 경로로 부르는 테스트를 붙였습니다.
 
 핸드오프에서 **바로잡은 것 두 가지**:
 
@@ -208,10 +222,13 @@ grep 하세요.**)
    `max(52px,14vw,12vh)` → `clamp(44px, min(14vw,16vh), 108px)` 로 바꿨습니다 — 원안은
    넓고 낮은 창에서 `14vw` 가 이겨 타이머가 화면 밖으로 밀렸습니다.
 
+3. **마킹을 브라우저에 들고 있지 않습니다.** 핸드오프는 그렇게 그렸지만, 그러면 같은 세션에
+   `perftracker mark` 로 남긴 마킹을 GUI 가 정지할 때 덮어씁니다. 정본을 활성 세션 포인터
+   파일 하나로 두고 CLI 와 GUI 가 같은 자리에 쓰게 했습니다 — 기기 접촉이 아닙니다
+   (core 의 `appendMark` 는 `AdbClient` 를 아예 받지 않습니다).
+
 **화면이 지키는 규율** (`packages/gui/AGENTS.md` 가 정본):
-컴포넌트는 `fetch` 를 부르지 않고 기기 접촉은 전부 `effects/` 를 지납니다. 측정 중에는
-아무것도 기기로 나가지 않고, 마킹은 브라우저에 쌓였다가 정지할 때 한 번에 갑니다
-(`test/effects.test.ts` 가 이것을 지킵니다).
+컴포넌트는 `fetch` 를 부르지 않고 기기 접촉은 전부 `effects/` 를 지납니다.
 
 ### ✅ 버전 호환 결함 3건 (2026-07-27)
 
@@ -469,7 +486,7 @@ RED 가 나는지 확인하고 원복합니다.** 통과하는 테스트는 증�
   - `perftracker extract` 로 재산출해 볼 대상도 없습니다. **새 기기에서 세션을 하나 떠서
     만드세요** — `npx perftracker start --app <앱> --launch` 후 조작하고 `stop`.
   - 유닛 테스트는 `runs/` 에 의존하지 않습니다. **합성 픽스처만 커밋한다**는 규칙이 있어서
-    `npm test` 767개는 **`npm run build` 만 먼저 돌리면** 아무 데서나 그대로 돕니다
+    `npm test` 800개는 **`npm run build` 만 먼저 돌리면** 아무 데서나 그대로 돕니다
     (`packages/cli` 테스트가 core 를 `dist/` 로 해석합니다 — §0 참고).
 
 ---

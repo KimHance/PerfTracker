@@ -10,10 +10,6 @@ import type { AppView, DeviceView, DoctorCheckView, MarkView, RunView } from '..
 
 export type TabPhase = 'setup' | 'running'
 
-export interface Mark extends MarkView {
-  /** 목록에서 지우기 위한 키. 서버로는 나가지 않는다. */
-  key: string
-}
 
 export interface Tab {
   key: string
@@ -30,7 +26,11 @@ export interface Tab {
   startedAt: number | null
   /** 서버가 준 세션 id — 정지할 때 쓴다. */
   sessionId: string | null
-  marks: Mark[]
+  /**
+   * 서버가 준 마킹 목록의 사본. **시간순(오름차순)이다** — 화면이 최신순으로 그릴 뿐이다.
+   * 삭제할 때 쓰는 인덱스가 서버의 인덱스와 같아야 하므로 순서를 여기서 바꾸지 않는다.
+   */
+  marks: MarkView[]
   markDraft: string
 }
 

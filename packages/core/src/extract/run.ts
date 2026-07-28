@@ -27,6 +27,7 @@ import {
   SCHEMA_VERSION,
 } from '../schema/result.js'
 import { type CaptureManifest, parseVersionedJson, readCaptureManifest } from '../session/manifest.js'
+import { sortedMarks } from '../session/marks.js'
 import { type ActiveSession, readActiveSession } from '../session/state.js'
 import { computeOverhead } from './overhead.js'
 
@@ -327,6 +328,9 @@ export async function extractRun(
       ended_at: endedAt?.toISOString() ?? null,
       duration_ms: endedAt !== null ? endedAt.getTime() - startedAt.getTime() : null,
       options: session.options,
+      // 사람이 적은 것을 도구가 시간순으로 옮기기만 한다 — 내용은 해석하지 않는다.
+      // 값이 없으면 빈 배열이다: "아무도 적지 않았다" 는 확인된 사실이다.
+      marks: sortedMarks(session).map((m) => ({ offset_ms: m.offsetMs, label: m.label })),
     },
     device: {
       serial: manifest.device.serial,

@@ -11,10 +11,11 @@
   "scripts": {
     "build": "tsc --build",
     "gui": "npm run dev -w @perftracker/gui",
-    "typecheck": "tsc --build && tsc -p tsconfig.test.json && tsc -p packages/gui/tsconfig.json",
+    "typecheck": "tsc --build && tsc -p tsconfig.test.json && tsc -p packages/gui/tsconfig.web.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:device": "vitest run --config vitest.device.config.ts"
+    "test:device": "vitest run --config vitest.device.config.ts",
+    "build:web": "npm run build:web -w @perftracker/gui"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",

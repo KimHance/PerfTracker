@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { RunView, StartRequest, StopRequest } from '../src/contract/api.js'
+import type { MarkView, RunView, StartRequest, StopRequest } from '../src/contract/api.js'
 import type { ApiClient } from '../src/web/api/client.js'
 import { addMark, startSession, stopSession } from '../src/web/effects/effects.js'
 import type { Action } from '../src/web/state/actions.js'
@@ -28,6 +28,9 @@ function spyApi(overrides: Partial<ApiClient> = {}): { api: ApiClient; calls: st
       startedAt: '2026-07-27T10:00:00.000Z',
       unsupported: [],
     }),
+    marks: note('marks', [] as MarkView[]),
+    addMark: note('addMark', [] as MarkView[]),
+    removeMark: note('removeMark', [] as MarkView[]),
     stop: note('stop', {} as RunView),
     abort: note('abort', undefined),
     runs: note('runs', []),
@@ -46,41 +49,63 @@ function collector(): { dispatch: (a: Action) => void; actions: Action[] } {
 
 const running = (): Tab => ({ ...newTab('t1'), serial: 'S1', packageName: 'com.x', phase: 'running', startedAt: 1000 })
 
-describe('측정 창', () => {
-  it('마킹은 기기에 아무것도 보내지 않는다', () => {
-    // core 규칙 1 이 화면 쪽에서 깨지는 가장 그럴듯한 경로가 여기다 — 마킹을 "기기에
-    // 기록" 하려는 순간 측정 창 안에서 adb 가 나간다.
+describe('마킹', () => {
+  it('서버가 준 목록으로 통째로 바뀐다', async () => {
+    // 화면이 자기 목록을 따로 고치면 같은 세션에 `perftracker mark` 로 남긴 마킹과 어긋난다.
+    const server: MarkView[] = [
+      { offsetMs: 1000, label: 'CLI 가 남긴 것' },
+      { offsetMs: 3000, label: '스크롤 시작' },
+    ]
+    const { api } = spyApi({ addMark: async () => server })
+    const { dispatch, actions } = collector()
+
+    await addMark({ api, dispatch }, running(), '스크롤 시작', 4000)
+
+    expect(actions.find((a) => a.type === 'marks/loaded')).toMatchObject({ marks: server })
+  })
+
+  it('보내기 전에 앞뒤 공백을 뗀다', async () => {
+    const sent: string[] = []
+    const { api } = spyApi({
+      addMark: async (_serial: string, label: string) => {
+        sent.push(label)
+        return []
+      },
+    })
+    const { dispatch } = collector()
+
+    await addMark({ api, dispatch }, running(), '  광고 재생  ', 4000)
+
+    expect(sent).toEqual(['광고 재생'])
+  })
+
+  it('빈 라벨은 서버를 부르지 않는다', async () => {
     const { api, calls } = spyApi()
     const { dispatch, actions } = collector()
 
-    addMark({ api, dispatch }, running(), '스크롤 시작', 4000)
+    await addMark({ api, dispatch }, running(), '   ', 4000)
 
     expect(calls).toEqual([])
-    expect(actions.map((a) => a.type)).toEqual(['mark/added', 'cli/logged'])
-  })
-
-  it('마킹은 세션 시작으로부터의 경과로 기록된다', () => {
-    const { api } = spyApi()
-    const { dispatch, actions } = collector()
-
-    addMark({ api, dispatch }, running(), '진입', 4500)
-
-    const added = actions.find((a) => a.type === 'mark/added')
-    expect(added).toMatchObject({ label: '진입', offsetMs: 3500 })
-  })
-
-  it('빈 라벨은 마킹하지 않는다', () => {
-    const { api } = spyApi()
-    const { dispatch, actions } = collector()
-
-    addMark({ api, dispatch }, running(), '   ', 4000)
-
     expect(actions).toEqual([])
+  })
+
+  it('실패해도 화면이 마킹을 남긴 척하지 않는다', async () => {
+    const { api } = spyApi({
+      addMark: async () => {
+        throw new Error('세션이 없습니다')
+      },
+    })
+    const { dispatch, actions } = collector()
+
+    await addMark({ api, dispatch }, running(), '진입', 4000)
+
+    expect(actions.map((a) => a.type)).toContain('error/raised')
+    expect(actions.map((a) => a.type)).not.toContain('marks/loaded')
   })
 })
 
 describe('정지', () => {
-  it('쌓아 둔 마킹을 이때 한 번에 보낸다', async () => {
+  it('마킹을 실어 보내지 않는다 — 이미 서버에 있다', async () => {
     const sent: StopRequest[] = []
     const { api } = spyApi({
       stop: async (_serial: string, req: StopRequest) => {
@@ -89,26 +114,10 @@ describe('정지', () => {
       },
     })
     const { dispatch } = collector()
-    const tab: Tab = {
-      ...running(),
-      marks: [
-        { key: 'm2', label: '스크롤', offsetMs: 3000 },
-        { key: 'm1', label: '진입', offsetMs: 500 },
-      ],
-    }
 
-    await stopSession({ api, dispatch }, tab)
+    await stopSession({ api, dispatch }, { ...running(), offline: true })
 
-    // 내부 키(`key`)는 서버로 나가지 않는다 — 계약에 없는 필드다.
-    expect(sent).toEqual([
-      {
-        offline: false,
-        marks: [
-          { label: '스크롤', offsetMs: 3000 },
-          { label: '진입', offsetMs: 500 },
-        ],
-      },
-    ])
+    expect(sent).toEqual([{ offline: true }])
   })
 })
 

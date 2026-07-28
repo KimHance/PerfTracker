@@ -1,4 +1,4 @@
-import type { AppView, DeviceView, DoctorCheckView, RunView } from '../../contract/api.js'
+import type { AppView, DeviceView, DoctorCheckView, MarkView, RunView } from '../../contract/api.js'
 import type { AppState, Confirm, Loading, Tab } from './model.js'
 
 /**
@@ -21,8 +21,9 @@ export type Action =
   | { type: 'tab/closed'; key: string }
   | { type: 'tab/patched'; key: string; patch: Partial<Tab> }
   // 마킹
-  | { type: 'mark/added'; tabKey: string; key: string; label: string; offsetMs: number }
-  | { type: 'mark/removed'; tabKey: string; key: string }
+  // 마킹의 정본은 서버다. 화면은 부분 갱신하지 않고 서버가 준 목록으로 통째로 바꾼다 —
+  // 두 벌을 각자 고치면 CLI 로 남긴 마킹과 어긋난다.
+  | { type: 'marks/loaded'; tabKey: string; marks: MarkView[] }
   // 세션
   | { type: 'session/started'; tabKey: string; sessionId: string; name: string; startedAt: number }
   | { type: 'session/stopped'; tabKey: string; run: RunView | null }
