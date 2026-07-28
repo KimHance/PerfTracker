@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative as relativePath } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { ApiErrorBody, EnvView, RunView } from '../src/contract/api.js'
+import type { ApiErrorBody, EnvView, RunsView } from '../src/contract/api.js'
 import { listRuns, renameRun } from '@perftracker/core'
 import { startGuiServer, type GuiServer } from '../src/server/index.js'
 
@@ -63,7 +63,7 @@ describe('기록', () => {
     const res = await fetch(`${server.url}/api/runs`)
 
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual([])
+    expect(await res.json()).toEqual({ runs: [], incompleteCount: 0, activeCount: 0 })
   })
 
   it('항상 최신순으로 낸다', async () => {
@@ -71,7 +71,7 @@ describe('기록', () => {
     await makeRun('b', 'bbb', '2026-07-27T12:00:00')
     await makeRun('c', 'ccc', '2026-07-27T11:00:00')
 
-    const runs = (await (await fetch(`${server.url}/api/runs`)).json()) as RunView[]
+    const { runs } = (await (await fetch(`${server.url}/api/runs`)).json()) as RunsView
 
     expect(runs.map((r) => r.id)).toEqual(['bbb', 'ccc', 'aaa'])
   })
@@ -80,7 +80,7 @@ describe('기록', () => {
     // 목록에서 사라지면 사용자가 extract 를 돌릴 대상을 찾지 못한다.
     await makeRun('a', 'aaa', '2026-07-27T10:00:00')
 
-    const runs = (await (await fetch(`${server.url}/api/runs`)).json()) as RunView[]
+    const { runs } = (await (await fetch(`${server.url}/api/runs`)).json()) as RunsView
 
     expect(runs).toHaveLength(1)
     expect(runs[0]!.markCount).toBe(0)
@@ -96,7 +96,7 @@ describe('기록', () => {
     await makeRunningRun('running', 'run1', '2026-07-27T10:00:00')
     await makeRun('done', 'done1', '2026-07-27T09:00:00')
 
-    const runs = (await (await fetch(`${server.url}/api/runs`)).json()) as RunView[]
+    const { runs } = (await (await fetch(`${server.url}/api/runs`)).json()) as RunsView
 
     expect(runs.map((r) => r.id)).toEqual(['done1'])
   })
@@ -132,12 +132,32 @@ describe('기록', () => {
     expect(await listRuns(out)).toEqual([])
   })
 
-  it('전체 지우기는 전부 지운다', async () => {
+  it('전체 지우기는 기록과 미완성을 함께 지우고 내역을 돌려준다', async () => {
+    /**
+     * **내역을 돌려주는 것이 계약이다.** 예전에는 라우트가 결과를 버리고 204(내용 없음)를
+     * 냈고, 화면이 `records` 를 읽다가 `Cannot read properties of undefined` 로 터졌다
+     * (실측). 무엇을 지웠는지는 화면이 사람에게 말해야 할 내용이다.
+     */
     await makeRun('a', 'aaa', '2026-07-27T10:00:00')
     await makeRun('b', 'bbb', '2026-07-27T11:00:00')
+    await makeRunningRun('c', 'ccc', '2026-07-27T12:00:00')
 
-    expect((await fetch(`${server.url}/api/runs`, { method: 'DELETE' })).status).toBe(204)
+    const res = await fetch(`${server.url}/api/runs`, { method: 'DELETE' })
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ records: 2, incomplete: 1, skippedActive: 0 })
     expect(await listRuns(out)).toEqual([])
+  })
+
+  it('목록이 미완성 폴더 수를 함께 낸다', async () => {
+    // 다이얼로그가 "기록 N건" 이라고 하면서 N+M 개를 지우면 그 문장이 거짓이 된다.
+    await makeRun('a', 'aaa', '2026-07-27T10:00:00')
+    await makeRunningRun('b', 'bbb', '2026-07-27T11:00:00')
+
+    const view = (await (await fetch(`${server.url}/api/runs`)).json()) as RunsView
+
+    expect(view.runs).toHaveLength(1)
+    expect(view.incompleteCount).toBe(1)
   })
 
   it('상대 경로로 준 outDir 도 절대 경로 runDir 과 맞는다', async () => {

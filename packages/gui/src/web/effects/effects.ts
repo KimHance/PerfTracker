@@ -76,7 +76,7 @@ export async function bootstrap(deps: EffectDeps): Promise<void> {
     ])
     deps.dispatch({ type: 'env/loaded', env })
     deps.dispatch({ type: 'devices/loaded', devices })
-    deps.dispatch({ type: 'runs/loaded', runs })
+    deps.dispatch({ type: 'runs/loaded', runs: runs.runs, incompleteCount: runs.incompleteCount })
     deps.dispatch({ type: 'sessions/loaded', sessions })
   } catch (e) {
     deps.dispatch({ type: 'error/raised', message: e instanceof Error ? e.message : String(e) })
@@ -294,9 +294,13 @@ export async function deleteRun(deps: EffectDeps, runId: string, runName: string
 }
 
 export async function clearRuns(deps: EffectDeps): Promise<void> {
-  log(deps, 'rm -rf runs/*')
   try {
-    await deps.api.clearRuns()
+    const r = await deps.api.clearRuns()
+    // 서버가 실제로 지운 내역을 찍는다 — 화면이 "기록 N건" 이라고 지어내지 않는다.
+    const what = [r.records > 0 ? `기록 ${r.records}건` : '', r.incomplete > 0 ? `미완성 ${r.incomplete}건` : '']
+      .filter(Boolean)
+      .join(' + ')
+    log(deps, `perftracker runs rm --all --yes   # ${what || '지울 것 없음'}`)
     deps.dispatch({ type: 'runs/cleared' })
   } catch (e) {
     deps.dispatch({ type: 'error/raised', message: e instanceof Error ? e.message : String(e) })

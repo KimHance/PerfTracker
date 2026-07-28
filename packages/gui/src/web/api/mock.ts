@@ -328,7 +328,7 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
       return wait(undefined)
     },
 
-    runs: () => wait(runs.map((r) => ({ ...r }))),
+    runs: () => wait({ runs: runs.map((r) => ({ ...r })), incompleteCount: 2, activeCount: 0 }),
 
     renameRun: (id, name) => {
       runs = runs.map((r) => (r.id === id ? { ...r, name } : r))
@@ -341,8 +341,10 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
     },
 
     clearRuns: () => {
+      const records = runs.length
       runs = []
-      return wait(undefined)
+      // 목업도 "미완성까지 지운다" 는 사실을 흉내 낸다 — 실제 서버가 그렇다.
+      return wait({ records, incomplete: 2, skippedActive: 0 })
     },
   }
 }

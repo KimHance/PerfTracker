@@ -49,9 +49,17 @@ export function filterApps(apps: AppView[], query: string): AppView[] {
   )
 }
 
-/** 기기와 앱이 모두 정해져야 시작할 수 있다. 이름은 비어도 서버가 붙여 준다. */
-export function canStart(tab: Tab): boolean {
-  return tab.serial !== null && tab.packageName !== null
+/**
+ * 기기와 앱이 모두 정해져야 시작할 수 있다. 이름은 비어도 서버가 붙여 준다.
+ *
+ * **고른 기기가 지금도 쓸 수 있는지까지 본다.** 리듀서가 기기 목록이 바뀔 때 선택을 풀지만
+ * (`reconcileSelection`), 버튼의 활성 여부는 그 한 겹에만 기대지 않는다 — 여기서 한 번 더
+ * 확인하는 값이 "없는 기기로 세션을 여는" 실패를 막는 것보다 싸다.
+ */
+export function canStart(state: AppState, tab: Tab): boolean {
+  if (tab.serial === null || tab.packageName === null) return false
+  const device = state.devices.find((d) => d.serial === tab.serial)
+  return device !== undefined && device.state === 'device' && !busySerials(state, tab.key).has(tab.serial)
 }
 
 export function runningCount(state: AppState): number {

@@ -27,6 +27,33 @@ function resetAfterStop(tab: Tab): Tab {
   }
 }
 
+/**
+ * **기기 목록이 바뀌면 탭의 선택을 다시 맞춘다.**
+ *
+ * 실측 결함: 기기·앱을 고른 뒤 케이블을 뽑고 `새로고침` 을 누르면 목록에서 기기가 사라지는데
+ * 탭은 그 serial 과 packageName 을 **그대로 들고 있었다.** 화면에는 아무것도 선택되지 않은
+ * 것처럼 보이는데 `측정 시작` 은 활성 상태였고, 누르면 없는 기기로 세션을 열려 했다.
+ *
+ * 쓸 수 없게 된 기기(`unauthorized` / `offline`)도 같이 본다 — 꽂혀 있기는 하지만 그 기기로
+ * 세션을 열 수는 없다.
+ *
+ * **측정 중인 탭은 건드리지 않는다.** 케이블이 빠져도 그 세션의 포인터는 살아 있고, 정리는
+ * `sessions/loaded` 와 `stop` 의 몫이다. 여기서 지우면 되찾을 길이 사라진다.
+ */
+function reconcileSelection(state: AppState): AppState {
+  const usable = new Set(state.devices.filter((d) => d.state === 'device').map((d) => d.serial))
+
+  return {
+    ...state,
+    tabs: state.tabs.map((tab) => {
+      if (tab.phase === 'running' || tab.serial === null || usable.has(tab.serial)) return tab
+      // 고른 기기가 사라졌거나 쓸 수 없게 됐다. 앱 선택도 함께 푼다 —
+      // 앱 목록은 그 기기에서 읽은 것이라 기기 없이는 의미가 없다.
+      return { ...tab, serial: null, packageName: null, appQuery: '' }
+    }),
+  }
+}
+
 /** `appVersions` 의 키. 같은 패키지라도 기기가 다르면 버전이 다를 수 있다. */
 export function appVersionKey(serial: string, packageName: string): string {
   return `${serial}|${packageName}`
@@ -115,7 +142,7 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, env: action.env }
 
     case 'devices/loaded':
-      return { ...state, devices: action.devices }
+      return reconcileSelection({ ...state, devices: action.devices })
 
     case 'apps/loaded':
       return { ...state, appsBySerial: { ...state.appsBySerial, [action.serial]: action.apps } }
@@ -130,7 +157,7 @@ export function reducer(state: AppState, action: Action): AppState {
       }
 
     case 'runs/loaded':
-      return { ...state, runs: action.runs }
+      return { ...state, runs: action.runs, incompleteRunCount: action.incompleteCount }
 
     case 'doctor/loaded':
       return { ...state, doctor: action.checks }
@@ -207,7 +234,7 @@ export function reducer(state: AppState, action: Action): AppState {
       }
 
     case 'runs/cleared':
-      return { ...state, runs: [], freshRunIds: [], confirm: null }
+      return { ...state, runs: [], incompleteRunCount: 0, freshRunIds: [], confirm: null }
 
     case 'run/opened':
       // 한 번 열면 `NEW` 는 사라진다. 배지는 "아직 안 본 것" 을 뜻한다.

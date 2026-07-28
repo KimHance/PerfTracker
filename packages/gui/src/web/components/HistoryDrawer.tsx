@@ -20,9 +20,16 @@ export function HistoryDrawer() {
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
           <button
             className="btn btn-ghost btn-sm"
-            disabled={state.runs.length === 0}
+            disabled={state.runs.length === 0 && state.incompleteRunCount === 0}
             onClick={() =>
-              dispatch({ type: 'confirm/asked', confirm: { kind: 'clear-runs', count: state.runs.length } })
+              dispatch({
+                type: 'confirm/asked',
+                confirm: {
+                  kind: 'clear-runs',
+                  count: state.runs.length,
+                  incomplete: state.incompleteRunCount,
+                },
+              })
             }
           >
             전체 지우기

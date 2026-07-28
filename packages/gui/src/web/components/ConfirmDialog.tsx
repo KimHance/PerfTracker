@@ -64,12 +64,19 @@ function textFor(confirm: Confirm, runName?: string): { title: string; body: str
         body: `“${runName ?? confirm.runName}” 의 run 디렉토리와 result.json 이 함께 삭제됩니다. 되돌릴 수 없습니다.`,
         confirm: '삭제',
       }
-    case 'clear-runs':
+    case 'clear-runs': {
+      /**
+       * **지우는 것을 그대로 센다.** 목록에 안 뜨는 폴더(`start` 가 죽었거나 `--force` 로
+       * 밀린 것)도 함께 지워지는데, "기록 5건" 이라고 말하면서 7개를 지우면 그 문장이 거짓이다.
+       */
+      const parts = [`기록 ${confirm.count}건`]
+      if (confirm.incomplete > 0) parts.push(`목록에 없는 미완성 ${confirm.incomplete}건`)
       return {
         title: '기록을 전체 지울까요?',
-        body: `기록 ${confirm.count}건의 run 디렉토리가 모두 삭제됩니다. 되돌릴 수 없습니다.`,
+        body: `${parts.join(' + ')}의 run 디렉토리가 모두 삭제됩니다. 되돌릴 수 없습니다.`,
         confirm: '삭제',
       }
+    }
     case 'close-running-tab':
       return {
         title: '측정 중인 탭을 닫을까요?',

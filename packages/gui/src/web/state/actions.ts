@@ -20,7 +20,7 @@ export type Action =
   | { type: 'devices/loaded'; devices: DeviceView[] }
   | { type: 'apps/loaded'; serial: string; apps: AppView[] }
   | { type: 'appVersion/loaded'; serial: string; packageName: string; versionName: string | null }
-  | { type: 'runs/loaded'; runs: RunView[] }
+  | { type: 'runs/loaded'; runs: RunView[]; incompleteCount: number }
   | { type: 'doctor/loaded'; checks: DoctorCheckView[] }
   | { type: 'doctor/dismissed' }
   // 탭

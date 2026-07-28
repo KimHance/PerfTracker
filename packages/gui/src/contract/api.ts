@@ -228,6 +228,28 @@ export interface RunView {
   markCount: number
 }
 
+/**
+ * 기록 목록 + **목록에 안 잡히는 폴더 수.**
+ *
+ * `runs` 배열은 끝난 세션만이다. 그런데 `start` 가 죽었거나 `--force` 로 밀린 폴더가
+ * 디스크에 남고, "전체 지우기" 는 그것까지 지운다 — 다이얼로그가 "기록 5건" 이라고 하면서
+ * 7개를 지우면 그 문장이 거짓이 된다. 그래서 수를 함께 준다.
+ */
+export interface RunsView {
+  runs: RunView[]
+  /** 기록이 아닌 run 폴더 수 (측정 중인 것 제외). */
+  incompleteCount: number
+  /** 지금 측정 중이라 지우지 않을 폴더 수. */
+  activeCount: number
+}
+
+/** 전체 지우기 결과. 무엇을 지웠고 무엇을 남겼는지 말한다. */
+export interface ClearRunsResult {
+  records: number
+  incomplete: number
+  skippedActive: number
+}
+
 // ─── 오류 ──────────────────────────────────────────────────────────────────
 
 /** 서버는 실패를 이 모양으로만 낸다. 화면은 `message` 를 그대로 보여 준다 (한국어). */

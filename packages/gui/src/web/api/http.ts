@@ -13,6 +13,8 @@ import {
   type StartedSessionView,
   type StopRequest,
   type StopResult,
+  type RunsView,
+  type ClearRunsResult,
 } from '../../contract/api.js'
 import { ApiError, type ApiClient } from './client.js'
 
@@ -52,10 +54,10 @@ export function createHttpClient(): ApiClient {
     stop: (serial, req: StopRequest) =>
       request<StopResult>(API.stop(serial), { method: 'POST', body: JSON.stringify(req) }),
     abort: (serial) => request<void>(API.abort(serial), { method: 'DELETE' }),
-    runs: () => request<RunView[]>(API.runs),
+    runs: () => request<RunsView>(API.runs),
     renameRun: (id, name) =>
       request<RunView>(API.run(id), { method: 'PATCH', body: JSON.stringify({ name }) }),
     deleteRun: (id) => request<void>(API.run(id), { method: 'DELETE' }),
-    clearRuns: () => request<void>(API.runs, { method: 'DELETE' }),
+    clearRuns: () => request<ClearRunsResult>(API.runs, { method: 'DELETE' }),
   }
 }

@@ -11,6 +11,8 @@ import type {
   StartedSessionView,
   StopRequest,
   StopResult,
+  RunsView,
+  ClearRunsResult,
 } from '../../contract/api.js'
 
 /**
@@ -40,10 +42,10 @@ export interface ApiClient {
   stop(serial: string, req: StopRequest): Promise<StopResult>
   /** 측정 중인 세션을 기록 없이 버린다 (측정 중 탭 닫기). */
   abort(serial: string): Promise<void>
-  runs(): Promise<RunView[]>
+  runs(): Promise<RunsView>
   renameRun(id: string, name: string): Promise<RunView>
   deleteRun(id: string): Promise<void>
-  clearRuns(): Promise<void>
+  clearRuns(): Promise<ClearRunsResult>
 }
 
 /** 서버가 낸 실패. `message` 는 이미 한국어 문장이라 화면에 그대로 올린다. */

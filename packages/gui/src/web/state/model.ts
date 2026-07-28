@@ -48,7 +48,7 @@ export interface Loading {
 
 export type Confirm =
   | { kind: 'delete-run'; runId: string; runName: string }
-  | { kind: 'clear-runs'; count: number }
+  | { kind: 'clear-runs'; count: number; incomplete: number }
   | { kind: 'close-running-tab'; tabKey: string }
 
 export interface CliLogEntry {
@@ -71,6 +71,11 @@ export interface AppState {
    */
   appVersions: Record<string, string | null>
   runs: RunView[]
+  /**
+   * 기록 목록에 안 잡히는 run 폴더 수 (start 가 죽었거나 --force 로 밀린 것).
+   * "전체 지우기" 가 이것까지 지우므로 다이얼로그가 알아야 한다.
+   */
+  incompleteRunCount: number
   /** 방금 만들어져 아직 열어 보지 않은 기록 id. `NEW` 배지가 붙는다. */
   freshRunIds: string[]
   doctor: DoctorCheckView[] | null
@@ -121,6 +126,7 @@ export function initialState(
     appsBySerial: {},
     appVersions: {},
     runs: [],
+    incompleteRunCount: 0,
     freshRunIds: [],
     doctor: null,
     drawerOpen: true,

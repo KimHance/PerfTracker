@@ -2,6 +2,7 @@ import {
   clearRuns,
   deleteRun,
   formatElapsed,
+  listRunDirs,
   listRuns,
   renameRun,
   type RunSummary,
@@ -82,17 +83,32 @@ export async function runRunsRemove(
   opts: { out: string; all: boolean; yes: boolean },
 ): Promise<string> {
   if (opts.all) {
-    const runs = await listRuns(opts.out)
-    if (runs.length === 0) return `${opts.out} 에 지울 기록이 없습니다.`
+    const entries = await listRunDirs(opts.out)
+    const removable = entries.filter((e) => !e.active)
+    const active = entries.length - removable.length
+    const records = removable.filter((e) => e.summary !== null).length
+    const incomplete = removable.length - records
+
+    if (removable.length === 0) {
+      return active > 0
+        ? `${opts.out} 에는 측정 중인 세션 ${active}건뿐입니다. 지우려면 먼저 perftracker stop 하세요.`
+        : `${opts.out} 에 지울 것이 없습니다.`
+    }
+
     if (!opts.yes) {
       throw new SessionStateError(
-        `기록 ${runs.length}건을 모두 지우려 합니다. 되돌릴 수 없습니다.\n` +
+        `${describeTargets(records, incomplete)}을 지우려 합니다. 되돌릴 수 없습니다.\n` +
+          (active > 0 ? `(측정 중인 세션 ${active}건은 지우지 않습니다)\n` : '') +
           `정말이라면 --yes 를 함께 주세요:\n` +
           `  perftracker runs rm --all --yes -o ${opts.out}`,
       )
     }
-    const removed = await clearRuns(opts.out)
-    return `기록 ${removed}건을 지웠습니다.`
+
+    const r = await clearRuns(opts.out)
+    return (
+      `${describeTargets(r.records, r.incomplete)}을 지웠습니다.` +
+      (r.skippedActive > 0 ? `\n측정 중인 세션 ${r.skippedActive}건은 남겼습니다.` : '')
+    )
   }
 
   if (id === undefined) {
@@ -100,8 +116,27 @@ export async function runRunsRemove(
       '지울 기록의 id 를 주거나 --all 을 쓰세요.\n  perftracker runs   로 id 를 확인할 수 있습니다.',
     )
   }
-  if (!(await deleteRun(opts.out, id))) {
-    throw new SessionStateError(`기록 ${id} 을(를) ${opts.out} 에서 찾지 못했습니다.`)
+
+  const result = await deleteRun(opts.out, id)
+  if (!result.deleted) {
+    // 측정 중인 폴더를 "못 찾았다" 고 하면 사람이 엉뚱한 곳을 뒤진다. 이유를 갈라서 말한다.
+    throw new SessionStateError(
+      result.reason === 'active'
+        ? `${id} 은(는) 지금 측정 중인 세션입니다. 먼저 perftracker stop 을 실행하세요.`
+        : `${id} 을(를) ${opts.out} 에서 찾지 못했습니다.\n` +
+          `  기록은 perftracker runs 로, 그 밖의 폴더는 디렉토리 이름으로 지정할 수 있습니다.`,
+    )
   }
-  return `기록 ${id} 을(를) 지웠습니다.`
+  return `지웠습니다: ${result.runDir}`
+}
+
+/**
+ * "기록 2건" 과 "기록 2건 + 미완성 3건" 을 가려 말한다.
+ * 미완성은 `start` 가 죽었거나 `--force` 로 밀린 폴더다 — 목록에는 없지만 디스크는 차지한다.
+ */
+function describeTargets(records: number, incomplete: number): string {
+  const parts: string[] = []
+  if (records > 0) parts.push(`기록 ${records}건`)
+  if (incomplete > 0) parts.push(`미완성 ${incomplete}건`)
+  return parts.join(' + ')
 }

@@ -2,7 +2,8 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { deleteRun, listRuns, renameRun } from '../../src/session/runs.js'
+import { clearRuns, deleteRun, listRunDirs, listRuns, renameRun } from '../../src/session/runs.js'
+import { writeActiveSession } from '../../src/session/state.js'
 
 /**
  * 기록 읽기는 **core 의 일이다.** CLI 의 `runs` 명령과 GUI 가 둘 다 부른다 —
@@ -106,11 +107,109 @@ describe('삭제', () => {
   it('디렉토리째 지운다', async () => {
     await done('a', 'aaa', '2026-07-27T10:00:00')
 
-    expect(await deleteRun(out, 'aaa')).toBe(true)
+    expect((await deleteRun(out, 'aaa')).deleted).toBe(true)
     expect(await listRuns(out)).toEqual([])
   })
 
   it('없는 기록이면 지웠다고 하지 않는다', async () => {
-    expect(await deleteRun(out, '없음')).toBe(false)
+    expect(await deleteRun(out, '없음')).toEqual({ deleted: false, reason: 'not_found' })
+  })
+
+  it('기록이 아닌 폴더도 디렉토리 이름으로 지울 수 있다', async () => {
+    /**
+     * `start` 가 죽어 `session.json` 조차 없는 폴더는 id 가 없다. 그래도 지울 수 있어야 한다 —
+     * 예전에는 목록에 없으니 삭제 대상도 못 됐고, 사람이 `rm -rf` 를 직접 쳐야 했다.
+     */
+    await mkdir(join(out, '깨진폴더'), { recursive: true })
+    await writeFile(join(out, '깨진폴더', 'capture.json'), '{}', 'utf8')
+
+    expect((await deleteRun(out, '깨진폴더')).deleted).toBe(true)
+    expect(await listRunDirs(out)).toEqual([])
+  })
+})
+
+describe('run 폴더 판별', () => {
+  it('이 도구가 만든 흔적이 있는 폴더만 센다', async () => {
+    // 이름이 아니라 내용물로 가른다 — `-o` 로 엉뚱한 곳을 가리켰을 때 남의 폴더를 지우지 않는다.
+    await done('진짜', 'aaa', '2026-07-27T10:00:00')
+    await mkdir(join(out, '남의폴더'), { recursive: true })
+    await writeFile(join(out, '남의폴더', 'memo.txt'), 'hi', 'utf8')
+
+    const dirs = await listRunDirs(out)
+
+    expect(dirs).toHaveLength(1)
+    expect(dirs[0]!.runDir.endsWith('진짜')).toBe(true)
+  })
+
+  it('session.json 이 없어도 run 산출물이 있으면 센다', async () => {
+    await mkdir(join(out, '깨진'), { recursive: true })
+    await writeFile(join(out, '깨진', 'trace.perfetto-trace'), 'x', 'utf8')
+
+    const dirs = await listRunDirs(out)
+
+    expect(dirs).toHaveLength(1)
+    expect(dirs[0]!.summary).toBeNull()
+  })
+})
+
+describe('측정 중인 세션 보호', () => {
+  /**
+   * 진행 중인 세션의 폴더는 `stop` 이 트레이스를 회수해 쓸 자리다. 지우면 돌고 있는 측정을
+   * 조용히 못 쓰게 만든다 — "전체 지우기" 가 그걸 하면 안 된다.
+   */
+  async function withActive(): Promise<{ home: string; runDir: string; id: string }> {
+    const home = await mkdtemp(join(tmpdir(), 'perftracker-home-'))
+    const runDir = join(out, '도는중')
+    await mkdir(runDir, { recursive: true })
+    await writeFile(join(runDir, 'session.json'), JSON.stringify({ version: 1, id: 'live1' }), 'utf8')
+    await writeActiveSession(
+      {
+        version: 1,
+        id: 'live1',
+        name: '도는 중',
+        serial: 'S1',
+        packageName: 'com.x',
+        runDir,
+        perfettoKey: 'k',
+        remoteTracePath: '/x',
+        startedAt: '2026-07-28T10:00:00.000Z',
+        configuredDurationMs: 600_000,
+        options: { launch: false },
+        startup: null,
+      },
+      home,
+    )
+    return { home, runDir, id: 'live1' }
+  }
+
+  it('전체 지우기가 측정 중인 폴더를 남긴다', async () => {
+    const { home } = await withActive()
+    await done('끝난것', 'aaa', '2026-07-27T10:00:00')
+
+    const r = await clearRuns(out, home)
+
+    expect(r).toMatchObject({ records: 1, skippedActive: 1 })
+    expect((await listRunDirs(out, home)).map((e) => e.active)).toEqual([true])
+  })
+
+  it('id 로 지목해도 거절하고, 그 이유를 말한다', async () => {
+    // "찾지 못했습니다" 로 답하면 멀쩡한 id 를 든 사람이 엉뚱한 곳을 뒤진다.
+    const { home, id } = await withActive()
+
+    expect(await deleteRun(out, id, home)).toEqual({ deleted: false, reason: 'active' })
+  })
+})
+
+describe('전체 지우기', () => {
+  it('기록과 미완성을 함께 지우고 내역을 낸다', async () => {
+    await done('끝난것', 'aaa', '2026-07-27T10:00:00')
+    await write('안끝난것', { id: 'bbb', name: 'bbb', startedAt: '2026-07-27T11:00:00' })
+    await mkdir(join(out, '깨진것'), { recursive: true })
+    await writeFile(join(out, '깨진것', 'capture.json'), '{}', 'utf8')
+
+    const r = await clearRuns(out)
+
+    expect(r).toEqual({ removed: 3, records: 1, incomplete: 2, skippedActive: 0 })
+    expect(await listRunDirs(out)).toEqual([])
   })
 })

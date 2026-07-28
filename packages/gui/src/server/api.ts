@@ -7,6 +7,7 @@ import {
   deleteRun,
   extractRun,
   getAppDetail,
+  listRunDirs,
   listRuns,
   listDeviceSummaries,
   metricSupportChecks,
@@ -33,7 +34,9 @@ import type {
   DoctorCheckView,
   EnvView,
   MarkView,
+  RunsView,
   RunView,
+  ClearRunsResult,
   StartRequest,
   StartedSessionView,
   StopRequest,
@@ -231,8 +234,18 @@ export class GuiApi {
     await rm(runDir, { recursive: true, force: true })
   }
 
-  async runs(): Promise<RunView[]> {
-    return (await listRuns(this.opts.outDir)).map(toRunView)
+  async runs(): Promise<RunsView> {
+    const entries = await listRunDirs(this.opts.outDir)
+    return {
+      // `listRunDirs` 는 **디렉토리 열거**라 이름순이다. 화면의 기록 목록은 **시각순**이어야
+      // 하므로 여기서 다시 세운다 — 이름은 세션 이름을 담고 있어 시간과 무관하다.
+      runs: entries
+        .flatMap((e) => (e.summary === null ? [] : [e.summary]))
+        .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+        .map(toRunView),
+      incompleteCount: entries.filter((e) => e.summary === null && !e.active).length,
+      activeCount: entries.filter((e) => e.active).length,
+    }
   }
 
   /** 측정 중인 세션을 버릴 때 화면이 찍을 줄. 실행한 쪽이 적는다. */
@@ -247,13 +260,19 @@ export class GuiApi {
   }
 
   async deleteRun(id: string): Promise<void> {
-    if (!(await deleteRun(this.opts.outDir, id))) {
-      throw new SessionStateError(`기록 ${id} 을(를) 찾지 못했습니다.`)
-    }
+    const result = await deleteRun(this.opts.outDir, id)
+    if (result.deleted) return
+    throw new SessionStateError(
+      result.reason === 'active'
+        ? `${id} 은(는) 지금 측정 중인 세션입니다. 먼저 정지하세요.`
+        : `기록 ${id} 을(를) 찾지 못했습니다.`,
+    )
   }
 
-  async clearRuns(): Promise<void> {
-    await clearRuns(this.opts.outDir)
+  /** 기록뿐 아니라 미완성 폴더까지 지운다. 측정 중인 것은 남긴다 — core 가 그 규칙을 갖는다. */
+  async clearRuns(): Promise<ClearRunsResult> {
+    const r = await clearRuns(this.opts.outDir)
+    return { records: r.records, incomplete: r.incomplete, skippedActive: r.skippedActive }
   }
 }
 

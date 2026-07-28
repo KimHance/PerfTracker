@@ -1,5 +1,6 @@
-import { readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
+import { listActiveSessions } from './state.js'
 
 /**
  * 끝난 세션 하나. `result.json` 이 있으면 그것이 정본이고, 없으면 `session.json` 으로
@@ -143,6 +144,83 @@ export async function listRuns(dir: string): Promise<RunSummary[]> {
   return runs.sort((a, b) => b.startedAt.localeCompare(a.startedAt))
 }
 
+/**
+ * `runs/` 안의 **디렉토리 하나**. 기록이 아닌 것까지 포함한다.
+ *
+ * `listRuns` 는 "기록" 만 낸다 — 끝난 세션이다. 그런데 지우려면 그것만으로 부족하다:
+ * `start` 가 디렉토리를 만든 직후 죽었거나 `--force` 로 밀린 폴더는 목록에 없으니
+ * **삭제 대상도 되지 못했고**, 결국 사람이 `rm -rf` 를 직접 쳐야 했다 (실측: `runs rm --all`
+ * 이 4개 중 2개만 지웠다).
+ */
+export interface RunEntry {
+  runDir: string
+  /**
+   * 세션 고유값. `session.json` 이 있으면 거기서 읽는다 — **기록이 아니어도** 읽는다.
+   *
+   * 요약(`summary`)에만 id 를 두면 진행 중인 세션을 id 로 지목할 수 없다. 그때
+   * "측정 중이라 못 지웁니다" 가 아니라 "찾지 못했습니다" 가 나와서, 사람이 멀쩡한 id 를
+   * 들고 엉뚱한 곳을 뒤지게 된다 (실측).
+   */
+  id: string | null
+  /** 기록으로 셀 수 있으면 요약. 아니면 null. */
+  summary: RunSummary | null
+  /**
+   * **지금 측정 중인 세션의 폴더인가.** 활성 세션 포인터의 `runDir` 과 같으면 true.
+   *
+   * 이 구분이 없으면 "전체 지우기" 가 **돌고 있는 세션의 디렉토리를 지운다** — 트레이스가
+   * 아직 회수되지 않았고 `stop` 이 그 자리에 쓰려던 참인데 바닥이 사라진다.
+   */
+  active: boolean
+}
+
+/** 이 디렉토리를 이 도구가 만들었다고 볼 근거. 하나라도 있으면 run 디렉토리다. */
+const RUN_ARTIFACTS = ['session.json', 'capture.json', 'result.json', 'trace.perfetto-trace', 'raw'] as const
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await access(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * `runs/` 안에서 **이 도구가 만든 디렉토리** 전부. 기록이 아닌 것도 낸다.
+ *
+ * 판별을 디렉토리 **이름**이 아니라 **내용물**로 하는 이유: 이름은 사람이 바꿀 수 있지만
+ * `capture.json` · `trace.perfetto-trace` 같은 파일은 이 도구만 만든다. `-o` 로 엉뚱한
+ * 디렉토리를 가리켰을 때 무관한 폴더를 지우지 않으려면 근거가 그쪽이어야 한다.
+ */
+export async function listRunDirs(dir: string, home?: string): Promise<RunEntry[]> {
+  const outDir = resolve(dir)
+  let entries: string[]
+  try {
+    entries = await readdir(outDir)
+  } catch {
+    return []
+  }
+
+  const summaries = new Map((await listRuns(outDir)).map((r) => [r.runDir, r]))
+  const activeDirs = new Set((await listActiveSessions(home)).map((s) => resolve(s.runDir)))
+
+  const out: RunEntry[] = []
+  for (const entry of entries) {
+    const runDir = join(outDir, entry)
+    const marks = await Promise.all(RUN_ARTIFACTS.map((f) => exists(join(runDir, f))))
+    if (!marks.some(Boolean)) continue // 이 도구가 만든 것이 아니다
+
+    const session = await readJson<StoredSessionFile>(join(runDir, 'session.json'))
+    out.push({
+      runDir,
+      id: session?.id ?? null,
+      summary: summaries.get(runDir) ?? null,
+      active: activeDirs.has(runDir),
+    })
+  }
+  return out.sort((a, b) => b.runDir.localeCompare(a.runDir))
+}
+
 export async function findRun(outDir: string, id: string): Promise<RunSummary | null> {
   return (await listRuns(outDir)).find((r) => r.id === id) ?? null
 }
@@ -171,15 +249,57 @@ export async function renameRun(outDir: string, id: string, name: string): Promi
   return { ...run, name }
 }
 
-export async function deleteRun(outDir: string, id: string): Promise<boolean> {
-  const run = await findRun(outDir, id)
-  if (run === null) return false
-  await rm(run.runDir, { recursive: true, force: true })
-  return true
+/** 삭제가 거절된 이유. 조용히 안 지우는 것과 지운 것을 구분한다. */
+export type DeleteRefusal = 'not_found' | 'active'
+
+/**
+ * 하나 지운다. **`id` 는 기록의 id 이거나 디렉토리 이름**이다 —
+ * `session.json` 이 없어 id 자체가 없는 폴더도 지울 수 있어야 한다.
+ *
+ * 측정 중인 세션의 폴더는 **거절한다.** 그 자리는 `stop` 이 트레이스를 회수해 쓸 곳이고,
+ * 지우면 진행 중인 측정을 조용히 못 쓰게 만든다.
+ */
+export async function deleteRun(
+  outDir: string,
+  id: string,
+  home?: string,
+): Promise<{ deleted: true; runDir: string } | { deleted: false; reason: DeleteRefusal }> {
+  const entries = await listRunDirs(outDir, home)
+  // id 는 세 가지로 지목할 수 있다: 기록 id · 진행 중인 세션의 id · 디렉토리 이름.
+  // 마지막 하나가 있어야 `session.json` 조차 없는 폴더도 지울 수 있다.
+  const target = entries.find(
+    (e) => e.summary?.id === id || e.id === id || e.runDir.split('/').pop() === id,
+  )
+  if (target === undefined) return { deleted: false, reason: 'not_found' }
+  if (target.active) return { deleted: false, reason: 'active' }
+
+  await rm(target.runDir, { recursive: true, force: true })
+  return { deleted: true, runDir: target.runDir }
 }
 
-export async function clearRuns(outDir: string): Promise<number> {
-  const runs = await listRuns(outDir)
-  for (const run of runs) await rm(run.runDir, { recursive: true, force: true })
-  return runs.length
+/**
+ * **이 디렉토리의 run 산출물을 전부 지운다** — 기록뿐 아니라 정지되지 않은 것,
+ * `session.json` 이 없는 것까지. "전체 지우기" 가 전체를 못 지우면 그것은 전체가 아니다.
+ *
+ * 측정 중인 세션의 폴더만 남긴다. 그 사실을 반환값으로 알려 부르는 쪽이 사람에게 말할 수 있게 한다.
+ */
+export async function clearRuns(
+  outDir: string,
+  home?: string,
+): Promise<{ removed: number; records: number; incomplete: number; skippedActive: number }> {
+  const entries = await listRunDirs(outDir, home)
+  let records = 0
+  let incomplete = 0
+  let skippedActive = 0
+
+  for (const entry of entries) {
+    if (entry.active) {
+      skippedActive += 1
+      continue
+    }
+    if (entry.summary !== null) records += 1
+    else incomplete += 1
+    await rm(entry.runDir, { recursive: true, force: true })
+  }
+  return { removed: records + incomplete, records, incomplete, skippedActive }
 }

@@ -108,7 +108,7 @@ describe('삭제', () => {
   })
 
   it('지울 것이 없으면 --yes 없이도 조용히 끝난다', async () => {
-    expect(await runRunsRemove(undefined, { out, all: true, yes: false })).toContain('지울 기록이 없습니다')
+    expect(await runRunsRemove(undefined, { out, all: true, yes: false })).toContain('지울 것이 없습니다')
   })
 
   it('id 도 --all 도 없으면 무엇을 해야 하는지 말한다', async () => {

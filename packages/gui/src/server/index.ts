@@ -123,10 +123,9 @@ const ROUTES: Route[] = [
   {
     method: 'DELETE',
     pattern: /^\/api\/runs$/,
-    handle: async (api) => {
-      await api.clearRuns()
-      return undefined
-    },
+    // 결과를 **돌려준다.** 예전에는 `await` 만 하고 undefined 를 냈고, 그러면 204(내용 없음)가
+    // 나가 화면이 `r.records` 를 읽다 터졌다. 무엇을 지웠는지는 화면이 사람에게 말해야 할 내용이다.
+    handle: (api) => api.clearRuns(),
   },
   {
     method: 'PATCH',

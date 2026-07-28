@@ -36,10 +36,10 @@ function spyApi(overrides: Partial<ApiClient> = {}): { api: ApiClient; calls: st
     removeMark: note('removeMark', [] as MarkView[]),
     stop: note('stop', { run: {} as RunView, command: 'perftracker stop (가짜)' }),
     abort: note('abort', undefined),
-    runs: note('runs', []),
+    runs: note('runs', { runs: [], incompleteCount: 0, activeCount: 0 }),
     renameRun: note('renameRun', {} as RunView),
     deleteRun: note('deleteRun', undefined),
-    clearRuns: note('clearRuns', undefined),
+    clearRuns: note('clearRuns', { records: 0, incomplete: 0, skippedActive: 0 }),
     ...overrides,
   }
   return { api, calls }

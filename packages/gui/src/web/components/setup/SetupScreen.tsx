@@ -38,7 +38,7 @@ export function SetupScreen({ tab }: { tab: Tab }) {
         <button
           className="btn btn-primary btn-lg blueprint"
           style={{ minWidth: 150 }}
-          disabled={!canStart(tab)}
+          disabled={!canStart(state, tab)}
           onClick={() => void startSession(deps, tab, state.env.outDir)}
         >
           측정 시작
