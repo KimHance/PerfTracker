@@ -15,7 +15,7 @@
 - **PerfTracker 는 안드로이드 앱 성능을 앱을 고치지 않고 재는 CLI 입니다.**
   adb 로 붙어 Perfetto 트레이스를 남기고 호스트에서 파싱해 세션마다 `result.json` 하나를 냅니다.
 - **M0 ~ M3 이 끝났고 실기기 검증까지 마쳤습니다.** 지표 7개가 전부 돕니다.
-- **기준선:** `npm test` **846/846** (52 파일, 1초 남짓) · `npm run typecheck` · `npm run build`
+- **기준선:** `npm test` **849/849** (52 파일, 1초 남짓) · `npm run typecheck` · `npm run build`
   클린 · 온-디바이스 `npm run test:device` **11 스펙**.
   **`npm test` 전에 `npm run build` 가 필요합니다** — `packages/cli` 테스트가
   `@perftracker/core` 를 `dist/` 로 해석하므로, 갓 클론한 저장소에서 곧바로 `npm test` 를
@@ -409,6 +409,25 @@ CLI 와 GUI 는 나란히 그것을 부르는 형제입니다. 다만 그 형제
 남은 1.1초는 **한 기기 안**의 스펙 수집이 순차인 것입니다 (`getprop` · cpufreq · meminfo ·
 `wm size` · `dumpsys display`). 새로고침 버튼 하나에 더 손댈 값은 아니라고 봅니다.
 
+### ✅ 글꼴 자체 호스팅 · `--json` (2026-07-28)
+
+**GUI 가 화면을 그리려고 바깥에 나가고 있었습니다.** Google Fonts 를 `<link>` 로 걸어서,
+인터넷 없는 자리(사내망·기내·랩실)에서는 글꼴 요청이 DNS 에서 매달렸습니다. `latin` subset
+6개(89KB)만 받아 `src/web/fonts/` 에 넣었습니다 — Barlow 에 한글 글리프가 없어 본문 한국어는
+어차피 시스템 글꼴로 떨어지므로 전체를 받을 이유가 없고, `unicode-range` 가 그 경계입니다.
+라이선스는 OFL 1.1 이고 파일을 함께 뒀습니다.
+
+브라우저에서 **외부 요청을 전부 차단한 채** 확인했습니다: 나가는 요청 0건, 글꼴은 로컬에서
+로드, 화면 정상.
+
+**`--json` 을 조회 명령 5개에 넣었습니다** (`doctor` `devices` `apps` `status` `runs`).
+**사람이 읽는 문장이 기본이고 이것은 추가 모드입니다** — 사람과 기계가 둘 다 소비자입니다.
+`start`/`stop`/`mark` 에는 넣지 않았습니다: 출력이 이미 한 줄이고, 시작 전에 알아야 할 것
+(이 기기가 뭘 잴 수 있나)은 `doctor --json` 이 전부 줍니다.
+
+텍스트와 JSON 이 **같은 규칙으로 답하는지**가 이 작업의 핵심이었습니다. `status` 의 세션 선택
+규칙을 `pick()` 하나로 모았습니다 — 두 곳에 적으면 사람이 보는 답과 기계가 받는 답이 갈립니다.
+
 ### 그 밖의 후보 (우선순위 낮음)
 
 - **Power** — 배터리 델타는 **구조적으로 불가능**합니다. adb 는 USB 연결을 전제하고 USB 는
@@ -584,7 +603,7 @@ RED 가 나는지 확인하고 원복합니다.** 통과하는 테스트는 증�
   - `perftracker extract` 로 재산출해 볼 대상도 없습니다. **새 기기에서 세션을 하나 떠서
     만드세요** — `npx perftracker start --app <앱> --launch` 후 조작하고 `stop`.
   - 유닛 테스트는 `runs/` 에 의존하지 않습니다. **합성 픽스처만 커밋한다**는 규칙이 있어서
-    `npm test` 846개는 **`npm run build` 만 먼저 돌리면** 아무 데서나 그대로 돕니다
+    `npm test` 849개는 **`npm run build` 만 먼저 돌리면** 아무 데서나 그대로 돕니다
     (`packages/cli` 테스트가 core 를 `dist/` 로 해석합니다 — §0 참고).
 
 ---

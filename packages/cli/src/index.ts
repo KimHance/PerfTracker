@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
-import { hasBlockingFailure, listDeviceSummaries, loadLabeledApps, PerfTrackerError, runDoctor } from '@perftracker/core'
+import {
+  hasBlockingFailure,
+  listDeviceSummaries,
+  listRuns,
+  loadLabeledApps,
+  PerfTrackerError,
+  runDoctor,
+} from '@perftracker/core'
 import { formatApps } from './commands/apps.js'
 import { runGui } from './commands/gui.js'
 import { runMark } from './commands/mark.js'
@@ -10,17 +17,33 @@ import { formatDevices } from './commands/devices.js'
 import { runExtract } from './commands/extract.js'
 import { runSchema } from './commands/schema.js'
 import { runStart } from './commands/start.js'
-import { runStatus } from './commands/status.js'
+import { runStatus, statusData } from './commands/status.js'
 import { runStop } from './commands/stop.js'
 import { createContext } from './context.js'
 
 const program = new Command()
+
+/**
+ * 사람이 읽는 문장이 기본이고 `--json` 이 켜졌을 때만 데이터를 낸다.
+ * 두 갈래를 명령마다 손으로 적지 않게 한 곳에 둔다.
+ */
+function emit(data: unknown, text: string): void {
+  console.log(program.opts()['json'] === true ? JSON.stringify(data, null, 2) : text)
+}
 
 program
   .name('perftracker')
   .description('안드로이드 앱 성능 데이터를 코드 수정 없이 수집한다')
   .version('0.1.0')
   .option('--adb <path>', 'adb 실행 파일 경로')
+  /**
+   * 조회 명령의 출력을 JSON 으로. **사람이 읽는 문장이 기본이고 이것은 추가 모드다** —
+   * 사람과 기계(CI · LLM)가 둘 다 소비자이므로 어느 한쪽으로 바꾸지 않는다.
+   *
+   * `start` / `stop` / `mark` 에는 없다. 그 셋의 출력은 이미 한 줄이고(경로 하나), 시작 전에
+   * 알아야 할 것(이 기기가 뭘 잴 수 있나)은 `doctor --json` 이 전부 준다.
+   */
+  .option('--json', '조회 결과를 JSON 으로 출력한다 (doctor · devices · apps · status · runs)', false)
 
 program
   .command('doctor')
@@ -28,7 +51,7 @@ program
   .option('-d, --device <serial>', '대상 기기 serial')
   .action(async (opts: { device?: string }) => {
     const checks = await runDoctor({ ...program.opts(), ...opts })
-    console.log(formatDoctor(checks))
+    emit(checks, formatDoctor(checks))
     // capability 실패(이 기기가 원래 못 재는 것)는 종료 코드를 바꾸지 않는다.
     if (hasBlockingFailure(checks)) process.exitCode = 1
   })
@@ -37,7 +60,8 @@ program
   .command('devices')
   .description('연결된 기기와 스펙 요약을 보여준다')
   .action(async () => {
-    console.log(formatDevices(await listDeviceSummaries(program.opts())))
+    const devices = await listDeviceSummaries(program.opts())
+    emit(devices, formatDevices(devices))
   })
 
 program
@@ -46,7 +70,8 @@ program
   .option('-d, --device <serial>', '대상 기기 serial')
   .action(async (opts: { device?: string }) => {
     const ctx = await createContext({ ...program.opts(), ...opts })
-    console.log(formatApps(await loadLabeledApps(ctx)))
+    const apps = await loadLabeledApps(ctx)
+    emit(apps, formatApps(apps))
   })
 
 program
@@ -92,7 +117,7 @@ runs
   .description('기록 목록')
   .option('-o, --out <dir>', '기록이 있는 디렉토리', 'runs')
   .action(async (opts: { out: string }) => {
-    console.log(await runRunsList(opts))
+    emit(await listRuns(opts.out), await runRunsList(opts))
   })
 
 runs
@@ -131,7 +156,7 @@ program
   .description('진행 중인 세션을 보여준다 (기기에 접촉하지 않음)')
   .option('-d, --device <serial>', '대상 기기 serial')
   .action(async (opts: { device?: string }) => {
-    console.log(await runStatus(opts.device))
+    emit(await statusData(opts.device), await runStatus(opts.device))
   })
 
 program

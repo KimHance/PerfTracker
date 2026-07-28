@@ -107,7 +107,9 @@ npx vitest run packages/gui             # 리듀서 · 파생값 · 포맷 · ef
 
 ## 알려진 것
 
-- 폰트(Barlow / Barlow Condensed)를 Google Fonts 에서 받는다. 오프라인이면 `system-ui` 로
-  떨어진다 — 로컬 도구가 폰트 때문에 안 뜨면 안 되기 때문이다. 자체 호스팅은 남은 과제.
+- **이 페이지는 외부로 아무 요청도 보내지 않는다.** 글꼴(Barlow / Barlow Condensed)은
+  `src/web/fonts/` 에 자체 호스팅한다 — `latin` subset 6개 · 89KB. Barlow 에 한글 글리프가
+  없어 본문 한국어는 어차피 `system-ui` 로 떨어지므로 전체 subset 을 받을 이유가 없고,
+  `unicode-range` 가 그 경계를 그린다. 라이선스는 OFL 1.1 (`fonts/OFL.txt`).
 - 핸드오프의 "알려진 이슈"(마킹이 쌓이면 정지 버튼이 밀림)는 정지 버튼을 마킹 블록 **위**로
   올리고 목록에 `max-height` 를 걸어 해결했다.

@@ -14,21 +14,64 @@ import {
  *   - 2개 이상이면 -d 로 지정하라고 안내 (모든 serial 을 이름과 함께 보여준다)
  * 어느 경로도 adb 를 부르지 않는다 — 기기에 접촉하지 않는다 (규칙 1).
  */
-export async function runStatus(serial?: string, home?: string): Promise<string> {
-  let session: ActiveSession | null
-  if (serial !== undefined) {
-    session = await readActiveSession(serial, home)
-  } else {
-    const active = await listActiveSessions(home)
-    if (active.length > 1) {
-      return [
-        '실행 중인 세션이 여러 기기에 있습니다:',
-        ...active.map((s) => `  ${s.serial}  ${s.name} (${s.id})`),
-        '',
-        '-d <serial> 로 대상 기기를 지정하세요.',
-      ].join('\n')
+/**
+ * 어느 세션을 볼 것인가. **텍스트와 `--json` 이 같은 규칙을 쓰도록** 여기 한 번만 적는다 —
+ * 두 곳에 적으면 사람이 보는 답과 기계가 받는 답이 갈리는 날이 온다.
+ */
+async function pick(
+  serial?: string,
+  home?: string,
+): Promise<{ session: ActiveSession | null; ambiguous: ActiveSession[] }> {
+  if (serial !== undefined) return { session: await readActiveSession(serial, home), ambiguous: [] }
+
+  const active = await listActiveSessions(home)
+  if (active.length > 1) return { session: null, ambiguous: active }
+  return { session: active[0] ?? null, ambiguous: [] }
+}
+
+/** `--json` 이 내는 모양. 세션이 없으면 `session: null` 이다 — 빈 객체가 아니다. */
+export async function statusData(
+  serial?: string,
+  home?: string,
+): Promise<{
+  session: ActiveSession | null
+  elapsedMs: number | null
+  durationExceeded: boolean | null
+  marks: { offsetMs: number; label: string }[]
+  adbCommandsDuringSession: number
+  ambiguous: { serial: string; id: string; name: string }[]
+}> {
+  const { session, ambiguous } = await pick(serial, home)
+  if (session === null) {
+    return {
+      session: null,
+      elapsedMs: null,
+      durationExceeded: null,
+      marks: [],
+      adbCommandsDuringSession: 0,
+      ambiguous: ambiguous.map((s) => ({ serial: s.serial, id: s.id, name: s.name })),
     }
-    session = active[0] ?? null
+  }
+  const status = computeStatus(session, new Date())
+  return {
+    session,
+    elapsedMs: status.elapsedMs,
+    durationExceeded: status.durationExceeded,
+    marks: sortedMarks(session),
+    adbCommandsDuringSession: session.adbCommandsDuringSession ?? 0,
+    ambiguous: [],
+  }
+}
+
+export async function runStatus(serial?: string, home?: string): Promise<string> {
+  const { session, ambiguous } = await pick(serial, home)
+  if (ambiguous.length > 0) {
+    return [
+      '실행 중인 세션이 여러 기기에 있습니다:',
+      ...ambiguous.map((s) => `  ${s.serial}  ${s.name} (${s.id})`),
+      '',
+      '-d <serial> 로 대상 기기를 지정하세요.',
+    ].join('\n')
   }
 
   if (session === null) return '실행 중인 세션이 없습니다.'

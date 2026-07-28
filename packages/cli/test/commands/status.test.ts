@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import type { ActiveSession } from '@perftracker/core'
 import { writeActiveSession } from '@perftracker/core'
 import { describe, expect, it } from 'vitest'
-import { runStatus } from '../../src/commands/status.js'
+import { runStatus, statusData } from '../../src/commands/status.js'
 
 function session(overrides: Partial<ActiveSession> = {}): ActiveSession {
   return {
@@ -115,5 +115,54 @@ describe('runStatus — 지금 알아야 할 것', () => {
     await writeActiveSession(session(), home)
 
     expect(await runStatus(undefined, home)).not.toContain('Marks')
+  })
+})
+
+describe('statusData — --json 이 내는 모양', () => {
+  it('세션이 없으면 session 은 null 이다 (빈 객체가 아니다)', async () => {
+    // `{}` 를 내면 소비자가 "세션은 있는데 정보가 비었다" 로 읽는다.
+    const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
+
+    const data = await statusData(undefined, home)
+
+    expect(data.session).toBeNull()
+    expect(data.elapsedMs).toBeNull()
+    expect(data.durationExceeded).toBeNull()
+  })
+
+  it('텍스트와 같은 규칙으로 세션을 고른다', async () => {
+    /**
+     * 사람이 보는 답과 기계가 받는 답이 갈리면 안 된다. 기기가 여럿일 때 텍스트가
+     * "-d 로 지정하세요" 라고 하면 JSON 도 고르지 않고 후보를 낸다.
+     */
+    const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
+    await writeActiveSession(session({ serial: 'AAA', id: 'aaa111' }), home)
+    await writeActiveSession(session({ serial: 'BBB', id: 'bbb222' }), home)
+
+    const data = await statusData(undefined, home)
+    const text = await runStatus(undefined, home)
+
+    expect(data.session).toBeNull()
+    expect(data.ambiguous.map((a) => a.serial)).toEqual(['AAA', 'BBB'])
+    expect(text).toContain('여러 기기에')
+  })
+
+  it('마킹은 시간순으로, 위반 횟수는 숫자로 낸다', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
+    await writeActiveSession(
+      session({
+        adbCommandsDuringSession: 2,
+        marks: [
+          { offsetMs: 9000, label: '나중' },
+          { offsetMs: 1000, label: '먼저' },
+        ],
+      }),
+      home,
+    )
+
+    const data = await statusData(undefined, home)
+
+    expect(data.marks.map((m) => m.label)).toEqual(['먼저', '나중'])
+    expect(data.adbCommandsDuringSession).toBe(2)
   })
 })

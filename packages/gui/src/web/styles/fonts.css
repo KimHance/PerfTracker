@@ -1,0 +1,84 @@
+/*
+ * Barlow / Barlow Condensed — **자체 호스팅.**
+ *
+ * 예전에는 Google Fonts 를 `<link>` 로 걸었다. 이 도구는 USB 로 연결한 기기를 재는 로컬
+ * 도구라 인터넷이 없는 자리(사내망, 기내, 랩실)에서도 돌아야 하는데, 그때 글꼴 요청이
+ * DNS 에서 매달리면 첫 화면이 늦게 뜬다. 그리고 로컬 도구가 화면을 그리려고 외부에
+ * 요청을 보내는 것 자체가 설명하기 어려운 동작이다.
+ *
+ * **`latin` subset 만 받는다** (6개 · 89KB). Barlow 에는 한글 글리프가 없어서 본문 한국어는
+ * 어차피 `system-ui` 로 떨어진다 — 전체 subset 을 받아 봐야 쓰이지 않는다.
+ * `unicode-range` 를 그대로 옮겨 적는 이유가 그것이다: 이 범위 밖은 브라우저가 다음 글꼴로
+ * 넘어간다. 범위를 지우면 한글까지 Barlow 로 그리려다 실패한 뒤에야 넘어간다.
+ *
+ * 라이선스는 SIL Open Font License 1.1 (`fonts/OFL.txt`). 재배포가 허용되고, 그 조건이
+ * 라이선스 파일을 함께 두는 것이다.
+ */
+
+/* Google Fonts 가 latin subset 에 쓰는 범위 그대로. */
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 400;
+  /* swap: 글꼴이 늦게 와도 글자가 먼저 보인다. 측정 도구가 흰 화면으로 시작하면 안 된다. */
+  font-display: swap;
+  src: url('../fonts/Barlow-400.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 500;
+  /* swap: 글꼴이 늦게 와도 글자가 먼저 보인다. 측정 도구가 흰 화면으로 시작하면 안 된다. */
+  font-display: swap;
+  src: url('../fonts/Barlow-500.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 600;
+  /* swap: 글꼴이 늦게 와도 글자가 먼저 보인다. 측정 도구가 흰 화면으로 시작하면 안 된다. */
+  font-display: swap;
+  src: url('../fonts/Barlow-600.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 500;
+  /* swap: 글꼴이 늦게 와도 글자가 먼저 보인다. 측정 도구가 흰 화면으로 시작하면 안 된다. */
+  font-display: swap;
+  src: url('../fonts/BarlowCondensed-500.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 600;
+  /* swap: 글꼴이 늦게 와도 글자가 먼저 보인다. 측정 도구가 흰 화면으로 시작하면 안 된다. */
+  font-display: swap;
+  src: url('../fonts/BarlowCondensed-600.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 700;
+  /* swap: 글꼴이 늦게 와도 글자가 먼저 보인다. 측정 도구가 흰 화면으로 시작하면 안 된다. */
+  font-display: swap;
+  src: url('../fonts/BarlowCondensed-700.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}

@@ -4,6 +4,7 @@ import { App } from './App.jsx'
 import { createHttpClient } from './api/http.js'
 import { createMockClient } from './api/mock.js'
 import { StoreProvider } from './state/StoreContext.jsx'
+import './styles/fonts.css'
 import './styles/tokens.css'
 import './styles/app.css'
 

@@ -5,15 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>PerfTracker</title>
     <!--
-      Barlow / Barlow Condensed. 오프라인이면 tokens.css 의 system-ui 로 떨어진다 —
-      로컬 도구가 폰트를 못 받았다고 안 뜨면 안 된다. (자체 호스팅은 이후 과제)
+      글꼴은 자체 호스팅한다 (src/web/styles/fonts.css). 이 페이지는 **외부로 아무 요청도
+      보내지 않는다** — 인터넷 없는 자리에서도 그대로 뜨고, 로컬 도구가 화면을 그리려고
+      바깥에 나가지 않는다.
     -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap"
-      rel="stylesheet"
-    />
   </head>
   <body>
     <div id="root"></div>
