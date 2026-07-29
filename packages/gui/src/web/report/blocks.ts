@@ -337,13 +337,20 @@ export function buildBars(b: BarsBlock, res: unknown): BarsVm | NoneVm {
   const vals = rows.map((r) => r[b.valueField]).filter((v): v is number => typeof v === 'number')
   const max = b.scaleMax ?? (vals.length > 0 ? Math.max(...vals) : 1)
 
+  // 분모는 **데이터가 말하는 전체**여야 한다. 막대들의 합으로 계산하면 꼬리표처럼 겹치는
+  // 값에서 분모가 부풀어 각 비율이 실제보다 작게 나온다.
+  const denomRaw = b.percentOfPath === undefined ? MISSING : readPath(res, b.percentOfPath)
+  const denom = typeof denomRaw === 'number' && denomRaw > 0 ? denomRaw : null
+
   return {
     rows: rows.map((r) => {
       const lv = r[b.labelField]
       const v = r[b.valueField]
+      const share =
+        denom !== null && typeof v === 'number' ? ` · ${nf((v / denom) * 100, 1)}%` : ''
       return {
         label: `${b.labelPrefix}${Array.isArray(lv) ? `CPU ${lv[0]}–${lv[lv.length - 1]}` : String(lv)}`,
-        value: fmtValue(v === undefined ? MISSING : v, b.fmt),
+        value: `${fmtValue(v === undefined ? MISSING : v, b.fmt)}${share}`,
         pct: typeof v === 'number' && max > 0 ? Math.max(0, Math.min(100, (v / max) * 100)) : 0,
       }
     }),

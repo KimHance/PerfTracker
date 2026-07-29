@@ -15,7 +15,7 @@
 - **PerfTracker 는 안드로이드 앱 성능을 앱을 고치지 않고 재는 CLI 입니다.**
   adb 로 붙어 Perfetto 트레이스를 남기고 호스트에서 파싱해 세션마다 `result.json` 하나를 냅니다.
 - **M0 ~ M3 이 끝났고 실기기 검증까지 마쳤습니다.** 지표 7개가 전부 돕니다.
-- **기준선:** `npm test` **944/944** (56 파일, 1초 남짓) · `npm run typecheck` · `npm run build`
+- **기준선:** `npm test` **955/955** (56 파일, 1초 남짓) · `npm run typecheck` · `npm run build`
   클린 · 온-디바이스 `npm run test:device` **11 스펙**.
   **`npm test` 전에 `npm run build` 가 필요합니다** — `packages/cli` 테스트가
   `@perftracker/core` 를 `dist/` 로 해석하므로, 갓 클론한 저장소에서 곧바로 `npm test` 를
@@ -459,6 +459,34 @@ SM-A405S(Android 11)에서 `am start -W` 가 매번 `Status: timeout` 을 냅니
 `frametimeline` 이 없어(sdk 30) **끝점을 잡을 수단이 없습니다.** `process.start_ts` 도 NULL 이라
 시작점도 없습니다 — 켜려면 ftrace 이벤트를 늘려야 하고 오버헤드 예산을 다시 봐야 합니다.
 즉 "이미 되는 기기를 더 정확하게" 는 되지만 "안 되는 기기를 되게" 는 못 합니다.
+
+### ✅ 프레임 꼬리표 — 기기가 이미 적어 둔 것 (2026-07-29)
+
+**사용자 요청: "프레임 드랍된 것들 확인할 수 있지?"** 그때는 못 봤습니다. 이제 봅니다.
+
+`actual_frame_timeline_slice` 에서 `ts` 와 `dur` **둘만** 읽고 있었습니다. 같은 행에
+`jank_type` 과 `on_time_finish` 가 있고 값이 채워져 있습니다 — **기기에 아무것도 더 묻지
+않습니다.** 실측(Stream 24초 세션, 1,938프레임):
+
+| 꼬리표 | 프레임 | 비율 |
+| --- | ---: | ---: |
+| Buffer Stuffing | 1,556 | 80.3% |
+| App Deadline Missed | 188 | 9.7% |
+| **Dropped Frame** | **101** | **5.2%** |
+| SurfaceFlinger Stuffing | 73 | 3.8% |
+| Display HAL | 5 | 0.3% |
+
+**꼬리표는 값이 아니라 집합입니다.** `"App Deadline Missed, Buffer Stuffing"` 처럼 오므로
+쪼개서 각각에 셉니다. 그래서 `by_type` 의 합이 `janky_frames` 를 넘는 것이 정상이고,
+그것을 피하려고 첫 꼬리표만 세면 나머지가 사라집니다.
+
+`janky_frames` 와 `late_frames` 는 **다른 사실**입니다. 꼬리표가 `None` 인데 마감을 넘긴
+프레임이 실재했고(240장 중 41장), 반대로 `Buffer Stuffing` 은 꼬리표가 붙어도 마감은 지킨
+경우가 대부분이었습니다.
+
+**규칙 2 를 지키느라 색까지 갔습니다.** 이 세션은 88%가 꼬리표를 달았는데 그것을 빨강으로
+그리면 도구가 "이 앱은 나쁘다" 고 말하는 셈입니다. 팔레트에 위험색을 넣지 않고 **두 번째
+계열색**(채도 낮춘 흙색)을 넣었습니다 — 좋고 나쁨이 아니라 출처가 다르다는 표시입니다.
 
 ### ✅ 앱 목록이 유튜브를 빼고 있었다 (2026-07-29)
 

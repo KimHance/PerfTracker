@@ -212,6 +212,48 @@ const FRAME_TIMELINE_DESCRIPTION =
   '이 배열이 있다고 기기에 더 많은 것을 물은 것은 아니다 — 트레이스에 이미 있던 값을 ' +
   '접지 않고 그대로 낸 것뿐이라 측정 부하는 같다.'
 
+export const FrameJankSchema = z.object({
+  /**
+   * 꼬리표를 셀 수 있었던 프레임 수. `total_frames` 와 같아야 정상이고, 다르면 트레이스가
+   * 두 질의 사이에 다른 답을 준 것이다 — 그 사실을 감추지 않으려고 따로 싣는다.
+   */
+  total_frames: z.number().int().nonnegative(),
+  janky_frames: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe('`jank_type` 이 `None` 이 아닌 프레임 수. **어느 꼬리표든 하나라도 붙은 것**을 센다.'),
+  late_frames: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      '`on_time_finish = 0` 인 프레임 수 — 마감 안에 끝내지 못한 것. `janky_frames` 와 ' +
+        '**다른 사실이다**: 꼬리표가 `None` 인데도 늦게 끝난 프레임이 실재한다 ' +
+        '(실측 Stream 세션: `None` 240장 중 41장). 반대로 `Buffer Stuffing` 은 꼬리표가 붙어도 ' +
+        '`on_time_finish = 1` 인 경우가 대부분이었다.',
+    ),
+  by_type: z
+    .array(z.object({ type: z.string(), count: z.number().int().nonnegative() }))
+    .describe(
+      '꼬리표별 프레임 수, 많은 순. `type` 은 SurfaceFlinger 가 쓰는 원문이다 ' +
+        '(`Dropped Frame` · `App Deadline Missed` · `Buffer Stuffing` · ' +
+        '`SurfaceFlinger Stuffing` · `Display HAL` 등) — 우리가 정한 분류가 아니다. ' +
+        '**합이 `janky_frames` 를 넘을 수 있다**: 한 프레임에 꼬리표가 여러 개 붙으면 ' +
+        '(`"App Deadline Missed, Buffer Stuffing"`) 각각에 세어진다.',
+    ),
+})
+export type FrameJank = z.infer<typeof FrameJankSchema>
+
+const FRAME_JANK_DESCRIPTION =
+  '**기기가 프레임마다 붙여 둔 꼬리표를 센 것이다 — 이 도구의 판정이 아니다.** ' +
+  'SurfaceFlinger 가 `actual_frame_timeline_slice.jank_type` 에 직접 적고, 우리는 개수만 낸다. ' +
+  '어느 꼬리표가 심각한지는 정하지 않는다 — 실측에서 `Buffer Stuffing` 이 1,347장으로 ' +
+  '압도적이었는데 그 대부분은 마감 안에 끝났다(`on_time_finish = 1`). ' +
+  '**`janky_frames / total_frames` 를 그대로 "품질" 로 읽지 말 것.** ' +
+  '`dur` 와 같은 테이블·같은 트레이스에서 나오므로 기기에 더 물어보지 않는다. ' +
+  '`null` 은 **꼬리표를 읽지 못했다**는 뜻이지 문제가 없었다는 뜻이 아니다.'
+
 export const FrameDataSchema = z.object({
   process: z.string().describe(PROCESS_NAME_DESCRIPTION),
   /** 그 프로세스의 pid. target_app.render_process / target_app.pid 가 여기서 채워진다. */
@@ -227,6 +269,10 @@ export const FrameDataSchema = z.object({
   mean_ms: z.number(),
   max_ms: z.number(),
   timeline: z.array(FrameTimelinePointSchema).optional().describe(FRAME_TIMELINE_DESCRIPTION),
+  // `optional` 과 `nullable` 이 서로 다른 말이다 — **필드가 없다**는 이 값을 낼 줄 모르던
+  // 시절의 세션이고(`timeline` 과 같은 이유로 optional 이다), **null** 은 이번에 읽지
+  // 못했다는 뜻이다. 옛 run 을 `extract` 로 다시 산출할 때 전자가 실제로 나온다.
+  jank: FrameJankSchema.nullable().optional().describe(FRAME_JANK_DESCRIPTION),
 })
 export type FrameData = z.infer<typeof FrameDataSchema>
 

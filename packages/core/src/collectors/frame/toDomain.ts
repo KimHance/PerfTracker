@@ -1,6 +1,6 @@
 import type { FrameBucket, FrameData, FrameTimelinePoint } from '../../schema/result.js'
 import { round } from '../num.js'
-import type { FrameCollection, FrameSample } from './model.js'
+import type { FrameCollection, FrameJankRow, FrameSample } from './model.js'
 
 const OVERFLOW_FROM_MS = 700
 
@@ -119,6 +119,50 @@ export function findOutOfRange(samples: FrameSample[]): number | undefined {
   return samples.find((s) => !isBucketableDuration(s.durationMs))?.durationMs
 }
 
+/** 기기가 "문제 없음" 을 적는 값. 꼬리표가 아니라 꼬리표의 부재다. */
+const JANK_NONE = 'None'
+
+/**
+ * 꼬리표 집계를 도메인 모양으로 옮긴다.
+ *
+ * **꼬리표는 집합이라 겹친다.** `"App Deadline Missed, Buffer Stuffing"` 한 장은 두 꼬리표에
+ * 각각 세어지므로 `by_type` 의 합은 `janky_frames` 를 넘을 수 있다. 그것을 사실대로 두는 대신
+ * 하나만 고르면(예: 첫 꼬리표) 나머지가 사라진다 — 세지 않은 것을 0 으로 만드는 일이다.
+ *
+ * **판정하지 않는다.** 어느 꼬리표가 나쁜지 정하지 않고 개수만 낸다. `Buffer Stuffing` 이
+ * 실측에서 1,347장으로 압도적인데(Stream 세션), 그것을 "심각"으로 접으면 이 도구가 판정을
+ * 시작하는 것이다 — 무엇이 중요한지는 읽는 쪽이 정한다.
+ */
+export function buildJank(rows: FrameJankRow[] | null): FrameData['jank'] {
+  if (rows === null) return null
+
+  const byType = new Map<string, number>()
+  let janky = 0
+  let late = 0
+  let total = 0
+
+  for (const row of rows) {
+    total += row.count
+    if (!row.onTime) late += row.count
+    if (row.type === JANK_NONE || row.type === '') continue
+    janky += row.count
+    for (const tag of row.type.split(',')) {
+      const t = tag.trim()
+      if (t === '' || t === JANK_NONE) continue
+      byType.set(t, (byType.get(t) ?? 0) + row.count)
+    }
+  }
+
+  return {
+    total_frames: total,
+    janky_frames: janky,
+    late_frames: late,
+    by_type: [...byType.entries()]
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count || a.type.localeCompare(b.type)),
+  }
+}
+
 /**
  * **데이터 모델 → 도메인 모델.** 이 함수는 기기도, SDK 도, 어떤 명령으로 얻었는지도 모른다.
  * 어느 소스에서 왔든 `FrameCollection` 이면 같은 계산을 받는다 — 그것이 이 분리의 목적이다.
@@ -143,5 +187,6 @@ export function toFrameData(collection: FrameCollection): FrameData {
     mean_ms: round(durationsMs.reduce((s, v) => s + v, 0) / durationsMs.length, 2),
     max_ms: round(sorted[sorted.length - 1]!, 2),
     timeline: buildFrameTimeline(collection.samples),
+    jank: buildJank(collection.jank),
   }
 }

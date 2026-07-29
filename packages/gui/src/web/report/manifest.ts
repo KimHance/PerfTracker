@@ -45,6 +45,11 @@ export interface BlockBase {
    * "`data.timeline` 을 보면 된다" 는 규칙을 만들면 cpu 와 log 가 조용히 빈다.
    */
   path?: string
+  /**
+   * 두 번째 계열색으로 그린다. **경고가 아니라 구분이다** — 이 화면은 판정하지 않으므로
+   * 색으로 좋고 나쁨을 말하지 않는다 (규칙 2). 값의 출처가 다르다는 표시일 뿐이다.
+   */
+  tone?: 'alt'
 }
 
 export interface StatBlock extends BlockBase {
@@ -103,6 +108,8 @@ export interface BarsBlock extends BlockBase {
   fmt: Fmt
   /** `null` 이면 데이터 최댓값에 맞춘다. */
   scaleMax: number | null
+  /** 있으면 이 경로의 값을 분모로 퍼센트를 함께 적는다. 없으면 개수만 낸다. */
+  percentOfPath?: string
 }
 
 export interface DeltaBlock extends BlockBase {
@@ -193,6 +200,24 @@ export const MANIFEST: Block[] = [
     percentilesPath: 'metrics.frame.data.percentiles',
     totalPath: 'metrics.frame.data.total_frames',
     breakAfterEmptyBuckets: Infinity,
+  },
+  {
+    // 기기가 프레임마다 붙여 둔 꼬리표를 센 것이다 — 이 화면의 판정이 아니다.
+    // 그래서 `unit` 이 출처를 밝히고, 색만 달리해 "다른 종류의 값" 이라고 말한다.
+    kind: 'bars', section: 'render', title: '프레임 꼬리표', metric: 'frame', span: 6,
+    unit: 'SurfaceFlinger 가 붙인 것 · 겹칠 수 있음', tone: 'alt',
+    path: 'metrics.frame.data.jank.by_type',
+    labelField: 'type', labelPrefix: '', valueField: 'count', fmt: 'int', scaleMax: null,
+    percentOfPath: 'metrics.frame.data.jank.total_frames',
+  },
+  {
+    kind: 'pairs', section: 'render', title: '마감', metric: 'frame', span: 6,
+    unit: '기기가 센 것', tone: 'alt', path: 'metrics.frame.data.jank',
+    keys: [
+      { p: 'total_frames', l: '전체', f: 'int' },
+      { p: 'janky_frames', l: '꼬리표 붙은 프레임', f: 'int' },
+      { p: 'late_frames', l: '마감 넘긴 프레임', f: 'int' },
+    ],
   },
 
   // ── CPU: 시계열은 전부 선 ────────────────────────────────────

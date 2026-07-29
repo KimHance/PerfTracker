@@ -3,7 +3,9 @@ import {
   bucketFrames,
   buildFrameBuckets,
   buildFrameTimeline,
+  buildJank,
   frameCollector,
+  frameJankSql,
   frameSamplesSql,
   percentile,
 } from '../../src/collectors/frame/index.js'
@@ -396,5 +398,68 @@ describe('buildFrameTimeline', () => {
   it('SQL 이 trace_bounds 를 기준점으로 쓴다 — 지표마다 다른 0 초를 쓰지 않는다', () => {
     expect(frameSamplesSql(7)).toContain('select start_ts from trace_bounds')
     expect(frameSamplesSql(7)).toContain('dur >= 0')
+  })
+})
+
+/**
+ * 실기기(SM-S901N / Stream 24초) 트레이스가 실제로 낸 모양이다. 꼬리표가 **집합**이라
+ * 한 프레임이 여러 줄에 세어지는 것이 이 데이터의 핵심이고, 여기가 그것을 고정한다.
+ */
+const JANK_ROWS = [
+  { type: 'Buffer Stuffing', onTime: true, count: 1347 },
+  { type: 'None', onTime: true, count: 199 },
+  { type: 'None', onTime: false, count: 41 },
+  { type: 'App Deadline Missed, Buffer Stuffing', onTime: false, count: 144 },
+  { type: 'Dropped Frame', onTime: false, count: 101 },
+]
+
+describe('buildJank', () => {
+  it('꼬리표가 겹치면 각각에 센다 — 하나만 고르면 나머지가 사라진다', () => {
+    const j = buildJank(JANK_ROWS)!
+    const byType = Object.fromEntries(j.by_type.map((r) => [r.type, r.count]))
+
+    // `App Deadline Missed, Buffer Stuffing` 144장은 두 꼬리표 **양쪽**에 들어간다.
+    expect(byType['Buffer Stuffing']).toBe(1347 + 144)
+    expect(byType['App Deadline Missed']).toBe(144)
+    expect(byType['Dropped Frame']).toBe(101)
+  })
+
+  it('by_type 의 합이 janky_frames 를 넘는 것이 정상이다', () => {
+    const j = buildJank(JANK_ROWS)!
+    expect(j.janky_frames).toBe(1347 + 144 + 101)
+    expect(j.by_type.reduce((n, r) => n + r.count, 0)).toBeGreaterThan(j.janky_frames)
+  })
+
+  it('None 은 꼬리표가 아니다 — janky 에도 by_type 에도 넣지 않는다', () => {
+    const j = buildJank(JANK_ROWS)!
+    expect(j.by_type.some((r) => r.type === 'None')).toBe(false)
+    expect(j.total_frames).toBe(1347 + 199 + 41 + 144 + 101)
+  })
+
+  it('late 는 janky 와 다른 사실이다 — None 인데 늦은 프레임이 실재한다', () => {
+    const j = buildJank(JANK_ROWS)!
+    // 꼬리표 없이 늦은 41장 + 꼬리표 붙고 늦은 144·101장.
+    expect(j.late_frames).toBe(41 + 144 + 101)
+    expect(j.late_frames).not.toBe(j.janky_frames)
+  })
+
+  it('많은 순으로 낸다', () => {
+    const counts = buildJank(JANK_ROWS)!.by_type.map((r) => r.count)
+    expect(counts).toEqual([...counts].sort((a, b) => b - a))
+  })
+
+  it('못 읽었으면 null 이다 — 빈 배열(문제 없었다)과 다른 말이다', () => {
+    expect(buildJank(null)).toBeNull()
+    expect(buildJank([{ type: 'None', onTime: true, count: 10 }])).toEqual({
+      total_frames: 10,
+      janky_frames: 0,
+      late_frames: 0,
+      by_type: [],
+    })
+  })
+
+  it('꼬리표 질의도 미완결 프레임을 같은 규칙으로 제외한다', () => {
+    // `dur >= 0` 이 빠지면 표본 질의와 분모가 달라져 비율이 조용히 틀어진다.
+    expect(frameJankSql(7)).toContain('dur >= 0')
   })
 })

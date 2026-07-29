@@ -365,3 +365,61 @@ describe('README 가 말하는 숫자', () => {
     expect(readme).toContain(`시계열 ${KO[n]}`)
   })
 })
+
+describe('프레임 꼬리표 — 기기가 붙인 것', () => {
+  const block = MANIFEST.find((b) => b.title === '프레임 꼬리표') as BarsBlock
+
+  it('개수와 퍼센트를 함께 낸다', () => {
+    const doc = {
+      metrics: {
+        frame: {
+          data: {
+            jank: {
+              total_frames: 1000,
+              by_type: [
+                { type: 'Buffer Stuffing', count: 800 },
+                { type: 'Dropped Frame', count: 101 },
+              ],
+            },
+          },
+        },
+      },
+    }
+    const vm = buildBars(block, doc) as { rows: { label: string; value: string }[] }
+    expect(vm.rows[0]!.value).toBe('800 · 80.0%')
+    expect(vm.rows[1]!.value).toBe('101 · 10.1%')
+  })
+
+  it('분모는 전체 프레임이다 — 막대의 합이 아니다', () => {
+    // 꼬리표는 겹치므로 합(1,100)으로 나누면 각 비율이 실제보다 작아진다.
+    const doc = {
+      metrics: {
+        frame: {
+          data: {
+            jank: {
+              total_frames: 1000,
+              by_type: [
+                { type: 'A', count: 600 },
+                { type: 'B', count: 500 },
+              ],
+            },
+          },
+        },
+      },
+    }
+    const vm = buildBars(block, doc) as { rows: { value: string }[] }
+    expect(vm.rows[0]!.value).toBe('600 · 60.0%')
+  })
+
+  it('분모가 없으면 퍼센트를 지어내지 않는다', () => {
+    const doc = { metrics: { frame: { data: { jank: { by_type: [{ type: 'A', count: 5 }] } } } } }
+    const vm = buildBars(block, doc) as { rows: { value: string }[] }
+    expect(vm.rows[0]!.value).toBe('5')
+  })
+
+  it('꼬리표 카드는 두 번째 계열색을 쓴다 — 다른 카드와 구분된다', () => {
+    expect(block.tone).toBe('alt')
+    // 색이 판정으로 읽히지 않게, 이 화면에서 tone 을 쓰는 곳은 frame 지표뿐이어야 한다.
+    expect(MANIFEST.filter((b) => b.tone === 'alt').every((b) => b.metric === 'frame')).toBe(true)
+  })
+})

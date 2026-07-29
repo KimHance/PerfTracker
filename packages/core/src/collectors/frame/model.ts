@@ -21,9 +21,31 @@ export interface FrameSample {
  * 수집 결과. **어느 프로세스의 것인지**까지 담는다 — 프레임은 프로세스를 특정하지 못하면
  * 값을 낼 수 없고, 그 특정은 소스마다 방법이 다르다(트레이스는 upid, gfxinfo 는 패키지명).
  */
+/**
+ * 기기가 프레임에 붙인 꼬리표를 **원문 그대로** 센 것. 쪼개고 합치는 일은 도메인 계층이 한다.
+ *
+ * `type` 은 값 하나가 아니라 집합이다 — `"App Deadline Missed, Buffer Stuffing"` 처럼 온다.
+ */
+export interface FrameJankRow {
+  /** `jank_type` 원문. 아무 문제 없던 프레임은 `"None"` 이다. */
+  type: string
+  /** 마감 안에 끝났는가. 꼬리표가 `None` 이어도 이것이 false 인 프레임이 실재한다. */
+  onTime: boolean
+  count: number
+}
+
+/**
+ * 수집 결과. **어느 프로세스의 것인지**까지 담는다 — 프레임은 프로세스를 특정하지 못하면
+ * 값을 낼 수 없고, 그 특정은 소스마다 방법이 다르다(트레이스는 upid, gfxinfo 는 패키지명).
+ */
 export interface FrameCollection {
   /** 결과에 실을 프로세스 이름. 확인된 이름만 온다. */
   process: string
   pid: number
   samples: FrameSample[]
+  /**
+   * 꼬리표 집계. **`null` 은 "이 경로가 꼬리표를 주지 않았다"** 이지 "문제가 없었다" 가
+   * 아니다 — 빈 배열과 구분해야 한다 (규칙 3).
+   */
+  jank: FrameJankRow[] | null
 }

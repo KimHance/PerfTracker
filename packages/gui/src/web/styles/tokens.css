@@ -34,6 +34,15 @@
   --color-accent-800: #cfe1f3;
   --color-accent-900: #e7f1fb;
 
+  /*
+   * 두 번째 계열색. **경고색이 아니다** — 이 도구는 판정하지 않으므로 빨강·주황 같은
+   * 위험 신호를 쓰지 않는다 (규칙 2). 파랑 옆에서 "다른 종류의 값" 으로만 읽히도록
+   * 채도를 낮춘 흙색이고, 지금은 프레임 꼬리표(기기가 붙인 것)에만 쓴다.
+   */
+  --color-alt-400: #a97b56;
+  --color-alt-500: #c2916a;
+  --color-alt-700: #ddb894;
+
   --font-heading: 'Barlow Condensed', system-ui, sans-serif;
   --font-body: 'Barlow', system-ui, sans-serif;
   --font-mono: ui-monospace, Menlo, monospace;

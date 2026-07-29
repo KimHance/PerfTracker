@@ -530,7 +530,17 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   "percentiles": { "p50": 9.2, "p90": 21.4, "p95": 28.1, "p99": 96.3 },
   "mean_ms": 12.8,
   "max_ms": 312.4,
-  "timeline": [ { "t_s": 0, "count": 119, "p50_ms": 6.81, "max_ms": 24.03 }, "..." ]
+  "timeline": [ { "t_s": 0, "count": 119, "p50_ms": 6.81, "max_ms": 24.03 }, "..." ],
+  "jank": {
+    "total_frames": 1938,
+    "janky_frames": 1698,
+    "late_frames": 330,
+    "by_type": [
+      { "type": "Buffer Stuffing", "count": 1556 },
+      { "type": "App Deadline Missed", "count": 188 },
+      { "type": "Dropped Frame", "count": 101 }
+    ]
+  }
 }
 ```
 
@@ -542,6 +552,21 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   `max_ms` 가 소수점까지 말합니다.
   흔히 쓰이는 예산 부근을 1ms 로 조밀하게 보고 꼬리로 갈수록 폭을 넓힙니다.
 - 종료 이벤트를 못 받은 미완결 프레임(`dur = -1`)은 집계에서 **제외**됩니다.
+- **`jank` 는 기기가 프레임마다 붙여 둔 꼬리표를 센 것입니다 — 이 도구의 판정이 아닙니다.**
+  SurfaceFlinger 가 `actual_frame_timeline_slice.jank_type` 에 직접 적고, 우리는 개수만 냅니다.
+  `dur` 와 같은 테이블에서 나오므로 기기에 더 물어보지 않습니다.
+  - `by_type` 의 `type` 은 SurfaceFlinger 원문입니다 (`Dropped Frame` · `App Deadline Missed` ·
+    `Buffer Stuffing` · `SurfaceFlinger Stuffing` · `Display HAL` 등).
+  - **합이 `janky_frames` 를 넘을 수 있습니다.** 한 프레임에 꼬리표가 여러 개 붙으면
+    (`"App Deadline Missed, Buffer Stuffing"`) 각각에 세어집니다. 하나만 고르면 나머지가
+    사라지므로 겹치는 채로 둡니다.
+  - `late_frames`(`on_time_finish = 0`)는 `janky_frames` 와 **다른 사실**입니다. 꼬리표가
+    `None` 인데 늦게 끝난 프레임이 실재합니다 (실측: `None` 240장 중 41장). 반대로
+    `Buffer Stuffing` 은 꼬리표가 붙어도 마감 안에 끝난 경우가 대부분이었습니다.
+  - **`janky_frames / total_frames` 를 그대로 "품질" 로 읽지 마세요.** 실측 한 세션에서 88%가
+    꼬리표를 달았는데 그 대부분이 `Buffer Stuffing` 이었고 마감은 지켰습니다.
+  - `null` 은 **꼬리표를 읽지 못했다**는 뜻이고, 필드 자체가 없으면 이 값을 낼 줄 모르던
+    시절의 세션입니다. 둘 다 "문제가 없었다" 가 아닙니다.
 - `timeline` 은 **1초 단위 추이**입니다. `buckets` 와 같은 원본에서 나오고 같은 규칙으로
   미완결 프레임을 거릅니다. 집계만으로는 구분되지 않는 것 — 내내 고르게 느렸는지, 특정
   구간에서만 튀었는지 — 을 보려는 값입니다. **값이 없는 초는 배열에 없습니다**(0 으로 채우지

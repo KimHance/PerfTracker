@@ -159,6 +159,7 @@ export function ReportPage({ runId }: { runId: string }) {
                     title={block.title}
                     unit={stat && !isNone ? (vm as { unit: string }).unit : (block.unit ?? '')}
                     span={block.span}
+                    tone={block.tone}
                     metric={metric}
                     showHead={!stat}
                     readout={

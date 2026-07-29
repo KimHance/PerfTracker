@@ -11,6 +11,7 @@ export function BlockCard({
   title,
   unit,
   span,
+  tone,
   metric,
   showHead,
   readout,
@@ -21,6 +22,8 @@ export function BlockCard({
   title: string
   unit: string
   span: number
+  /** 두 번째 계열색. 경고가 아니라 구분이다. */
+  tone?: 'alt' | undefined
   metric: MetricState
   showHead: boolean
   readout?: string
@@ -36,7 +39,10 @@ export function BlockCard({
       : null
 
   return (
-    <section className="rp-card" style={{ gridColumn: `span ${span}` }}>
+    <section
+      className={`rp-card${tone === 'alt' ? ' rp-card-alt' : ''}`}
+      style={{ gridColumn: `span ${span}` }}
+    >
       {showHead && (
         <header className="rp-card-head">
           <h3 className="rp-card-title" title={metric.reason ?? undefined}>
