@@ -95,12 +95,12 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
 ## 실행
 
 ```bash
-# 실제로 쓰는 방법 — 서버가 화면과 API 를 함께 서빙한다
-npm run build && npm run build:web
-npx perftracker gui                     # 127.0.0.1 의 빈 포트, 브라우저 자동 실행
+# 실제로 쓰는 방법 — 이 한 줄이 빌드까지 한다. 서버가 화면과 API 를 함께 서빙한다
+npm run gui                             # 127.0.0.1 의 빈 포트, 브라우저 자동 실행
+npx perftracker gui -p 7333             # 옵션이 필요할 때만 CLI 를 직접 부른다
 
 # 화면만 손볼 때 — vite 개발 서버(5173)가 /api 를 7333 으로 프록시한다
-npm run gui
+npm run gui:dev
 #   http://localhost:5173/?mock         목업으로 화면 전체 (기기 불필요)
 #   http://localhost:5173/?mock=empty   기기 0대 빈 상태
 

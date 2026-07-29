@@ -199,8 +199,7 @@ async function handle(api: GuiApi, req: IncomingMessage, res: ServerResponse): P
 
   res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
   res.end(
-    '화면이 빌드되어 있지 않습니다.\n' +
-      'npm run build:web -w @perftracker/gui 를 먼저 실행하세요.\n',
+    '화면이 빌드되어 있지 않습니다.\n' + 'npm run gui 로 실행하세요 (빌드까지 함께 합니다).\n',
   )
 }
 

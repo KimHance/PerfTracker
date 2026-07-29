@@ -17,10 +17,12 @@ export async function runGui(opts: {
 }): Promise<void> {
   if (!existsSync(webRoot())) {
     // 화면이 없는데 서버만 띄우면 사용자는 빈 페이지를 보고 원인을 모른다.
+    // 저장소에서 직접 `node .../index.js gui` 를 부른 경우에만 여기 온다 —
+    // `npm run gui` 는 빌드를 포함하므로 이 문장을 볼 일이 없다.
     throw new Error(
       '화면이 아직 빌드되지 않았습니다.\n' +
         `  기대한 경로  ${webRoot()}\n` +
-        'npm run build:web 을 먼저 실행하세요.',
+        'npm run gui 로 실행하세요 (빌드까지 함께 합니다).',
     )
   }
 

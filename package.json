@@ -9,8 +9,9 @@
     "node": ">=20.19"
   },
   "scripts": {
-    "build": "tsc --build",
-    "gui": "npm run dev -w @perftracker/gui",
+    "build": "tsc --build && npm run build:web -w @perftracker/gui",
+    "gui": "npm run build && node packages/cli/dist/index.js gui",
+    "gui:dev": "npm run dev -w @perftracker/gui",
     "typecheck": "tsc --build && tsc -p tsconfig.test.json && tsc -p packages/gui/tsconfig.web.json",
     "test": "vitest run",
     "test:watch": "vitest",
