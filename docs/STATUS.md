@@ -1,6 +1,6 @@
 # 프로젝트 현황 — 이어서 작업하려면 여기부터
 
-마지막 갱신: 2026-07-28.
+마지막 갱신: 2026-07-29.
 
 이 문서는 **다른 컴퓨터에서 저장소를 클론해 작업을 이어받는 사람**을 위한 것입니다.
 "무엇이 끝났고, 무엇을 확인하지 못했고, 다음에 무엇을 할 차례인가" 세 가지에 답합니다.
@@ -45,7 +45,7 @@
 | | 무엇이었나 | 병합 |
 | --- | --- | --- |
 | **M0** | 기기·앱 해석의 토대. `adb` 탐색 사슬, **측정 창 래치가 달린 `AdbClient`**, 기기 목록·정적 스펙·전후 상태 스냅샷, `resources.arsc` 를 직접 파싱하는 앱 라벨 해석, `result.json` 의 zod 스키마, `doctor`/`devices`/`apps`/`schema` 명령 | — |
-| **M1** | 측정 흐름의 완성. Perfetto `--detach` 세션 제어, TraceConfig 조립기와 **저부하 불변식 검사**, `trace_processor` 확보·쿼리, **frame 수집기(101단 버킷)**, capture 매니페스트와 `extract` 오케스트레이터, `start`/`status`/`stop`/`extract` end-to-end | — |
+| **M1** | 측정 흐름의 완성. Perfetto `--detach` 세션 제어, TraceConfig 조립기와 **저부하 불변식 검사**, `trace_processor` 확보·쿼리, **frame 수집기(가변 폭 버킷)**, capture 매니페스트와 `extract` 오케스트레이터, `start`/`status`/`stop`/`extract` end-to-end | — |
 | **M2** | **CPU · Memory · Log 수집기**와 `measurement_overhead` 자체 계측 | `c874f23` |
 | **M3** | **Thermal · Network 수집기**와 before/after 스냅샷 계약 (`captureSnapshots`) | `89d89ee` |
 | **실기기 검증** | 그때까지 에뮬레이터로만 덮여 있던 것을 실기기로 확인하고, 거기서 나온 결함을 수정 | `dffd9cb` |
@@ -457,6 +457,42 @@ SM-A405S(Android 11)에서 `am start -W` 가 매번 `Status: timeout` 을 냅니
 `frametimeline` 이 없어(sdk 30) **끝점을 잡을 수단이 없습니다.** `process.start_ts` 도 NULL 이라
 시작점도 없습니다 — 켜려면 ftrace 이벤트를 늘려야 하고 오버헤드 예산을 다시 봐야 합니다.
 즉 "이미 되는 기기를 더 정확하게" 는 되지만 "안 되는 기기를 되게" 는 못 합니다.
+
+### ✅ 기기가 이미 준 것을 버리지 않는다 · 꼬리 버킷 (2026-07-29)
+
+**여덟 자리를 채웠습니다. 전부 기기에 더 묻지 않고 나온 값입니다.**
+
+| 필드 | 어디서 왔나 |
+| --- | --- |
+| `target_app` 의 `debuggable` · `large_heap` · `min_sdk` · `target_sdk` · `primary_cpu_abi` | `version_name` 을 읽으려고 **이미 돌리던** `dumpsys package` 출력을 다시 파싱 |
+| `display.opengl_es_version` | 기존 getprop 묶음에 키 하나 |
+| `display.orientation` · `size_class` | 이미 읽은 해상도·밀도에서 **파생** |
+| `tool.host` | node 런타임 (기기 접촉 0) |
+| `cpu.device_timeline` · `memory.system_timeline` | **이미 받아 놓고 집계만 내고 버리던 표본** (각 40개) |
+
+`debuggable` 의 `false` 와 `null` 을 갈랐습니다. `false` 는 "릴리스임을 확인했다" 이고
+`null` 은 "모른다" 인데, 둘을 바꿔 쓰면 디버그 빌드를 재고 릴리스라고 읽는 세션이 생깁니다.
+
+**thermal 시계열은 검토하고 뺐습니다.** `thermal/thermal_temperature` ftrace 이벤트가 두 기기
+모두에 존재해서 될 줄 알았는데, 15초 트레이스에서 **0건**이었습니다 (tracepoint 는 있는데
+삼성 HAL 이 타지 않습니다). 추측으로 "가능하다" 고 적을 뻔한 자리였습니다.
+
+**꼬리 버킷을 넓혔습니다 (101 → 61).** 130–350ms 를 5ms 로 잘라 그 한 구간에만 44칸을 뒀는데,
+실측 두 세션에서 거기 들어간 프레임은 각각 1개였습니다. 130 이상을 30 → 50 → 100ms 로
+넓혔고 **보이는 막대 수는 그대로**입니다 — 줄어든 것은 전부 빈 버킷입니다.
+
+> 2026-07-27 항목의 "버킷 경계는 바꾸지 않았습니다" 는 **그때의 판단**입니다. 그때 안 바꾼
+> 이유는 "경계가 기준선으로 읽히면 안 된다" 였고 그 이유는 지금도 유효합니다 — 이번에
+> 바꾼 것은 **130ms 미만이 아니라 꼬리**이고, 60fps·120Hz·90Hz 가 사는 5~16ms 구간은
+> 손대지 않았습니다.
+
+**잃은 것:** 꼬리의 해상도. 182ms 와 166ms 가 이제 같은 `160–190` 칸에 들어갑니다.
+130ms 를 넘은 프레임에서 분포가 답하는 질문은 "165냐 185냐" 가 아니라 "몇 개 있었나" 이고,
+정확한 값은 `percentiles` 와 `max_ms` 가 소수점까지 말합니다.
+
+**실기기 확인:** F936N 24.9초 세션에서 여덟 자리 모두 값이 나왔고 측정 창 안 adb 는 0회.
+저사양 기기(A405S / sdk 30)로도 한 세션 떠서 `frame` · `network` 가 `unsupported` 로,
+`cpu.app` 이 `null` 로 떨어지는 것을 확인했습니다.
 
 ### ✅ 삭제가 실제로 전부 지운다 · 뽑힌 기기가 선택으로 남던 것 (2026-07-28)
 
