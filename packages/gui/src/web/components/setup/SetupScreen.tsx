@@ -3,7 +3,6 @@ import { startPreview } from '../../format/preview.js'
 import { canStart } from '../../state/derive.js'
 import type { Tab } from '../../state/model.js'
 import { useStore } from '../../state/StoreContext.jsx'
-import { BlueprintCorners } from '../ui/Blueprint.jsx'
 import { AppSection } from './AppSection.jsx'
 import { DeviceSection } from './DeviceSection.jsx'
 import { MetricSection } from './MetricSection.jsx'
@@ -36,13 +35,12 @@ export function SetupScreen({ tab }: { tab: Tab }) {
         */}
         <span className="startbar-command">$ {startPreview(tab, state.env.outDir)}</span>
         <button
-          className="btn btn-primary btn-lg blueprint"
+          className="btn btn-primary btn-lg"
           style={{ minWidth: 150 }}
           disabled={!canStart(state, tab)}
           onClick={() => void startSession(deps, tab, state.env.outDir)}
         >
           측정 시작
-          <BlueprintCorners />
         </button>
       </div>
     </>

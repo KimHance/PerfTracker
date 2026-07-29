@@ -121,6 +121,12 @@ const ROUTES: Route[] = [
   },
   { method: 'GET', pattern: /^\/api\/runs$/, handle: (api) => api.runs() },
   {
+    // 보고서. `result.json` 을 그대로 낸다 — 이유는 GuiApi.report 주석 참고.
+    method: 'GET',
+    pattern: /^\/api\/runs\/([^/]+)\/report$/,
+    handle: (api, _r, p) => api.report(decode(p[0])),
+  },
+  {
     method: 'DELETE',
     pattern: /^\/api\/runs$/,
     // 결과를 **돌려준다.** 예전에는 `await` 만 하고 undefined 를 냈고, 그러면 204(내용 없음)가

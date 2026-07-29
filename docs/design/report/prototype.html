@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/industry-dead3d66-f6b4-48d1-8e80-511171bc624a/styles.css">
+<script src="_ds/industry-dead3d66-f6b4-48d1-8e80-511171bc624a/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;min-height:100%}
+body{background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);font-size:14px;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+a{color:var(--color-accent-700);text-decoration:none}
+a:hover{color:var(--color-accent-800);text-decoration:underline}
+:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px}
+:root{
+  --color-bg:#1d1f20;
+  --color-surface:#26282a;
+  --color-text:#eef0f2;
+  --color-accent:#749dc4;
+  --color-accent-2:#7e9cb8;
+  --color-divider:color-mix(in srgb,#eef0f2 18%,transparent);
+  --color-neutral-100:#26282a;
+  --color-neutral-200:#2f3133;
+  --color-neutral-300:#3b3d40;
+  --color-neutral-400:#55585b;
+  --color-neutral-500:#7e8285;
+  --color-neutral-600:#9a9ea1;
+  --color-neutral-700:#b6babd;
+  --color-neutral-800:#d3d6d8;
+  --color-neutral-900:#eef0f2;
+  --color-accent-100:#1f2b36;
+  --color-accent-200:#26374a;
+  --color-accent-300:#3d5f80;
+  --color-accent-400:#6d97bf;
+  --color-accent-500:#749dc4;
+  --color-accent-600:#8fb2d3;
+  --color-accent-700:#a9c8e6;
+  --color-accent-800:#cfe1f3;
+  --color-accent-900:#e7f1fb;
+  --radius-sm:6px;
+  --radius-md:10px;
+  --radius-lg:16px;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.5);
+  --shadow-md:0 3px 10px rgba(0,0,0,.55);
+  --shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+.card,.dialog,.tag{border-radius:var(--radius-lg)}
+.input{border-radius:var(--radius-md)}
+.btn{border-radius:99px}
+nav button{border-radius:0 99px 99px 0}
+::selection{background:var(--color-accent-200)}
+@keyframes spin{to{transform:rotate(360deg)}}
+svg{display:block}
+svg text,svg tspan{display:inline}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--color-neutral-300);border-radius:99px}
+</style>
+</helmet>
+
+<div style="display:grid;grid-template-columns:212px minmax(0,1fr);min-height:100vh;background:var(--color-bg)">
+
+  <nav style="border-right:1px solid var(--color-divider);position:sticky;top:0;align-self:start;height:100vh;overflow:auto;display:flex;flex-direction:column;padding:var(--space-6) 0">
+    <div style="padding:0 var(--space-4) var(--space-4);border-bottom:1px solid var(--color-divider)">
+      <div style="font-family:var(--font-heading);font-weight:700;font-size:15px;letter-spacing:.16em;text-transform:uppercase">PerfTracker</div>
+      <div style="font-size:11.5px;color:var(--color-neutral-600);margin-top:1px">세션 데이터</div>
+    </div>
+
+    <div style="padding:var(--space-3) 0;display:flex;flex-direction:column">
+      <sc-for list="{{ nav }}" as="n" hint-placeholder-count="2">
+        <button style="{{ n.style }}" onClick="{{ n.select }}">
+          <span>{{ n.label }}</span>
+          <span style="{{ n.countStyle }}">{{ n.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+  </nav>
+
+  <main style="padding:var(--space-6) clamp(16px,2.6vw,32px) 96px;max-width:1320px;min-width:0">
+
+    <sc-if value="{{ loading }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;align-items:center;gap:var(--space-3);padding:var(--space-8) 0;color:var(--color-neutral-600);font-size:13px">
+        <span style="width:16px;height:16px;border-radius:50%;border:2px solid var(--color-accent-300);border-top-color:var(--color-accent-700);animation:spin .8s linear infinite"></span>
+        result.json 읽는 중
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ loaded }}" hint-placeholder-val="{{ false }}">
+      <header style="border-bottom:1px solid var(--color-text);padding-bottom:var(--space-4);margin-bottom:var(--space-4)">
+        <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--space-2) var(--space-4)">
+          <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-accent-700)">{{ sessionId }}</span>
+          <h1 style="font-family:var(--font-heading);font-weight:600;font-size:clamp(26px,3.4vw,34px);letter-spacing:.01em;margin:0;line-height:1.05">{{ sessionName }}</h1>
+          <span style="{{ stateStyle }}">{{ stateLabel }}</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-6);margin-top:var(--space-3);font-size:12.5px;color:var(--color-neutral-700)">
+          <sc-for list="{{ headMeta }}" as="h" hint-placeholder-count="4">
+            <span style="display:flex;gap:var(--space-2);min-width:0">
+              <span style="color:var(--color-neutral-500);flex:none">{{ h.k }}</span>
+              <span class="num" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ h.v }}</span>
+            </span>
+          </sc-for>
+        </div>
+      </header>
+
+      <div style="display:flex;flex-wrap:wrap;gap:var(--space-2);margin-bottom:var(--space-6)">
+        <sc-for list="{{ flags }}" as="f" hint-placeholder-count="3">
+          <span style="{{ f.style }}" title="{{ f.title }}">{{ f.label }}</span>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{ hasMarks }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2);margin-bottom:var(--space-6);padding:var(--space-3) 0;border-top:1px solid var(--color-divider);border-bottom:1px solid var(--color-divider)">
+          <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-neutral-600);margin-right:var(--space-2)">표식</span>
+          <sc-for list="{{ markChips }}" as="m" hint-placeholder-count="4">
+            <button style="{{ m.style }}" onMouseEnter="{{ m.enter }}" onMouseLeave="{{ m.leave }}" onFocus="{{ m.enter }}" onBlur="{{ m.leave }}">
+              <span class="num" style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-600)">{{ m.at }}</span>
+              <span>{{ m.label }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-for list="{{ sections }}" as="sec" hint-placeholder-count="6">
+        <section id="{{ sec.id }}" style="margin-bottom:var(--space-8);scroll-margin-top:var(--space-4)">
+          <h2 style="display:flex;align-items:center;gap:var(--space-3);font-family:ui-monospace,Menlo,monospace;font-size:10.5px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--color-neutral-600);margin:0 0 var(--space-3)">
+            <span style="flex:none">{{ sec.label }}</span>
+            <span style="flex:1;height:1px;background:var(--color-divider)"></span>
+          </h2>
+
+          <div style="display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--space-3)">
+            <sc-for list="{{ sec.blocks }}" as="b" hint-placeholder-count="4">
+              <div class="card" style="{{ b.wrapStyle }}">
+
+                <sc-if value="{{ b.showHead }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;align-items:baseline;gap:var(--space-2);margin-bottom:var(--space-2)">
+                    <span style="font-family:var(--font-heading);font-size:15px;font-weight:600;letter-spacing:.03em;flex:none">{{ b.title }}</span>
+                    <span style="font-size:11px;color:var(--color-neutral-500);flex:none">{{ b.unit }}</span>
+                    <span style="{{ b.statusStyle }}" title="{{ b.reason }}">{{ b.statusLabel }}</span>
+                  </div>
+                  <div class="num" style="{{ b.readoutStyle }}">{{ b.readout }}</div>
+                </sc-if>
+
+                <sc-if value="{{ b.isStat }}" hint-placeholder-val="{{ false }}">
+                  <div>
+                    <div style="font-family:ui-monospace,Menlo,monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--color-neutral-600)">{{ b.title }}</div>
+                    <div class="num" style="{{ b.valueStyle }}">
+                      <span>{{ b.value }}</span>
+                      <span style="font-size:12px;font-weight:400;color:var(--color-neutral-600);margin-left:3px">{{ b.unit }}</span>
+                    </div>
+                    <div style="font-size:11.5px;color:var(--color-neutral-600);margin-top:2px;line-height:1.45">{{ b.sub }}</div>
+                    <span style="{{ b.statusStyle }}" title="{{ b.reason }}">{{ b.statusLabel }}</span>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ b.isSeries }}" hint-placeholder-val="{{ false }}">
+                  <div>
+                    <div>
+                    <svg viewBox="{{ b.viewBox }}" style="width:100%;height:auto" onMouseMove="{{ b.onMove }}" onMouseLeave="{{ b.onLeave }}" role="img" aria-label="{{ b.title }} 초당 추이">
+                      <sc-for list="{{ b.gaps }}" as="g" hint-placeholder-count="0">
+                        <rect x="{{ g.x }}" y="{{ g.y }}" width="{{ g.w }}" height="{{ g.h }}" fill="var(--color-neutral-500)" opacity="0.13"></rect>
+                      </sc-for>
+                      <sc-for list="{{ b.yTicks }}" as="y" hint-placeholder-count="3">
+                        <line x1="{{ b.plotX }}" y1="{{ y.gy }}" x2="{{ b.plotR }}" y2="{{ y.gy }}" stroke="var(--color-divider)" stroke-width="0.6"></line>
+                      </sc-for>
+                      <line x1="{{ b.plotX }}" y1="{{ b.plotT }}" x2="{{ b.plotX }}" y2="{{ b.plotB }}" stroke="var(--color-neutral-400)" stroke-width="0.8"></line>
+                      <line x1="{{ b.plotX }}" y1="{{ b.plotB }}" x2="{{ b.plotR }}" y2="{{ b.plotB }}" stroke="var(--color-neutral-400)" stroke-width="0.8"></line>
+                      <sc-for list="{{ b.xTicks }}" as="x" hint-placeholder-count="6">
+                        <line x1="{{ x.x }}" y1="{{ b.plotB }}" x2="{{ x.x }}" y2="{{ b.tickMarkY }}" stroke="var(--color-neutral-400)" stroke-width="0.8"></line>
+                      </sc-for>
+                      <sc-for list="{{ b.markLines }}" as="m" hint-placeholder-count="0">
+                        <line x1="{{ m.x }}" y1="{{ b.plotT }}" x2="{{ m.x }}" y2="{{ b.plotB }}" stroke="var(--color-neutral-500)" stroke-dasharray="2 3" opacity="{{ m.opacity }}"></line>
+                      </sc-for>
+                      <sc-for list="{{ b.subSegments }}" as="s" hint-placeholder-count="0">
+                        <path d="{{ s.d }}" fill="none" stroke="var(--color-neutral-500)" stroke-width="1.1" stroke-dasharray="3 2"></path>
+                      </sc-for>
+                      <sc-for list="{{ b.segments }}" as="s" hint-placeholder-count="1">
+                        <path d="{{ s.d }}" fill="none" stroke="var(--color-accent)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"></path>
+                      </sc-for>
+                      <sc-for list="{{ b.singletons }}" as="p" hint-placeholder-count="0">
+                        <circle cx="{{ p.x }}" cy="{{ p.y }}" r="1.8" fill="var(--color-accent)"></circle>
+                      </sc-for>
+                      <sc-if value="{{ b.hasCursor }}" hint-placeholder-val="{{ false }}">
+                        <g>
+                          <line x1="{{ b.cursorX }}" y1="{{ b.plotT }}" x2="{{ b.cursorX }}" y2="{{ b.plotB }}" stroke="var(--color-accent)" stroke-width="1"></line>
+                          <circle cx="{{ b.cursorX }}" cy="{{ b.cursorY }}" r="{{ b.cursorR }}" fill="var(--color-bg)" stroke="var(--color-accent)" stroke-width="2"></circle>
+                        </g>
+                      </sc-if>
+                      {{ b.axisText }}
+                    </svg>
+                    <div style="font-size:10.5px;color:var(--color-neutral-500);line-height:1.5;margin-top:2px">{{ b.footnote }}</div>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ b.isDistribution }}" hint-placeholder-val="{{ false }}">
+                  <div>
+                    <div style="display:flex;flex-wrap:wrap;gap:var(--space-4) var(--space-6);margin-bottom:var(--space-3)">
+                      <sc-for list="{{ b.percentiles }}" as="p" hint-placeholder-count="4">
+                        <div>
+                          <div style="font-family:ui-monospace,Menlo,monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-600)">{{ p.k }}</div>
+                          <div class="num" style="font-family:var(--font-heading);font-size:20px;font-weight:600;letter-spacing:.01em">{{ p.v }}<span style="font-size:11px;font-weight:400;color:var(--color-neutral-600);margin-left:2px">{{ p.u }}</span></div>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <div style="width:100%;min-width:0" ref="{{ b.measureRef }}">
+                      <svg viewBox="{{ b.viewBox }}" width="100%" height="{{ b.svgHeight }}" preserveAspectRatio="none" role="img" aria-label="프레임 지속 시간 버킷 분포">
+                        <sc-for list="{{ b.yTicks }}" as="y" hint-placeholder-count="5">
+                          <line x1="{{ b.plotL }}" y1="{{ y.gy }}" x2="{{ b.plotR }}" y2="{{ y.gy }}" stroke="var(--color-divider)" stroke-width="0.6"></line>
+                        </sc-for>
+                        <line x1="{{ b.plotL }}" y1="{{ b.plotT }}" x2="{{ b.plotL }}" y2="{{ b.plotB }}" stroke="var(--color-neutral-400)" stroke-width="0.8"></line>
+                        <line x1="{{ b.plotL }}" y1="{{ b.plotB }}" x2="{{ b.plotR }}" y2="{{ b.plotB }}" stroke="var(--color-neutral-400)" stroke-width="0.8"></line>
+                        <sc-for list="{{ b.xLabels }}" as="x" hint-placeholder-count="6">
+                          <line x1="{{ x.x }}" y1="{{ b.plotB }}" x2="{{ x.x }}" y2="{{ b.tickMarkY }}" stroke="var(--color-neutral-400)" stroke-width="0.8"></line>
+                        </sc-for>
+                        <sc-if value="{{ b.hasHot }}" hint-placeholder-val="{{ false }}">
+                          <rect x="{{ b.hotX }}" y="{{ b.hotY }}" width="{{ b.hotW }}" height="{{ b.hotH }}" rx="3" fill="var(--color-accent)" opacity="0.14"></rect>
+                        </sc-if>
+                        <sc-for list="{{ b.bars }}" as="r" hint-placeholder-count="24">
+                          <rect x="{{ r.x }}" y="{{ r.y }}" width="{{ r.w }}" height="{{ r.h }}" rx="{{ r.rx }}" fill="var(--color-accent)" opacity="{{ r.opacity }}"></rect>
+                        </sc-for>
+                        <sc-for list="{{ b.breaks }}" as="k" hint-placeholder-count="0">
+                          <line x1="{{ k.x }}" y1="{{ b.plotT }}" x2="{{ k.x }}" y2="{{ b.plotB }}" stroke="var(--color-neutral-400)" stroke-dasharray="2 2"></line>
+                        </sc-for>
+                        <sc-for list="{{ b.pLines }}" as="p" hint-placeholder-count="0">
+                          <line x1="{{ p.x }}" y1="{{ b.plotT }}" x2="{{ p.x }}" y2="{{ b.plotB }}" stroke="var(--color-neutral-700)" stroke-dasharray="3 3" opacity="0.6"></line>
+                        </sc-for>
+                        {{ b.axisText }}
+                        <g onMouseLeave="{{ b.onDistLeave }}">
+                          <sc-for list="{{ b.hits }}" as="t" hint-placeholder-count="24">
+                            <rect x="{{ t.x }}" y="{{ t.y }}" width="{{ t.w }}" height="{{ t.h }}" fill="transparent" onMouseEnter="{{ t.on }}" onMouseMove="{{ t.on }}"></rect>
+                          </sc-for>
+                        </g>
+                      </svg>
+                    </div>
+                    <div style="font-size:10.5px;color:var(--color-neutral-500);line-height:1.5;margin-top:var(--space-2)">{{ b.footnote }}</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ b.isBars }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:grid;gap:5px">
+                    <sc-for list="{{ b.rows }}" as="r" hint-placeholder-count="8">
+                      <div style="display:grid;grid-template-columns:64px minmax(0,1fr) 66px;align-items:center;gap:var(--space-2)">
+                        <span style="font-size:12px;color:var(--color-neutral-700)">{{ r.label }}</span>
+                        <span style="height:8px;background:var(--color-neutral-200);display:block;border-radius:99px;overflow:hidden">
+                          <i style="{{ r.fillStyle }}"></i>
+                        </span>
+                        <span class="num" style="font-size:12px;text-align:right">{{ r.value }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ b.isDelta }}" hint-placeholder-val="{{ false }}">
+                  <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+                    <sc-for list="{{ b.rows }}" as="r" hint-placeholder-count="6">
+                      <tr>
+                        <th style="text-align:left;font-weight:500;color:var(--color-neutral-600);padding:4px 0;border-bottom:1px solid var(--color-divider);white-space:nowrap">{{ r.label }}</th>
+                        <td class="num" style="padding:4px 0;border-bottom:1px solid var(--color-divider);text-align:right;color:var(--color-neutral-700);width:26%">{{ r.before }}</td>
+                        <td style="padding:4px var(--space-2);border-bottom:1px solid var(--color-divider);text-align:center;color:var(--color-neutral-500);width:18px">→</td>
+                        <td class="num" style="padding:4px 0;border-bottom:1px solid var(--color-divider);text-align:right;width:26%">{{ r.after }}</td>
+                      </tr>
+                    </sc-for>
+                  </table>
+                </sc-if>
+
+                <sc-if value="{{ b.isPairs }}" hint-placeholder-val="{{ false }}">
+                  <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+                    <sc-for list="{{ b.rows }}" as="r" hint-placeholder-count="6">
+                      <tr>
+                        <th style="text-align:left;font-weight:500;color:var(--color-neutral-600);padding:4px var(--space-3) 4px 0;border-bottom:1px solid var(--color-divider);vertical-align:top;white-space:nowrap">{{ r.label }}</th>
+                        <td style="{{ r.valueStyle }}">{{ r.value }}</td>
+                      </tr>
+                    </sc-for>
+                  </table>
+                </sc-if>
+
+                <sc-if value="{{ b.isNone }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:var(--space-3) 0;display:flex;align-items:baseline;gap:var(--space-2);flex-wrap:wrap" title="{{ b.reason }}">
+                    <span style="font-size:12.5px;color:var(--color-neutral-600)">{{ b.noneLabel }}</span>
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-500)">{{ b.reasonCode }}</span>
+                  </div>
+                </sc-if>
+
+              </div>
+            </sc-for>
+          </div>
+        </section>
+      </sc-for>
+
+      <footer style="border-top:1px solid var(--color-divider);padding-top:var(--space-3);font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-500);display:flex;flex-wrap:wrap;gap:var(--space-4)">
+        <span>{{ footerTool }}</span>
+        <span>{{ footerSchema }}</span>
+        <span>{{ footerIgnored }}</span>
+      </footer>
+    </sc-if>
+  </main>
+</div>
+
+<sc-if value="{{ tipOpen }}" hint-placeholder-val="{{ false }}">
+  <div style="{{ tipStyle }}">
+    <div style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-600)">{{ tipHead }}</div>
+    <div class="num" style="font-family:var(--font-heading);font-size:19px;font-weight:600;letter-spacing:.01em;margin-top:1px">{{ tipValue }}</div>
+    <div class="num" style="font-size:11.5px;color:var(--color-neutral-700);margin-top:1px">{{ tipSub }}</div>
+  </div>
+</sc-if>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:980},&quot;sample&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;full&quot;,&quot;low-end&quot;,&quot;legacy&quot;],&quot;default&quot;:&quot;full&quot;,&quot;tsType&quot;:&quot;'full' | 'low-end' | 'legacy'&quot;,&quot;section&quot;:&quot;표본&quot;}}">
+/* ── 매니페스트 ─────────────────────────────────────────────────────────
+   지표가 자기 모양(kind)과 데이터 위치(path)를 선언한다. 렌더러는 모양만 안다.
+   새 지표 = 여기 한 줄. 새 모양이 나올 때만 kind 를 늘린다.                */
+
+const SECTIONS = [
+  { id: 'summary', label: '요약', tab: 'summary' },
+  { id: 'render', label: '렌더', tab: 'summary' },
+  { id: 'cpu', label: 'CPU', tab: 'summary' },
+  { id: 'memory', label: '메모리', tab: 'summary' },
+  { id: 'log', label: '로그', tab: 'summary' },
+  { id: 'context', label: '맥락', tab: 'summary' },
+  { id: 'device', label: '기기 · 앱', tab: 'device' },
+]
+
+const TABS = [
+  { id: 'summary', label: '요약' },
+  { id: 'device', label: '기기' },
+]
+
+const MANIFEST = [
+  // ── 요약 타일 ────────────────────────────────────────────────
+  { kind: 'stat', section: 'summary', title: '프레임', metric: 'frame', path: 'metrics.frame.data.total_frames', fmt: 'int', unit: '개', span: 4,
+    sub: [{ l: '최대', p: 'metrics.frame.data.max_ms', f: 'ms2' }, { l: 'p50', p: 'metrics.frame.data.percentiles.p50', f: 'ms2' }] },
+  { kind: 'stat', section: 'summary', title: '앱 시작', metric: 'startup', path: 'metrics.startup.data.total_time_ms', fmt: 'int', unit: 'ms', span: 4,
+    sub: [{ l: '상태', p: 'metrics.startup.data.launch_state', f: 'raw' }, { l: 'wait', p: 'metrics.startup.data.wait_time_ms', f: 'ms0' }] },
+  { kind: 'stat', section: 'summary', title: '앱 CPU 시간', metric: 'cpu', path: 'metrics.cpu.data.app.total_ms', fmt: 'int', unit: 'ms', span: 4,
+    sub: [{ l: '기기 몫', p: 'metrics.cpu.data.app.share_of_device_cpu_pct', f: 'pct2' }, { l: '기기 busy', p: 'metrics.cpu.data.device_total_busy_pct', f: 'pct2' }] },
+  { kind: 'stat', section: 'summary', title: '앱 RSS 최대', metric: 'memory', path: 'metrics.memory.data.rss.max_kb', fmt: 'mb0', unit: '', span: 4,
+    sub: [{ l: '평균', p: 'metrics.memory.data.rss.avg_kb', f: 'mb0' }, { l: 'watermark', p: 'metrics.memory.data.rss_watermark_peak_kb', f: 'mb0' }] },
+  { kind: 'stat', section: 'summary', title: '앱 경고·에러', metric: 'log', path: 'metrics.log.data.app.total', fmt: 'int', unit: '건', span: 4,
+    sub: [{ l: 'error', p: 'metrics.log.data.app.by_priority.error', f: 'int' }, { l: '기기 전체', p: 'metrics.log.data.device_total', f: 'int' }] },
+  { kind: 'stat', section: 'summary', title: '수신', metric: 'network', path: 'metrics.network.data.rx_bytes', fmt: 'bytes', unit: '', span: 4,
+    sub: [{ l: '송신', p: 'metrics.network.data.tx_bytes', f: 'bytes' }, { l: 'uid', p: 'metrics.network.data.uid', f: 'raw' }] },
+
+  // ── 렌더: 이 프로젝트의 유일한 막대 ───────────────────────────
+  { kind: 'distribution', section: 'render', title: '프레임 지속 시간 분포', metric: 'frame', unit: 'ms', span: 12,
+    path: 'metrics.frame.data.buckets', percentilesPath: 'metrics.frame.data.percentiles',
+    totalPath: 'metrics.frame.data.total_frames', breakAfterEmptyBuckets: Infinity },
+
+  // ── 시계열: 전부 선. path 가 지표마다 다르다는 것이 요점 ────────
+  { kind: 'series', section: 'cpu', title: '앱 CPU', metric: 'cpu', unit: '% · 1코어 = 100%', span: 6,
+    path: 'metrics.cpu.data.app.timeline', field: 'app_cpu_ms', transform: (ms) => ms / 10, sampling: 'cumulative', fmt: 'n1', baseline: 'zero' },
+  { kind: 'series', section: 'cpu', title: '기기 CPU', metric: 'cpu', unit: '% · 전 코어 = 100%', span: 6,
+    path: 'metrics.cpu.data.device_timeline', field: 'busy_pct', sampling: 'cumulative', fmt: 'n1', baseline: 'zero' },
+  { kind: 'bars', section: 'cpu', title: '기기 코어별 사용률', metric: 'cpu', unit: '세션 전체 집계 · %', span: 6,
+    path: 'metrics.cpu.data.device_per_core', labelField: 'cpu', labelPrefix: 'CPU ', valueField: 'busy_pct', fmt: 'pct2', scaleMax: 100 },
+  { kind: 'pairs', section: 'cpu', title: '앱 CPU 시간', metric: 'cpu', unit: '', span: 6, path: 'metrics.cpu.data.app',
+    keys: [{ p: 'user_ms', l: 'user', f: 'ms0' }, { p: 'kernel_ms', l: 'kernel', f: 'ms0' }, { p: 'total_ms', l: '합계', f: 'ms0' },
+           { p: 'sampled_ms', l: '표본 구간', f: 'ms0' }, { p: 'samples', l: '표본 수', f: 'int' }, { p: 'share_of_device_cpu_pct', l: '기기 CPU 대비', f: 'pct2' }] },
+  { kind: 'pairs', section: 'cpu', title: '클러스터 주파수', metric: 'cpu', unit: 'avg / max', span: 12,
+    path: 'metrics.cpu.data.device_frequency', arrayAs: 'freq' },
+
+  // ── 메모리 ───────────────────────────────────────────────────
+  { kind: 'series', section: 'memory', title: '앱 RSS', metric: 'memory', unit: 'MB', span: 6,
+    path: 'metrics.memory.data.timeline', field: 'rss_kb', transform: (kb) => kb / 1024, sampling: 'gauge', fmt: 'n0', baseline: 'zero' },
+  { kind: 'series', section: 'memory', title: '기기 가용 메모리', metric: 'memory', unit: 'MB', span: 6,
+    path: 'metrics.memory.data.system_timeline', field: 'mem_available_kb', transform: (kb) => kb / 1024, sampling: 'gauge', fmt: 'n0', baseline: 'data' },
+  { kind: 'pairs', section: 'memory', title: '앱 RSS 구성', metric: 'memory', unit: 'min / avg / max', span: 6, path: 'metrics.memory.data',
+    keys: [{ p: 'rss_anon', l: 'anon', f: 'mbTriple' }, { p: 'rss_file', l: 'file', f: 'mbTriple' },
+           { p: 'rss_watermark_peak_kb', l: 'watermark peak', f: 'mb0' }, { p: 'process', l: '프로세스', f: 'raw' }, { p: 'samples', l: '표본 수', f: 'int' }] },
+  { kind: 'pairs', section: 'memory', title: '기기 메모리', metric: 'memory', unit: 'min / avg / max', span: 6, path: 'metrics.memory.data.system',
+    keys: [{ p: 'mem_total_kb', l: '전체', f: 'gb1' }, { p: 'mem_available', l: '가용', f: 'mbTriple' }, { p: 'mem_free', l: 'free', f: 'mbTriple' },
+           { p: 'cached', l: 'cached', f: 'mbTriple' }, { p: 'swap_total_kb', l: 'swap 전체', f: 'gb1' }, { p: 'swap_free', l: 'swap free', f: 'mbTriple' }] },
+
+  // ── 로그 ─────────────────────────────────────────────────────
+  { kind: 'series', section: 'log', title: '앱 로그', metric: 'log', unit: '건 / 초', span: 6,
+    path: 'metrics.log.data.app.timeline', field: 'count', subField: 'error', subLabel: 'error', sampling: 'count', fmt: 'int', baseline: 'zero' },
+  { kind: 'pairs', section: 'log', title: '우선순위별', metric: 'log', unit: '앱 / 기기 전체', span: 6, path: 'metrics.log.data',
+    keys: [{ p: 'min_prio', l: '수집 문턱', f: 'raw' }, { p: 'app.total', l: '앱 합계', f: 'int' }, { p: 'app.by_priority.warn', l: '앱 warn', f: 'int' },
+           { p: 'app.by_priority.error', l: '앱 error', f: 'int' }, { p: 'app.by_priority.fatal', l: '앱 fatal', f: 'int' },
+           { p: 'device_total', l: '기기 합계', f: 'int' }, { p: 'device_by_priority.warn', l: '기기 warn', f: 'int' },
+           { p: 'device_by_priority.error', l: '기기 error', f: 'int' }] },
+
+  // ── 맥락 ─────────────────────────────────────────────────────
+  { kind: 'delta', section: 'context', title: '온도 (세션 전 → 후)', metric: 'thermal', unit: '°C', span: 6,
+    path: 'metrics.thermal.data.zones', labelField: 'name', beforeField: 'before_c', afterField: 'after_c', fmt: 'c1' },
+  { kind: 'delta', section: 'context', title: '기기 상태 (전 → 후)', unit: '', span: 6,
+    beforePath: 'device.state_before', afterPath: 'device.state_after',
+    keys: [{ p: 'battery_level', l: '배터리', f: 'pct0' }, { p: 'battery_temp_c', l: '배터리 온도', f: 'c1' }, { p: 'charging', l: '충전', f: 'bool' },
+           { p: 'mem_available_kb', l: '가용 메모리', f: 'mb0' }, { p: 'screen_brightness', l: '밝기', f: 'int' },
+           { p: 'power_save_mode', l: '절전', f: 'bool' }, { p: 'network', l: '네트워크', f: 'raw' }, { p: 'animator_duration_scale', l: '애니메이션 배율', f: 'raw' }] },
+  { kind: 'pairs', section: 'context', title: '네트워크', metric: 'network', unit: 'uid 델타 · 세션 총량', span: 4, path: 'metrics.network.data',
+    keys: [{ p: 'rx_bytes', l: '수신', f: 'bytes' }, { p: 'tx_bytes', l: '송신', f: 'bytes' }, { p: 'rx_packets', l: '수신 패킷', f: 'int' },
+           { p: 'tx_packets', l: '송신 패킷', f: 'int' }, { p: 'uid', l: 'uid', f: 'raw' }, { p: 'shared_uid_packages', l: 'uid 공유', f: 'list' }] },
+  { kind: 'pairs', section: 'context', title: '앱 시작', metric: 'startup', unit: 'am start -W', span: 4, path: 'metrics.startup.data',
+    keys: [{ p: 'total_time_ms', l: 'TotalTime', f: 'ms0' }, { p: 'wait_time_ms', l: 'WaitTime', f: 'ms0' },
+           { p: 'launch_state', l: 'LaunchState', f: 'raw' }, { p: 'status', l: 'Status', f: 'raw' }] },
+  { kind: 'pairs', section: 'context', title: '측정 자신의 비용', unit: '', span: 4, path: 'measurement_overhead',
+    keys: [{ p: 'tracing_processes_cpu_time_ms', l: '수집 CPU 시간', f: 'ms0' }, { p: 'tracing_processes_cpu_share_pct', l: '수집 CPU 몫', f: 'pct2' },
+           { p: 'tracing_processes_peak_rss_kb', l: '수집 RSS 최대', f: 'mb1' }, { p: 'adb_commands_during_session', l: '세션 중 adb 명령', f: 'int' },
+           { p: 'trace_buffer_overrun', l: '버퍼 넘침', f: 'bool' }] },
+
+  // ── 기기 · 앱 ────────────────────────────────────────────────
+  { kind: 'pairs', section: 'device', title: '기기', unit: '', span: 4, path: 'device.static',
+    keys: [{ p: 'manufacturer', l: '제조사', f: 'raw' }, { p: 'model', l: '모델', f: 'raw' }, { p: 'android_release', l: 'Android', f: 'raw' },
+           { p: 'sdk_int', l: 'sdk_int', f: 'int' }, { p: 'soc_model', l: 'SoC', f: 'raw' }, { p: 'soc_manufacturer', l: 'SoC 제조사', f: 'raw' },
+           { p: 'memory_total_kb', l: '메모리', f: 'gb1' }, { p: 'abis', l: 'ABI', f: 'list' }, { p: 'build_fingerprint', l: 'fingerprint', f: 'wrap' }] },
+  { kind: 'pairs', section: 'device', title: '앱', unit: '', span: 4, path: 'target_app',
+    keys: [{ p: 'label', l: '이름', f: 'raw' }, { p: 'package', l: '패키지', f: 'wrap' }, { p: 'version_name', l: '버전', f: 'raw' },
+           { p: 'version_code', l: 'versionCode', f: 'int' }, { p: 'debuggable', l: 'debuggable', f: 'bool' }, { p: 'large_heap', l: 'largeHeap', f: 'bool' },
+           { p: 'min_sdk', l: 'minSdk', f: 'int' }, { p: 'target_sdk', l: 'targetSdk', f: 'int' }, { p: 'primary_cpu_abi', l: 'ABI', f: 'raw' },
+           { p: 'uid', l: 'uid', f: 'raw' }, { p: 'pid', l: 'pid', f: 'raw' }, { p: 'install_source', l: '설치 경로', f: 'raw' },
+           { p: 'launcher_activity', l: '진입점', f: 'wrap' }, { p: 'render_process', l: '렌더 프로세스', f: 'wrap' }] },
+  { kind: 'pairs', section: 'device', title: '화면', unit: '', span: 4, path: 'device.static.display',
+    keys: [{ p: 'width_px', l: '가로', f: 'int' }, { p: 'height_px', l: '세로', f: 'int' }, { p: 'density_dpi', l: 'dpi', f: 'int' },
+           { p: 'active_refresh_rate_hz', l: '주사율', f: 'hz' }, { p: 'supported_refresh_rates_hz', l: '지원 주사율', f: 'list' },
+           { p: 'orientation', l: '방향', f: 'raw' }, { p: 'size_class', l: '크기 구간', f: 'raw' }, { p: 'opengl_es_version', l: 'OpenGL ES', f: 'raw' }] },
+  { kind: 'bars', section: 'device', title: 'CPU 클러스터 최대 주파수', unit: 'GHz', span: 6,
+    path: 'device.static.cpu.clusters', labelField: 'cpus', labelPrefix: '', valueField: 'max_freq_khz', fmt: 'ghz2', scaleMax: null, span2: 12 },
+]
+
+const KNOWN_METRICS = ['frame', 'startup', 'cpu', 'memory', 'log', 'thermal', 'network']
+const SCHEMA_MAJOR = 1
+const SAMPLES = [
+  { id: 'full', label: 'full · sdk 36', file: 'samples/full.json' },
+  { id: 'low-end', label: 'low-end · sdk 30', file: 'samples/low-end.json' },
+  { id: 'legacy', label: 'legacy · 구 필드', file: 'samples/legacy.json' },
+]
+
+/* ── 읽기: 없는 것과 null 을 구분한다 ───────────────────────────── */
+const MISSING = Symbol('missing')
+function readPath(root, path) {
+  if (root === null || root === undefined) return MISSING
+  let cur = root
+  for (const seg of path.split('.')) {
+    if (cur === null || cur === undefined || typeof cur !== 'object' || !(seg in cur)) return MISSING
+    cur = cur[seg]
+  }
+  return cur
+}
+
+/* ── 표시 ──────────────────────────────────────────────────────── */
+const NONE_MISSING = '수집 안 함'
+const NONE_NULL = '값 없음'
+const nf = (n, d) => Number(n).toLocaleString('ko-KR', { minimumFractionDigits: d, maximumFractionDigits: d })
+
+function fmtValue(v, f) {
+  if (v === MISSING) return NONE_MISSING
+  if (v === null) return NONE_NULL
+  switch (f) {
+    case 'int': return nf(v, 0)
+    case 'ms0': return `${nf(v, 0)} ms`
+    case 'ms2': return `${nf(v, 2)} ms`
+    case 'pct0': return `${nf(v, 0)}%`
+    case 'pct1': return `${nf(v, 1)}%`
+    case 'pct2': return `${nf(v, 2)}%`
+    case 'c1': return `${nf(v, 1)}°C`
+    case 'hz': return `${nf(v, 0)} Hz`
+    case 'mb0': return `${nf(v / 1024, 0)} MB`
+    case 'mb1': return `${nf(v / 1024, 1)} MB`
+    case 'n0': return nf(v, 0)
+    case 'n1': return nf(v, 1)
+    case 'gb1': return `${nf(v / 1048576, 1)} GB`
+    case 'ghz2': return `${nf(v / 1000000, 2)} GHz`
+    case 'bytes': return fmtBytes(v)
+    case 'bool': return v === true ? '예' : v === false ? '아니오' : String(v)
+    case 'list': return Array.isArray(v) ? (v.length === 0 ? '없음' : v.join(', ')) : String(v)
+    case 'mbTriple':
+      if (typeof v !== 'object' || v === null) return NONE_NULL
+      return `${nf(v.min_kb / 1024, 0)} / ${nf(v.avg_kb / 1024, 0)} / ${nf(v.max_kb / 1024, 0)} MB`
+    case 'wrap': case 'raw': default: return String(v)
+  }
+}
+function fmtBytes(b) {
+  if (b < 1024) return `${nf(b, 0)} B`
+  if (b < 1048576) return `${nf(b / 1024, 1)} kB`
+  if (b < 1073741824) return `${nf(b / 1048576, 2)} MB`
+  return `${nf(b / 1073741824, 2)} GB`
+}
+const clock = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+const fmtWhen = (iso) => {
+  if (typeof iso !== 'string') return NONE_NULL
+  const d = new Date(iso)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
+const STATUS_LABEL = { collected: '수집됨', partial: '일부만', skipped: '건너뜀', unsupported: '기기 미지원', failed: '실패' }
+
+/* ── 기하: 시계열 ───────────────────────────────────────────────── */
+const SW = 300, SH = 138, SPAD = { l: 40, r: 10, t: 12, b: 30 }
+function niceMax(v) {
+  if (v <= 0) return 1
+  const mag = Math.pow(10, Math.floor(Math.log10(v)))
+  return Math.ceil(v / (mag / 2)) * (mag / 2)
+}
+
+class Component extends DCLogic {
+  state = { sample: 'full', data: null, error: null, hoverT: null, tip: null, hoverBucket: null, tab: 'summary', distW: 900 }
+
+  componentDidMount() {
+    this.load(this.props.sample ?? 'full')
+  }
+  componentWillUnmount() { if (this.ro) this.ro.disconnect() }
+
+  measureRef = (el) => {
+    if (el === null || el === this.distEl) return
+    this.distEl = el
+    if (this.ro) this.ro.disconnect()
+    this.ro = new ResizeObserver(() => {
+      const w = Math.round(el.clientWidth)
+      if (w > 0 && Math.abs(w - this.state.distW) > 2) this.setState({ distW: w })
+    })
+    this.ro.observe(el)
+    const w = Math.round(el.clientWidth)
+    if (w > 0 && w !== this.state.distW) this.setState({ distW: w })
+  }
+  componentDidUpdate(prev) {
+    if (this.props.sample !== undefined && this.props.sample !== prev.sample) this.load(this.props.sample)
+  }
+  load(id) {
+    const s = SAMPLES.find((x) => x.id === id) ?? SAMPLES[0]
+    this.setState({ sample: s.id, data: null, error: null, hoverT: null, tip: null, hoverBucket: null })
+    fetch(s.file)
+      .then((r) => r.json())
+      .then((data) => this.setState({ data }))
+      .catch((e) => this.setState({ error: String(e) }))
+  }
+
+  metricOf(res, name) {
+    if (name === undefined) return null
+    const m = readPath(res, `metrics.${name}`)
+    return m === MISSING || m === null ? null : m
+  }
+
+  /* 블록 공통: 상태/이유 */
+  decorate(b, m, vm) {
+    const status = m === null ? null : m.status
+    const badge = status === 'unsupported' || status === 'skipped' || status === 'failed'
+    vm.statusLabel = badge ? (STATUS_LABEL[status] ?? status) : ''
+    vm.statusStyle = vm.statusLabel === ''
+      ? 'display:none'
+      : 'font-family:ui-monospace,Menlo,monospace;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:99px;flex:none;white-space:nowrap;background:var(--color-neutral-200);color:var(--color-neutral-800)'
+    vm.reason = m === null || m.reason === null || m.reason === undefined ? '' : m.reason
+    vm.reasonCode = m === null || m.reason_code === null || m.reason_code === undefined ? '' : m.reason_code
+    vm.showReason = vm.reason !== '' && vm.isNone !== true && b.kind !== 'stat'
+    return vm
+  }
+
+  buildSeries(b, res, axis, marks) {
+    const raw = readPath(res, b.path)
+    const vm = { isSeries: true, showHead: true }
+    if (raw === MISSING || raw === null || !Array.isArray(raw) || raw.length === 0) {
+      vm.isSeries = false
+      vm.isNone = true
+      vm.noneLabel = raw === MISSING ? `${NONE_MISSING} — ${b.path} 없음` : NONE_NULL
+      return vm
+    }
+    const tf = b.transform ?? ((v) => v)
+    const pts = new Map()
+    const subPts = new Map()
+    for (const row of raw) {
+      const t = row.t_s
+      const v = row[b.field]
+      if (typeof t !== 'number') continue
+      if (v !== null && v !== undefined) pts.set(t, tf(v))
+      if (b.subField !== undefined) {
+        const sv = row[b.subField]
+        if (sv !== null && sv !== undefined) subPts.set(t, tf(sv))
+      }
+    }
+    const all = [...pts.values(), ...subPts.values()]
+    const dataMax = Math.max(...all)
+    const dataMin = Math.min(...all)
+    const yMax = b.baseline === 'data' ? niceMax(dataMax) : niceMax(dataMax)
+    const yMin = b.baseline === 'data' ? Math.max(0, Math.floor(dataMin / (yMax / 10)) * (yMax / 10)) : 0
+    const span = yMax - yMin || 1
+    const px = (t) => SPAD.l + (axis.maxT === 0 ? 0 : (t / axis.maxT) * (SW - SPAD.l - SPAD.r))
+    const py = (v) => SH - SPAD.b - ((v - yMin) / span) * (SH - SPAD.t - SPAD.b)
+
+    const firstExpected = b.sampling === 'cumulative' ? 1 : 0
+    const segs = []
+    const singles = []
+    let run = []
+    for (let t = firstExpected; t <= axis.maxT; t++) {
+      if (pts.has(t)) run.push(t)
+      else if (run.length > 0) { (run.length === 1 ? singles : segs).push(run); run = [] }
+    }
+    if (run.length > 0) (run.length === 1 ? singles : segs).push(run)
+
+    const gaps = []
+    let gapRun = []
+    for (let t = firstExpected; t <= axis.maxT; t++) {
+      if (!pts.has(t)) gapRun.push(t)
+      else if (gapRun.length > 0) { gaps.push(gapRun); gapRun = [] }
+    }
+    if (gapRun.length > 0) gaps.push(gapRun)
+
+    const toPath = (run, map) => run.map((t, i) => `${i === 0 ? 'M' : 'L'}${px(t).toFixed(1)} ${py(map.get(t)).toFixed(1)}`).join(' ')
+    vm.segments = segs.map((r) => ({ d: toPath(r, pts) }))
+    vm.singletons = singles.flat().map((t) => ({ x: px(t).toFixed(1), y: py(pts.get(t)).toFixed(1) }))
+    vm.subSegments = []
+    if (b.subField !== undefined) {
+      let sr = []
+      const out = []
+      for (let t = firstExpected; t <= axis.maxT; t++) {
+        if (subPts.has(t)) sr.push(t)
+        else if (sr.length > 1) { out.push(sr); sr = [] }
+        else sr = []
+      }
+      if (sr.length > 1) out.push(sr)
+      vm.subSegments = out.map((r) => ({ d: toPath(r, subPts) }))
+    }
+    vm.gaps = gaps.map((r) => ({
+      x: (px(r[0]) - (r.length === 1 ? 1.5 : 0)).toFixed(1),
+      y: SPAD.t, h: SH - SPAD.t - SPAD.b,
+      w: Math.max(3, px(r[r.length - 1]) - px(r[0])).toFixed(1),
+    }))
+
+    vm.viewBox = `0 0 ${SW} ${SH}`
+    vm.plotX = SPAD.l; vm.plotR = SW - SPAD.r; vm.plotT = SPAD.t; vm.plotB = SH - SPAD.b
+    vm.tickMarkY = SH - SPAD.b + 3
+    vm.labelX = SPAD.l - 6; vm.tickY = SH - 8
+    const yVals = [yMin, yMin + (yMax - yMin) / 2, yMax]
+    vm.yTicks = yVals.map((v) => ({ y: (py(v) + 3).toFixed(1), gy: py(v).toFixed(1), label: fmtAxis(v) }))
+    const step = axis.maxT <= 12 ? 3 : axis.maxT <= 30 ? 10 : axis.maxT <= 70 ? 20 : 30
+    const xs = []
+    for (let t = 0; t <= axis.maxT; t += step) xs.push(t)
+    if (xs[xs.length - 1] !== axis.maxT) xs.push(axis.maxT)
+    vm.xTicks = xs.map((t, i) => ({
+      x: px(t).toFixed(1),
+      anchor: i === 0 ? 'start' : i === xs.length - 1 ? 'end' : 'middle',
+      label: `${t}s`,
+    }))
+    vm.axisText = svgText([
+      ...vm.yTicks.map((t) => ({ x: vm.labelX, y: t.y, anchor: 'end', size: 12, text: t.label })),
+      ...vm.xTicks.map((t) => ({ x: t.x, y: SH - 9, anchor: t.anchor, size: 12, text: t.label })),
+    ])
+    vm.yTitle = b.unit === '' || b.unit === undefined ? '값' : b.unit.split(' · ')[0]
+    vm.markLines = marks.map((mk) => ({ x: px(mk.t).toFixed(1), opacity: this.state.hoverT === mk.t ? 0.95 : 0.4 }))
+
+    const ht = this.state.hoverT
+    const has = ht !== null && pts.has(ht)
+    vm.hasCursor = ht !== null && ht >= 0 && ht <= axis.maxT
+    vm.cursorX = ht === null ? 0 : px(ht).toFixed(1)
+    vm.cursorY = has ? py(pts.get(ht)).toFixed(1) : (SH - SPAD.b).toFixed(1)
+    vm.cursorR = has ? 3 : 0
+    const vv = [...pts.values()]
+    const vMin = Math.min(...vv), vMax = Math.max(...vv)
+    const vAvg = vv.reduce((a, x) => a + x, 0) / vv.length
+    vm.summary = `min ${fmtValue(vMin, b.fmt)} · avg ${fmtValue(vAvg, b.fmt)} · max ${fmtValue(vMax, b.fmt)}`
+    vm.readout = ht === null
+      ? vm.summary
+      : has
+        ? `${clock(ht)} · ${fmtValue(pts.get(ht), b.fmt)}${b.subField !== undefined && subPts.has(ht) ? ` · ${b.subLabel} ${fmtValue(subPts.get(ht), b.fmt)}` : ''}`
+        : `${clock(ht)} · 표본 없음`
+    vm.readoutStyle = `font-size:11.5px;margin:-2px 0 var(--space-2);font-weight:${ht === null ? '400' : '600'};color:${ht === null ? 'var(--color-neutral-600)' : has ? 'var(--color-accent-700)' : 'var(--color-neutral-500)'}`
+    vm.onMove = (e) => {
+      const r = e.currentTarget.getBoundingClientRect()
+      const rel = ((e.clientX - r.left) / r.width) * SW
+      const t = Math.round(((rel - SPAD.l) / (SW - SPAD.l - SPAD.r)) * axis.maxT)
+      const cl = Math.max(0, Math.min(axis.maxT, t))
+      if (cl !== this.state.hoverT) this.setState({ hoverT: cl })
+    }
+    vm.onLeave = () => this.setState({ hoverT: null })
+
+    const notes = []
+    if (b.subField !== undefined) notes.push(`점선 ${b.subLabel}`)
+    vm.footnote = notes.join(' · ')
+    return vm
+  }
+
+  buildDistribution(b, res) {
+    const raw = readPath(res, b.path)
+    const vm = { isDistribution: true, showHead: true, readout: '', readoutStyle: 'display:none' }
+    if (raw === MISSING || raw === null || !Array.isArray(raw) || raw.length === 0) {
+      vm.isDistribution = false
+      vm.isNone = true
+      vm.noneLabel = raw === MISSING ? `${NONE_MISSING} — ${b.path} 없음` : NONE_NULL
+      return vm
+    }
+    const total = raw.reduce((n, x) => n + x.count, 0)
+    const keep = []
+    let i = 0
+    let collapsed = 0
+    let collapsedRuns = 0
+    while (i < raw.length) {
+      if (raw[i].count === 0) {
+        let j = i
+        while (j < raw.length && raw[j].count === 0) j++
+        const len = j - i
+        if (len >= b.breakAfterEmptyBuckets) {
+          keep.push({ type: 'break', from: raw[i].from_ms, to: raw[j - 1].to_ms, len })
+          collapsed += len; collapsedRuns++
+          i = j; continue
+        }
+        for (let k = i; k < j; k++) keep.push({ type: 'bar', b: raw[k], idx: k })
+        i = j; continue
+      }
+      keep.push({ type: 'bar', b: raw[i], idx: i })
+      i++
+    }
+    const H = 190, PT = 18, PB = 30, PL = 44, PR = 10
+    const W = Math.max(360, this.state.distW)
+    const nSlots = keep.length
+    const slotW = (W - PL - PR) / Math.max(1, nSlots)
+    const GAP = slotW > 9 ? 2 : slotW > 5 ? 1 : slotW > 3 ? 0.6 : 0.3
+    const BW = Math.max(1, slotW - GAP)
+    const BRK = slotW
+    // 넓으면 촘촘히, 좁으면 드물게
+    const labelEvery = Math.max(1, Math.ceil(nSlots / Math.max(4, Math.floor((W - PL - PR) / 62))))
+    let x = PL
+    const maxCount = Math.max(...raw.map((r) => r.count))
+    const bars = []
+    const hits = []
+    const breaks = []
+    const xLabels = []
+    const slotOf = new Map()
+
+    keep.forEach((s, si) => {
+      if (s.type === 'break') {
+        breaks.push({ x: (x + BRK / 2).toFixed(1), tx: (x + BRK / 2 + 3).toFixed(1), label: `${s.len}칸 생략` })
+        x += slotW
+        return
+      }
+      const h = s.b.count === 0 ? 0 : Math.max(1, (s.b.count / maxCount) * (H - PT - PB))
+      const hot = this.state.hoverBucket
+      bars.push({
+        x: x.toFixed(1), y: (H - PB - h).toFixed(1), w: BW.toFixed(2), h: h.toFixed(1), rx: Math.min(2, BW / 3).toFixed(2),
+        opacity: hot === null ? 0.9 : hot === s.idx ? 1 : 0.28,
+      })
+      hits.push({
+        idx: s.idx,
+        x: (x - GAP / 2).toFixed(2), w: slotW.toFixed(2),
+        y: PT, h: (H - PT - PB).toFixed(1),
+        on: (e) => this.showBucketTip(e, s.b, s.idx, total),
+      })
+      slotOf.set(s.idx, x + BW / 2)
+      if (si % labelEvery === 0) xLabels.push({ x: (x + BW / 2).toFixed(1), label: `${s.b.from_ms}ms` })
+      x += slotW
+    })
+
+    const width = W
+    vm.viewBox = `0 0 ${width} ${H}`
+    vm.svgWidth = '100%'; vm.svgHeight = H
+    vm.measureRef = this.measureRef
+    vm.plotB = H - PB; vm.plotT = PT; vm.plotL = PL; vm.plotR = width - PR
+    vm.tickY = H - 12; vm.tickMarkY = H - PB + 3; vm.labelX = PL - 6; vm.breakY = H - PB - 4
+    const yStep = niceMax(maxCount / 4)
+    const yVals = []
+    for (let v = 0; v <= maxCount + 0.001; v += yStep) yVals.push(v)
+    if (yVals[yVals.length - 1] < maxCount) yVals.push(maxCount)
+    const cy = (v) => H - PB - (v / maxCount) * (H - PT - PB)
+    vm.yTicks = yVals.map((v) => ({ label: nf(Math.round(v), 0), y: (cy(v) + 3.5).toFixed(1), gy: cy(v).toFixed(1) }))
+    vm.bars = bars; vm.hits = hits; vm.breaks = breaks; vm.xLabels = xLabels
+    const hotHit = hits.find((t) => t.idx === this.state.hoverBucket)
+    vm.hasHot = hotHit !== undefined
+    vm.hotX = hotHit === undefined ? 0 : hotHit.x
+    vm.hotW = hotHit === undefined ? 0 : hotHit.w
+    vm.hotY = PT
+    vm.hotH = (H - PT - PB).toFixed(1)
+    vm.onDistLeave = () => { if (this.state.hoverBucket !== null) this.setState({ hoverBucket: null, tip: null }) }
+
+    const pc = readPath(res, b.percentilesPath)
+    vm.percentiles = []
+    vm.pLines = []
+    if (pc !== MISSING && pc !== null) {
+      for (const k of ['p50', 'p90', 'p95', 'p99']) {
+        const v = pc[k]
+        vm.percentiles.push({ k, v: v === null || v === undefined ? NONE_NULL : nf(v, 2), u: 'ms' })
+        if (typeof v !== 'number') continue
+        const bi = raw.findIndex((r) => v >= r.from_ms && (r.to_ms === null || v < r.to_ms))
+        if (bi < 0 || !slotOf.has(bi)) continue
+        vm.pLines.push({ x: slotOf.get(bi).toFixed(1), tx: (slotOf.get(bi) + 4).toFixed(1), label: `${k} ${nf(v, 1)}` })
+      }
+    }
+    const totalFrames = readPath(res, b.totalPath)
+    vm.axisText = svgText([
+      ...vm.yTicks.map((t) => ({ x: vm.labelX, y: t.y, anchor: 'end', size: 12, text: t.label })),
+      ...xLabels.map((t) => ({ x: t.x, y: vm.tickY, anchor: 'middle', size: 12, text: t.label })),
+      ...breaks.map((k) => ({ x: k.tx, y: vm.breakY, anchor: 'start', size: 10, text: k.label, dim: true })),
+    ])
+    const notes = [`${fmtValue(totalFrames, 'int')} 프레임`, `버킷 ${raw.length}칸 전부 · 가로축 = 버킷 순서`]
+    if (collapsed > 0) notes.push(`빈 버킷 ${collapsed}칸 접음`)
+    vm.footnote = notes.join(' · ')
+    return vm
+  }
+
+  showBucketTip(e, bk, idx, total) {
+    const range = bk.to_ms === null ? `${bk.from_ms}ms 이상` : `${bk.from_ms}–${bk.to_ms}ms`
+    const x = e.clientX, y = e.clientY
+    const t = this.state.tip
+    if (this.state.hoverBucket === idx && t !== null) {
+      if (Math.abs(t.x - x) < 6 && Math.abs(t.y - y) < 6) return
+      this.setState({ tip: { ...t, x, y } })
+      return
+    }
+    this.setState({
+      hoverBucket: idx,
+      tip: {
+        x, y, head: range,
+        value: `${nf(bk.count, 0)} 프레임`,
+        sub: `전체의 ${nf((bk.count / total) * 100, 2)}%`,
+      },
+    })
+  }
+
+  buildBars(b, res) {
+    const raw = readPath(res, b.path)
+    const vm = { isBars: true, showHead: true, readout: '', readoutStyle: 'display:none' }
+    if (raw === MISSING || raw === null || !Array.isArray(raw) || raw.length === 0) {
+      vm.isBars = false; vm.isNone = true
+      vm.noneLabel = raw === MISSING ? `${NONE_MISSING} — ${b.path} 없음` : NONE_NULL
+      return vm
+    }
+    const vals = raw.map((r) => r[b.valueField]).filter((v) => typeof v === 'number')
+    const max = b.scaleMax ?? (vals.length > 0 ? Math.max(...vals) : 1)
+    vm.rows = raw.map((r) => {
+      const lv = r[b.labelField]
+      const v = r[b.valueField]
+      return {
+        label: `${b.labelPrefix}${Array.isArray(lv) ? `CPU ${lv[0]}–${lv[lv.length - 1]}` : lv}`,
+        value: fmtValue(v === undefined ? MISSING : v, b.fmt),
+        fillStyle: `display:block;height:100%;border-radius:99px;background:var(--color-accent);opacity:.7;width:${typeof v === 'number' ? Math.max(0, Math.min(100, (v / max) * 100)) : 0}%`,
+      }
+    })
+    return vm
+  }
+
+  buildDelta(b, res) {
+    const vm = { isDelta: true, showHead: true, readout: '', readoutStyle: 'display:none' }
+    if (b.keys !== undefined) {
+      const before = readPath(res, b.beforePath)
+      const after = readPath(res, b.afterPath)
+      if (before === MISSING && after === MISSING) {
+        vm.isDelta = false; vm.isNone = true; vm.noneLabel = `${NONE_MISSING} — ${b.beforePath} 없음`
+        return vm
+      }
+      vm.rows = b.keys.map((k) => ({
+        label: k.l,
+        before: fmtValue(before === MISSING ? MISSING : readPath(before, k.p), k.f),
+        after: fmtValue(after === MISSING ? MISSING : readPath(after, k.p), k.f),
+      }))
+      return vm
+    }
+    const raw = readPath(res, b.path)
+    if (raw === MISSING || raw === null || !Array.isArray(raw) || raw.length === 0) {
+      vm.isDelta = false; vm.isNone = true
+      vm.noneLabel = raw === MISSING ? `${NONE_MISSING} — ${b.path} 없음` : NONE_NULL
+      return vm
+    }
+    vm.rows = raw.map((r) => ({
+      label: r[b.labelField],
+      before: fmtValue(r[b.beforeField] === undefined ? MISSING : r[b.beforeField], b.fmt),
+      after: fmtValue(r[b.afterField] === undefined ? MISSING : r[b.afterField], b.fmt),
+    }))
+    return vm
+  }
+
+  buildPairs(b, res) {
+    const vm = { isPairs: true, showHead: true, readout: '', readoutStyle: 'display:none' }
+    const wrapStyle = 'padding:4px 0;border-bottom:1px solid var(--color-divider);text-align:right;word-break:break-all'
+    const plainStyle = 'padding:4px 0;border-bottom:1px solid var(--color-divider);text-align:right'
+    const raw = readPath(res, b.path)
+    if (b.arrayAs === 'warnings') {
+      if (raw === MISSING || !Array.isArray(raw) || raw.length === 0) {
+        vm.isPairs = false; vm.isNone = true
+        vm.noneLabel = raw === MISSING ? NONE_MISSING : '경고 없음'
+        return vm
+      }
+      vm.rows = raw.map((w) => ({
+        label: w.code, value: w.message,
+        valueStyle: 'padding:4px 0;border-bottom:1px solid var(--color-divider);text-align:left;color:var(--color-neutral-700);line-height:1.55',
+      }))
+      return vm
+    }
+    if (b.arrayAs === 'freq') {
+      if (raw === MISSING || !Array.isArray(raw) || raw.length === 0) {
+        vm.isPairs = false; vm.isNone = true
+        vm.noneLabel = raw === MISSING ? `${NONE_MISSING} — ${b.path} 없음` : NONE_NULL
+        return vm
+      }
+      const groups = new Map()
+      for (const f of raw) {
+        const key = `${f.min_khz}/${f.max_khz}/${f.avg_khz}`
+        if (!groups.has(key)) groups.set(key, { cpus: [], f })
+        groups.get(key).cpus.push(f.cpu)
+      }
+      vm.rows = [...groups.values()].map((g) => ({
+        label: `CPU ${g.cpus.join(',')}`,
+        value: `${nf(g.f.avg_khz / 1000000, 2)} / ${nf(g.f.max_khz / 1000000, 2)} GHz · 표본 ${nf(g.f.samples, 0)}`,
+        valueStyle: plainStyle,
+      }))
+      return vm
+    }
+    if (raw === MISSING) {
+      vm.isPairs = false; vm.isNone = true; vm.noneLabel = `${NONE_MISSING} — ${b.path} 없음`
+      return vm
+    }
+    if (raw === null) {
+      vm.isPairs = false; vm.isNone = true; vm.noneLabel = NONE_NULL
+      return vm
+    }
+    vm.rows = b.keys.map((k) => ({
+      label: k.l,
+      value: fmtValue(readPath(raw, k.p), k.f),
+      valueStyle: k.f === 'wrap' ? wrapStyle : plainStyle,
+    }))
+    return vm
+  }
+
+  buildStat(b, res) {
+    const v = readPath(res, b.path)
+    const vm = { isStat: true, showHead: false }
+    vm.value = fmtValue(v, b.fmt)
+    vm.unit = v === MISSING || v === null ? '' : b.unit
+    vm.valueStyle = `font-family:var(--font-heading);font-size:${v === MISSING || v === null ? '16px' : '26px'};font-weight:600;letter-spacing:.01em;line-height:1.1;margin-top:2px;white-space:nowrap;color:${v === MISSING || v === null ? 'var(--color-neutral-500)' : 'var(--color-text)'}`
+    vm.sub = (b.sub ?? []).map((s) => `${s.l} ${fmtValue(readPath(res, s.p), s.f)}`).join(' · ')
+    return vm
+  }
+
+  renderVals() {
+    const s = this.state
+    const res = s.data
+    const base = {
+      loading: res === null && s.error === null,
+      loaded: res !== null,
+      backToList: (e) => { e.preventDefault() },
+      tipOpen: s.tip !== null,
+      tipHead: s.tip === null ? '' : s.tip.head,
+      tipValue: s.tip === null ? '' : s.tip.value,
+      tipSub: s.tip === null ? '' : s.tip.sub,
+      tipStyle: s.tip === null ? 'display:none' : `position:fixed;left:${s.tip.x + 14}px;top:${s.tip.y + 14}px;z-index:60;pointer-events:none;background:var(--color-bg);border:1px solid var(--color-text);box-shadow:var(--shadow-md);padding:8px 11px;border-radius:var(--radius-md);min-width:150px`,
+    }
+    if (res === null) return { ...base, nav: [], sections: [], flags: [], headMeta: [], markChips: [] }
+
+    const session = readPath(res, 'session')
+    const marksRaw = readPath(res, 'session.marks')
+    const marks = Array.isArray(marksRaw) ? marksRaw.map((m) => ({ t: Math.round(m.offset_ms / 1000), label: m.label })) : []
+
+    // 시간축은 하나다 — 모든 t_s 와 마킹이 같은 0초를 쓴다.
+    let maxT = 0
+    const scanTimeline = (p) => {
+      const arr = readPath(res, p)
+      if (Array.isArray(arr)) for (const r of arr) if (typeof r.t_s === 'number' && r.t_s > maxT) maxT = r.t_s
+    }
+    for (const b of MANIFEST) if (b.kind === 'series') scanTimeline(b.path)
+    for (const m of marks) if (m.t > maxT) maxT = m.t
+    const dur = readPath(res, 'session.duration_ms')
+    if (typeof dur === 'number' && Math.ceil(dur / 1000) > maxT) maxT = Math.ceil(dur / 1000)
+    if (maxT === 0) maxT = 1
+    const axis = { maxT }
+
+    const blocks = MANIFEST.map((b, i) => {
+      const m = this.metricOf(res, b.metric)
+      let vm
+      if (b.kind === 'series') vm = this.buildSeries(b, res, axis, marks)
+      else if (b.kind === 'distribution') vm = this.buildDistribution(b, res)
+      else if (b.kind === 'bars') vm = this.buildBars(b, res)
+      else if (b.kind === 'delta') vm = this.buildDelta(b, res)
+      else if (b.kind === 'pairs') vm = this.buildPairs(b, res)
+      else vm = this.buildStat(b, res)
+      vm.key = `b${i}`
+      vm.title = b.title
+      vm.unit = vm.isStat === true ? vm.unit : b.unit
+      vm.section = b.section
+      vm.wrapStyle = `grid-column:span ${b.span};padding:var(--space-4);min-width:0`
+      if (vm.isNone === true) vm.showHead = b.kind !== 'stat'
+      return this.decorate(b, m, vm)
+    })
+
+    const metricsObj = readPath(res, 'metrics')
+    const knownInManifest = new Set(MANIFEST.map((b) => b.metric).filter((x) => x !== undefined))
+    const presentKeys = metricsObj === MISSING || metricsObj === null ? [] : Object.keys(metricsObj)
+    const ignored = presentKeys.filter((k) => !knownInManifest.has(k))
+
+    const sections = SECTIONS.filter((sec) => sec.tab === s.tab).map((sec) => ({
+      id: sec.id,
+      label: sec.label,
+      blocks: blocks.filter((b) => b.section === sec.id),
+    })).filter((sec) => sec.blocks.length > 0)
+
+    const navItems = TABS.map((t) => {
+      const on = s.tab === t.id
+      const bad = blocks.filter((b) => b.isNone === true && SECTIONS.find((x) => x.id === b.section).tab === t.id).length
+      return {
+        label: t.label,
+        count: bad === 0 ? '' : String(bad),
+        countStyle: bad === 0 ? 'display:none' : 'font-family:ui-monospace,Menlo,monospace;font-size:9.5px;padding:1px 5px;background:var(--color-neutral-200);color:var(--color-neutral-700)',
+        style: `font:inherit;text-align:left;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);padding:8px var(--space-4);font-size:13.5px;border:0;border-left:2px solid ${on ? 'var(--color-accent)' : 'transparent'};background:${on ? 'var(--color-accent-100)' : 'transparent'};color:${on ? 'var(--color-accent-800)' : 'var(--color-neutral-700)'}`,
+        select: () => { this.setState({ tab: t.id }); window.scrollTo(0, 0) },
+      }
+    })
+
+    const flagStyle = (kind) =>
+      `font-size:11.5px;padding:3px 10px;border-radius:99px;white-space:nowrap;border:1px solid ${kind === 'hot' ? 'var(--color-accent)' : 'var(--color-divider)'};background:${kind === 'hot' ? 'var(--color-accent-100)' : 'var(--color-neutral-100)'};color:${kind === 'hot' ? 'var(--color-accent-800)' : 'var(--color-neutral-700)'}`
+
+    const flags = []
+    const schemaVer = readPath(res, 'schema_version')
+    const major = typeof schemaVer === 'string' ? Number(schemaVer.split('.')[0]) : null
+    if (major !== null && major !== SCHEMA_MAJOR) {
+      flags.push({ label: `schema ${schemaVer}`, style: flagStyle('hot'), title: '메이저 버전이 다르다. 아래 값의 해석이 어긋날 수 있다.' })
+    }
+    const dbg = readPath(res, 'target_app.debuggable')
+    if (dbg === true) flags.push({ label: 'debuggable', style: flagStyle('hot'), title: '측정 조건의 사실이다. 판정이 아니다.' })
+    else if (dbg === null || dbg === MISSING) flags.push({ label: 'debuggable 모름', style: flagStyle(''), title: 'false(릴리스 확인)와 다르다 — 확인하지 못했다.' })
+    const unsup = presentKeys.filter((k) => {
+      const st = readPath(res, `metrics.${k}.status`)
+      return st === 'unsupported' || st === 'skipped' || st === 'failed'
+    })
+    if (unsup.length > 0) flags.push({ label: `미수집 ${unsup.join(' ')}`, style: flagStyle(''), title: '기기가 못 재거나 건너뛴 지표다.' })
+    const warns = readPath(res, 'warnings')
+    if (Array.isArray(warns) && warns.length > 0) flags.push({ label: `경고 ${warns.length}`, style: flagStyle(''), title: warns.map((w) => w.code).join(', ') })
+    if (ignored.length > 0) flags.push({ label: `미지원 매니페스트 ${ignored.join(' ')}`, style: flagStyle('hot'), title: '매니페스트에 없는 지표다.' })
+    const hz = readPath(res, 'device.static.display.active_refresh_rate_hz')
+    if (hz === null) flags.push({ label: '주사율 못 읽음', style: flagStyle(''), title: '이 기기에서 읽지 못했다 — 0Hz 가 아니다.' })
+
+    const state = readPath(res, 'session.state')
+    const running = state === 'running'
+
+    return {
+      ...base,
+      nav: navItems,
+      sections,
+      flags,
+      sessionId: readPath(res, 'session.id'),
+      sessionName: readPath(res, 'session.name'),
+      stateLabel: running ? '측정 중' : fmtValue(state, 'raw'),
+      stateStyle: `font-family:ui-monospace,Menlo,monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:3px 10px;border-radius:99px;flex:none;background:${running ? 'var(--color-accent)' : 'var(--color-neutral-200)'};color:${running ? 'var(--color-bg)' : 'var(--color-neutral-700)'}`,
+      headMeta: [
+        { k: '앱', v: `${fmtValue(readPath(res, 'target_app.label'), 'raw')} · ${fmtValue(readPath(res, 'target_app.package'), 'raw')} · ${fmtValue(readPath(res, 'target_app.version_name'), 'raw')}` },
+        { k: '기기', v: `${fmtValue(readPath(res, 'device.static.model'), 'raw')} · ${fmtValue(readPath(res, 'device.serial'), 'raw')} · Android ${fmtValue(readPath(res, 'device.static.android_release'), 'raw')} (sdk ${fmtValue(readPath(res, 'device.static.sdk_int'), 'int')})` },
+        { k: '시작', v: fmtWhen(readPath(res, 'session.started_at')) },
+        { k: '길이', v: running ? '측정 중' : fmtValue(dur, 'ms0') },
+        { k: '옵션', v: readPath(res, 'session.options.launch') === true ? '--launch' : 'attach' },
+      ],
+      hasMarks: marks.length > 0,
+      markChips: marks.map((m) => ({
+        at: clock(m.t),
+        label: m.label,
+        style: `font:inherit;font-size:12px;cursor:pointer;display:inline-flex;gap:7px;align-items:baseline;padding:3px 10px;border-radius:99px;border:1px dashed ${s.hoverT === m.t ? 'var(--color-accent)' : 'var(--color-divider)'};background:${s.hoverT === m.t ? 'var(--color-accent-100)' : 'transparent'};color:var(--color-neutral-700)`,
+        enter: () => this.setState({ hoverT: m.t }),
+        leave: () => this.setState({ hoverT: null }),
+      })),
+      footerTool: `${fmtValue(readPath(res, 'tool.name'), 'raw')} ${fmtValue(readPath(res, 'tool.version'), 'raw')} · ${fmtValue(readPath(res, 'tool.host.os'), 'raw')}/${fmtValue(readPath(res, 'tool.host.arch'), 'raw')} · node ${fmtValue(readPath(res, 'tool.host.node'), 'raw')}`,
+      footerSchema: `schema_version ${fmtValue(schemaVer, 'raw')}`,
+      footerIgnored: ignored.length === 0 ? '' : `무시한 지표 ${ignored.length}개: ${ignored.join(', ')}`,
+    }
+  }
+}
+
+function svgText(items) {
+  return React.createElement(
+    'g',
+    { key: 'axis' },
+    items.map((it, i) =>
+      React.createElement('text', {
+        key: i, x: it.x, y: it.y, textAnchor: it.anchor,
+        fontSize: it.size, fontFamily: 'ui-monospace, Menlo, monospace',
+        fill: it.dim === true ? 'var(--color-neutral-500)' : 'var(--color-neutral-700)',
+      }, it.text),
+    ),
+  )
+}
+
+function fmtAxis(v) {
+  if (v === 0) return '0'
+  if (v >= 1000) return nf(Math.round(v), 0)
+  if (v >= 10) return nf(Math.round(v), 0)
+  if (v >= 1) return nf(v, 1)
+  return nf(v, 2)
+}
+
+</script>
+</body>
+</html>

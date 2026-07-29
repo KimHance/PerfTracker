@@ -1,4 +1,5 @@
-import { rm } from 'node:fs/promises'
+import { readFile, rm } from 'node:fs/promises'
+import { join } from 'node:path'
 import {
   appendMark,
   createAdbContext,
@@ -6,6 +7,7 @@ import {
   clearRuns,
   deleteRun,
   extractRun,
+  findRun,
   getAppDetail,
   listRunDirs,
   listRuns,
@@ -34,6 +36,7 @@ import type {
   DoctorCheckView,
   EnvView,
   MarkView,
+  ReportDocument,
   RunsView,
   RunView,
   ClearRunsResult,
@@ -267,6 +270,32 @@ export class GuiApi {
         ? `${id} 은(는) 지금 측정 중인 세션입니다. 먼저 정지하세요.`
         : `기록 ${id} 을(를) 찾지 못했습니다.`,
     )
+  }
+
+  /**
+   * 보고서가 읽을 `result.json` 을 **그대로** 돌려준다 (뷰로 옮기지 않는 이유는
+   * `contract/api.ts` 의 `ReportDocument` 주석에 있다).
+   *
+   * **검증하지 않는다.** 여기서 zod 로 걸면 옛 세션(필드가 없던 시절)이 화면에 아예 안 뜨는데,
+   * 그것은 보고서가 풀어야 할 문제이지 서버가 막을 문제가 아니다 — 화면은 필드 부재를
+   * "수집 안 함" 으로 그리도록 만들어져 있다.
+   */
+  async report(id: string): Promise<ReportDocument> {
+    const run = await findRun(this.opts.outDir, id)
+    if (run === null) throw new SessionStateError(`기록 ${id} 을(를) 찾지 못했습니다.`)
+
+    const path = join(run.runDir, 'result.json')
+    let text: string
+    try {
+      text = await readFile(path, 'utf8')
+    } catch {
+      // `start` 는 됐는데 `stop` 전이거나 죽은 폴더다. 목록에는 있는데 파일이 없는 상태를
+      // "찾지 못했습니다" 로 뭉치면 사람이 엉뚱한 id 를 의심한다.
+      throw new SessionStateError(
+        `기록 ${id} 에 result.json 이 없습니다. 아직 정지하지 않았거나 추출에 실패한 세션입니다.`,
+      )
+    }
+    return JSON.parse(text) as ReportDocument
   }
 
   /** 기록뿐 아니라 미완성 폴더까지 지운다. 측정 중인 것은 남긴다 — core 가 그 규칙을 갖는다. */

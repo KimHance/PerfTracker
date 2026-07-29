@@ -65,17 +65,21 @@ function RunRow({ run }: { run: RunView }) {
   const fresh = state.freshRunIds.includes(run.id)
 
   /**
-   * 기록을 열면 세션 대시보드로 간다 — **아직 없다.**
-   * 여기는 그 자리를 표시해 두는 지점이고, 지금은 CLI 로그에 run 디렉토리만 남긴다.
-   * 없는 화면으로 보내는 대신 아무 데도 가지 않는 쪽을 골랐다.
+   * 기록을 열면 세션 보고서가 **새 창**으로 뜬다.
+   *
+   * 같은 창을 쓰지 않는 이유: 이 화면에서 다른 탭이 측정 중일 수 있고, 그 위에 보고서를
+   * 덮으면 진행 중인 세션 화면을 잃는다. 보고서는 URL 에 run id 가 있어 딥링크가 되므로
+   * 새 창이 곧 공유 가능한 주소이기도 하다.
    */
   const open = (): void => {
     dispatch({ type: 'run/opened', runId: run.id })
+    const url = `${window.location.pathname}?report=${encodeURIComponent(run.id)}`
     dispatch({
       type: 'cli/logged',
       at: formatClock(new Date()),
-      command: `open ${run.runDir}  # 대시보드는 아직 없습니다`,
+      command: `open ${url}  # ${run.runDir}/result.json`,
     })
+    window.open(url, `perftracker-report-${run.id}`)
   }
 
   return (

@@ -222,11 +222,27 @@ export interface RunView {
   at: string
   durationMs: number
   launch: boolean
-  /** 못 잰 지표 수 · 경고 수 · 마킹 수. 세부는 대시보드(미정)가 result.json 에서 읽는다. */
+  /** 못 잰 지표 수 · 경고 수 · 마킹 수. 세부는 보고서가 `result.json` 에서 직접 읽는다. */
   unsupportedCount: number
   warningCount: number
   markCount: number
 }
+
+/**
+ * **보고서의 입력. `result.json` 그대로다.**
+ *
+ * 이 파일의 다른 타입들과 규칙이 다르고, 그것이 의도다. 다른 화면은 core 타입을 그대로 쓰지
+ * 않고 서버가 뷰로 옮겨 준다 — 화면이 core 의 내부 모양에 묶이지 않게 하려는 것이다.
+ * 보고서는 반대다: 읽는 대상이 core 의 **내부 타입이 아니라 이 도구가 세션마다 내는 공개
+ * 산출물**이고, 그 산출물에는 이미 `schema_version` 이 붙어 있으며 CI·LLM 같은 다른 소비자가
+ * 같은 파일을 같은 모양으로 읽는다. 옆에 GUI 전용 뷰를 하나 더 두면 계약이 둘이 되고,
+ * 필드가 늘 때마다 두 곳을 고쳐야 하며, 안 고친 쪽이 조용히 낡는다.
+ *
+ * 구조를 타입으로 다시 적지 않는 이유도 같다 — 보고서 렌더러는 매니페스트의 경로 문자열로
+ * 읽고(`readPath`), **필드 부재 / `null` / 값** 세 상태를 런타임에 가른다. 타입을 적어 두면
+ * 스키마를 두 벌 유지하게 되는데, 정본은 `perftracker schema` 가 내는 JSON Schema 다.
+ */
+export type ReportDocument = Record<string, unknown>
 
 /**
  * 기록 목록 + **목록에 안 잡히는 폴더 수.**

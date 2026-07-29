@@ -204,8 +204,9 @@ button {
 }
 
 /*
- * blueprint: Industry 의 등록 표식. primary 버튼과 다이얼로그에만 남긴다 —
- * 원본 시스템에서 "이건 판 위의 물건" 이라고 말하는 유일한 장치다.
+ * blueprint: Industry 의 등록 표식. **다이얼로그에만** 남긴다.
+ * 한때 primary 버튼에도 달았는데(핸드오프 §디자인 노트), 알약 모양 버튼 바깥으로 삐져나온
+ * `+` 넷이 버튼의 윤곽을 흐려 보기 나빴다 — 사용자 요청으로 뺐다.
  */
 .blueprint {
   position: relative;

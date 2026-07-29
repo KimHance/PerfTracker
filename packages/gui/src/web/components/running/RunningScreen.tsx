@@ -4,7 +4,6 @@ import { elapsedMs, selectedApp, selectedDevice } from '../../state/derive.js'
 import { appVersionKey } from '../../state/reducer.js'
 import type { Tab } from '../../state/model.js'
 import { useStore } from '../../state/StoreContext.jsx'
-import { BlueprintCorners } from '../ui/Blueprint.jsx'
 import { MarkBlock } from './MarkBlock.jsx'
 
 /**
@@ -63,12 +62,11 @@ export function RunningScreen({ tab }: { tab: Tab }) {
         올리고 마킹 목록에는 max-height 를 걸었다 (app.css 의 `.marks-list`).
       */}
       <button
-        className="btn btn-primary btn-xl blueprint"
+        className="btn btn-primary btn-xl"
         style={{ minWidth: 190 }}
         onClick={() => void stopSession(deps, tab)}
       >
         정지 · 기록 생성
-        <BlueprintCorners />
       </button>
 
       <MarkBlock tab={tab} />

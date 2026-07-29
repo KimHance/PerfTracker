@@ -1,3 +1,7 @@
+> **이 문서는 보낸 쪽이다.** 받은 답은 [HANDOFF.md](HANDOFF.md) 이고, 그것을 구현한 코드는
+> `packages/gui/src/web/report/` 에 있다. `manifest.draft.ts` 와 `interaction-reference.html` 은
+> 실제 매니페스트(`report/manifest.ts`)와 받은 프로토타입(`prototype.html`)이 대체해 지웠다.
+
 # 클로드 디자인에게 넘길 프롬프트
 
 아래 `---` 사이를 그대로 붙여넣고, 같은 디렉토리의 파일 7개를 함께 올린다.
@@ -9,7 +13,7 @@ samples/full.json      실기기 세션 — 7개 지표 다 나옴 (sdk 36, 릴�
 samples/legacy.json    실기기 세션 — 새 필드가 통째로 없음 (구버전 캡처)
 samples/low-end.json   실기기 세션 — 지표 2개 미지원 · 3개 부분수집 (sdk 30, 디버그 빌드)
 samples/schema.json    JSON Schema (필드 뜻과 함정)
-interaction-reference.html         상호작용 레퍼런스 (디자인 아님)
+interaction-reference.html         상호작용 레퍼런스 (보낼 때만 있던 파일)
 ```
 
 ---
