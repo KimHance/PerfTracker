@@ -1,0 +1,15 @@
+Packages:
+  Package [com.example.streaming.design.catalog.test] (cc6cc4b):
+    pkg=Package{af1f949 com.example.streaming.design.catalog.test}
+    codePath=/data/app/~~DJTSSJF7gIvfYbJDU8irYg==/com.example.streaming.design.catalog.test-ZgtD9ykmDYGM3ntwp68eEQ==
+    primaryCpuAbi=null
+    secondaryCpuAbi=null
+    versionCode=0 minSdk=26 targetSdk=34
+    versionName=null
+    splits=[base]
+    apkSigningVersion=2
+    flags=[ DEBUGGABLE HAS_CODE ALLOW_CLEAR_USER_DATA ALLOW_BACKUP ]
+    privateFlags=[ PRIVATE_FLAG_ACTIVITIES_RESIZE_MODE_RESIZEABLE_VIA_SDK_VERSION ALLOW_AUDIO_PLAYBACK_CAPTURE PRIVATE_FLAG_ALLOW_NATIVE_HEAP_POINTER_TAGGING ]
+    installerPackageName=null
+      dataDir=/data/user/0/com.example.streaming.design.catalog.test
+      firstInstallTime=2023-07-25 15:48:21

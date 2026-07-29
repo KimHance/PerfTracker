@@ -13,6 +13,7 @@ import type {
 } from '../collectors/types.js'
 import { parseThermalZones } from '../device/state.js'
 import { SchemaValidationError, SessionStateError } from '../errors.js'
+import { collectHostInfo } from '../host/info.js'
 import { TraceProcessor } from '../perfetto/traceProcessor/client.js'
 import { ensureTraceProcessor } from '../perfetto/traceProcessor/locate.js'
 import { REFERENCES } from '../schema/references.js'
@@ -321,7 +322,12 @@ export async function extractRun(
   const result: Result = {
     schema_version: SCHEMA_VERSION,
     schema_help: SCHEMA_HELP,
-    tool: { name: 'perftracker', version: opts.toolVersion ?? '0.1.0' },
+    tool: {
+      name: 'perftracker',
+      version: opts.toolVersion ?? '0.1.0',
+      // extract 는 기기 없이도 돌 수 있고(`perftracker extract`), 호스트는 그때도 있다.
+      host: collectHostInfo(),
+    },
     session: {
       id: session.id,
       name: session.name,

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { AdbClient } from '../../src/adb/client.js'
-import { parsePackageDetail } from '../../src/app/detail.js'
 import { listInstalledApps, parseInstalledPackages } from '../../src/app/list.js'
 import { detectForegroundPackage, matchApp, parseForegroundPackage } from '../../src/app/select.js'
 import { AmbiguousAppError, AppNotFoundError } from '../../src/errors.js'
@@ -109,40 +108,5 @@ describe('matchApp', () => {
 
   it('일치가 없으면 오류를 던진다', () => {
     expect(() => matchApp(apps, 'zzz')).toThrow(AppNotFoundError)
-  })
-})
-
-describe('parsePackageDetail', () => {
-  it('versionName 과 설치 출처를 읽는다', () => {
-    const text = [
-      '    versionCode=24600400 minSdk=28 targetSdk=36',
-      '    versionName=2.46.0',
-      '    installerPackageName=com.android.vending',
-    ].join('\n')
-
-    expect(parsePackageDetail(text)).toEqual({ versionName: '2.46.0', installSource: 'com.android.vending' })
-  })
-
-  it('없으면 null', () => {
-    expect(parsePackageDetail('')).toEqual({ versionName: null, installSource: null })
-  })
-
-  /**
-   * 기기가 **"모른다" 를 `null` 이라는 네 글자로 찍는다.** 실기기 실측:
-   *
-   *     $ adb shell dumpsys package com.android.settings | grep installerPackageName
-   *         installerPackageName=null
-   *
-   * 그 네 글자를 그대로 실으면 `result.json` 에 `"install_source": "null"` 이 들어간다 —
-   * JSON 의 `null` 이 아니라 **문자열**이라, 소비자에게는 `null` 이라는 이름의 설치 출처가
-   * 있는 것으로 읽힌다. 시스템 앱과 프리로드는 전부 이 경우다(실기기에서 settings,
-   * launcher 둘 다). 없는 것은 없다고 말해야 한다.
-   *
-   * 깨지는 조건: 리터럴 `null` 을 걸러 내지 않으면 문자열 `'null'` 이 나와 실패한다.
-   */
-  it('기기가 찍은 리터럴 null 을 값으로 싣지 않는다 — 시스템 앱의 설치 출처가 그렇다', () => {
-    expect(
-      parsePackageDetail('    versionName=null\n    installerPackageName=null\n'),
-    ).toEqual({ versionName: null, installSource: null })
   })
 })

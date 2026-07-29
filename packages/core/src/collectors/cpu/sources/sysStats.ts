@@ -18,6 +18,29 @@ export const CPU_TIMES_SQL =
   "where t.name like 'cpu.times.%' " +
   'group by t.cpu, t.name order by t.cpu, t.name)'
 
+/**
+ * 기기 전역 `cpu.times.*` 의 **초별 마지막 표본** `[상대초, 카운터, 누적 ns]`.
+ *
+ * 코어를 여기서 합치지 않는 이유: `cpu.times.idle` 인지 아닌지를 가르는 것이 도메인 규칙이고
+ * (`summarizeCpuTimes` 가 이미 그 규칙을 갖고 있다), SQL 에 두 벌로 두면 언젠가 갈린다.
+ * 그래서 초·카운터별로 접어서 넘기고 busy 판정은 `toDomain` 이 한다.
+ *
+ * `max(c.value)` 로 그 초의 마지막을 고르는 것은 `appCpuTimelineSql` 과 같은 이유다 —
+ * 누적 카운터라 최댓값이 곧 마지막 값이다. 폴링 지터로 한 초에 표본이 둘 이상이어도
+ * 같은 카운터가 두 번 더해지지 않는다.
+ *
+ * 시간 기준점은 frame·memory·log 와 같은 `trace_bounds.start_ts` 다.
+ */
+export const DEVICE_CPU_TIMELINE_SQL =
+  'select json_group_array(json_array(t_s, counter, v)) as j from (' +
+  'select t_s, counter, sum(v) as v from (' +
+  `select ${relativeSecondSql('c.ts')} as t_s, t.name as counter, t.cpu as cpu, ` +
+  'cast(max(c.value) as int) as v ' +
+  'from counter c join cpu_counter_track t on c.track_id = t.id ' +
+  "where t.name like 'cpu.times.%' " +
+  'group by t_s, t.name, t.cpu) ' +
+  'group by t_s, counter order by t_s, counter)'
+
 /** ftrace `power/cpu_frequency` 는 `cpufreq` 라는 이름의 cpu_counter_track 이 된다 (실측 확인). 단위는 kHz. */
 export const CPU_FREQ_SQL =
   "select json_group_array(json_object('cpu', cpu, 'samples', samples, 'min_khz', min_khz, " +

@@ -1,0 +1,2218 @@
+{
+  "schema_version": "1.1.0",
+  "schema_help": "필드의 뜻과 함정(특히 null 과 0 의 차이)은 `perftracker schema` 가 내는 JSON Schema 에 있습니다. 값을 해석하기 전에 그것부터 읽으세요.",
+  "tool": {
+    "name": "perftracker",
+    "version": "0.1.0",
+    "host": {
+      "os": "darwin",
+      "arch": "arm64",
+      "node": "25.2.1"
+    }
+  },
+  "session": {
+    "id": "068fb2",
+    "name": "홈 스크롤 측정",
+    "state": "completed",
+    "started_at": "2026-07-29T01:46:30.679Z",
+    "ended_at": "2026-07-29T01:47:11.799Z",
+    "duration_ms": 41120,
+    "options": {
+      "launch": true
+    },
+    "marks": [
+      {
+        "offset_ms": 9518,
+        "label": "추천 탭 스크롤"
+      },
+      {
+        "offset_ms": 19546,
+        "label": "이슈 탭 진입"
+      },
+      {
+        "offset_ms": 23993,
+        "label": "이슈탭 스크롤"
+      },
+      {
+        "offset_ms": 32185,
+        "label": "라이브탭 진입"
+      }
+    ]
+  },
+  "device": {
+    "serial": "R3CT0000003",
+    "static": {
+      "manufacturer": "samsung",
+      "model": "SM-F936N",
+      "android_release": "16",
+      "sdk_int": 36,
+      "build_fingerprint": "samsung/q4qksx/q4q:16/BP2A.250605.031.A3/F936NKSS8IZF1:user/release-keys",
+      "abis": [
+        "arm64-v8a",
+        "armeabi-v7a",
+        "armeabi"
+      ],
+      "soc_model": "SM8475",
+      "soc_manufacturer": "QTI",
+      "cpu": {
+        "core_count": 8,
+        "clusters": [
+          {
+            "cpus": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "max_freq_khz": 2016000
+          },
+          {
+            "cpus": [
+              4,
+              5,
+              6
+            ],
+            "max_freq_khz": 2745600
+          },
+          {
+            "cpus": [
+              7
+            ],
+            "max_freq_khz": 3187200
+          }
+        ]
+      },
+      "memory_total_kb": 11521992,
+      "display": {
+        "width_px": 904,
+        "height_px": 2316,
+        "density_dpi": 420,
+        "active_refresh_rate_hz": 60,
+        "supported_refresh_rates_hz": [
+          10,
+          24,
+          30,
+          48,
+          60,
+          96,
+          120
+        ]
+      }
+    },
+    "state_before": {
+      "captured_at": "2026-07-29T01:46:30.679Z",
+      "battery_level": 100,
+      "battery_temp_c": 25.3,
+      "charging": true,
+      "connection": "usb",
+      "screen_brightness": 78,
+      "power_save_mode": false,
+      "network": "wifi",
+      "mem_available_kb": 4512492,
+      "animator_duration_scale": 1,
+      "thermal_zones": [
+        {
+          "name": "AP",
+          "celsius": 25.8,
+          "type": 0,
+          "status": 0,
+          "source": "hal"
+        },
+        {
+          "name": "BAT",
+          "celsius": 25.3,
+          "type": 2,
+          "status": 0,
+          "source": "hal"
+        },
+        {
+          "name": "MAINBATRAW",
+          "celsius": 25.4,
+          "type": 2,
+          "status": 0,
+          "source": "hal"
+        },
+        {
+          "name": "PA1THM",
+          "celsius": 27.1,
+          "type": 5,
+          "status": 0,
+          "source": "hal"
+        },
+        {
+          "name": "PATHM",
+          "celsius": 27.3,
+          "type": 5,
+          "status": 0,
+          "source": "hal"
+        },
+        {
+          "name": "SKIN",
+          "celsius": 26.1,
+          "type": 3,
+          "status": 0,
+          "source": "hal"
+        },
+        {
+          "name": "SUBBAT",
+          "celsius": 25.4,
+          "type": 2,
+          "status": 0,
+          "source": "hal"
+        },
+        {
+          "name": "USB",
+          "celsius": 25.1,
+          "type": 4,
+          "status": 0,
+          "source": "hal"
+        }
+      ]
+    },
+    "state_after": {
+      "captured_at": "2026-07-29T01:47:11.799Z",
+      "battery_level": 100,
+      "battery_temp_c": 25.6,
+      "charging": true,
+      "connection": "usb",
+      "screen_brightness": 255,
+      "power_save_mode": false,
+      "network": "wifi",
+      "mem_available_kb": 4259732,
+      "animator_duration_scale": 1,
+      "thermal_zones": [
+        {
+          "name": "AP",
+          "celsius": 31,
+          "type": 0,
+          "status": 0,
+          "source": "hal"
+        },
+        {
+          "name": "BAT",
+          "celsius": 25.6,
+          "type": 2,
+          "status": 0,
+          "source": "hal"
+        },
+        {
+          "name": "MAINBATRAW",
+          "celsius": 25.9,
+          "type": 2,
+          "status": 0,
+          "source": "hal"
+        },
+        {
+          "name": "PA1THM",
+          "celsius": 29.3,
+          "type": 5,
+          "status": 0,
+          "source": "hal"
+        },
+        {
+          "name": "PATHM",
+          "celsius": 30.4,
+          "type": 5,
+          "status": 0,
+          "source": "hal"
+        },
+        {
+          "name": "SKIN",
+          "celsius": 27.8,
+          "type": 3,
+          "status": 0,
+          "source": "hal"
+        },
+        {
+          "name": "SUBBAT",
+          "celsius": 25.7,
+          "type": 2,
+          "status": 0,
+          "source": "hal"
+        },
+        {
+          "name": "USB",
+          "celsius": 25.2,
+          "type": 4,
+          "status": 0,
+          "source": "hal"
+        }
+      ]
+    }
+  },
+  "target_app": {
+    "package": "com.example.streaming",
+    "label": "Stream",
+    "label_source": "apk_resources",
+    "version_name": "8.28.3",
+    "version_code": 8280302,
+    "uid": 11372,
+    "install_source": "com.android.vending",
+    "launcher_activity": "com.example.streaming.splash.SplashActivity",
+    "launcher_activity_candidates": null,
+    "render_process": "com.example.streaming",
+    "pid": 13895
+  },
+  "metrics": {
+    "frame": {
+      "status": "partial",
+      "source": "perfetto: actual_frame_timeline_slice.dur",
+      "reason_code": "process_name_stale_in_trace",
+      "reason": "트레이스는 이 프로세스(pid 13895)를 \"<pre-initialized>\" 이라는 이름으로 기록했습니다 — zygote 가 fork 한 직후 이름이 확정되기 전에 관측된 것입니다. 대상 앱(com.example.streaming)임은 실행 직후 기기에서 받아 둔 pid 로 확인했고, 보고하는 이름은 그 패키지명입니다.",
+      "data": {
+        "process": "com.example.streaming",
+        "pid": 13895,
+        "total_frames": 3473,
+        "buckets": [
+          {
+            "from_ms": 0,
+            "to_ms": 5,
+            "count": 221
+          },
+          {
+            "from_ms": 5,
+            "to_ms": 6,
+            "count": 412
+          },
+          {
+            "from_ms": 6,
+            "to_ms": 7,
+            "count": 434
+          },
+          {
+            "from_ms": 7,
+            "to_ms": 8,
+            "count": 371
+          },
+          {
+            "from_ms": 8,
+            "to_ms": 9,
+            "count": 287
+          },
+          {
+            "from_ms": 9,
+            "to_ms": 10,
+            "count": 230
+          },
+          {
+            "from_ms": 10,
+            "to_ms": 11,
+            "count": 224
+          },
+          {
+            "from_ms": 11,
+            "to_ms": 12,
+            "count": 230
+          },
+          {
+            "from_ms": 12,
+            "to_ms": 13,
+            "count": 190
+          },
+          {
+            "from_ms": 13,
+            "to_ms": 14,
+            "count": 249
+          },
+          {
+            "from_ms": 14,
+            "to_ms": 15,
+            "count": 183
+          },
+          {
+            "from_ms": 15,
+            "to_ms": 16,
+            "count": 88
+          },
+          {
+            "from_ms": 16,
+            "to_ms": 18,
+            "count": 107
+          },
+          {
+            "from_ms": 18,
+            "to_ms": 20,
+            "count": 56
+          },
+          {
+            "from_ms": 20,
+            "to_ms": 22,
+            "count": 44
+          },
+          {
+            "from_ms": 22,
+            "to_ms": 24,
+            "count": 30
+          },
+          {
+            "from_ms": 24,
+            "to_ms": 26,
+            "count": 28
+          },
+          {
+            "from_ms": 26,
+            "to_ms": 28,
+            "count": 11
+          },
+          {
+            "from_ms": 28,
+            "to_ms": 30,
+            "count": 2
+          },
+          {
+            "from_ms": 30,
+            "to_ms": 32,
+            "count": 22
+          },
+          {
+            "from_ms": 32,
+            "to_ms": 34,
+            "count": 4
+          },
+          {
+            "from_ms": 34,
+            "to_ms": 36,
+            "count": 7
+          },
+          {
+            "from_ms": 36,
+            "to_ms": 38,
+            "count": 7
+          },
+          {
+            "from_ms": 38,
+            "to_ms": 40,
+            "count": 2
+          },
+          {
+            "from_ms": 40,
+            "to_ms": 42,
+            "count": 2
+          },
+          {
+            "from_ms": 42,
+            "to_ms": 44,
+            "count": 3
+          },
+          {
+            "from_ms": 44,
+            "to_ms": 46,
+            "count": 6
+          },
+          {
+            "from_ms": 46,
+            "to_ms": 48,
+            "count": 1
+          },
+          {
+            "from_ms": 48,
+            "to_ms": 50,
+            "count": 1
+          },
+          {
+            "from_ms": 50,
+            "to_ms": 54,
+            "count": 5
+          },
+          {
+            "from_ms": 54,
+            "to_ms": 58,
+            "count": 3
+          },
+          {
+            "from_ms": 58,
+            "to_ms": 62,
+            "count": 2
+          },
+          {
+            "from_ms": 62,
+            "to_ms": 66,
+            "count": 7
+          },
+          {
+            "from_ms": 66,
+            "to_ms": 70,
+            "count": 1
+          },
+          {
+            "from_ms": 70,
+            "to_ms": 74,
+            "count": 1
+          },
+          {
+            "from_ms": 74,
+            "to_ms": 78,
+            "count": 0
+          },
+          {
+            "from_ms": 78,
+            "to_ms": 82,
+            "count": 0
+          },
+          {
+            "from_ms": 82,
+            "to_ms": 86,
+            "count": 0
+          },
+          {
+            "from_ms": 86,
+            "to_ms": 90,
+            "count": 0
+          },
+          {
+            "from_ms": 90,
+            "to_ms": 94,
+            "count": 0
+          },
+          {
+            "from_ms": 94,
+            "to_ms": 98,
+            "count": 0
+          },
+          {
+            "from_ms": 98,
+            "to_ms": 102,
+            "count": 0
+          },
+          {
+            "from_ms": 102,
+            "to_ms": 106,
+            "count": 0
+          },
+          {
+            "from_ms": 106,
+            "to_ms": 110,
+            "count": 0
+          },
+          {
+            "from_ms": 110,
+            "to_ms": 114,
+            "count": 0
+          },
+          {
+            "from_ms": 114,
+            "to_ms": 118,
+            "count": 0
+          },
+          {
+            "from_ms": 118,
+            "to_ms": 122,
+            "count": 1
+          },
+          {
+            "from_ms": 122,
+            "to_ms": 126,
+            "count": 0
+          },
+          {
+            "from_ms": 126,
+            "to_ms": 130,
+            "count": 0
+          },
+          {
+            "from_ms": 130,
+            "to_ms": 135,
+            "count": 0
+          },
+          {
+            "from_ms": 135,
+            "to_ms": 140,
+            "count": 0
+          },
+          {
+            "from_ms": 140,
+            "to_ms": 145,
+            "count": 0
+          },
+          {
+            "from_ms": 145,
+            "to_ms": 150,
+            "count": 0
+          },
+          {
+            "from_ms": 150,
+            "to_ms": 155,
+            "count": 0
+          },
+          {
+            "from_ms": 155,
+            "to_ms": 160,
+            "count": 0
+          },
+          {
+            "from_ms": 160,
+            "to_ms": 165,
+            "count": 0
+          },
+          {
+            "from_ms": 165,
+            "to_ms": 170,
+            "count": 1
+          },
+          {
+            "from_ms": 170,
+            "to_ms": 175,
+            "count": 0
+          },
+          {
+            "from_ms": 175,
+            "to_ms": 180,
+            "count": 0
+          },
+          {
+            "from_ms": 180,
+            "to_ms": 185,
+            "count": 0
+          },
+          {
+            "from_ms": 185,
+            "to_ms": 190,
+            "count": 0
+          },
+          {
+            "from_ms": 190,
+            "to_ms": 195,
+            "count": 0
+          },
+          {
+            "from_ms": 195,
+            "to_ms": 200,
+            "count": 0
+          },
+          {
+            "from_ms": 200,
+            "to_ms": 205,
+            "count": 0
+          },
+          {
+            "from_ms": 205,
+            "to_ms": 210,
+            "count": 0
+          },
+          {
+            "from_ms": 210,
+            "to_ms": 215,
+            "count": 0
+          },
+          {
+            "from_ms": 215,
+            "to_ms": 220,
+            "count": 0
+          },
+          {
+            "from_ms": 220,
+            "to_ms": 225,
+            "count": 0
+          },
+          {
+            "from_ms": 225,
+            "to_ms": 230,
+            "count": 0
+          },
+          {
+            "from_ms": 230,
+            "to_ms": 235,
+            "count": 0
+          },
+          {
+            "from_ms": 235,
+            "to_ms": 240,
+            "count": 0
+          },
+          {
+            "from_ms": 240,
+            "to_ms": 245,
+            "count": 0
+          },
+          {
+            "from_ms": 245,
+            "to_ms": 250,
+            "count": 0
+          },
+          {
+            "from_ms": 250,
+            "to_ms": 255,
+            "count": 0
+          },
+          {
+            "from_ms": 255,
+            "to_ms": 260,
+            "count": 0
+          },
+          {
+            "from_ms": 260,
+            "to_ms": 265,
+            "count": 0
+          },
+          {
+            "from_ms": 265,
+            "to_ms": 270,
+            "count": 0
+          },
+          {
+            "from_ms": 270,
+            "to_ms": 275,
+            "count": 0
+          },
+          {
+            "from_ms": 275,
+            "to_ms": 280,
+            "count": 0
+          },
+          {
+            "from_ms": 280,
+            "to_ms": 285,
+            "count": 0
+          },
+          {
+            "from_ms": 285,
+            "to_ms": 290,
+            "count": 0
+          },
+          {
+            "from_ms": 290,
+            "to_ms": 295,
+            "count": 0
+          },
+          {
+            "from_ms": 295,
+            "to_ms": 300,
+            "count": 0
+          },
+          {
+            "from_ms": 300,
+            "to_ms": 305,
+            "count": 0
+          },
+          {
+            "from_ms": 305,
+            "to_ms": 310,
+            "count": 0
+          },
+          {
+            "from_ms": 310,
+            "to_ms": 315,
+            "count": 0
+          },
+          {
+            "from_ms": 315,
+            "to_ms": 320,
+            "count": 0
+          },
+          {
+            "from_ms": 320,
+            "to_ms": 325,
+            "count": 0
+          },
+          {
+            "from_ms": 325,
+            "to_ms": 330,
+            "count": 0
+          },
+          {
+            "from_ms": 330,
+            "to_ms": 335,
+            "count": 0
+          },
+          {
+            "from_ms": 335,
+            "to_ms": 340,
+            "count": 0
+          },
+          {
+            "from_ms": 340,
+            "to_ms": 345,
+            "count": 0
+          },
+          {
+            "from_ms": 345,
+            "to_ms": 350,
+            "count": 0
+          },
+          {
+            "from_ms": 350,
+            "to_ms": 400,
+            "count": 0
+          },
+          {
+            "from_ms": 400,
+            "to_ms": 450,
+            "count": 0
+          },
+          {
+            "from_ms": 450,
+            "to_ms": 500,
+            "count": 0
+          },
+          {
+            "from_ms": 500,
+            "to_ms": 550,
+            "count": 0
+          },
+          {
+            "from_ms": 550,
+            "to_ms": 600,
+            "count": 0
+          },
+          {
+            "from_ms": 600,
+            "to_ms": 650,
+            "count": 0
+          },
+          {
+            "from_ms": 650,
+            "to_ms": 700,
+            "count": 0
+          },
+          {
+            "from_ms": 700,
+            "to_ms": null,
+            "count": 0
+          }
+        ],
+        "percentiles": {
+          "p50": 9.05,
+          "p90": 16.09,
+          "p95": 20.43,
+          "p99": 39.06
+        },
+        "mean_ms": 10.66,
+        "max_ms": 166.32,
+        "timeline": [
+          {
+            "t_s": 0,
+            "count": 58,
+            "p50_ms": 3.3,
+            "max_ms": 12.48
+          },
+          {
+            "t_s": 1,
+            "count": 120,
+            "p50_ms": 5.06,
+            "max_ms": 9.2
+          },
+          {
+            "t_s": 2,
+            "count": 49,
+            "p50_ms": 5.28,
+            "max_ms": 166.32
+          },
+          {
+            "t_s": 3,
+            "count": 111,
+            "p50_ms": 8.27,
+            "max_ms": 36.12
+          },
+          {
+            "t_s": 4,
+            "count": 161,
+            "p50_ms": 9.88,
+            "max_ms": 16.64
+          },
+          {
+            "t_s": 5,
+            "count": 50,
+            "p50_ms": 10.32,
+            "max_ms": 27.48
+          },
+          {
+            "t_s": 6,
+            "count": 25,
+            "p50_ms": 13.1,
+            "max_ms": 15.74
+          },
+          {
+            "t_s": 7,
+            "count": 25,
+            "p50_ms": 13.38,
+            "max_ms": 17.45
+          },
+          {
+            "t_s": 8,
+            "count": 217,
+            "p50_ms": 14.06,
+            "max_ms": 67.63
+          },
+          {
+            "t_s": 9,
+            "count": 125,
+            "p50_ms": 12,
+            "max_ms": 42.99
+          },
+          {
+            "t_s": 10,
+            "count": 85,
+            "p50_ms": 11.31,
+            "max_ms": 61.61
+          },
+          {
+            "t_s": 11,
+            "count": 116,
+            "p50_ms": 11.68,
+            "max_ms": 33.12
+          },
+          {
+            "t_s": 12,
+            "count": 106,
+            "p50_ms": 12.09,
+            "max_ms": 43.1
+          },
+          {
+            "t_s": 13,
+            "count": 104,
+            "p50_ms": 10.99,
+            "max_ms": 31.57
+          },
+          {
+            "t_s": 14,
+            "count": 92,
+            "p50_ms": 6.15,
+            "max_ms": 10.43
+          },
+          {
+            "t_s": 15,
+            "count": 33,
+            "p50_ms": 6.14,
+            "max_ms": 10.98
+          },
+          {
+            "t_s": 16,
+            "count": 32,
+            "p50_ms": 6.3,
+            "max_ms": 10.88
+          },
+          {
+            "t_s": 17,
+            "count": 31,
+            "p50_ms": 11.68,
+            "max_ms": 16.49
+          },
+          {
+            "t_s": 18,
+            "count": 105,
+            "p50_ms": 7.27,
+            "max_ms": 63.33
+          },
+          {
+            "t_s": 19,
+            "count": 46,
+            "p50_ms": 7.23,
+            "max_ms": 15.67
+          },
+          {
+            "t_s": 20,
+            "count": 24,
+            "p50_ms": 7.09,
+            "max_ms": 9.84
+          },
+          {
+            "t_s": 21,
+            "count": 25,
+            "p50_ms": 7.08,
+            "max_ms": 8.85
+          },
+          {
+            "t_s": 22,
+            "count": 45,
+            "p50_ms": 10.18,
+            "max_ms": 37.74
+          },
+          {
+            "t_s": 23,
+            "count": 336,
+            "p50_ms": 11.16,
+            "max_ms": 46.52
+          },
+          {
+            "t_s": 24,
+            "count": 114,
+            "p50_ms": 12.15,
+            "max_ms": 39.06
+          },
+          {
+            "t_s": 25,
+            "count": 107,
+            "p50_ms": 11.99,
+            "max_ms": 30.46
+          },
+          {
+            "t_s": 26,
+            "count": 84,
+            "p50_ms": 10.07,
+            "max_ms": 20.34
+          },
+          {
+            "t_s": 27,
+            "count": 38,
+            "p50_ms": 5.95,
+            "max_ms": 11.87
+          },
+          {
+            "t_s": 28,
+            "count": 38,
+            "p50_ms": 5.67,
+            "max_ms": 11.03
+          },
+          {
+            "t_s": 29,
+            "count": 38,
+            "p50_ms": 7.88,
+            "max_ms": 16.46
+          },
+          {
+            "t_s": 30,
+            "count": 39,
+            "p50_ms": 7.48,
+            "max_ms": 13.77
+          },
+          {
+            "t_s": 31,
+            "count": 97,
+            "p50_ms": 7.81,
+            "max_ms": 71.39
+          },
+          {
+            "t_s": 32,
+            "count": 108,
+            "p50_ms": 8.55,
+            "max_ms": 32.91
+          },
+          {
+            "t_s": 33,
+            "count": 110,
+            "p50_ms": 6.68,
+            "max_ms": 30.43
+          },
+          {
+            "t_s": 34,
+            "count": 81,
+            "p50_ms": 6.26,
+            "max_ms": 30.49
+          },
+          {
+            "t_s": 35,
+            "count": 97,
+            "p50_ms": 7.11,
+            "max_ms": 22.4
+          },
+          {
+            "t_s": 36,
+            "count": 143,
+            "p50_ms": 8.93,
+            "max_ms": 28.61
+          },
+          {
+            "t_s": 37,
+            "count": 99,
+            "p50_ms": 7.55,
+            "max_ms": 22.84
+          },
+          {
+            "t_s": 38,
+            "count": 122,
+            "p50_ms": 6.49,
+            "max_ms": 30.2
+          },
+          {
+            "t_s": 39,
+            "count": 37,
+            "p50_ms": 5.81,
+            "max_ms": 6.74
+          }
+        ]
+      }
+    },
+    "startup": {
+      "status": "collected",
+      "source": "am start -W: TotalTime / LaunchState",
+      "reason_code": null,
+      "reason": null,
+      "data": {
+        "total_time_ms": 543,
+        "launch_state": "COLD",
+        "status": "ok",
+        "wait_time_ms": 547
+      }
+    },
+    "cpu": {
+      "status": "partial",
+      "source": "perfetto: linux.process_stats runtime.* (앱) + linux.sys_stats cpu.times.* · ftrace power/cpu_frequency (기기 전역)",
+      "reason_code": "process_name_stale_in_trace",
+      "reason": "트레이스는 이 프로세스(pid 13895)를 \"<pre-initialized>\" 이라는 이름으로 기록했습니다 — zygote 가 fork 한 직후 이름이 확정되기 전에 관측된 것입니다. 대상 앱(com.example.streaming)임은 실행 직후 기기에서 받아 둔 pid 로 확인했고, 보고하는 이름은 그 패키지명입니다.",
+      "data": {
+        "device_sampled_ms": 38532,
+        "device_samples": 40,
+        "device_total_busy_pct": 36.44,
+        "device_per_core": [
+          {
+            "cpu": 0,
+            "busy_pct": 49.27
+          },
+          {
+            "cpu": 1,
+            "busy_pct": 44.6
+          },
+          {
+            "cpu": 2,
+            "busy_pct": 43.57
+          },
+          {
+            "cpu": 3,
+            "busy_pct": 43.01
+          },
+          {
+            "cpu": 4,
+            "busy_pct": 35.77
+          },
+          {
+            "cpu": 5,
+            "busy_pct": 32.09
+          },
+          {
+            "cpu": 6,
+            "busy_pct": 31.81
+          },
+          {
+            "cpu": 7,
+            "busy_pct": 12.44
+          }
+        ],
+        "device_frequency": [
+          {
+            "cpu": 0,
+            "samples": 2757,
+            "min_khz": 691200,
+            "max_khz": 2016000,
+            "avg_khz": 1331220.9
+          },
+          {
+            "cpu": 1,
+            "samples": 2757,
+            "min_khz": 691200,
+            "max_khz": 2016000,
+            "avg_khz": 1331220.9
+          },
+          {
+            "cpu": 2,
+            "samples": 2757,
+            "min_khz": 691200,
+            "max_khz": 2016000,
+            "avg_khz": 1331220.9
+          },
+          {
+            "cpu": 3,
+            "samples": 2757,
+            "min_khz": 691200,
+            "max_khz": 2016000,
+            "avg_khz": 1331220.9
+          },
+          {
+            "cpu": 4,
+            "samples": 5767,
+            "min_khz": 633600,
+            "max_khz": 2745600,
+            "avg_khz": 1715878.1
+          },
+          {
+            "cpu": 5,
+            "samples": 5767,
+            "min_khz": 633600,
+            "max_khz": 2745600,
+            "avg_khz": 1715878.1
+          },
+          {
+            "cpu": 6,
+            "samples": 5767,
+            "min_khz": 633600,
+            "max_khz": 2745600,
+            "avg_khz": 1715878.1
+          },
+          {
+            "cpu": 7,
+            "samples": 1290,
+            "min_khz": 787200,
+            "max_khz": 3187200,
+            "avg_khz": 2127330.2
+          }
+        ],
+        "device_timeline": [
+          {
+            "t_s": 1,
+            "busy_pct": 43.8
+          },
+          {
+            "t_s": 2,
+            "busy_pct": 43.54
+          },
+          {
+            "t_s": 3,
+            "busy_pct": 45.97
+          },
+          {
+            "t_s": 4,
+            "busy_pct": 49.16
+          },
+          {
+            "t_s": 5,
+            "busy_pct": 43
+          },
+          {
+            "t_s": 6,
+            "busy_pct": 21.19
+          },
+          {
+            "t_s": 7,
+            "busy_pct": 20.95
+          },
+          {
+            "t_s": 8,
+            "busy_pct": 46.9
+          },
+          {
+            "t_s": 9,
+            "busy_pct": 48.83
+          },
+          {
+            "t_s": 10,
+            "busy_pct": 54.73
+          },
+          {
+            "t_s": 11,
+            "busy_pct": 54.94
+          },
+          {
+            "t_s": 12,
+            "busy_pct": 50.76
+          },
+          {
+            "t_s": 13,
+            "busy_pct": 48.66
+          },
+          {
+            "t_s": 14,
+            "busy_pct": 41.36
+          },
+          {
+            "t_s": 15,
+            "busy_pct": 19.92
+          },
+          {
+            "t_s": 16,
+            "busy_pct": 16.44
+          },
+          {
+            "t_s": 17,
+            "busy_pct": 17.93
+          },
+          {
+            "t_s": 18,
+            "busy_pct": 27.93
+          },
+          {
+            "t_s": 19,
+            "busy_pct": 24.18
+          },
+          {
+            "t_s": 20,
+            "busy_pct": 17.34
+          },
+          {
+            "t_s": 21,
+            "busy_pct": 14.39
+          },
+          {
+            "t_s": 22,
+            "busy_pct": 14.38
+          },
+          {
+            "t_s": 23,
+            "busy_pct": 50.07
+          },
+          {
+            "t_s": 24,
+            "busy_pct": 52.57
+          },
+          {
+            "t_s": 25,
+            "busy_pct": 49.94
+          },
+          {
+            "t_s": 26,
+            "busy_pct": 44.96
+          },
+          {
+            "t_s": 27,
+            "busy_pct": 12.63
+          },
+          {
+            "t_s": 28,
+            "busy_pct": 13.8
+          },
+          {
+            "t_s": 29,
+            "busy_pct": 17.46
+          },
+          {
+            "t_s": 30,
+            "busy_pct": 18.24
+          },
+          {
+            "t_s": 31,
+            "busy_pct": 32.49
+          },
+          {
+            "t_s": 32,
+            "busy_pct": 40.03
+          },
+          {
+            "t_s": 33,
+            "busy_pct": 47.93
+          },
+          {
+            "t_s": 34,
+            "busy_pct": 32.56
+          },
+          {
+            "t_s": 35,
+            "busy_pct": 40.66
+          },
+          {
+            "t_s": 36,
+            "busy_pct": 48.29
+          },
+          {
+            "t_s": 37,
+            "busy_pct": 50.13
+          },
+          {
+            "t_s": 38,
+            "busy_pct": 45.95
+          }
+        ],
+        "app": {
+          "process": "com.example.streaming",
+          "pid": 13895,
+          "samples": 40,
+          "sampled_ms": 38524,
+          "user_ms": 33890,
+          "kernel_ms": 10130,
+          "total_ms": 44020,
+          "share_of_device_cpu_pct": 14.59,
+          "other_processes": [],
+          "timeline": [
+            {
+              "t_s": 1,
+              "app_cpu_ms": 1470
+            },
+            {
+              "t_s": 2,
+              "app_cpu_ms": 1320
+            },
+            {
+              "t_s": 3,
+              "app_cpu_ms": 1620
+            },
+            {
+              "t_s": 4,
+              "app_cpu_ms": 1570
+            },
+            {
+              "t_s": 5,
+              "app_cpu_ms": 1120
+            },
+            {
+              "t_s": 6,
+              "app_cpu_ms": 630
+            },
+            {
+              "t_s": 7,
+              "app_cpu_ms": 700
+            },
+            {
+              "t_s": 8,
+              "app_cpu_ms": 1120
+            },
+            {
+              "t_s": 9,
+              "app_cpu_ms": 1510
+            },
+            {
+              "t_s": 10,
+              "app_cpu_ms": 1610
+            },
+            {
+              "t_s": 11,
+              "app_cpu_ms": 1420
+            },
+            {
+              "t_s": 12,
+              "app_cpu_ms": 1490
+            },
+            {
+              "t_s": 13,
+              "app_cpu_ms": 1550
+            },
+            {
+              "t_s": 14,
+              "app_cpu_ms": 1110
+            },
+            {
+              "t_s": 15,
+              "app_cpu_ms": 540
+            },
+            {
+              "t_s": 16,
+              "app_cpu_ms": 420
+            },
+            {
+              "t_s": 17,
+              "app_cpu_ms": 550
+            },
+            {
+              "t_s": 18,
+              "app_cpu_ms": 790
+            },
+            {
+              "t_s": 19,
+              "app_cpu_ms": 860
+            },
+            {
+              "t_s": 20,
+              "app_cpu_ms": 520
+            },
+            {
+              "t_s": 21,
+              "app_cpu_ms": 560
+            },
+            {
+              "t_s": 22,
+              "app_cpu_ms": 560
+            },
+            {
+              "t_s": 23,
+              "app_cpu_ms": 1480
+            },
+            {
+              "t_s": 24,
+              "app_cpu_ms": 1750
+            },
+            {
+              "t_s": 25,
+              "app_cpu_ms": 1690
+            },
+            {
+              "t_s": 26,
+              "app_cpu_ms": 1320
+            },
+            {
+              "t_s": 27,
+              "app_cpu_ms": 400
+            },
+            {
+              "t_s": 28,
+              "app_cpu_ms": 400
+            },
+            {
+              "t_s": 29,
+              "app_cpu_ms": 610
+            },
+            {
+              "t_s": 30,
+              "app_cpu_ms": 550
+            },
+            {
+              "t_s": 31,
+              "app_cpu_ms": 840
+            },
+            {
+              "t_s": 32,
+              "app_cpu_ms": 1260
+            },
+            {
+              "t_s": 33,
+              "app_cpu_ms": 1970
+            },
+            {
+              "t_s": 34,
+              "app_cpu_ms": 1000
+            },
+            {
+              "t_s": 35,
+              "app_cpu_ms": 1410
+            },
+            {
+              "t_s": 36,
+              "app_cpu_ms": 1780
+            },
+            {
+              "t_s": 37,
+              "app_cpu_ms": 2000
+            },
+            {
+              "t_s": 38,
+              "app_cpu_ms": 1590
+            }
+          ]
+        }
+      }
+    },
+    "memory": {
+      "status": "partial",
+      "source": "perfetto: linux.process_stats mem.rss + linux.sys_stats meminfo",
+      "reason_code": "process_name_stale_in_trace",
+      "reason": "트레이스는 이 프로세스(pid 13895)를 \"<pre-initialized>\" 이라는 이름으로 기록했습니다 — zygote 가 fork 한 직후 이름이 확정되기 전에 관측된 것입니다. 대상 앱(com.example.streaming)임은 실행 직후 기기에서 받아 둔 pid 로 확인했고, 보고하는 이름은 그 패키지명입니다.",
+      "data": {
+        "process": "com.example.streaming",
+        "pid": 13895,
+        "samples": 40,
+        "rss": {
+          "min_kb": 54832,
+          "max_kb": 522216,
+          "avg_kb": 403671
+        },
+        "rss_anon": {
+          "min_kb": 31380,
+          "max_kb": 380488,
+          "avg_kb": 278805
+        },
+        "rss_file": {
+          "min_kb": 23164,
+          "max_kb": 139700,
+          "avg_kb": 119901
+        },
+        "timeline": [
+          {
+            "t_s": 0,
+            "rss_kb": 219356
+          },
+          {
+            "t_s": 1,
+            "rss_kb": 272628
+          },
+          {
+            "t_s": 2,
+            "rss_kb": 258652
+          },
+          {
+            "t_s": 3,
+            "rss_kb": 322544
+          },
+          {
+            "t_s": 4,
+            "rss_kb": 333212
+          },
+          {
+            "t_s": 5,
+            "rss_kb": 309280
+          },
+          {
+            "t_s": 6,
+            "rss_kb": 310244
+          },
+          {
+            "t_s": 7,
+            "rss_kb": 311144
+          },
+          {
+            "t_s": 8,
+            "rss_kb": 345356
+          },
+          {
+            "t_s": 9,
+            "rss_kb": 389004
+          },
+          {
+            "t_s": 10,
+            "rss_kb": 418836
+          },
+          {
+            "t_s": 11,
+            "rss_kb": 414944
+          },
+          {
+            "t_s": 12,
+            "rss_kb": 457244
+          },
+          {
+            "t_s": 13,
+            "rss_kb": 441532
+          },
+          {
+            "t_s": 14,
+            "rss_kb": 465620
+          },
+          {
+            "t_s": 15,
+            "rss_kb": 400748
+          },
+          {
+            "t_s": 16,
+            "rss_kb": 401956
+          },
+          {
+            "t_s": 17,
+            "rss_kb": 402752
+          },
+          {
+            "t_s": 18,
+            "rss_kb": 397544
+          },
+          {
+            "t_s": 19,
+            "rss_kb": 407172
+          },
+          {
+            "t_s": 20,
+            "rss_kb": 408076
+          },
+          {
+            "t_s": 21,
+            "rss_kb": 408836
+          },
+          {
+            "t_s": 22,
+            "rss_kb": 411228
+          },
+          {
+            "t_s": 23,
+            "rss_kb": 463760
+          },
+          {
+            "t_s": 24,
+            "rss_kb": 466128
+          },
+          {
+            "t_s": 25,
+            "rss_kb": 476656
+          },
+          {
+            "t_s": 26,
+            "rss_kb": 441880
+          },
+          {
+            "t_s": 27,
+            "rss_kb": 443056
+          },
+          {
+            "t_s": 28,
+            "rss_kb": 444164
+          },
+          {
+            "t_s": 29,
+            "rss_kb": 445484
+          },
+          {
+            "t_s": 30,
+            "rss_kb": 447080
+          },
+          {
+            "t_s": 31,
+            "rss_kb": 454004
+          },
+          {
+            "t_s": 32,
+            "rss_kb": 475808
+          },
+          {
+            "t_s": 33,
+            "rss_kb": 475272
+          },
+          {
+            "t_s": 34,
+            "rss_kb": 494304
+          },
+          {
+            "t_s": 35,
+            "rss_kb": 522216
+          },
+          {
+            "t_s": 36,
+            "rss_kb": 518580
+          },
+          {
+            "t_s": 37,
+            "rss_kb": 521940
+          },
+          {
+            "t_s": 38,
+            "rss_kb": 493764
+          }
+        ],
+        "rss_watermark_peak_kb": 555236,
+        "system": {
+          "mem_total_kb": 11521992,
+          "mem_available": {
+            "min_kb": 4179264,
+            "max_kb": 4804052,
+            "avg_kb": 4281519
+          },
+          "mem_free": {
+            "min_kb": 239312,
+            "max_kb": 372036,
+            "avg_kb": 281182
+          },
+          "cached": {
+            "min_kb": 4046884,
+            "max_kb": 4082972,
+            "avg_kb": 4073259
+          },
+          "swap_total_kb": 8388604,
+          "swap_free": {
+            "min_kb": 5071400,
+            "max_kb": 5124648,
+            "avg_kb": 5100098
+          }
+        },
+        "system_timeline": [
+          {
+            "t_s": 0,
+            "mem_available_kb": 4720636,
+            "mem_free_kb": 286832
+          },
+          {
+            "t_s": 1,
+            "mem_available_kb": 4416788,
+            "mem_free_kb": 351508
+          },
+          {
+            "t_s": 2,
+            "mem_available_kb": 4362908,
+            "mem_free_kb": 371716
+          },
+          {
+            "t_s": 3,
+            "mem_available_kb": 4283608,
+            "mem_free_kb": 288044
+          },
+          {
+            "t_s": 4,
+            "mem_available_kb": 4279604,
+            "mem_free_kb": 291236
+          },
+          {
+            "t_s": 5,
+            "mem_available_kb": 4294596,
+            "mem_free_kb": 315408
+          },
+          {
+            "t_s": 6,
+            "mem_available_kb": 4292884,
+            "mem_free_kb": 313360
+          },
+          {
+            "t_s": 7,
+            "mem_available_kb": 4291256,
+            "mem_free_kb": 312360
+          },
+          {
+            "t_s": 8,
+            "mem_available_kb": 4272356,
+            "mem_free_kb": 294156
+          },
+          {
+            "t_s": 9,
+            "mem_available_kb": 4257348,
+            "mem_free_kb": 289752
+          },
+          {
+            "t_s": 10,
+            "mem_available_kb": 4205556,
+            "mem_free_kb": 245600
+          },
+          {
+            "t_s": 11,
+            "mem_available_kb": 4211992,
+            "mem_free_kb": 255140
+          },
+          {
+            "t_s": 12,
+            "mem_available_kb": 4179264,
+            "mem_free_kb": 245524
+          },
+          {
+            "t_s": 13,
+            "mem_available_kb": 4204208,
+            "mem_free_kb": 253512
+          },
+          {
+            "t_s": 14,
+            "mem_available_kb": 4187600,
+            "mem_free_kb": 243788
+          },
+          {
+            "t_s": 15,
+            "mem_available_kb": 4257812,
+            "mem_free_kb": 251916
+          },
+          {
+            "t_s": 16,
+            "mem_available_kb": 4253556,
+            "mem_free_kb": 246528
+          },
+          {
+            "t_s": 17,
+            "mem_available_kb": 4251956,
+            "mem_free_kb": 243220
+          },
+          {
+            "t_s": 18,
+            "mem_available_kb": 4249252,
+            "mem_free_kb": 239312
+          },
+          {
+            "t_s": 19,
+            "mem_available_kb": 4271900,
+            "mem_free_kb": 250520
+          },
+          {
+            "t_s": 20,
+            "mem_available_kb": 4269256,
+            "mem_free_kb": 247612
+          },
+          {
+            "t_s": 21,
+            "mem_available_kb": 4268804,
+            "mem_free_kb": 246824
+          },
+          {
+            "t_s": 22,
+            "mem_available_kb": 4262508,
+            "mem_free_kb": 240300
+          },
+          {
+            "t_s": 23,
+            "mem_available_kb": 4231132,
+            "mem_free_kb": 245040
+          },
+          {
+            "t_s": 24,
+            "mem_available_kb": 4220668,
+            "mem_free_kb": 241348
+          },
+          {
+            "t_s": 25,
+            "mem_available_kb": 4207720,
+            "mem_free_kb": 248580
+          },
+          {
+            "t_s": 26,
+            "mem_available_kb": 4242020,
+            "mem_free_kb": 292940
+          },
+          {
+            "t_s": 27,
+            "mem_available_kb": 4240804,
+            "mem_free_kb": 291756
+          },
+          {
+            "t_s": 28,
+            "mem_available_kb": 4240228,
+            "mem_free_kb": 290488
+          },
+          {
+            "t_s": 29,
+            "mem_available_kb": 4238828,
+            "mem_free_kb": 288976
+          },
+          {
+            "t_s": 30,
+            "mem_available_kb": 4237204,
+            "mem_free_kb": 287632
+          },
+          {
+            "t_s": 31,
+            "mem_available_kb": 4305576,
+            "mem_free_kb": 355884
+          },
+          {
+            "t_s": 32,
+            "mem_available_kb": 4295296,
+            "mem_free_kb": 332184
+          },
+          {
+            "t_s": 33,
+            "mem_available_kb": 4281384,
+            "mem_free_kb": 309020
+          },
+          {
+            "t_s": 34,
+            "mem_available_kb": 4260948,
+            "mem_free_kb": 290648
+          },
+          {
+            "t_s": 35,
+            "mem_available_kb": 4239108,
+            "mem_free_kb": 274016
+          },
+          {
+            "t_s": 36,
+            "mem_available_kb": 4219476,
+            "mem_free_kb": 262128
+          },
+          {
+            "t_s": 37,
+            "mem_available_kb": 4218164,
+            "mem_free_kb": 258896
+          },
+          {
+            "t_s": 38,
+            "mem_available_kb": 4232512,
+            "mem_free_kb": 281548
+          }
+        ]
+      }
+    },
+    "log": {
+      "status": "partial",
+      "source": "perfetto: android.log (min_prio=PRIO_WARN) + linux.process_stats (앱 프로세스 특정)",
+      "reason_code": "process_name_stale_in_trace",
+      "reason": "트레이스는 이 프로세스(pid 13895)를 \"<pre-initialized>\" 이라는 이름으로 기록했습니다 — zygote 가 fork 한 직후 이름이 확정되기 전에 관측된 것입니다. 대상 앱(com.example.streaming)임은 실행 직후 기기에서 받아 둔 pid 로 확인했고, 보고하는 이름은 그 패키지명입니다.",
+      "data": {
+        "min_prio": "PRIO_WARN",
+        "app": {
+          "process": "com.example.streaming",
+          "pid": 13895,
+          "total": 243,
+          "by_priority": {
+            "warn": 170,
+            "error": 73,
+            "fatal": 0
+          },
+          "timeline": [
+            {
+              "t_s": 0,
+              "count": 19,
+              "error": 5
+            },
+            {
+              "t_s": 2,
+              "count": 22,
+              "error": 0
+            },
+            {
+              "t_s": 3,
+              "count": 2,
+              "error": 0
+            },
+            {
+              "t_s": 4,
+              "count": 15,
+              "error": 4
+            },
+            {
+              "t_s": 7,
+              "count": 7,
+              "error": 7
+            },
+            {
+              "t_s": 8,
+              "count": 122,
+              "error": 5
+            },
+            {
+              "t_s": 9,
+              "count": 4,
+              "error": 4
+            },
+            {
+              "t_s": 10,
+              "count": 2,
+              "error": 2
+            },
+            {
+              "t_s": 11,
+              "count": 6,
+              "error": 6
+            },
+            {
+              "t_s": 12,
+              "count": 5,
+              "error": 5
+            },
+            {
+              "t_s": 13,
+              "count": 4,
+              "error": 4
+            },
+            {
+              "t_s": 14,
+              "count": 1,
+              "error": 1
+            },
+            {
+              "t_s": 22,
+              "count": 2,
+              "error": 2
+            },
+            {
+              "t_s": 23,
+              "count": 8,
+              "error": 4
+            },
+            {
+              "t_s": 24,
+              "count": 4,
+              "error": 4
+            },
+            {
+              "t_s": 25,
+              "count": 2,
+              "error": 2
+            },
+            {
+              "t_s": 26,
+              "count": 2,
+              "error": 2
+            },
+            {
+              "t_s": 32,
+              "count": 2,
+              "error": 2
+            },
+            {
+              "t_s": 33,
+              "count": 2,
+              "error": 2
+            },
+            {
+              "t_s": 34,
+              "count": 2,
+              "error": 2
+            },
+            {
+              "t_s": 35,
+              "count": 4,
+              "error": 4
+            },
+            {
+              "t_s": 36,
+              "count": 2,
+              "error": 2
+            },
+            {
+              "t_s": 37,
+              "count": 2,
+              "error": 2
+            },
+            {
+              "t_s": 38,
+              "count": 2,
+              "error": 2
+            }
+          ]
+        },
+        "device_total": 644,
+        "device_by_priority": {
+          "warn": 279,
+          "error": 365,
+          "fatal": 0
+        },
+        "device_crashes": [],
+        "device_anrs": []
+      }
+    },
+    "thermal": {
+      "status": "collected",
+      "source": "dumpsys thermalservice: 세션 시작 직전 / 종료 직후 스냅샷의 센서별 온도 차이. 기기 전역이며 대상 앱의 온도가 아니다. 전/후 두 점이므로 구간 중 최고 온도는 포함하지 않는다.",
+      "reason_code": null,
+      "reason": null,
+      "data": {
+        "zones": [
+          {
+            "name": "AP",
+            "type": 0,
+            "before_c": 25.8,
+            "after_c": 31,
+            "delta_c": 5.2,
+            "status_before": 0,
+            "status_after": 0,
+            "source": "hal"
+          },
+          {
+            "name": "BAT",
+            "type": 2,
+            "before_c": 25.3,
+            "after_c": 25.6,
+            "delta_c": 0.3,
+            "status_before": 0,
+            "status_after": 0,
+            "source": "hal"
+          },
+          {
+            "name": "MAINBATRAW",
+            "type": 2,
+            "before_c": 25.4,
+            "after_c": 25.9,
+            "delta_c": 0.5,
+            "status_before": 0,
+            "status_after": 0,
+            "source": "hal"
+          },
+          {
+            "name": "PA1THM",
+            "type": 5,
+            "before_c": 27.1,
+            "after_c": 29.3,
+            "delta_c": 2.2,
+            "status_before": 0,
+            "status_after": 0,
+            "source": "hal"
+          },
+          {
+            "name": "PATHM",
+            "type": 5,
+            "before_c": 27.3,
+            "after_c": 30.4,
+            "delta_c": 3.1,
+            "status_before": 0,
+            "status_after": 0,
+            "source": "hal"
+          },
+          {
+            "name": "SKIN",
+            "type": 3,
+            "before_c": 26.1,
+            "after_c": 27.8,
+            "delta_c": 1.7,
+            "status_before": 0,
+            "status_after": 0,
+            "source": "hal"
+          },
+          {
+            "name": "SUBBAT",
+            "type": 2,
+            "before_c": 25.4,
+            "after_c": 25.7,
+            "delta_c": 0.3,
+            "status_before": 0,
+            "status_after": 0,
+            "source": "hal"
+          },
+          {
+            "name": "USB",
+            "type": 4,
+            "before_c": 25.1,
+            "after_c": 25.2,
+            "delta_c": 0.1,
+            "status_before": 0,
+            "status_after": 0,
+            "source": "hal"
+          }
+        ],
+        "device_status_before": 0,
+        "device_status_after": 0,
+        "status_override_before": false,
+        "status_override_after": false,
+        "hal_ready_before": true,
+        "hal_ready_after": true,
+        "headroom_thresholds": [
+          null,
+          0.8666667,
+          0.93333334,
+          1,
+          1.1333333,
+          1.4333333,
+          2.4333334
+        ]
+      }
+    },
+    "network": {
+      "status": "collected",
+      "source": "dumpsys netstats: mAppUidStatsMap 의 세션 전/후 델타 (uid 단위, IP 계층 바이트, loopback 포함 전 인터페이스 합계, wifi/mobile 분리 없음, 큰 패킷은 GSO 추정)",
+      "reason_code": null,
+      "reason": null,
+      "data": {
+        "uid": 11372,
+        "rx_bytes": 133295354,
+        "tx_bytes": 1163208,
+        "rx_packets": 89649,
+        "tx_packets": 17622,
+        "shared_uid_packages": [
+          "com.example.streaming"
+        ]
+      }
+    }
+  },
+  "measurement_overhead": {
+    "tracing_processes_cpu_time_ms": 2350,
+    "tracing_processes_cpu_share_pct": 0.78,
+    "tracing_processes_peak_rss_kb": 17476,
+    "adb_commands_during_session": 0,
+    "trace_buffer_overrun": false
+  },
+  "references": [
+    {
+      "metric": "frame",
+      "name": "60fps frame budget",
+      "value": 16.67,
+      "unit": "ms",
+      "source": "Android Vitals — slow rendering",
+      "url": "https://developer.android.com/topic/performance/vitals/render"
+    },
+    {
+      "metric": "frame",
+      "name": "frozen frame threshold",
+      "value": 700,
+      "unit": "ms",
+      "source": "Android Vitals — frozen frames",
+      "url": "https://developer.android.com/topic/performance/vitals/frozen"
+    },
+    {
+      "metric": "startup",
+      "name": "excessive cold startup time",
+      "value": 5000,
+      "unit": "ms",
+      "source": "Android Vitals — app startup time",
+      "url": "https://developer.android.com/topic/performance/vitals/launch-time"
+    },
+    {
+      "metric": "startup",
+      "name": "excessive warm startup time",
+      "value": 2000,
+      "unit": "ms",
+      "source": "Android Vitals — app startup time",
+      "url": "https://developer.android.com/topic/performance/vitals/launch-time"
+    },
+    {
+      "metric": "startup",
+      "name": "excessive hot startup time",
+      "value": 1500,
+      "unit": "ms",
+      "source": "Android Vitals — app startup time",
+      "url": "https://developer.android.com/topic/performance/vitals/launch-time"
+    },
+    {
+      "metric": "network",
+      "name": "excessive background mobile network usage",
+      "value": 50,
+      "unit": "MB/day",
+      "source": "Android Vitals — Excessive Mobile Network Usage in Background",
+      "url": "https://developer.android.com/topic/performance/vitals/bg-network-usage"
+    }
+  ],
+  "warnings": [
+    {
+      "code": "charging_during_session",
+      "message": "USB 충전 중이었음 — thermal/power 지표에 영향 가능"
+    }
+  ],
+  "artifacts": {
+    "trace": "trace.perfetto-trace",
+    "raw": [
+      "raw/battery_before.txt",
+      "raw/thermalservice_before.txt",
+      "raw/settings_before.txt",
+      "raw/meminfo_before.txt",
+      "raw/iproute_before.txt",
+      "raw/netstats_before.txt",
+      "raw/packages_before.txt",
+      "raw/battery_after.txt",
+      "raw/thermalservice_after.txt",
+      "raw/settings_after.txt",
+      "raw/meminfo_after.txt",
+      "raw/iproute_after.txt",
+      "raw/netstats_after.txt",
+      "raw/packages_after.txt"
+    ]
+  }
+}

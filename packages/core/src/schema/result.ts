@@ -314,6 +314,25 @@ export const CpuTimelinePointSchema = z.object({
 })
 export type CpuTimelinePoint = z.infer<typeof CpuTimelinePointSchema>
 
+/**
+ * 기기 전체 사용률의 한 초.
+ *
+ * 앱 쪽(`CpuTimelinePoint`)이 **시간(ms)** 인 것과 달리 여기는 **백분율**이다. 앱은 분모가
+ * 없지만(한 프로세스가 몇 코어를 썼는지는 누적 카운터로 알 수 없다) 기기 전체는 그 초의
+ * 총 CPU시간이 곧 분모라, 폴링이 지터를 겪어도 비율이 흔들리지 않는다.
+ */
+export const DeviceCpuTimelinePointSchema = z.object({
+  t_s: z.number().int().nonnegative().describe(TIMELINE_T_DESCRIPTION),
+  busy_pct: z
+    .number()
+    .nonnegative()
+    .describe(
+      '그 1초의 (총 CPU시간 − idle − iowait) / 총 CPU시간, 모든 코어 합산. ' +
+        '**1코어=100% 가 아니라 전 코어를 합쳐 100% 다** — 8코어가 전부 바쁘면 100 이다.',
+    ),
+})
+export type DeviceCpuTimelinePoint = z.infer<typeof DeviceCpuTimelinePointSchema>
+
 const CPU_TIMELINE_DESCRIPTION =
   '앱이 **그 1초 동안** 쓴 CPU 시간(user+kernel). ' +
   '`runtime.*` 는 프로세스 시작부터의 **누적값**이라, 이 배열은 이웃한 두 표본의 차이다.\n' +
@@ -425,6 +444,18 @@ export const CpuDataSchema = z.object({
       `ftrace power/cpu_frequency 로 관측한 코어별 주파수(kHz). ${CPU_DEVICE_SCOPE}` +
         '이벤트가 하나도 없으면 **null** 이다 — 사용률만 있는 결과가 사용률+주파수인 척하지 않게.',
     ),
+  device_timeline: z
+    .array(DeviceCpuTimelinePointSchema)
+    .nullable()
+    .optional()
+    .describe(
+      `기기 전체 사용률의 초당 추이. ${CPU_DEVICE_SCOPE}` +
+        '`cpu.times.*` 는 **누적값**이라 이 배열은 이웃한 두 표본의 차이이고, ' +
+        'app.timeline 과 같은 이유로 **첫 표본의 초는 배열에 없다.**\n' +
+        '집계값(device_total_busy_pct)과 이 배열의 평균은 정확히 같지 않다 — 집계는 전체 ' +
+        '첫·마지막 표본의 차이 하나로 내고 이 배열은 초 경계마다 끊기 때문이다.\n' +
+        '표본이 없거나 전부 되감겨 초당으로 나눌 수 없으면 **null** 이다. 0 으로 채우지 않는다.',
+    ),
   app: AppCpuSchema.nullable().describe(
     '**대상 앱 프로세스 하나가 쓴 CPU 시간.** 프로세스 특정 규칙은 frame / memory 와 같다 ' +
       '(캡처한 pid → 정확한 패키지명 → `패키지:서브프로세스`), 그래서 세 메트릭이 같은 ' +
@@ -462,6 +493,21 @@ export const MemoryTimelinePointSchema = z.object({
 })
 export type MemoryTimelinePoint = z.infer<typeof MemoryTimelinePointSchema>
 
+/** 기기 전체 메모리의 한 초. 앱의 RSS(`MemoryTimelinePoint`)와 분모가 다르다. */
+export const SystemMemoryTimelinePointSchema = z.object({
+  t_s: z.number().int().nonnegative().describe(TIMELINE_T_DESCRIPTION),
+  mem_available_kb: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      '커널의 `MemAvailable` — 스왑 없이 새 프로세스에 내줄 수 있다고 커널이 추산한 양. ' +
+        'MemFree 와 다르다 (회수 가능한 캐시를 포함한다).',
+    ),
+  mem_free_kb: z.number().int().nonnegative().describe('커널의 `MemFree` — 어디에도 쓰이지 않는 양.'),
+})
+export type SystemMemoryTimelinePoint = z.infer<typeof SystemMemoryTimelinePointSchema>
+
 const MEMORY_TIMELINE_DESCRIPTION =
   '1초 주기로 폴링된 앱 RSS 의 추이. 집계값(rss.avg_kb / max_kb)과 같은 원본에서 나온다. ' +
   '평균만으로는 구분되지 않는 것 — 내내 일정했는지, 계속 우상향했는지 — 을 보려는 값이다. ' +
@@ -498,6 +544,17 @@ export const MemoryDataSchema = z.object({
     ),
   /** 기기 전체 메모리. linux.sys_stats 의 meminfo 가 없으면 null. */
   system: SystemMemorySchema.nullable(),
+  system_timeline: z
+    .array(SystemMemoryTimelinePointSchema)
+    .nullable()
+    .optional()
+    .describe(
+      '기기 전체 가용 메모리의 초당 추이. **앱이 아니라 기기 전체다** — 앱의 RSS 가 늘어도 ' +
+        '기기 가용이 그만큼 줄지 않을 수 있다(캐시 회수 등).\n' +
+        'meminfo 는 누적이 아니라 **그 순간의 값**이라 첫 초도 배열에 있다 (app.timeline · ' +
+        'cpu.device_timeline 이 첫 초를 빼는 것과 다르다). 한 초에 표본이 여럿이면 마지막 것을 쓴다.\n' +
+        'meminfo 카운터가 없으면 **null** 이다 — system 이 null 인 경우와 같은 원인이다.',
+    ),
 })
 export type MemoryData = z.infer<typeof MemoryDataSchema>
 
@@ -907,8 +964,49 @@ export const DisplayInfoSchema = z.object({
   density_dpi: z.number().int(),
   active_refresh_rate_hz: z.number().nullable(),
   supported_refresh_rates_hz: z.array(z.number()),
+  orientation: z
+    .enum(['portrait', 'landscape', 'square'])
+    .nullable()
+    .optional()
+    .describe(
+      '`wm size` 가 보고한 **물리 해상도**의 가로세로 비교. 세션 중 기기가 실제로 어느 방향을 ' +
+        '보고 있었는지가 아니다 — 회전은 세션 중에도 바뀌고 이 도구는 그것을 추적하지 않는다. ' +
+        '폴더블은 접힘 상태에 따라 이 값이 달라진다. 확인하지 못했으면 null.',
+    ),
+  size_class: z
+    .enum(['small', 'normal', 'large', 'xlarge'])
+    .nullable()
+    .optional()
+    .describe(
+      '안드로이드 화면 크기 구간. 짧은 변을 dp 로 환산해 320/480/720 경계로 가른다 ' +
+        '(width_px·height_px·density_dpi 에서 계산한 값이며 기기가 준 값이 아니다). ' +
+        '셋 중 하나라도 0 이면 null.',
+    ),
+  opengl_es_version: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      '`ro.opengles.version` 원문(예: `196610`). **10진 문자열이지만 의미는 16진 인코딩이다** — ' +
+        '상위 16비트가 major, 하위 16비트가 minor라 196610 = 0x30002 = OpenGL ES 3.2 다. ' +
+        '이 도구는 해석하지 않고 기기가 준 값을 그대로 싣는다.',
+    ),
 })
 export type DisplayInfo = z.infer<typeof DisplayInfoSchema>
+
+/**
+ * 이 도구를 **돌린 컴퓨터**. 기기가 아니다.
+ *
+ * 왜 남기는가: 같은 앱·같은 기기인데 수치가 다른 두 세션을 비교할 때, 호스트가 달랐다는
+ * 사실이 후보에서 빠지면 원인을 기기에서만 찾게 된다. adb 왕복 지연과 트레이스 회수 속도는
+ * 호스트에 달렸고, 그 둘은 측정 창 **밖**이지만 세션 전체 길이에는 들어간다.
+ */
+export const HostInfoSchema = z.object({
+  os: z.string().describe('node `process.platform` 원문 (`darwin` / `linux` / `win32`).'),
+  arch: z.string().describe('node `process.arch` 원문 (`arm64` / `x64`).'),
+  node: z.string().describe('이 도구를 실행한 node 버전.'),
+})
+export type HostInfo = z.infer<typeof HostInfoSchema>
 
 export const DeviceStaticSchema = z.object({
   manufacturer: z.string(),
@@ -1053,6 +1151,51 @@ export const TargetAppSchema = z.object({
     ),
   render_process: z.string().nullable(),
   pid: z.number().int().nullable(),
+
+  /**
+   * 아래 다섯은 전부 `dumpsys package <패키지>` 한 번의 출력에서 나온다 — `version_name` ·
+   * `install_source` 를 읽으려고 이미 돌리던 명령이라 **기기 왕복이 늘지 않는다.**
+   *
+   * 다섯 모두 `null` 이 "그 줄을 찾지 못했다" 는 뜻이다. 특히 `debuggable: false` 는
+   * "릴리스 빌드임을 확인했다" 이고 `null` 은 "모른다" 라 서로 바꿔 쓸 수 없다 —
+   * 디버그 빌드를 재고 릴리스라고 읽는 것이 이 도구에서 가장 비싼 착각이다.
+   */
+  debuggable: z
+    .boolean()
+    .nullable()
+    .optional()
+    .describe(
+      '`flags=[ ... DEBUGGABLE ... ]` 의 유무. **true 면 이 세션은 릴리스 빌드를 잰 것이 ' +
+        '아니다** — 디버그 빌드는 JIT·검증·로깅이 달라 수치를 릴리스와 비교할 수 없다. ' +
+        '이 도구는 그 사실을 판정하지 않고 적기만 한다. null 은 확인하지 못한 것.',
+    ),
+  large_heap: z
+    .boolean()
+    .nullable()
+    .optional()
+    .describe(
+      '`flags=[ ... LARGE_HEAP ... ]` 의 유무 (`android:largeHeap="true"`). ' +
+        'metrics.memory 의 RSS 를 읽을 때 상한이 다르다는 사실이 여기 있다.',
+    ),
+  min_sdk: z.number().int().nullable().optional().describe('`minSdk=` 원문.'),
+  target_sdk: z
+    .number()
+    .int()
+    .nullable()
+    .optional()
+    .describe(
+      '`targetSdk=` 원문. 기기의 sdk_int 와 다를 수 있고, 그 차이가 곧 플랫폼이 이 앱에 ' +
+        '적용하는 호환 동작의 범위다.',
+    ),
+  primary_cpu_abi: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      '`primaryCpuAbi=` — 이 앱이 **실제로 실행되는** ABI. 기기가 지원하는 목록 ' +
+        '(device.static.abis)의 부분집합이며, 64비트 기기에서 32비트로 도는 앱이 여기서 갈린다. ' +
+        'APK 에 네이티브 코드가 없으면 기기가 `null` 을 찍고 이 값도 null 이다.',
+    ),
 })
 export type TargetApp = z.infer<typeof TargetAppSchema>
 
@@ -1249,7 +1392,12 @@ export const ResultSchema = z.object({
       '이 파일을 해석하려면 무엇을 먼저 읽어야 하는지. **값은 항상 같다** — 안내이지 데이터가 아니다. ' +
         'optional 인 것은 이 필드가 없던 시절의 result.json 을 그대로 읽기 위해서다.',
     ),
-  tool: z.object({ name: z.string(), version: z.string() }),
+  tool: z.object({
+    name: z.string(),
+    version: z.string(),
+    /** optional 인 것은 이 필드가 없던 시절의 result.json 을 그대로 읽기 위해서다. */
+    host: HostInfoSchema.optional(),
+  }),
   session: SessionInfoSchema,
   device: z.object({
     serial: z.string(),

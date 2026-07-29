@@ -280,9 +280,11 @@ npx perftracker mark "광고 재생" -d R5CT0000001       # 기기로 지정해�
 같은 흐름을 브라우저에서 할 수 있습니다.
 
 ```bash
-npm run build && npm run build:web   # 처음 한 번
-npx perftracker gui                  # 서버가 뜨고 브라우저가 열립니다
+npm run gui   # 빌드 · 서버 · 브라우저까지 이 한 줄이 다 합니다
 ```
+
+옵션을 주려면 `npx perftracker gui -p 7333` 처럼 CLI 를 직접 부릅니다 (`npm run build` 가
+한 번은 돌아 있어야 합니다).
 
 세션을 **동시에 여러 개** 돌릴 수 있게 브라우저 탭처럼 상단 탭바로 나뉘고, 기기를 고르면 그
 기기에서 못 재는 지표를 **시작 전에** 알려 줍니다. 측정 중 화면에는 경과 시간과 정지 버튼,
@@ -328,9 +330,10 @@ npx perftracker schema > result.schema.json
 | 필드 | 무엇인가 |
 | --- | --- |
 | `schema_version` | 이 파일 형식의 버전 |
+| `tool` | 도구 이름·버전과 **이것을 돌린 컴퓨터**(`host.os` / `arch` / `node`) |
 | `session` | id, 이름, `state`, 시작/종료 시각, 길이 (아래 참고) |
 | `device` | 기기 스펙(`static`)과 세션 전후 상태(`state_before` / `state_after`) |
-| `target_app` | 패키지, 라벨, 버전, 렌더 프로세스와 pid |
+| `target_app` | 패키지, 라벨, 버전, 렌더 프로세스와 pid, **빌드 속성**(`debuggable` / `large_heap` / `min_sdk` / `target_sdk` / `primary_cpu_abi`) |
 | `metrics` | 메트릭들. 키가 곧 수집기 id (`frame` / `startup` / `cpu` / `memory` / `log` / `thermal` / `network`) |
 | `measurement_overhead` | 이 측정이 기기에 개입한 정도의 **하한** (아래 참고) |
 | `references` | 구글 공개 기준치. **비교에 쓰이지 않고 기록만 된다** |
@@ -343,6 +346,36 @@ npx perftracker schema > result.schema.json
 > 그리고 `device.state_after`. `measurement_overhead` 의 두 필드도 `null` 일 수 있습니다
 > (아래). `warnings` 에는 `session_still_running` 이 함께 실립니다.
 > `stop` 한 뒤 같은 run 디렉토리로 `extract` 를 다시 돌리면 전부 채워집니다.
+
+### `target_app` 의 빌드 속성
+
+`dumpsys package` 한 번의 출력에서 함께 읽습니다 — **기기 왕복이 늘지 않습니다.**
+
+```json
+{
+  "package": "com.example.streaming",
+  "version_name": "8.28.3",
+  "debuggable": false,
+  "large_heap": true,
+  "min_sdk": 26,
+  "target_sdk": 36,
+  "primary_cpu_abi": "arm64-v8a"
+}
+```
+
+- **`debuggable: true` 면 그 세션은 릴리스 빌드를 잰 것이 아닙니다.** 디버그 빌드는 JIT ·
+  검증 · 로깅이 달라 수치를 릴리스와 나란히 놓을 수 없습니다. 이 도구는 그 사실을 **판정하지
+  않고 적기만** 합니다 — 비교해도 되는지는 데이터를 읽는 쪽이 정합니다.
+- **`false` 와 `null` 은 다릅니다.** `false` 는 "릴리스임을 확인했다" 이고 `null` 은
+  "확인하지 못했다" 입니다. 다섯 필드 모두 그렇습니다.
+- `large_heap` 은 `metrics.memory` 의 RSS 를 읽을 때 상한이 다르다는 사실입니다.
+- `primary_cpu_abi` 는 이 앱이 **실제로 실행되는** ABI 로, `device.static.abis` 의 부분집합입니다.
+  64비트 기기에서 32비트로 도는 앱이 여기서 갈립니다. 네이티브 코드가 없으면 `null` 입니다.
+
+### `tool.host`
+
+이 도구를 **돌린 컴퓨터**입니다 (`os` / `arch` / `node`). 같은 앱·같은 기기인데 수치가 다른 두
+세션을 비교할 때, 호스트가 달랐다는 사실이 후보에서 빠지면 원인을 기기에서만 찾게 됩니다.
 
 ### 메트릭 하나의 모양
 
@@ -546,6 +579,7 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   "device_total_busy_pct": 14.18,
   "device_per_core": [ { "cpu": 0, "busy_pct": 20.61 }, "...7개 더" ],
   "device_frequency": [ { "cpu": 0, "samples": 2215, "min_khz": 614400, "max_khz": 1785600, "avg_khz": 1029397.4 }, "..." ],
+  "device_timeline": [ { "t_s": 1, "busy_pct": 43.8 }, { "t_s": 2, "busy_pct": 43.54 }, "..." ],
   "app": {
     "process": "com.nhn.android.webtoon",
     "pid": 24193,
@@ -578,6 +612,13 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 - **`app` 이 `null` 이면 그것은 `0` 이 아니라 "내지 못했다" 입니다.** `reason_code` 가
   갈래를 말합니다 (`process_not_in_trace` / `no_app_cpu_samples` / `counter_went_backwards` /
   `query_failed`). 그때도 `device_*` 값은 그대로 나옵니다.
+- **`device_timeline` 은 기기 전체 사용률의 초당 추이입니다.** `app.timeline` 이 **시간(ms)**
+  인 것과 달리 여기는 **백분율**이고, **전 코어를 합쳐 100%** 입니다 (8코어가 전부 바쁘면 100).
+  같은 `cpu.times.*` 카운터를 다시 접은 것이라 **기기에 아무것도 더 묻지 않습니다.**
+  `app.timeline` 과 같은 이유로 **첫 초는 배열에 없고**(누적값이라 앞에 뺄 대상이 없음),
+  되감긴 초는 버립니다. 초당으로 나눌 수 없으면 `[]` 가 아니라 `null` 입니다.
+  집계값 `device_total_busy_pct` 와 이 배열의 평균은 정확히 같지 않습니다 — 집계는 전체
+  첫·마지막 표본의 차이 하나로 내고 배열은 초 경계마다 끊습니다 (실측 36.44 vs 35.9).
 
 ### `metrics.memory`
 
@@ -601,7 +642,8 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
     "cached":        { "min_kb": 2591928, "max_kb": 2709448, "avg_kb": 2606573 },
     "swap_total_kb": 8388604,
     "swap_free":     { "min_kb": 5818808, "max_kb": 5888932, "avg_kb": 5824497 }
-  }
+  },
+  "system_timeline": [ { "t_s": 0, "mem_available_kb": 4720636, "mem_free_kb": 286832 }, "..." ]
 }
 ```
 
@@ -610,6 +652,12 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 
 - **단위는 전부 kB 입니다.** `trace_processor` 는 바이트로 주므로 이 도구가 변환합니다.
   필드 이름의 `_kb` 접미어가 그 계약입니다.
+- **`system_timeline` 은 기기 전체 가용 메모리의 초당 추이입니다.** 앱 RSS(`timeline`)와
+  나란히 놓고 읽는 값입니다 — 앱이 늘어도 기기 가용이 그만큼 줄지 않을 수 있습니다(캐시 회수).
+  `system` 집계와 **같은 meminfo 카운터**를 다시 접은 것이라 기기에 더 묻지 않습니다.
+  meminfo 는 누적이 아니라 그 순간의 값이라 **첫 초도 배열에 있습니다** (`cpu.device_timeline`
+  이 첫 초를 빼는 것과 다릅니다). `MemAvailable` 과 `MemFree` 중 한쪽만 있는 초는 버립니다 —
+  나머지를 0 으로 채우면 "재 봤더니 0" 이라는 거짓말이 됩니다. 남는 점이 없으면 `null` 입니다.
 - `rss` / `rss_anon` / `rss_file` 은 **세션 구간의 관측 통계**(min/max/avg)입니다.
   `linux.process_stats` 가 `/proc/<pid>/status` 를 폴링해 만든 `mem.rss` 계열 카운터에서
   나옵니다. `rss_anon` / `rss_file` 은 해당 카운터가 트레이스에 없으면 `null` 입니다 —

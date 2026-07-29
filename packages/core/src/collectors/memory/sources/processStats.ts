@@ -2,7 +2,12 @@ import { appProcessSql, resolveAppProcess, type ResolvedAppProcess } from '../..
 import type { AppProcessCandidate } from '../../appProcess.js'
 import { relativeSecondSql } from '../../timeline.js'
 import type { ExtractContext } from '../../types.js'
-import type { CounterStatBytes, MemoryCollection, SystemMemoryBytes } from '../model.js'
+import type {
+  CounterStatBytes,
+  MemoryCollection,
+  SystemMemoryBytes,
+  SystemMemoryTimelineRow,
+} from '../model.js'
 
 /**
  * **perfetto `linux.process_stats` + `linux.sys_stats` 경로.**
@@ -45,6 +50,26 @@ export function appMemoryTimelineSql(upid: number): string {
     `where t.upid = ${upid} and t.name = 'mem.rss' order by c.ts`
   )
 }
+
+/**
+ * 기기 전체 가용 메모리의 **초별 마지막 표본** `[상대초, 카운터, 바이트]`.
+ *
+ * meminfo 는 누적이 아니라 **그 순간의 값**이라 델타를 내지 않는다 — 그래서 `cpu.device_timeline`
+ * 과 달리 **첫 초도 결과에 있다.** 한 초에 표본이 여럿이면(폴링 지터) 마지막 것을 쓴다:
+ * `order by c.ts desc` 의 첫 행이다. `max(value)` 가 **아닌** 것이 요점이다 — 가용 메모리는
+ * 오르내리므로 최댓값은 "마지막" 이 아니다.
+ *
+ * 단위는 `SYSTEM_MEMORY_SQL` 과 같은 **바이트**다 (`/proc/meminfo` 는 kB 지만 perfetto 가
+ * 바이트로 정규화해 싣는다 — 실측 `MemAvailable = 4833931264`). kB 변환은 도메인의 몫이다.
+ */
+export const SYSTEM_MEMORY_TIMELINE_SQL =
+  'select json_group_array(json_array(t_s, counter, v)) as j from (' +
+  `select ${relativeSecondSql('c.ts')} as t_s, t.name as counter, ` +
+  'cast(c.value as int) as v, ' +
+  `row_number() over (partition by ${relativeSecondSql('c.ts')}, t.name order by c.ts desc) as rn ` +
+  'from counter c join counter_track t on c.track_id = t.id ' +
+  "where t.type = 'meminfo' and t.name in ('MemAvailable', 'MemFree') " +
+  ') where rn = 1 order by t_s, counter'
 
 /**
  * meminfo 는 프로세스에도 CPU 에도 붙지 않는 전역 카운터다.
@@ -118,11 +143,17 @@ export async function collectFromProcessStats(ctx: ExtractContext): Promise<Proc
   if (rss === null) return { collection: null, resolved, noRssSamples: true }
 
   // sys_stats 는 별도 데이터소스라 없을 수 있다. 그 부재가 앱 RSS 를 죽이면 안 된다.
+  // 집계와 초당 추이는 **같은 meminfo 카운터**를 두 번 접은 것이라 같은 실패를 공유한다.
   let system: SystemMemoryBytes | null = null
+  let systemTimelineRows: SystemMemoryTimelineRow[] = []
   try {
     system = toSystemBytes(await ctx.tp.queryJson<CounterStatRow[]>(SYSTEM_MEMORY_SQL))
+    systemTimelineRows = await ctx.tp.queryJson<SystemMemoryTimelineRow[]>(
+      SYSTEM_MEMORY_TIMELINE_SQL,
+    )
   } catch {
     system = null
+    systemTimelineRows = []
   }
 
   const timelineRows = await ctx.tp.queryJson<[number, number][]>(appMemoryTimelineSql(upid))
@@ -140,6 +171,7 @@ export async function collectFromProcessStats(ctx: ExtractContext): Promise<Proc
       watermarkPeak: watermark === undefined ? null : watermark.max,
       timeline: timelineRows.map(([second, rssBytes]) => ({ second, rssBytes })),
       system,
+      systemTimelineRows,
     },
   }
 }

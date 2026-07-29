@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest'
 import { AdbClient } from '../../src/adb/client.js'
 import {
   collectDeviceStatic,
+  deriveOrientation,
+  deriveSizeClass,
   groupCpuClusters,
   parseCpuMaxFreqLines,
   parseDisplayModes,
@@ -25,6 +27,7 @@ const GETPROP = [
   'ro.soc.model=SM8750',
   'ro.soc.manufacturer=QTI',
   'ro.build.fingerprint=samsung/pa1qksx/pa1q:16/BP4A.251205.006/x:user/release-keys',
+  'ro.opengles.version=196610',
   '',
 ].join('\n')
 
@@ -103,7 +106,7 @@ describe('parseDisplayModes', () => {
 describe('collectDeviceStatic', () => {
   it('기기에서 스펙을 모아 하나의 객체로 만든다', async () => {
     const runner = new FakeProcessRunner()
-      .on('-s S1 shell for p in ro.product.manufacturer ro.product.model ro.build.version.release ro.build.version.sdk ro.product.cpu.abilist ro.soc.model ro.soc.manufacturer ro.build.fingerprint; do echo "$p=$(getprop $p)"; done', { stdout: GETPROP })
+      .on('-s S1 shell for p in ro.product.manufacturer ro.product.model ro.build.version.release ro.build.version.sdk ro.product.cpu.abilist ro.soc.model ro.soc.manufacturer ro.build.fingerprint ro.opengles.version; do echo "$p=$(getprop $p)"; done', { stdout: GETPROP })
       .on('-s S1 shell for c in /sys/devices/system/cpu/cpu[0-9]*; do [ -d "$c" ] && echo "$(basename $c) $(cat $c/cpufreq/cpuinfo_max_freq 2>/dev/null)"; done', { stdout: CPU_FREQ })
       .on('-s S1 shell grep MemTotal /proc/meminfo', { stdout: 'MemTotal:       11380228 kB\n' })
       .on('-s S1 shell wm size', { stdout: 'Physical size: 1080x2340\n' })
@@ -126,6 +129,10 @@ describe('collectDeviceStatic', () => {
       density_dpi: 480,
       active_refresh_rate_hz: 120,
       supported_refresh_rates_hz: [10, 24, 30, 48, 60, 80, 120],
+      // 1080x2340 @480dpi → 짧은 변 360dp → normal.
+      orientation: 'portrait',
+      size_class: 'normal',
+      opengl_es_version: '196610',
     })
     expect(spec.manufacturer).toBe('samsung')
     expect(spec.android_release).toBe('16')
@@ -136,7 +143,7 @@ describe('collectDeviceStatic', () => {
 
   it('한 명령이 실패해도 나머지 스펙은 채운다 — 상태 스냅샷과 같은 정책이다', async () => {
     const runner = new FakeProcessRunner()
-      .on('-s S1 shell for p in ro.product.manufacturer ro.product.model ro.build.version.release ro.build.version.sdk ro.product.cpu.abilist ro.soc.model ro.soc.manufacturer ro.build.fingerprint; do echo "$p=$(getprop $p)"; done', { stdout: GETPROP })
+      .on('-s S1 shell for p in ro.product.manufacturer ro.product.model ro.build.version.release ro.build.version.sdk ro.product.cpu.abilist ro.soc.model ro.soc.manufacturer ro.build.fingerprint ro.opengles.version; do echo "$p=$(getprop $p)"; done', { stdout: GETPROP })
       .on('-s S1 shell for c in /sys/devices/system/cpu/cpu[0-9]*; do [ -d "$c" ] && echo "$(basename $c) $(cat $c/cpufreq/cpuinfo_max_freq 2>/dev/null)"; done', { stdout: CPU_FREQ })
       .on('-s S1 shell grep MemTotal /proc/meminfo', { stdout: 'MemTotal:       11380228 kB\n' })
       // 이 기기에는 wm size 가 없다.
@@ -150,5 +157,52 @@ describe('collectDeviceStatic', () => {
     expect(spec.model).toBe('SM-S931N')
     expect(spec.display.width_px).toBe(0)
     expect(spec.display.density_dpi).toBe(480)
+    // 해상도를 못 읽었으면 방향도 크기 구간도 **모르는 것**이다. portrait/small 로 뭉개지 않는다.
+    expect(spec.display.orientation).toBeNull()
+    expect(spec.display.size_class).toBeNull()
+    // 같은 getprop 묶음에서 오므로 이건 살아 있다.
+    expect(spec.display.opengl_es_version).toBe('196610')
+  })
+})
+
+describe('deriveOrientation', () => {
+  it('짧은 쪽이 가로면 portrait', () => {
+    expect(deriveOrientation(904, 2316)).toBe('portrait')
+  })
+
+  it('짧은 쪽이 세로면 landscape', () => {
+    expect(deriveOrientation(2316, 904)).toBe('landscape')
+  })
+
+  it('정사각이면 square — portrait 로 뭉개지 않는다', () => {
+    expect(deriveOrientation(1000, 1000)).toBe('square')
+  })
+
+  it('값을 못 읽었으면 null 이다 — 0 은 방향이 아니다', () => {
+    expect(deriveOrientation(0, 2316)).toBeNull()
+    expect(deriveOrientation(904, 0)).toBeNull()
+  })
+})
+
+describe('deriveSizeClass', () => {
+  /** 실측: F936N 접힘 상태 904x2316 @420dpi → 짧은 변 344dp → normal. */
+  it('짧은 변을 dp 로 환산해 가른다', () => {
+    expect(deriveSizeClass(904, 2316, 420)).toBe('normal')
+  })
+
+  it('눕혀도 같은 구간이다 — 긴 변이 아니라 짧은 변을 보기 때문', () => {
+    expect(deriveSizeClass(2316, 904, 420)).toBe(deriveSizeClass(904, 2316, 420))
+  })
+
+  it('320 / 480 / 720 dp 경계', () => {
+    // dp = px / dpi * 160 이므로 dpi 160 에서는 px 가 곧 dp 다.
+    expect(deriveSizeClass(319, 1000, 160)).toBe('small')
+    expect(deriveSizeClass(320, 1000, 160)).toBe('normal')
+    expect(deriveSizeClass(480, 1000, 160)).toBe('large')
+    expect(deriveSizeClass(720, 1000, 160)).toBe('xlarge')
+  })
+
+  it('밀도를 못 읽었으면 null 이다', () => {
+    expect(deriveSizeClass(904, 2316, 0)).toBeNull()
   })
 })

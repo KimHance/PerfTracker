@@ -1,5 +1,11 @@
 import type { MetricReason } from '../../schema/reasons.js'
-import type { AppCpuData, AppCpuProcess, CpuData, CpuFrequency } from '../../schema/result.js'
+import type {
+  AppCpuData,
+  AppCpuProcess,
+  CpuData,
+  CpuFrequency,
+  DeviceCpuTimelinePoint,
+} from '../../schema/result.js'
 import { appProcessSql, resolveAppProcess, staleNameReason } from '../appProcess.js'
 import type { AppProcessCandidate } from '../appProcess.js'
 import { FTRACE_POWER_BLOCK, processStatsBlock, SYS_STATS_BLOCK } from '../blocks.js'
@@ -11,16 +17,18 @@ import type {
   SupportResult,
   TraceCollector,
 } from '../types.js'
-import type { AppCpuRow, CpuFreqRow, CpuTimeRow } from './model.js'
+import type { AppCpuRow, CpuFreqRow, CpuTimeRow, DeviceCpuTimelineRow } from './model.js'
 import {
   appCpuSql,
   appCpuTimelineSql,
   CPU_FREQ_SQL,
   CPU_TIMES_SQL,
+  DEVICE_CPU_TIMELINE_SQL,
   SYS_STATS_SOURCE,
 } from './sources/sysStats.js'
 import {
   buildCpuTimeline,
+  buildDeviceCpuTimeline,
   MIN_SAMPLES,
   nsToMs,
   summarizeAppCpu,
@@ -206,6 +214,17 @@ export const cpuCollector: TraceCollector<CpuData> = {
       frequency = null
     }
 
+    // 초당 추이는 위 집계와 **같은 카운터**를 다시 접은 것이다 — 기기에 더 묻지 않는다.
+    // 실패해도 집계를 죽이지 않는다 (주파수와 같은 정책).
+    let deviceTimeline: DeviceCpuTimelinePoint[] | null = null
+    try {
+      deviceTimeline = buildDeviceCpuTimeline(
+        await ctx.tp.queryJson<DeviceCpuTimelineRow[]>(DEVICE_CPU_TIMELINE_SQL),
+      )
+    } catch {
+      deviceTimeline = null
+    }
+
     const app = await extractAppCpu(ctx, summary.totalDeltaNs)
 
     const data: CpuData = {
@@ -214,6 +233,7 @@ export const cpuCollector: TraceCollector<CpuData> = {
       device_total_busy_pct: round((summary.busyDeltaNs / summary.totalDeltaNs) * 100, 2),
       device_per_core: summary.perCore,
       device_frequency: frequency,
+      device_timeline: deviceTimeline,
       app: app.data,
     }
 

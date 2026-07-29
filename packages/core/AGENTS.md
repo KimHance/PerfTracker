@@ -13,8 +13,9 @@
 | `src/extract/` | 트레이스 재파싱 → `result.json` 조립 |
 | `src/schema/` | `result.json` 의 zod 스키마 · `reason_code` · `references` |
 | `src/device/` | 기기 목록 · 정적 스펙 · 전/후 상태 스냅샷 · `probeDevice` |
-| `src/app/` | 앱 목록 · 라벨 해석(`resources.arsc` 직접 파싱) · 대상 특정 |
+| `src/app/` | 앱 목록 · 라벨 해석(`resources.arsc` 직접 파싱) · 대상 특정 · 빌드 속성 |
 | `src/perfetto/` | TraceConfig 조립 · `--detach` 세션 · `trace_processor` |
+| `src/host/` | **기기가 아닌 이 컴퓨터.** 이 패키지에서 `AdbClient` 를 안 받는 유일한 수집 지점 |
 
 ## 제약
 
@@ -33,7 +34,12 @@
 ## 자주 틀리는 자리
 
 - **거짓 청정 신호** — 조회조차 못 한 것에 `0`/`false`/`[]` 를 쓰지 않는다. 판정 기준은
-  "이 필드를 보고 소비자가 내릴 결론이 사실인가".
+  "이 필드를 보고 소비자가 내릴 결론이 사실인가". `target_app.debuggable` 이 이 규칙의 가장
+  비싼 자리다: `false` 는 "릴리스임을 확인했다" 이고 `null` 은 "모른다" 인데, 둘을 바꿔 쓰면
+  디버그 빌드를 재고 릴리스라고 읽는 세션이 생긴다.
+- **필드를 늘릴 때 명령을 늘리지 않는다.** `app/detail.ts` 의 일곱 필드는 전부 한 번의
+  `dumpsys package` 출력에서 나오고, 화면 방향·크기 구간은 이미 읽은 해상도에서 **파생**한다.
+  `start` 전 왕복 하나가 곧 콜드 스타트가 그만큼 늦게 시작된다는 뜻이다.
 - **프로세스 특정** — 트레이스의 이름은 낡을 수 있다(`zygote64` / `<pre-initialized>`).
   이름 목록으로 막는 방어는 성립하지 않는다. 규칙은 `collectors/appProcess.ts` 하나뿐이다.
 - **config 는 부분 수용이 없다** — 기기가 모르는 필드 하나가 세션 전체를 거부시킨다.

@@ -5,9 +5,12 @@ import {
   appMemorySql,
   appMemoryTimelineSql,
   buildMemoryTimeline,
+  buildSystemMemoryTimeline,
   type CounterStatRow,
   memoryCollector,
   SYSTEM_MEMORY_SQL,
+  SYSTEM_MEMORY_TIMELINE_SQL,
+  type SystemMemoryTimelineRow,
 } from '../../src/collectors/memory/index.js'
 import type { ExtractContext } from '../../src/collectors/types.js'
 
@@ -264,5 +267,62 @@ describe('memoryCollector 가 시계열을 싣는다', () => {
       { t_s: 0, rss_kb: 1024 },
       { t_s: 1, rss_kb: 2048 },
     ])
+  })
+})
+
+describe('SYSTEM_MEMORY_TIMELINE_SQL', () => {
+  it('meminfo 두 카운터만, 초별 마지막 표본을 고른다', () => {
+    // `max(value)` 를 쓰면 "그 초의 최댓값" 이 되어 "마지막" 과 달라진다.
+    expect(SYSTEM_MEMORY_TIMELINE_SQL).toContain("t.type = 'meminfo'")
+    expect(SYSTEM_MEMORY_TIMELINE_SQL).toContain("'MemAvailable', 'MemFree'")
+    expect(SYSTEM_MEMORY_TIMELINE_SQL).toContain('order by c.ts desc')
+    expect(SYSTEM_MEMORY_TIMELINE_SQL).not.toContain('max(c.value)')
+  })
+})
+
+describe('buildSystemMemoryTimeline', () => {
+  const rows: SystemMemoryTimelineRow[] = [
+    [0, 'MemAvailable', 4_194_304],
+    [0, 'MemFree', 1_048_576],
+    [1, 'MemAvailable', 3_145_728],
+    [1, 'MemFree', 524_288],
+  ]
+
+  it('바이트를 kB 로 옮기고 두 값을 한 점에 담는다', () => {
+    expect(buildSystemMemoryTimeline(rows)).toEqual([
+      { t_s: 0, mem_available_kb: 4096, mem_free_kb: 1024 },
+      { t_s: 1, mem_available_kb: 3072, mem_free_kb: 512 },
+    ])
+  })
+
+  it('첫 초도 결과에 있다 — meminfo 는 누적이 아니라 그 순간의 값이다', () => {
+    expect(buildSystemMemoryTimeline(rows)![0]!.t_s).toBe(0)
+  })
+
+  it('짝이 안 맞는 초는 버린다 — 한쪽만 있는 점을 0 으로 채우지 않는다', () => {
+    const halfPaired: SystemMemoryTimelineRow[] = [
+      [0, 'MemAvailable', 4_194_304], // MemFree 없음
+      [1, 'MemAvailable', 3_145_728],
+      [1, 'MemFree', 524_288],
+    ]
+    expect(buildSystemMemoryTimeline(halfPaired)?.map((p) => p.t_s)).toEqual([1])
+  })
+
+  it('행이 없으면 빈 배열이 아니라 null 이다', () => {
+    expect(buildSystemMemoryTimeline([])).toBeNull()
+  })
+
+  it('짝 맞는 초가 하나도 없으면 null 이다', () => {
+    expect(buildSystemMemoryTimeline([[0, 'MemAvailable', 4_194_304]])).toBeNull()
+  })
+
+  it('초 순서가 뒤섞여 와도 오름차순으로 낸다', () => {
+    const shuffled: SystemMemoryTimelineRow[] = [
+      [2, 'MemFree', 524_288],
+      [0, 'MemAvailable', 4_194_304],
+      [2, 'MemAvailable', 3_145_728],
+      [0, 'MemFree', 1_048_576],
+    ]
+    expect(buildSystemMemoryTimeline(shuffled)?.map((p) => p.t_s)).toEqual([0, 2])
   })
 })

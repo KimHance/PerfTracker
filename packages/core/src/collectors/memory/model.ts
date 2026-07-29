@@ -28,6 +28,14 @@ export interface SystemMemoryBytes {
   swapFree: CounterStatBytes
 }
 
+/**
+ * meminfo 카운터의 초별 마지막 표본 `[상대초, 카운터 이름, 바이트]`.
+ *
+ * 이름이 그대로 실려 오는 이유는 `DeviceCpuTimelineRow` 와 같다 — 어느 이름이 무엇인지를
+ * SQL 이 알면 규칙이 두 곳에 살게 된다. 짝 맞추기는 도메인 계층이 한다.
+ */
+export type SystemMemoryTimelineRow = [number, string, number]
+
 export interface MemoryCollection {
   process: string
   pid: number
@@ -39,4 +47,6 @@ export interface MemoryCollection {
   timeline: MemorySample[]
   /** meminfo 는 별도 데이터소스라 없을 수 있다. 없는 것이 앱 RSS 를 죽이지 않는다. */
   system: SystemMemoryBytes | null
+  /** 접기 전 원본 행. 짝 맞추기도 kB 변환도 `toDomain` 이 한다 (이 파일은 단위를 모른다). */
+  systemTimelineRows: SystemMemoryTimelineRow[]
 }

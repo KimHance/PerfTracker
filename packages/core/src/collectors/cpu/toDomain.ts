@@ -1,6 +1,11 @@
-import type { CpuTimelinePoint } from '../../schema/result.js'
+import type { CpuTimelinePoint, DeviceCpuTimelinePoint } from '../../schema/result.js'
 import { round } from '../num.js'
-import type { AppCpuRow, AppCpuTimelineRow, CpuTimeRow } from './model.js'
+import type {
+  AppCpuRow,
+  AppCpuTimelineRow,
+  CpuTimeRow,
+  DeviceCpuTimelineRow,
+} from './model.js'
 
 /** delta 를 내려면 최소 두 표본이 필요하다. */
 export const MIN_SAMPLES = 2
@@ -104,6 +109,51 @@ export function buildCpuTimeline(rows: AppCpuTimelineRow[]): CpuTimelinePoint[] 
     out.push({ t_s, app_cpu_ms: round(deltaNs / 1e6, 1) })
   }
   return out
+}
+
+/**
+ * 기기 전체 사용률의 초당 추이.
+ *
+ * **집계(`summarizeCpuTimes`)와 같은 원본·같은 idle 규칙을 쓰지만 값이 정확히 같지는 않다.**
+ * 집계는 전체 첫·마지막 표본의 차이 하나로 내고, 여기는 초 경계마다 끊어 낸다. 그 차이는
+ * `.describe()` 에 적혀 있다.
+ *
+ * **첫 초는 결과에 없다** — 그 앞에 뺄 대상이 없다. `buildCpuTimeline` 과 같은 규칙이고,
+ * 0 으로 채우면 "그 초에 기기가 놀았다" 는 없던 사실이 된다.
+ *
+ * 되감긴 초는 **버린다.** 집계는 되감긴 *코어*를 통째로 버리지만 여기서는 코어가 이미 합쳐져
+ * 있어 어느 코어가 되감겼는지 알 수 없다. 그 초만 비우는 것이 지어낸 값을 싣는 것보다 낫고,
+ * 어느 코어가 문제였는지는 `device_per_core` · `cpu_counters_not_monotonic` 이 이미 말한다.
+ *
+ * 표본이 없거나 낼 수 있는 초가 하나도 없으면 `null` 이다 — 빈 배열이 아니다.
+ * `[]` 는 "재 봤더니 없었다" 인데 이 경우는 "초당으로 나눌 수 없었다" 이다.
+ */
+export function buildDeviceCpuTimeline(
+  rows: DeviceCpuTimelineRow[],
+): DeviceCpuTimelinePoint[] | null {
+  if (rows.length === 0) return null
+
+  const bySecond = new Map<number, { total: number; busy: number }>()
+  for (const [t_s, counter, ns] of rows) {
+    const acc = bySecond.get(t_s) ?? { total: 0, busy: 0 }
+    bySecond.set(t_s, acc)
+    if (!Number.isFinite(ns)) continue
+    acc.total += ns
+    if (!IDLE_COUNTERS.has(counter)) acc.busy += ns
+  }
+
+  const seconds = [...bySecond.entries()].sort((a, b) => a[0] - b[0])
+  const out: DeviceCpuTimelinePoint[] = []
+  for (let i = 1; i < seconds.length; i++) {
+    const [t_s, cur] = seconds[i]!
+    const prev = seconds[i - 1]![1]
+    const total = cur.total - prev.total
+    const busy = cur.busy - prev.busy
+    if (total <= 0 || busy < 0) continue
+    out.push({ t_s, busy_pct: round((busy / total) * 100, 2) })
+  }
+
+  return out.length > 0 ? out : null
 }
 
 export interface AppCpuSummary {

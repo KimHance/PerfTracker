@@ -62,5 +62,11 @@ export async function resolveTargetApp(ctx: AdbContext, query?: string): Promise
     // 렌더 프로세스와 pid 는 트레이스를 파싱해야 알 수 있다 — extract 가 채운다.
     render_process: null,
     pid: null,
+    // 아래 다섯도 위 둘과 같은 `dumpsys package` 출력에서 온다 (adb 왕복이 늘지 않는다).
+    debuggable: detail.debuggable,
+    large_heap: detail.largeHeap,
+    min_sdk: detail.minSdk,
+    target_sdk: detail.targetSdk,
+    primary_cpu_abi: detail.primaryCpuAbi,
   }
 }

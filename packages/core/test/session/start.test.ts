@@ -259,7 +259,7 @@ describe('startSession — 오케스트레이션 불변식', () => {
       `-s ${SERIAL} shell perfetto --query`,
       `-s ${SERIAL} shell getprop ro.build.version.sdk`,
       // collectDeviceStatic
-      `-s ${SERIAL} shell for p in ro.product.manufacturer ro.product.model ro.build.version.release ro.build.version.sdk ro.product.cpu.abilist ro.soc.model ro.soc.manufacturer ro.build.fingerprint; do echo "$p=$(getprop $p)"; done`,
+      `-s ${SERIAL} shell for p in ro.product.manufacturer ro.product.model ro.build.version.release ro.build.version.sdk ro.product.cpu.abilist ro.soc.model ro.soc.manufacturer ro.build.fingerprint ro.opengles.version; do echo "$p=$(getprop $p)"; done`,
       `-s ${SERIAL} shell for c in /sys/devices/system/cpu/cpu[0-9]*; do [ -d "$c" ] && echo "$(basename $c) $(cat $c/cpufreq/cpuinfo_max_freq 2>/dev/null)"; done`,
       `-s ${SERIAL} shell grep MemTotal /proc/meminfo`,
       `-s ${SERIAL} shell wm size`,

@@ -1,0 +1,19 @@
+    flags=0x0
+Packages:
+  Package [com.example.streaming] (641f75c):
+    pkg=Package{3f6ca8c com.example.streaming}
+    codePath=/data/app/~~e8lh3NQEHIDaZQpe39mz5w==/com.example.streaming-OqOSP4Lr_A7Rq97n8KA29Q==
+    primaryCpuAbi=arm64-v8a
+    secondaryCpuAbi=null
+    versionCode=8280302 minSdk=26 targetSdk=36
+    versionName=8.28.3
+    splits=[base]
+    apkSigningVersion=2
+    flags=[ HAS_CODE ALLOW_CLEAR_USER_DATA LARGE_HEAP ]
+    privateFlags=[ PRIVATE_FLAG_ACTIVITIES_RESIZE_MODE_RESIZEABLE_VIA_SDK_VERSION ALLOW_AUDIO_PLAYBACK_CAPTURE PRIVATE_FLAG_REQUEST_LEGACY_EXTERNAL_STORAGE HAS_DOMAIN_URLS PARTIALLY_DIRECT_BOOT_AWARE ]
+    installerPackageName=com.android.vending
+      dataDir=/data/user/0/com.example.streaming
+      firstInstallTime=2026-07-23 15:54:42
+        android.permission.POST_NOTIFICATIONS: granted=true, flags=[ USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+        android.permission.ACCESS_FINE_LOCATION: granted=false, flags=[ USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+        android.permission.READ_EXTERNAL_STORAGE: granted=false, flags=[ USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED|RESTRICTION_INSTALLER_EXEMPT]

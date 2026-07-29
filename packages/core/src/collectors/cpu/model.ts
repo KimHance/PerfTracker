@@ -36,3 +36,11 @@ export interface AppCpuRow {
 
 /** 앱 CPU 의 초별 누적값 `[상대초, user+kernel ns]`. 델타 변환은 도메인 계층이 한다. */
 export type AppCpuTimelineRow = [number, number]
+
+/**
+ * 기기 전역 CPU 의 초별 누적값 `[상대초, 카운터 이름, 전 코어 합 ns]`.
+ *
+ * 카운터 이름이 그대로 실려 오는 이유: 어떤 이름이 idle 인지는 도메인 규칙(`IDLE_COUNTERS`)이고
+ * SQL 이 그것을 알면 규칙이 두 곳에 살게 된다. 코어 합산만 SQL 이 하고, busy 판정은 안 한다.
+ */
+export type DeviceCpuTimelineRow = [number, string, number]

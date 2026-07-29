@@ -6,9 +6,11 @@ import {
   appCpuSql,
   appCpuTimelineSql,
   buildCpuTimeline,
+  buildDeviceCpuTimeline,
   CPU_FREQ_SQL,
   CPU_TIMES_SQL,
   type CpuTimeRow,
+  type DeviceCpuTimelineRow,
   cpuCollector,
   summarizeAppCpu,
   summarizeCpuTimes,
@@ -581,5 +583,54 @@ describe('buildCpuTimeline', () => {
     expect(sql).toContain('select start_ts from trace_bounds')
     // 안쪽 group by 가 없으면 같은 초의 표본이 여럿일 때 같은 카운터가 여러 번 더해진다.
     expect(sql).toContain('group by t_s, t.name')
+  })
+})
+
+describe('buildDeviceCpuTimeline', () => {
+  /** 두 초, 두 카운터. 1초 구간에서 busy 100 · idle 300 → 25%. */
+  const rows: DeviceCpuTimelineRow[] = [
+    [0, 'cpu.times.user_ns', 1000],
+    [0, 'cpu.times.idle_ns', 5000],
+    [1, 'cpu.times.user_ns', 1100],
+    [1, 'cpu.times.idle_ns', 5300],
+  ]
+
+  it('이웃한 두 표본의 차이로 사용률을 낸다', () => {
+    expect(buildDeviceCpuTimeline(rows)).toEqual([{ t_s: 1, busy_pct: 25 }])
+  })
+
+  it('첫 초는 결과에 없다 — 그 앞에 뺄 대상이 없다', () => {
+    expect(buildDeviceCpuTimeline(rows)?.some((p) => p.t_s === 0)).toBe(false)
+  })
+
+  it('io_wait 은 idle 로 센다 — 집계(summarizeCpuTimes)와 같은 규칙', () => {
+    const withIoWait: DeviceCpuTimelineRow[] = [
+      [0, 'cpu.times.user_ns', 0],
+      [0, 'cpu.times.io_wait_ns', 0],
+      [1, 'cpu.times.user_ns', 100],
+      [1, 'cpu.times.io_wait_ns', 300],
+    ]
+    expect(buildDeviceCpuTimeline(withIoWait)).toEqual([{ t_s: 1, busy_pct: 25 }])
+  })
+
+  it('되감긴 초는 버린다 — 지어낸 값을 싣지 않는다', () => {
+    const backwards: DeviceCpuTimelineRow[] = [
+      [0, 'cpu.times.user_ns', 1000],
+      [0, 'cpu.times.idle_ns', 5000],
+      [1, 'cpu.times.user_ns', 500], // 되감김
+      [1, 'cpu.times.idle_ns', 5300],
+      [2, 'cpu.times.user_ns', 600],
+      [2, 'cpu.times.idle_ns', 5600],
+    ]
+    expect(buildDeviceCpuTimeline(backwards)?.map((p) => p.t_s)).toEqual([2])
+  })
+
+  it('표본이 없으면 빈 배열이 아니라 null 이다', () => {
+    // [] 는 "재 봤더니 없었다" 이고 여기는 "초당으로 나눌 수 없었다" 이다.
+    expect(buildDeviceCpuTimeline([])).toBeNull()
+  })
+
+  it('초가 하나뿐이면 null 이다 — 델타를 낼 수 없다', () => {
+    expect(buildDeviceCpuTimeline([[0, 'cpu.times.user_ns', 100]])).toBeNull()
   })
 })

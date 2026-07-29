@@ -10,6 +10,8 @@ const GETPROP_KEYS = [
   'ro.soc.model',
   'ro.soc.manufacturer',
   'ro.build.fingerprint',
+  // 한 줄 늘어도 왕복은 그대로 한 번이다 (아래 GETPROP_COMMAND 가 셸 안에서 돈다).
+  'ro.opengles.version',
 ] as const
 
 /** getprop 을 키마다 호출하면 왕복이 8번이라 한 번의 shell 로 묶는다. */
@@ -86,6 +88,42 @@ export function parseDisplayModes(text: string): { active: number | null; suppor
 }
 
 /**
+ * 방향은 **물리 해상도의 가로세로 비교**다. 기기에 따로 묻지 않는다.
+ *
+ * `dumpsys window` 의 회전값을 읽는 방법도 있지만 그 값은 세션 중에도 바뀌고, 이 도구는
+ * 회전을 추적하지 않는다. 추적하지 않는 것을 한 시점의 스냅샷으로 실으면 "세션 내내 세로였다"
+ * 로 읽힌다 — 그래서 묻지 않고, 무엇을 비교한 값인지 `.describe()` 에 적는다.
+ * 왕복이 늘지 않는 것은 덤이다.
+ */
+export function deriveOrientation(
+  width: number,
+  height: number,
+): 'portrait' | 'landscape' | 'square' | null {
+  if (width <= 0 || height <= 0) return null
+  if (width === height) return 'square'
+  return width < height ? 'portrait' : 'landscape'
+}
+
+/**
+ * 안드로이드 화면 크기 구간. **짧은 변**을 dp 로 환산해 가른다 (`smallestWidth`).
+ * 경계는 플랫폼이 정한 320 / 480 / 720 dp 다.
+ *
+ * 긴 변이 아니라 짧은 변인 이유: 같은 기기를 눕혔다고 크기 구간이 바뀌면 안 되기 때문이다.
+ */
+export function deriveSizeClass(
+  width: number,
+  height: number,
+  densityDpi: number,
+): 'small' | 'normal' | 'large' | 'xlarge' | null {
+  if (width <= 0 || height <= 0 || densityDpi <= 0) return null
+  const swDp = (Math.min(width, height) / densityDpi) * 160
+  if (swDp >= 720) return 'xlarge'
+  if (swDp >= 480) return 'large'
+  if (swDp >= 320) return 'normal'
+  return 'small'
+}
+
+/**
  * 스펙 수집도 상태 스냅샷과 같은 정책을 쓴다 (`AdbClient.tryShell`):
  * 개별 명령 실패는 흡수하고 기본값으로 남긴다. 예전에는 여기만 던지는 `shell()` 을 써서
  * `wm size` 가 실패하는 특이 기기 하나가 `start` 전체를 중단시켰고, 같은 실패가
@@ -118,6 +156,10 @@ export async function collectDeviceStatic(adb: AdbClient): Promise<DeviceStatic>
       density_dpi: density,
       active_refresh_rate_hz: modes.active,
       supported_refresh_rates_hz: modes.supported,
+      orientation: deriveOrientation(size.width, size.height),
+      size_class: deriveSizeClass(size.width, size.height, density),
+      // 값의 뜻(16진 인코딩)은 해석하지 않고 기기가 준 문자열 그대로 싣는다.
+      opengl_es_version: props['ro.opengles.version'] || null,
     },
   }
 }

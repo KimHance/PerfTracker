@@ -1,0 +1,3104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "schema_help": {
+      "description": "이 파일을 해석하려면 무엇을 먼저 읽어야 하는지. **값은 항상 같다** — 안내이지 데이터가 아니다. optional 인 것은 이 필드가 없던 시절의 result.json 을 그대로 읽기 위해서다.",
+      "type": "string"
+    },
+    "tool": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "host": {
+          "type": "object",
+          "properties": {
+            "os": {
+              "type": "string",
+              "description": "node `process.platform` 원문 (`darwin` / `linux` / `win32`)."
+            },
+            "arch": {
+              "type": "string",
+              "description": "node `process.arch` 원문 (`arm64` / `x64`)."
+            },
+            "node": {
+              "type": "string",
+              "description": "이 도구를 실행한 node 버전."
+            }
+          },
+          "required": [
+            "os",
+            "arch",
+            "node"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "session": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "running",
+            "completed",
+            "aborted",
+            "failed"
+          ]
+        },
+        "started_at": {
+          "type": "string"
+        },
+        "ended_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "세션이 끝난 시각(= stop 이 원본 회수를 시작한 시각). **null 은 아직 끝나지 않았다는 뜻이다** — state 가 running 인 결과가 그렇다. 이 자리에 started_at 이 오는 일은 없다."
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ended_at − started_at (ms). **null 은 세션이 아직 끝나지 않아 길이를 잴 수 없다는 뜻이다**(state 가 running). 0 과 혼동하면 안 된다 — 0 은 \"길이가 0 인 세션\" 이다. 진행 중인 세션의 경과 시간이 필요하면 started_at 과 지금 시각으로 직접 구하라. 이 도구는 그것을 세션의 길이라고 부르지 않는다."
+        },
+        "options": {
+          "type": "object",
+          "properties": {
+            "launch": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "launch"
+          ],
+          "additionalProperties": false
+        },
+        "marks": {
+          "description": "측정 중 사람이 남긴 이벤트 라벨. 시간순(오름차순). **도구가 관측한 것이 아니라 사람이 적은 것이다** — 정확도는 적은 사람의 손에 달려 있다. 빈 배열은 아무도 적지 않았다는 뜻이고, 필드 자체가 없으면 마킹 개념이 없던 시절의 문서다.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "offset_ms": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "세션 시작(session.started_at)으로부터의 경과(ms). timeline 의 second 와 같은 축이다."
+              },
+              "label": {
+                "type": "string",
+                "description": "사람이 적은 이름. 이 도구는 내용을 해석하지 않는다."
+              }
+            },
+            "required": [
+              "offset_ms",
+              "label"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "state",
+        "started_at",
+        "ended_at",
+        "duration_ms",
+        "options"
+      ],
+      "additionalProperties": false
+    },
+    "device": {
+      "type": "object",
+      "properties": {
+        "serial": {
+          "type": "string"
+        },
+        "static": {
+          "type": "object",
+          "properties": {
+            "manufacturer": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "android_release": {
+              "type": "string"
+            },
+            "sdk_int": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "build_fingerprint": {
+              "type": "string"
+            },
+            "abis": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "soc_model": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "soc_manufacturer": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "cpu": {
+              "type": "object",
+              "properties": {
+                "core_count": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "clusters": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "cpus": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "max_freq_khz": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "cpus",
+                      "max_freq_khz"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "core_count",
+                "clusters"
+              ],
+              "additionalProperties": false
+            },
+            "memory_total_kb": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "display": {
+              "type": "object",
+              "properties": {
+                "width_px": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "height_px": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "density_dpi": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "active_refresh_rate_hz": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "supported_refresh_rates_hz": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                },
+                "orientation": {
+                  "description": "`wm size` 가 보고한 **물리 해상도**의 가로세로 비교. 세션 중 기기가 실제로 어느 방향을 보고 있었는지가 아니다 — 회전은 세션 중에도 바뀌고 이 도구는 그것을 추적하지 않는다. 폴더블은 접힘 상태에 따라 이 값이 달라진다. 확인하지 못했으면 null.",
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "portrait",
+                        "landscape",
+                        "square"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "size_class": {
+                  "description": "안드로이드 화면 크기 구간. 짧은 변을 dp 로 환산해 320/480/720 경계로 가른다 (width_px·height_px·density_dpi 에서 계산한 값이며 기기가 준 값이 아니다). 셋 중 하나라도 0 이면 null.",
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "small",
+                        "normal",
+                        "large",
+                        "xlarge"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "opengl_es_version": {
+                  "description": "`ro.opengles.version` 원문(예: `196610`). **10진 문자열이지만 의미는 16진 인코딩이다** — 상위 16비트가 major, 하위 16비트가 minor라 196610 = 0x30002 = OpenGL ES 3.2 다. 이 도구는 해석하지 않고 기기가 준 값을 그대로 싣는다.",
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "width_px",
+                "height_px",
+                "density_dpi",
+                "active_refresh_rate_hz",
+                "supported_refresh_rates_hz"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "manufacturer",
+            "model",
+            "android_release",
+            "sdk_int",
+            "build_fingerprint",
+            "abis",
+            "soc_model",
+            "soc_manufacturer",
+            "cpu",
+            "memory_total_kb",
+            "display"
+          ],
+          "additionalProperties": false
+        },
+        "state_before": {
+          "type": "object",
+          "properties": {
+            "captured_at": {
+              "type": "string"
+            },
+            "battery_level": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "battery_temp_c": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "charging": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "connection": {
+              "type": "string",
+              "enum": [
+                "usb",
+                "tcp",
+                "unknown"
+              ]
+            },
+            "screen_brightness": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "power_save_mode": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "network": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "mem_available_kb": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "animator_duration_scale": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "thermal_zones": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "센서 이름. **벤더가 정하는 임의 문자열이다**(`AP` / `SKIN` / `test temperature sensor`). 이 값으로 CPU 온도인지 피부 온도인지 판별하지 말 것 — 그 판별은 type 으로 한다. 유일성도 보장되지 않는다: 한 실기기에 `PATHM` 과 `PA1THM` 이 **둘 다** 있고 한 글자 차이의 서로 다른 센서다. 이 도구가 존을 동일시하는 키는 이름이 아니라 (type, name) 쌍이다."
+                  },
+                  "celsius": {
+                    "type": "number"
+                  },
+                  "type": {
+                    "description": "`android.hardware.thermal` 의 TemperatureType 표준 enum: 0=CPU, 1=GPU, 2=BATTERY, 3=SKIN, 4=USB_PORT, 5=POWER_AMPLIFIER, 6=BCL_VOLTAGE, 7=BCL_CURRENT, 8=BCL_PERCENTAGE, 9=NPU. 기기가 안 주면 null. **이 필드가 아예 없는 문서는 M3 이전에 산출된 것이다.**",
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "status": {
+                    "description": "이 센서 기준의 throttling 단계(`mStatus`, THERMAL_STATUS_*: 0=NONE … 6=SHUTDOWN). 기기 전체의 단계가 아니라 이 센서의 것이다. **이 필드가 아예 없는 문서는 M3 이전에 산출된 것이다.**",
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "source": {
+                    "description": "이 값이 온 절. `hal` = `Current temperatures from HAL`, `cached` = `Cached temperatures`(프레임워크가 콜백으로 들고 있던 값). **`cached` 는 갱신이 올 때만 바뀌므로 오래된 값일 수 있다** — 실기기에서 cached 전용 존 하나가 약 3시간 동안 같은 값이었다. 자세한 것은 metrics.thermal 의 zones[].source 설명에 있다. **이 필드가 아예 없는 문서는 M3 이전에 산출된 것이다.**",
+                    "type": "string",
+                    "enum": [
+                      "hal",
+                      "cached"
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "celsius"
+                ],
+                "additionalProperties": false
+              },
+              "description": "`dumpsys thermalservice` 가 이 시점에 보고한 센서별 온도. **기기 전역이며 대상 앱의 온도가 아니다** — 다른 앱, 화면 밝기, USB 충전이 전부 섞인다. `Current temperatures from HAL` 을 우선하고 거기 없는 센서는 `Cached temperatures` 에서 가져온다.\n**존 하나당 한 항목이라는 보장은 `type`/`source` 필드를 가진 문서에만 적용된다.** M3 이전의 파서는 두 절을 구분 없이 긁어 같은 존을 두 번 실었다(실기기 8존이 15항목). 이 결과는 `raw/thermalservice_{before,after}.txt` 원문이 run 디렉토리에 남아 있으면 extract 가 그 원문에서 이 배열을 **다시 만들어** 중복을 없앤다 — 같은 방식의 선례가 `target_app.render_process` 다(capture 때 몰랐던 것을 extract 가 더 나은 근거로 채운다). 원문이 없으면 capture.json 에 기록된 값을 그대로 옮기며, 그 값에는 중복이 남아 있을 수 있다. 그래서 **`type`/`source` 가 없는 항목이 보이면 중복을 의심해야 한다.** `capture.json` 쪽 값은 그대로 두므로 두 파일의 이 필드가 다를 수 있다.\n값이 정확히 `0.0` 인 존이 실기기에서 관측된다(SUBBAT / SUBBATRAW). 이 도구는 그것이 \"실제 0°C\" 인지 \"이 기기에 그 센서가 없다\" 인지 **판별하지 않는다** — 기기가 보고한 값을 그대로 싣는다. 세션 구간의 변화량은 metrics.thermal 에 있다."
+            }
+          },
+          "required": [
+            "captured_at",
+            "battery_level",
+            "battery_temp_c",
+            "charging",
+            "connection",
+            "screen_brightness",
+            "power_save_mode",
+            "network",
+            "mem_available_kb",
+            "animator_duration_scale",
+            "thermal_zones"
+          ],
+          "additionalProperties": false
+        },
+        "state_after": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "captured_at": {
+                  "type": "string"
+                },
+                "battery_level": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "battery_temp_c": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "charging": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "connection": {
+                  "type": "string",
+                  "enum": [
+                    "usb",
+                    "tcp",
+                    "unknown"
+                  ]
+                },
+                "screen_brightness": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "power_save_mode": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "network": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "mem_available_kb": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "animator_duration_scale": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "thermal_zones": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "센서 이름. **벤더가 정하는 임의 문자열이다**(`AP` / `SKIN` / `test temperature sensor`). 이 값으로 CPU 온도인지 피부 온도인지 판별하지 말 것 — 그 판별은 type 으로 한다. 유일성도 보장되지 않는다: 한 실기기에 `PATHM` 과 `PA1THM` 이 **둘 다** 있고 한 글자 차이의 서로 다른 센서다. 이 도구가 존을 동일시하는 키는 이름이 아니라 (type, name) 쌍이다."
+                      },
+                      "celsius": {
+                        "type": "number"
+                      },
+                      "type": {
+                        "description": "`android.hardware.thermal` 의 TemperatureType 표준 enum: 0=CPU, 1=GPU, 2=BATTERY, 3=SKIN, 4=USB_PORT, 5=POWER_AMPLIFIER, 6=BCL_VOLTAGE, 7=BCL_CURRENT, 8=BCL_PERCENTAGE, 9=NPU. 기기가 안 주면 null. **이 필드가 아예 없는 문서는 M3 이전에 산출된 것이다.**",
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "status": {
+                        "description": "이 센서 기준의 throttling 단계(`mStatus`, THERMAL_STATUS_*: 0=NONE … 6=SHUTDOWN). 기기 전체의 단계가 아니라 이 센서의 것이다. **이 필드가 아예 없는 문서는 M3 이전에 산출된 것이다.**",
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "source": {
+                        "description": "이 값이 온 절. `hal` = `Current temperatures from HAL`, `cached` = `Cached temperatures`(프레임워크가 콜백으로 들고 있던 값). **`cached` 는 갱신이 올 때만 바뀌므로 오래된 값일 수 있다** — 실기기에서 cached 전용 존 하나가 약 3시간 동안 같은 값이었다. 자세한 것은 metrics.thermal 의 zones[].source 설명에 있다. **이 필드가 아예 없는 문서는 M3 이전에 산출된 것이다.**",
+                        "type": "string",
+                        "enum": [
+                          "hal",
+                          "cached"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "celsius"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "description": "`dumpsys thermalservice` 가 이 시점에 보고한 센서별 온도. **기기 전역이며 대상 앱의 온도가 아니다** — 다른 앱, 화면 밝기, USB 충전이 전부 섞인다. `Current temperatures from HAL` 을 우선하고 거기 없는 센서는 `Cached temperatures` 에서 가져온다.\n**존 하나당 한 항목이라는 보장은 `type`/`source` 필드를 가진 문서에만 적용된다.** M3 이전의 파서는 두 절을 구분 없이 긁어 같은 존을 두 번 실었다(실기기 8존이 15항목). 이 결과는 `raw/thermalservice_{before,after}.txt` 원문이 run 디렉토리에 남아 있으면 extract 가 그 원문에서 이 배열을 **다시 만들어** 중복을 없앤다 — 같은 방식의 선례가 `target_app.render_process` 다(capture 때 몰랐던 것을 extract 가 더 나은 근거로 채운다). 원문이 없으면 capture.json 에 기록된 값을 그대로 옮기며, 그 값에는 중복이 남아 있을 수 있다. 그래서 **`type`/`source` 가 없는 항목이 보이면 중복을 의심해야 한다.** `capture.json` 쪽 값은 그대로 두므로 두 파일의 이 필드가 다를 수 있다.\n값이 정확히 `0.0` 인 존이 실기기에서 관측된다(SUBBAT / SUBBATRAW). 이 도구는 그것이 \"실제 0°C\" 인지 \"이 기기에 그 센서가 없다\" 인지 **판별하지 않는다** — 기기가 보고한 값을 그대로 싣는다. 세션 구간의 변화량은 metrics.thermal 에 있다."
+                }
+              },
+              "required": [
+                "captured_at",
+                "battery_level",
+                "battery_temp_c",
+                "charging",
+                "connection",
+                "screen_brightness",
+                "power_save_mode",
+                "network",
+                "mem_available_kb",
+                "animator_duration_scale",
+                "thermal_zones"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "serial",
+        "static",
+        "state_before",
+        "state_after"
+      ],
+      "additionalProperties": false
+    },
+    "target_app": {
+      "type": "object",
+      "properties": {
+        "package": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "label_source": {
+          "type": "string",
+          "enum": [
+            "apk_resources",
+            "aapt2",
+            "package_name"
+          ]
+        },
+        "version_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version_code": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "uid": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "이 패키지에 배정된 리눅스 uid (`pm list packages -U` 가 보고한 값). **패키지와 1:1 이 아니다** — `sharedUserId` 를 쓰는 패키지들은 같은 uid 를 공유하고, 안드로이드 플랫폼 패키지 수십 개가 uid 1000 을 함께 쓴다(실기기 실측 86개). uid 단위로만 집계되는 값(metrics.network)이 무엇의 합인지는 `metrics.network.data.shared_uid_packages` 가 말한다. **null 은 이 도구가 uid 를 확인하지 못했다는 뜻이다** — 셸 권한이 닿지 않는 안드로이드 user(시큐어 폴더 등)의 앱이 그렇다. 0 이나 -1 로 채우지 않는다."
+        },
+        "install_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "launcher_activity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`--launch` 가 `am start -n <package>/<이 값>` 으로 실제로 띄운 액티비티. 진입점이 여러 개인 앱에서는 이 도구가 그중 하나를 고른 것일 수 있고, 그때는 launcher_activity_candidates 에 후보 전체가 들어간다."
+        },
+        "launcher_activity_candidates": {
+          "description": "진입점이 여러 개여서 launcher_activity 를 이 도구가 고른 경우의 후보 전체. 고르지 않았으면 null. 이 값이 있으면 launcher_activity 는 기기가 지정해 준 것이 아니라 선택된 것이다.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "render_process": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pid": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "debuggable": {
+          "description": "`flags=[ ... DEBUGGABLE ... ]` 의 유무. **true 면 이 세션은 릴리스 빌드를 잰 것이 아니다** — 디버그 빌드는 JIT·검증·로깅이 달라 수치를 릴리스와 비교할 수 없다. 이 도구는 그 사실을 판정하지 않고 적기만 한다. null 은 확인하지 못한 것.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "large_heap": {
+          "description": "`flags=[ ... LARGE_HEAP ... ]` 의 유무 (`android:largeHeap=\"true\"`). metrics.memory 의 RSS 를 읽을 때 상한이 다르다는 사실이 여기 있다.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "min_sdk": {
+          "description": "`minSdk=` 원문.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target_sdk": {
+          "description": "`targetSdk=` 원문. 기기의 sdk_int 와 다를 수 있고, 그 차이가 곧 플랫폼이 이 앱에 적용하는 호환 동작의 범위다.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "primary_cpu_abi": {
+          "description": "`primaryCpuAbi=` — 이 앱이 **실제로 실행되는** ABI. 기기가 지원하는 목록 (device.static.abis)의 부분집합이며, 64비트 기기에서 32비트로 도는 앱이 여기서 갈린다. APK 에 네이티브 코드가 없으면 기기가 `null` 을 찍고 이 값도 null 이다.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "package",
+        "label",
+        "label_source",
+        "version_name",
+        "version_code",
+        "uid",
+        "install_source",
+        "launcher_activity",
+        "render_process",
+        "pid"
+      ],
+      "additionalProperties": false
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "frame": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "collected",
+                "partial",
+                "unsupported",
+                "failed",
+                "skipped"
+              ],
+              "description": "이 메트릭의 수집 상태.\n- collected: 값이 전부 나왔다. data 는 non-null 이고 reason_code 는 null 이다.\n- partial: **두 가지를 겸한다.** (a) 값은 나왔지만 일부가 빠졌다(예: CPU 사용률은 있고 주파수가 없다) — 이때 data 는 non-null 이다. (b) **값이 아예 나오지 않았다** — 이때 `data` 는 **null** 이다. 둘 다 reason_code 가 어느 쪽인지 말한다. data 가 null 인 partial 을 내는 reason_code 는 이 버전에서 render_process_not_found, no_frames, frame_duration_out_of_range, no_cpu_samples, insufficient_samples, cpu_counters_did_not_advance, cpu_counters_not_monotonic, process_not_in_trace, no_rss_samples, no_log_entries, launch_time_unreported, launch_wait_timed_out, snapshot_unavailable, snapshot_unparsable, no_thermal_zones, thermal_hal_not_ready, app_uid_unknown, uid_not_in_netstats, counter_went_backwards 이다. **이 목록은 참고용이고 계약이 아니다** — 새 collector 가 생기면 늘어난다. 판정은 반드시 `data !== null`(또는 `status === 'collected'`)로 하고 이 목록으로 하지 말 것. 스냅샷 계열(snapshot_unavailable / snapshot_unparsable)이 특히 흔하다: 이 도구가 스냅샷을 찍기 전에 만들어진 옛 run 을 재산출하면 thermal / network 가 반드시 그 길을 지난다.\n**위 목록의 코드 셋은 양쪽에 걸친다** — 같은 코드가 메트릭에 따라 data 를 내기도 하고 안 내기도 한다: `snapshot_unavailable`(network 는 data null / thermal 은 non-null), `process_not_in_trace`(memory 는 null / cpu·log 는 기기 전역 값을 낸 채 app 만 null), `counter_went_backwards`(network 는 null / cpu 는 app 만 null). **이 코드들로 data 유무를 추론하지 말 것.** 목록을 계약으로 만들지 않은 이유가 이런 것이며, 이 코드들이 그 산 증거다.\n- unsupported: 이 기기가 이 메트릭을 낼 수 없다 (sdk 하한 미달, 데이터소스 미등록). data 는 null 이다.\n- failed: 예외 상황 전용이다 — 트레이스 원본이 없거나(trace_missing) trace_processor 쿼리가 예외로 터진 경우(query_failed). data 는 null 이다.\n- skipped: 수집을 시도조차 하지 않았다 (`--launch` 없이 시작한 세션의 startup). data 는 null 이다.\n**`failed` 만 걸러서는 수집 실패를 잡지 못한다.** 값이 있어야 하는 소비자는 `status === 'collected'` 이거나 `data !== null` 인지를 보라."
+            },
+            "source": {
+              "type": "string"
+            },
+            "reason_code": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "sdk_too_low",
+                    "data_source_not_registered",
+                    "trace_missing",
+                    "render_process_not_found",
+                    "no_frames",
+                    "frame_duration_out_of_range",
+                    "query_failed",
+                    "launch_not_requested",
+                    "launch_time_unreported",
+                    "launch_wait_timed_out",
+                    "no_cpu_samples",
+                    "insufficient_samples",
+                    "cpu_counters_did_not_advance",
+                    "cpu_counters_not_monotonic",
+                    "cpu_freq_unavailable",
+                    "process_not_in_trace",
+                    "no_rss_samples",
+                    "no_app_cpu_samples",
+                    "process_name_stale_in_trace",
+                    "no_meminfo_samples",
+                    "no_log_entries",
+                    "log_events_truncated",
+                    "snapshot_unavailable",
+                    "snapshot_unparsable",
+                    "no_thermal_zones",
+                    "thermal_hal_not_ready",
+                    "thermal_zones_changed",
+                    "app_uid_unknown",
+                    "uid_not_in_netstats",
+                    "counter_went_backwards",
+                    "netstats_uid_duplicated",
+                    "uid_shared_by_multiple_packages",
+                    "uid_packages_not_enumerable",
+                    "uid_not_in_package_list"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "기계가 매칭하는 안정적인 사유 키. 사람용 문장은 reason 에 있다."
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "사람이 읽는 사유. 문구는 다듬힐 수 있으니 매칭에 쓰지 말 것."
+            },
+            "data": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "process": {
+                      "type": "string",
+                      "description": "대상 앱 프로세스의 이름. 트레이스의 프로세스 이름이 패키지명(또는 `패키지:서브프로세스`)과 일치했거나, 일치하지 않았을 때는 실행 직후 기기에서 받아 둔 pid 로 대상 앱임을 확인한 뒤 패키지명을 적은 것이다. 후자의 경우 reason_code 가 process_name_stale_in_trace 로 그 사실을 말한다. 둘 중 어느 것으로도 확인되지 않으면 이 메트릭은 값을 내지 않는다 — 확인되지 않은 이름이 이 자리에 오는 일은 없다."
+                    },
+                    "pid": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "total_frames": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "buckets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "from_ms": {
+                            "type": "number"
+                          },
+                          "to_ms": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "count": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "from_ms",
+                          "to_ms",
+                          "count"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "프레임 소요 시간의 분포. **이 도구는 어떤 기준선과도 비교하지 않는다** — 60fps(16.67ms) 든 120Hz(8.33ms) 든, 임계값을 고르고 비율을 내는 일은 이 데이터를 읽는 쪽이 한다. 그 판단에 필요한 기기 정보는 device.static.display 의 active_refresh_rate_hz 와 supported_refresh_rates_hz 에 있고, 구글이 공개한 참고치는 references 배열에 출처와 함께 있다 (기록만 되고 비교에 쓰이지 않는다). 경계는 [from_ms, to_ms) 반개구간이고 마지막 버킷은 to_ms 가 null (= 상한 없음) 이다. 버킷 폭이 구간마다 다르므로 임계값이 버킷 경계와 어긋나면 그 비율은 버킷 폭만큼 근사가 된다."
+                    },
+                    "percentiles": {
+                      "type": "object",
+                      "properties": {
+                        "p50": {
+                          "type": "number"
+                        },
+                        "p90": {
+                          "type": "number"
+                        },
+                        "p95": {
+                          "type": "number"
+                        },
+                        "p99": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "p50",
+                        "p90",
+                        "p95",
+                        "p99"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "mean_ms": {
+                      "type": "number"
+                    },
+                    "max_ms": {
+                      "type": "number"
+                    },
+                    "timeline": {
+                      "description": "1초 단위로 묶은 프레임 추이. 세션 전체 집계(buckets · percentiles)와 **같은 원본**에서 나오며 같은 규칙으로 미완결 프레임(dur < 0)을 제외한다. 집계만으로는 구분되지 않는 것 (내내 고르게 느렸는지, 특정 구간에서만 튀었는지)을 보려는 값이다. 이 배열이 있다고 기기에 더 많은 것을 물은 것은 아니다 — 트레이스에 이미 있던 값을 접지 않고 그대로 낸 것뿐이라 측정 부하는 같다.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "t_s": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991,
+                            "description": "세션 시작으로부터 몇 초째인지 (구간은 [t_s, t_s+1)). 값이 없는 초는 배열에 없다 — 0 으로 채우지 않는다. 빠진 초를 \"0\" 으로 읽지 말 것."
+                          },
+                          "count": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "p50_ms": {
+                            "type": "number"
+                          },
+                          "max_ms": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "t_s",
+                          "count",
+                          "p50_ms",
+                          "max_ms"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "process",
+                    "pid",
+                    "total_frames",
+                    "buckets",
+                    "percentiles",
+                    "mean_ms",
+                    "max_ms"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "source",
+            "reason_code",
+            "reason",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        "startup": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "collected",
+                "partial",
+                "unsupported",
+                "failed",
+                "skipped"
+              ],
+              "description": "이 메트릭의 수집 상태.\n- collected: 값이 전부 나왔다. data 는 non-null 이고 reason_code 는 null 이다.\n- partial: **두 가지를 겸한다.** (a) 값은 나왔지만 일부가 빠졌다(예: CPU 사용률은 있고 주파수가 없다) — 이때 data 는 non-null 이다. (b) **값이 아예 나오지 않았다** — 이때 `data` 는 **null** 이다. 둘 다 reason_code 가 어느 쪽인지 말한다. data 가 null 인 partial 을 내는 reason_code 는 이 버전에서 render_process_not_found, no_frames, frame_duration_out_of_range, no_cpu_samples, insufficient_samples, cpu_counters_did_not_advance, cpu_counters_not_monotonic, process_not_in_trace, no_rss_samples, no_log_entries, launch_time_unreported, launch_wait_timed_out, snapshot_unavailable, snapshot_unparsable, no_thermal_zones, thermal_hal_not_ready, app_uid_unknown, uid_not_in_netstats, counter_went_backwards 이다. **이 목록은 참고용이고 계약이 아니다** — 새 collector 가 생기면 늘어난다. 판정은 반드시 `data !== null`(또는 `status === 'collected'`)로 하고 이 목록으로 하지 말 것. 스냅샷 계열(snapshot_unavailable / snapshot_unparsable)이 특히 흔하다: 이 도구가 스냅샷을 찍기 전에 만들어진 옛 run 을 재산출하면 thermal / network 가 반드시 그 길을 지난다.\n**위 목록의 코드 셋은 양쪽에 걸친다** — 같은 코드가 메트릭에 따라 data 를 내기도 하고 안 내기도 한다: `snapshot_unavailable`(network 는 data null / thermal 은 non-null), `process_not_in_trace`(memory 는 null / cpu·log 는 기기 전역 값을 낸 채 app 만 null), `counter_went_backwards`(network 는 null / cpu 는 app 만 null). **이 코드들로 data 유무를 추론하지 말 것.** 목록을 계약으로 만들지 않은 이유가 이런 것이며, 이 코드들이 그 산 증거다.\n- unsupported: 이 기기가 이 메트릭을 낼 수 없다 (sdk 하한 미달, 데이터소스 미등록). data 는 null 이다.\n- failed: 예외 상황 전용이다 — 트레이스 원본이 없거나(trace_missing) trace_processor 쿼리가 예외로 터진 경우(query_failed). data 는 null 이다.\n- skipped: 수집을 시도조차 하지 않았다 (`--launch` 없이 시작한 세션의 startup). data 는 null 이다.\n**`failed` 만 걸러서는 수집 실패를 잡지 못한다.** 값이 있어야 하는 소비자는 `status === 'collected'` 이거나 `data !== null` 인지를 보라."
+            },
+            "source": {
+              "type": "string"
+            },
+            "reason_code": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "sdk_too_low",
+                    "data_source_not_registered",
+                    "trace_missing",
+                    "render_process_not_found",
+                    "no_frames",
+                    "frame_duration_out_of_range",
+                    "query_failed",
+                    "launch_not_requested",
+                    "launch_time_unreported",
+                    "launch_wait_timed_out",
+                    "no_cpu_samples",
+                    "insufficient_samples",
+                    "cpu_counters_did_not_advance",
+                    "cpu_counters_not_monotonic",
+                    "cpu_freq_unavailable",
+                    "process_not_in_trace",
+                    "no_rss_samples",
+                    "no_app_cpu_samples",
+                    "process_name_stale_in_trace",
+                    "no_meminfo_samples",
+                    "no_log_entries",
+                    "log_events_truncated",
+                    "snapshot_unavailable",
+                    "snapshot_unparsable",
+                    "no_thermal_zones",
+                    "thermal_hal_not_ready",
+                    "thermal_zones_changed",
+                    "app_uid_unknown",
+                    "uid_not_in_netstats",
+                    "counter_went_backwards",
+                    "netstats_uid_duplicated",
+                    "uid_shared_by_multiple_packages",
+                    "uid_packages_not_enumerable",
+                    "uid_not_in_package_list"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "기계가 매칭하는 안정적인 사유 키. 사람용 문장은 reason 에 있다."
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "사람이 읽는 사유. 문구는 다듬힐 수 있으니 매칭에 쓰지 말 것."
+            },
+            "data": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "total_time_ms": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "launch_state": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "wait_time_ms": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "`am start -W` 의 WaitTime — **호출자가 기다린 시간**이지 앱의 시작 시간이 아니다. `status` 가 `\"ok\"` 면 TotalTime 에 ActivityManager 자신의 오버헤드가 더해진 값이고, **`status` 가 `\"timeout\"` 이면 ActivityManager 가 포기한 시점**이다 — 그때 이 값은 앱을 잰 것이 아니라 기기의 임계치다. 실측(SM-A405S / Android 11, 같은 앱 4회): 10182 · 10150 · 10147 · 10163ms 로 편차 0.3% — 앱이 11초 걸리든 60초 걸리든 같은 값이 나온다. **그러므로 timeout 일 때 이 값을 시작 시간으로 읽지 말 것.** 읽을 수 있는 것은 하한 하나다: \"이 앱은 이 기기에서 wait_time_ms 안에 뜨지 못했다\"."
+                    }
+                  },
+                  "required": [
+                    "total_time_ms",
+                    "launch_state",
+                    "status",
+                    "wait_time_ms"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "source",
+            "reason_code",
+            "reason",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        "cpu": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "collected",
+                "partial",
+                "unsupported",
+                "failed",
+                "skipped"
+              ],
+              "description": "이 메트릭의 수집 상태.\n- collected: 값이 전부 나왔다. data 는 non-null 이고 reason_code 는 null 이다.\n- partial: **두 가지를 겸한다.** (a) 값은 나왔지만 일부가 빠졌다(예: CPU 사용률은 있고 주파수가 없다) — 이때 data 는 non-null 이다. (b) **값이 아예 나오지 않았다** — 이때 `data` 는 **null** 이다. 둘 다 reason_code 가 어느 쪽인지 말한다. data 가 null 인 partial 을 내는 reason_code 는 이 버전에서 render_process_not_found, no_frames, frame_duration_out_of_range, no_cpu_samples, insufficient_samples, cpu_counters_did_not_advance, cpu_counters_not_monotonic, process_not_in_trace, no_rss_samples, no_log_entries, launch_time_unreported, launch_wait_timed_out, snapshot_unavailable, snapshot_unparsable, no_thermal_zones, thermal_hal_not_ready, app_uid_unknown, uid_not_in_netstats, counter_went_backwards 이다. **이 목록은 참고용이고 계약이 아니다** — 새 collector 가 생기면 늘어난다. 판정은 반드시 `data !== null`(또는 `status === 'collected'`)로 하고 이 목록으로 하지 말 것. 스냅샷 계열(snapshot_unavailable / snapshot_unparsable)이 특히 흔하다: 이 도구가 스냅샷을 찍기 전에 만들어진 옛 run 을 재산출하면 thermal / network 가 반드시 그 길을 지난다.\n**위 목록의 코드 셋은 양쪽에 걸친다** — 같은 코드가 메트릭에 따라 data 를 내기도 하고 안 내기도 한다: `snapshot_unavailable`(network 는 data null / thermal 은 non-null), `process_not_in_trace`(memory 는 null / cpu·log 는 기기 전역 값을 낸 채 app 만 null), `counter_went_backwards`(network 는 null / cpu 는 app 만 null). **이 코드들로 data 유무를 추론하지 말 것.** 목록을 계약으로 만들지 않은 이유가 이런 것이며, 이 코드들이 그 산 증거다.\n- unsupported: 이 기기가 이 메트릭을 낼 수 없다 (sdk 하한 미달, 데이터소스 미등록). data 는 null 이다.\n- failed: 예외 상황 전용이다 — 트레이스 원본이 없거나(trace_missing) trace_processor 쿼리가 예외로 터진 경우(query_failed). data 는 null 이다.\n- skipped: 수집을 시도조차 하지 않았다 (`--launch` 없이 시작한 세션의 startup). data 는 null 이다.\n**`failed` 만 걸러서는 수집 실패를 잡지 못한다.** 값이 있어야 하는 소비자는 `status === 'collected'` 이거나 `data !== null` 인지를 보라."
+            },
+            "source": {
+              "type": "string"
+            },
+            "reason_code": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "sdk_too_low",
+                    "data_source_not_registered",
+                    "trace_missing",
+                    "render_process_not_found",
+                    "no_frames",
+                    "frame_duration_out_of_range",
+                    "query_failed",
+                    "launch_not_requested",
+                    "launch_time_unreported",
+                    "launch_wait_timed_out",
+                    "no_cpu_samples",
+                    "insufficient_samples",
+                    "cpu_counters_did_not_advance",
+                    "cpu_counters_not_monotonic",
+                    "cpu_freq_unavailable",
+                    "process_not_in_trace",
+                    "no_rss_samples",
+                    "no_app_cpu_samples",
+                    "process_name_stale_in_trace",
+                    "no_meminfo_samples",
+                    "no_log_entries",
+                    "log_events_truncated",
+                    "snapshot_unavailable",
+                    "snapshot_unparsable",
+                    "no_thermal_zones",
+                    "thermal_hal_not_ready",
+                    "thermal_zones_changed",
+                    "app_uid_unknown",
+                    "uid_not_in_netstats",
+                    "counter_went_backwards",
+                    "netstats_uid_duplicated",
+                    "uid_shared_by_multiple_packages",
+                    "uid_packages_not_enumerable",
+                    "uid_not_in_package_list"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "기계가 매칭하는 안정적인 사유 키. 사람용 문장은 reason 에 있다."
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "사람이 읽는 사유. 문구는 다듬힐 수 있으니 매칭에 쓰지 말 것."
+            },
+            "data": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "device_sampled_ms": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "device_samples": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "device_total_busy_pct": {
+                      "type": "number",
+                      "description": "코어를 합친 사용률. (총 CPU시간 − idle − iowait) / 총 CPU시간. **기기 전역이며 대상 앱만의 값이 아니다** — /proc/stat 은 프로세스를 구분하지 않는다. 대상 앱의 CPU 는 이 객체의 `app` 에 있다. 이 값은 그 옆에 두고 읽는 맥락이다 (앱이 느린 것이 기기 전체가 바빴기 때문인지 볼 수 있다). 누적 카운터가 되감긴 코어는 집계에서 통째로 빠지므로, reason_code 가 cpu_counters_not_monotonic 이면 이 값은 device_per_core 에 남은 코어만의 것이다."
+                    },
+                    "device_per_core": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "cpu": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "busy_pct": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "cpu",
+                          "busy_pct"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "코어별 사용률. **기기 전역이며 대상 앱만의 값이 아니다** — /proc/stat 은 프로세스를 구분하지 않는다. 대상 앱의 CPU 는 이 객체의 `app` 에 있다. 이 값은 그 옆에 두고 읽는 맥락이다 (앱이 느린 것이 기기 전체가 바빴기 때문인지 볼 수 있다). 기기의 모든 코어가 항상 들어 있다고 가정하면 안 된다 — 카운터가 되감긴 코어는 빠지고, 그 사실은 reason_code 로 알린다."
+                    },
+                    "device_frequency": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "cpu": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "samples": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "min_khz": {
+                                "type": "number"
+                              },
+                              "max_khz": {
+                                "type": "number"
+                              },
+                              "avg_khz": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "cpu",
+                              "samples",
+                              "min_khz",
+                              "max_khz",
+                              "avg_khz"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "ftrace power/cpu_frequency 로 관측한 코어별 주파수(kHz). **기기 전역이며 대상 앱만의 값이 아니다** — /proc/stat 은 프로세스를 구분하지 않는다. 대상 앱의 CPU 는 이 객체의 `app` 에 있다. 이 값은 그 옆에 두고 읽는 맥락이다 (앱이 느린 것이 기기 전체가 바빴기 때문인지 볼 수 있다). 이벤트가 하나도 없으면 **null** 이다 — 사용률만 있는 결과가 사용률+주파수인 척하지 않게."
+                    },
+                    "device_timeline": {
+                      "description": "기기 전체 사용률의 초당 추이. **기기 전역이며 대상 앱만의 값이 아니다** — /proc/stat 은 프로세스를 구분하지 않는다. 대상 앱의 CPU 는 이 객체의 `app` 에 있다. 이 값은 그 옆에 두고 읽는 맥락이다 (앱이 느린 것이 기기 전체가 바빴기 때문인지 볼 수 있다). `cpu.times.*` 는 **누적값**이라 이 배열은 이웃한 두 표본의 차이이고, app.timeline 과 같은 이유로 **첫 표본의 초는 배열에 없다.**\n집계값(device_total_busy_pct)과 이 배열의 평균은 정확히 같지 않다 — 집계는 전체 첫·마지막 표본의 차이 하나로 내고 이 배열은 초 경계마다 끊기 때문이다.\n표본이 없거나 전부 되감겨 초당으로 나눌 수 없으면 **null** 이다. 0 으로 채우지 않는다.",
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "t_s": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991,
+                                "description": "세션 시작으로부터 몇 초째인지 (구간은 [t_s, t_s+1)). 값이 없는 초는 배열에 없다 — 0 으로 채우지 않는다. 빠진 초를 \"0\" 으로 읽지 말 것."
+                              },
+                              "busy_pct": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "그 1초의 (총 CPU시간 − idle − iowait) / 총 CPU시간, 모든 코어 합산. **1코어=100% 가 아니라 전 코어를 합쳐 100% 다** — 8코어가 전부 바쁘면 100 이다."
+                              }
+                            },
+                            "required": [
+                              "t_s",
+                              "busy_pct"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "app": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "process": {
+                              "type": "string",
+                              "description": "대상 앱 프로세스의 이름. 트레이스의 프로세스 이름이 패키지명(또는 `패키지:서브프로세스`)과 일치했거나, 일치하지 않았을 때는 실행 직후 기기에서 받아 둔 pid 로 대상 앱임을 확인한 뒤 패키지명을 적은 것이다. 후자의 경우 reason_code 가 process_name_stale_in_trace 로 그 사실을 말한다. 둘 중 어느 것으로도 확인되지 않으면 이 메트릭은 값을 내지 않는다 — 확인되지 않은 이름이 이 자리에 오는 일은 없다."
+                            },
+                            "pid": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "samples": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991,
+                              "description": "이 프로세스의 runtime 카운터 표본 수."
+                            },
+                            "sampled_ms": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991,
+                              "description": "이 프로세스의 첫 표본과 마지막 표본 사이(ms). **세션 길이가 아니다** — 세션 도중 뜬 프로세스는 이 값이 짧다. 폴링 주기 때문에 세션 길이와 정확히 같은 경우도 없다."
+                            },
+                            "user_ms": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991,
+                              "description": "이 프로세스가 사용자 모드에서 쓴 CPU 시간(ms). linux.process_stats 의 `runtime.user_ns` 가 세션 구간에서 늘어난 양이다(= /proc/<pid>/stat 의 utime)."
+                            },
+                            "kernel_ms": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991,
+                              "description": "같은 구간의 커널 모드 CPU 시간(ms). `runtime.kernel_ns` 의 증가량(= stime)."
+                            },
+                            "total_ms": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991,
+                              "description": "user_ms + kernel_ms. **이것은 CPU 시간이지 벽시계 시간이 아니다** — 여러 코어에서 동시에 돌면 벽시계보다 클 수 있다.\n**커널이 clock tick 단위로만 보고하므로 해상도는 10ms 다** (USER_HZ=100). 짧은 세션의 0 은 \"안 썼다\" 가 아니라 \"10ms 미만\" 이다.\n**첫 표본 이전의 CPU 시간은 빠진다.** 카운터는 첫 폴링 때 관측된 값에서 시작하므로, `--launch` 로 콜드 스타트한 앱은 프로세스 생성부터 첫 표본까지(최대 1초)의 몫이 들어 있지 않다. 즉 이 값은 하한이다."
+                            },
+                            "share_of_device_cpu_pct": {
+                              "type": "number",
+                              "description": "**분모는 같은 구간 기기 전체의 CPU 시간(모든 코어의 cpu.times.* 증가량 합, idle 포함)** 이다. 즉 벽시계 시간이 아니라 \"벽시계 × 코어 수\" 에 가깝고, 100% 는 모든 코어를 내내 이 앱이 썼다는 뜻이다. 8코어 기기에서 코어 하나를 100% 쓰면 이 값은 약 12.5% 다.\n**같은 분모를 measurement_overhead.tracing_processes_cpu_share_pct 가 쓴다** — 그래야 한 result.json 안의 두 백분율을 서로 비교할 수 있다.\n\"기기가 실제로 한 일 중 이 앱의 몫\" 이 필요하면 이 값을 device_total_busy_pct 로 나누라 (분모가 같은 총 CPU 시간이라 그 비가 성립한다).\nreason_code 가 cpu_counters_not_monotonic 이면 분모에서 그 코어들이 빠져 있으므로 이 값은 실제보다 크다."
+                            },
+                            "other_processes": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "process": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ],
+                                    "description": "트레이스가 이 프로세스를 부르는 이름. 트레이스에 이름이 없으면 null 이다."
+                                  },
+                                  "pid": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "user_ms": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "kernel_ms": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "total_ms": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "process",
+                                  "pid",
+                                  "user_ms",
+                                  "kernel_ms",
+                                  "total_ms"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "description": "대표 프로세스가 아닌, 이 앱의 것으로 **트레이스가 이름을 붙인** 프로세스들의 CPU 시간. 위의 숫자에 **합산되어 있지 않다.**\n**왜 합치지 않는가:** CPU 시간은 더해도 이중 계산이 아니지만, 더하려면 이 앱의 프로세스 집합이 완전해야 한다. 그런데 트레이스의 프로세스 이름은 완전하지 않다 — linux.process_stats 는 이름을 최초 관측 때 한 번만 확정하므로 갓 fork 된 앱 본체가 `<pre-initialized>` 로 남는다. 실기기 실측: 대상 앱 uid 의 프로세스 4개 중 이름이 패키지명과 정확히 같은 것은 8.63초를 쓴 **본체가 아니라** 10ms 를 쓴 자식이었다. 불완전한 집합의 합을 \"이 앱의 CPU\" 라고 부르면 누가 빠졌는지조차 결과에 안 남는다. 그래서 대표 하나만 위에 싣고 나머지는 각자 pid 를 달고 여기 남긴다.\n**`[]` 는 \"그런 프로세스를 관측하지 못했다\" 이지 \"없다\" 가 아니다** — 이름이 낡은 서브프로세스는 애초에 후보에 들어오지 못한다. 합계가 필요하면 이 배열의 total_ms 를 직접 더하되, 그것도 하한이라는 사실과 함께 읽으라."
+                            },
+                            "timeline": {
+                              "description": "앱이 **그 1초 동안** 쓴 CPU 시간(user+kernel). `runtime.*` 는 프로세스 시작부터의 **누적값**이라, 이 배열은 이웃한 두 표본의 차이다.\n**첫 표본의 초는 배열에 없다** — 그 앞에 뺄 대상이 없기 때문이다. 0 으로 채우면 \"그 초에 CPU 를 안 썼다\" 는 없던 사실이 된다.\n**이 배열의 합은 app.total_ms 이하다.** 두 값의 기준점이 다르기 때문이다: total_ms 는 전체 첫 표본부터 재고, 이 배열은 **0 초 구간의 마지막 표본**부터 잰다. 그 구간 안에 표본이 여럿이면(폴링 지터, 콜드 스타트) 그 사이의 증가분이 이 배열에는 없다 — 실측: 콜드 스타트 세션에서 34,000ms(배열) vs 34,650ms(total_ms). 초당 표본이 하나뿐이면 둘은 같아진다.\n둘이 **함께** 놓치는 것은 첫 표본 이전(프로세스 생성부터 첫 폴링까지, 최대 1초)의 몫이고, 그것이 app.total_ms 가 하한인 이유다 — 이 배열은 그보다 한 겹 더 낮은 하한이다.\n표본 간격이 정확히 1초가 아닐 수 있으므로(폴링 지터) 이 값은 사용률(%)이 아니라 **시간(ms)** 이다.",
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "t_s": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991,
+                                    "description": "세션 시작으로부터 몇 초째인지 (구간은 [t_s, t_s+1)). 값이 없는 초는 배열에 없다 — 0 으로 채우지 않는다. 빠진 초를 \"0\" 으로 읽지 말 것."
+                                  },
+                                  "app_cpu_ms": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  }
+                                },
+                                "required": [
+                                  "t_s",
+                                  "app_cpu_ms"
+                                ],
+                                "additionalProperties": false
+                              }
+                            }
+                          },
+                          "required": [
+                            "process",
+                            "pid",
+                            "samples",
+                            "sampled_ms",
+                            "user_ms",
+                            "kernel_ms",
+                            "total_ms",
+                            "share_of_device_cpu_pct",
+                            "other_processes"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "**대상 앱 프로세스 하나가 쓴 CPU 시간.** 프로세스 특정 규칙은 frame / memory 와 같다 (캡처한 pid → 정확한 패키지명 → `패키지:서브프로세스`), 그래서 세 메트릭이 같은 프로세스를 가리킨다.\n**null 은 0 이 아니라 \"내지 못했다\" 이다.** reason_code 가 갈래를 말한다: process_not_in_trace(프로세스를 특정하지 못함) / no_app_cpu_samples(프로세스는 찾았는데 runtime.* 카운터가 없음 — record_process_runtime 이 꺼진 옛 캡처) / counter_went_backwards(누적 카운터가 감소 — pid 재사용 등) / query_failed."
+                    }
+                  },
+                  "required": [
+                    "device_sampled_ms",
+                    "device_samples",
+                    "device_total_busy_pct",
+                    "device_per_core",
+                    "device_frequency",
+                    "app"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "source",
+            "reason_code",
+            "reason",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        "memory": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "collected",
+                "partial",
+                "unsupported",
+                "failed",
+                "skipped"
+              ],
+              "description": "이 메트릭의 수집 상태.\n- collected: 값이 전부 나왔다. data 는 non-null 이고 reason_code 는 null 이다.\n- partial: **두 가지를 겸한다.** (a) 값은 나왔지만 일부가 빠졌다(예: CPU 사용률은 있고 주파수가 없다) — 이때 data 는 non-null 이다. (b) **값이 아예 나오지 않았다** — 이때 `data` 는 **null** 이다. 둘 다 reason_code 가 어느 쪽인지 말한다. data 가 null 인 partial 을 내는 reason_code 는 이 버전에서 render_process_not_found, no_frames, frame_duration_out_of_range, no_cpu_samples, insufficient_samples, cpu_counters_did_not_advance, cpu_counters_not_monotonic, process_not_in_trace, no_rss_samples, no_log_entries, launch_time_unreported, launch_wait_timed_out, snapshot_unavailable, snapshot_unparsable, no_thermal_zones, thermal_hal_not_ready, app_uid_unknown, uid_not_in_netstats, counter_went_backwards 이다. **이 목록은 참고용이고 계약이 아니다** — 새 collector 가 생기면 늘어난다. 판정은 반드시 `data !== null`(또는 `status === 'collected'`)로 하고 이 목록으로 하지 말 것. 스냅샷 계열(snapshot_unavailable / snapshot_unparsable)이 특히 흔하다: 이 도구가 스냅샷을 찍기 전에 만들어진 옛 run 을 재산출하면 thermal / network 가 반드시 그 길을 지난다.\n**위 목록의 코드 셋은 양쪽에 걸친다** — 같은 코드가 메트릭에 따라 data 를 내기도 하고 안 내기도 한다: `snapshot_unavailable`(network 는 data null / thermal 은 non-null), `process_not_in_trace`(memory 는 null / cpu·log 는 기기 전역 값을 낸 채 app 만 null), `counter_went_backwards`(network 는 null / cpu 는 app 만 null). **이 코드들로 data 유무를 추론하지 말 것.** 목록을 계약으로 만들지 않은 이유가 이런 것이며, 이 코드들이 그 산 증거다.\n- unsupported: 이 기기가 이 메트릭을 낼 수 없다 (sdk 하한 미달, 데이터소스 미등록). data 는 null 이다.\n- failed: 예외 상황 전용이다 — 트레이스 원본이 없거나(trace_missing) trace_processor 쿼리가 예외로 터진 경우(query_failed). data 는 null 이다.\n- skipped: 수집을 시도조차 하지 않았다 (`--launch` 없이 시작한 세션의 startup). data 는 null 이다.\n**`failed` 만 걸러서는 수집 실패를 잡지 못한다.** 값이 있어야 하는 소비자는 `status === 'collected'` 이거나 `data !== null` 인지를 보라."
+            },
+            "source": {
+              "type": "string"
+            },
+            "reason_code": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "sdk_too_low",
+                    "data_source_not_registered",
+                    "trace_missing",
+                    "render_process_not_found",
+                    "no_frames",
+                    "frame_duration_out_of_range",
+                    "query_failed",
+                    "launch_not_requested",
+                    "launch_time_unreported",
+                    "launch_wait_timed_out",
+                    "no_cpu_samples",
+                    "insufficient_samples",
+                    "cpu_counters_did_not_advance",
+                    "cpu_counters_not_monotonic",
+                    "cpu_freq_unavailable",
+                    "process_not_in_trace",
+                    "no_rss_samples",
+                    "no_app_cpu_samples",
+                    "process_name_stale_in_trace",
+                    "no_meminfo_samples",
+                    "no_log_entries",
+                    "log_events_truncated",
+                    "snapshot_unavailable",
+                    "snapshot_unparsable",
+                    "no_thermal_zones",
+                    "thermal_hal_not_ready",
+                    "thermal_zones_changed",
+                    "app_uid_unknown",
+                    "uid_not_in_netstats",
+                    "counter_went_backwards",
+                    "netstats_uid_duplicated",
+                    "uid_shared_by_multiple_packages",
+                    "uid_packages_not_enumerable",
+                    "uid_not_in_package_list"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "기계가 매칭하는 안정적인 사유 키. 사람용 문장은 reason 에 있다."
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "사람이 읽는 사유. 문구는 다듬힐 수 있으니 매칭에 쓰지 말 것."
+            },
+            "data": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "process": {
+                      "type": "string",
+                      "description": "대상 앱 프로세스의 이름. 트레이스의 프로세스 이름이 패키지명(또는 `패키지:서브프로세스`)과 일치했거나, 일치하지 않았을 때는 실행 직후 기기에서 받아 둔 pid 로 대상 앱임을 확인한 뒤 패키지명을 적은 것이다. 후자의 경우 reason_code 가 process_name_stale_in_trace 로 그 사실을 말한다. 둘 중 어느 것으로도 확인되지 않으면 이 메트릭은 값을 내지 않는다 — 확인되지 않은 이름이 이 자리에 오는 일은 없다."
+                    },
+                    "pid": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "samples": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "rss": {
+                      "type": "object",
+                      "properties": {
+                        "min_kb": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "max_kb": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "avg_kb": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "min_kb",
+                        "max_kb",
+                        "avg_kb"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "rss_anon": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "min_kb": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "max_kb": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "avg_kb": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "min_kb",
+                            "max_kb",
+                            "avg_kb"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "rss_file": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "min_kb": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "max_kb": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "avg_kb": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "min_kb",
+                            "max_kb",
+                            "avg_kb"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "timeline": {
+                      "description": "1초 주기로 폴링된 앱 RSS 의 추이. 집계값(rss.avg_kb / max_kb)과 같은 원본에서 나온다. 평균만으로는 구분되지 않는 것 — 내내 일정했는지, 계속 우상향했는지 — 을 보려는 값이다. **구간 평균이 아니라 그 순간의 표본**이므로, 표본과 표본 사이의 순간 최고점은 여기에도 없다. 이 배열이 있다고 기기에 더 많은 것을 물은 것은 아니다 (폴링 주기는 그대로다).",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "t_s": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991,
+                            "description": "세션 시작으로부터 몇 초째인지 (구간은 [t_s, t_s+1)). 값이 없는 초는 배열에 없다 — 0 으로 채우지 않는다. 빠진 초를 \"0\" 으로 읽지 말 것."
+                          },
+                          "rss_kb": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "t_s",
+                          "rss_kb"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "rss_watermark_peak_kb": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "커널이 기억하는 이 프로세스의 최고 RSS(kB). `/proc/<pid>/status` 의 VmHWM 이다.\n**이 값만 세션 구간의 값이 아니다 — 프로세스가 시작된 뒤 지금까지의 최고점이다.** 옆의 rss.max_kb 는 이 세션에서 1초 주기로 관측한 최댓값이고, 이 값은 그 이전에 찍힌 최고점일 수 있다. 특히 `--launch` 없이 이미 떠 있던 앱을 잰 세션에서는 몇 시간 전, 혹은 이전 세션의 최고점이 그대로 실린다 (실측: 연속 세션 두 개가 rss.max_kb 는 399,056 / 393,668 으로 달랐는데 이 값은 둘 다 399,592 였다). \"폴링이 놓친 이번 세션의 진짜 피크\" 로 읽으면 안 된다. 이번 세션 구간의 피크를 원하면 rss.max_kb 를 쓰라. null 은 트레이스에 mem.rss.watermark 카운터가 없었다는 뜻이다."
+                    },
+                    "system": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "mem_total_kb": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "mem_available": {
+                              "type": "object",
+                              "properties": {
+                                "min_kb": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                "max_kb": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                "avg_kb": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": [
+                                "min_kb",
+                                "max_kb",
+                                "avg_kb"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "mem_free": {
+                              "type": "object",
+                              "properties": {
+                                "min_kb": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                "max_kb": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                "avg_kb": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": [
+                                "min_kb",
+                                "max_kb",
+                                "avg_kb"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "cached": {
+                              "type": "object",
+                              "properties": {
+                                "min_kb": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                "max_kb": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                "avg_kb": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": [
+                                "min_kb",
+                                "max_kb",
+                                "avg_kb"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "swap_total_kb": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "swap_free": {
+                              "type": "object",
+                              "properties": {
+                                "min_kb": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                "max_kb": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                "avg_kb": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": [
+                                "min_kb",
+                                "max_kb",
+                                "avg_kb"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "mem_total_kb",
+                            "mem_available",
+                            "mem_free",
+                            "cached",
+                            "swap_total_kb",
+                            "swap_free"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "system_timeline": {
+                      "description": "기기 전체 가용 메모리의 초당 추이. **앱이 아니라 기기 전체다** — 앱의 RSS 가 늘어도 기기 가용이 그만큼 줄지 않을 수 있다(캐시 회수 등).\nmeminfo 는 누적이 아니라 **그 순간의 값**이라 첫 초도 배열에 있다 (app.timeline · cpu.device_timeline 이 첫 초를 빼는 것과 다르다). 한 초에 표본이 여럿이면 마지막 것을 쓴다.\nmeminfo 카운터가 없으면 **null** 이다 — system 이 null 인 경우와 같은 원인이다.",
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "t_s": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991,
+                                "description": "세션 시작으로부터 몇 초째인지 (구간은 [t_s, t_s+1)). 값이 없는 초는 배열에 없다 — 0 으로 채우지 않는다. 빠진 초를 \"0\" 으로 읽지 말 것."
+                              },
+                              "mem_available_kb": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991,
+                                "description": "커널의 `MemAvailable` — 스왑 없이 새 프로세스에 내줄 수 있다고 커널이 추산한 양. MemFree 와 다르다 (회수 가능한 캐시를 포함한다)."
+                              },
+                              "mem_free_kb": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991,
+                                "description": "커널의 `MemFree` — 어디에도 쓰이지 않는 양."
+                              }
+                            },
+                            "required": [
+                              "t_s",
+                              "mem_available_kb",
+                              "mem_free_kb"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "process",
+                    "pid",
+                    "samples",
+                    "rss",
+                    "rss_anon",
+                    "rss_file",
+                    "rss_watermark_peak_kb",
+                    "system"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "source",
+            "reason_code",
+            "reason",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        "log": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "collected",
+                "partial",
+                "unsupported",
+                "failed",
+                "skipped"
+              ],
+              "description": "이 메트릭의 수집 상태.\n- collected: 값이 전부 나왔다. data 는 non-null 이고 reason_code 는 null 이다.\n- partial: **두 가지를 겸한다.** (a) 값은 나왔지만 일부가 빠졌다(예: CPU 사용률은 있고 주파수가 없다) — 이때 data 는 non-null 이다. (b) **값이 아예 나오지 않았다** — 이때 `data` 는 **null** 이다. 둘 다 reason_code 가 어느 쪽인지 말한다. data 가 null 인 partial 을 내는 reason_code 는 이 버전에서 render_process_not_found, no_frames, frame_duration_out_of_range, no_cpu_samples, insufficient_samples, cpu_counters_did_not_advance, cpu_counters_not_monotonic, process_not_in_trace, no_rss_samples, no_log_entries, launch_time_unreported, launch_wait_timed_out, snapshot_unavailable, snapshot_unparsable, no_thermal_zones, thermal_hal_not_ready, app_uid_unknown, uid_not_in_netstats, counter_went_backwards 이다. **이 목록은 참고용이고 계약이 아니다** — 새 collector 가 생기면 늘어난다. 판정은 반드시 `data !== null`(또는 `status === 'collected'`)로 하고 이 목록으로 하지 말 것. 스냅샷 계열(snapshot_unavailable / snapshot_unparsable)이 특히 흔하다: 이 도구가 스냅샷을 찍기 전에 만들어진 옛 run 을 재산출하면 thermal / network 가 반드시 그 길을 지난다.\n**위 목록의 코드 셋은 양쪽에 걸친다** — 같은 코드가 메트릭에 따라 data 를 내기도 하고 안 내기도 한다: `snapshot_unavailable`(network 는 data null / thermal 은 non-null), `process_not_in_trace`(memory 는 null / cpu·log 는 기기 전역 값을 낸 채 app 만 null), `counter_went_backwards`(network 는 null / cpu 는 app 만 null). **이 코드들로 data 유무를 추론하지 말 것.** 목록을 계약으로 만들지 않은 이유가 이런 것이며, 이 코드들이 그 산 증거다.\n- unsupported: 이 기기가 이 메트릭을 낼 수 없다 (sdk 하한 미달, 데이터소스 미등록). data 는 null 이다.\n- failed: 예외 상황 전용이다 — 트레이스 원본이 없거나(trace_missing) trace_processor 쿼리가 예외로 터진 경우(query_failed). data 는 null 이다.\n- skipped: 수집을 시도조차 하지 않았다 (`--launch` 없이 시작한 세션의 startup). data 는 null 이다.\n**`failed` 만 걸러서는 수집 실패를 잡지 못한다.** 값이 있어야 하는 소비자는 `status === 'collected'` 이거나 `data !== null` 인지를 보라."
+            },
+            "source": {
+              "type": "string"
+            },
+            "reason_code": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "sdk_too_low",
+                    "data_source_not_registered",
+                    "trace_missing",
+                    "render_process_not_found",
+                    "no_frames",
+                    "frame_duration_out_of_range",
+                    "query_failed",
+                    "launch_not_requested",
+                    "launch_time_unreported",
+                    "launch_wait_timed_out",
+                    "no_cpu_samples",
+                    "insufficient_samples",
+                    "cpu_counters_did_not_advance",
+                    "cpu_counters_not_monotonic",
+                    "cpu_freq_unavailable",
+                    "process_not_in_trace",
+                    "no_rss_samples",
+                    "no_app_cpu_samples",
+                    "process_name_stale_in_trace",
+                    "no_meminfo_samples",
+                    "no_log_entries",
+                    "log_events_truncated",
+                    "snapshot_unavailable",
+                    "snapshot_unparsable",
+                    "no_thermal_zones",
+                    "thermal_hal_not_ready",
+                    "thermal_zones_changed",
+                    "app_uid_unknown",
+                    "uid_not_in_netstats",
+                    "counter_went_backwards",
+                    "netstats_uid_duplicated",
+                    "uid_shared_by_multiple_packages",
+                    "uid_packages_not_enumerable",
+                    "uid_not_in_package_list"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "기계가 매칭하는 안정적인 사유 키. 사람용 문장은 reason 에 있다."
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "사람이 읽는 사유. 문구는 다듬힐 수 있으니 매칭에 쓰지 말 것."
+            },
+            "data": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "min_prio": {
+                      "type": "string",
+                      "description": "이 세션이 android.log 데이터소스에 **요청한** 최소 우선순위(문턱). logd 가 이 문턱으로 걸러 보내므로 아래 개수는 사실상 이 문턱 이상의 줄들이지만, 이 도구는 트레이스를 받은 뒤 우선순위로 다시 거르지 않는다 — 개수의 정의는 \"트레이스에 있는 것을 센다\" 이지 \"문턱 이상만 센다\" 가 아니다. 그래도 문턱 없이는 개수를 읽을 수 없다: \"W 118건\" 은 무엇이 걸러진 뒤의 숫자인지 모르면 의미가 없다. app 과 device_* 양쪽에 똑같이 적용된다."
+                    },
+                    "app": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "process": {
+                              "type": "string",
+                              "description": "대상 앱 프로세스의 이름. 트레이스의 프로세스 이름이 패키지명(또는 `패키지:서브프로세스`)과 일치했거나, 일치하지 않았을 때는 실행 직후 기기에서 받아 둔 pid 로 대상 앱임을 확인한 뒤 패키지명을 적은 것이다. 후자의 경우 reason_code 가 process_name_stale_in_trace 로 그 사실을 말한다. 둘 중 어느 것으로도 확인되지 않으면 이 메트릭은 값을 내지 않는다 — 확인되지 않은 이름이 이 자리에 오는 일은 없다."
+                            },
+                            "pid": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "total": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991,
+                              "description": "이 프로세스가 찍은 로그 줄의 수. android_logs 를 utid → thread → **upid** 로 걸러 센다 (pid 가 아니다 — pid 는 재사용될 수 있고 그러면 남의 로그가 섞인다).\n**시간으로 자르지 않는다**: 이 프로세스가 트레이스 구간 안에서 찍은 줄 전부이고, 첫 process_stats 표본 이전(콜드 스타트 구간)의 줄도 포함된다.\n**0 은 관측이다** — 이 값이 나온 시점에 기기 전역 개수는 이미 0 이 아니었으므로 (그렇지 않으면 이 메트릭 전체가 no_log_entries 로 값을 내지 않는다) 로그 경로가 살아 있었다는 것이 확인된 상태다. 반대로 앱을 **특정하지 못한** 경우 이 객체 자체가 null 이다."
+                            },
+                            "by_priority": {
+                              "type": "object",
+                              "properties": {
+                                "warn": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "error": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "fatal": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": [
+                                "warn",
+                                "error",
+                                "fatal"
+                              ],
+                              "additionalProperties": false,
+                              "description": "이 프로세스가 찍은 W/E/F 세 우선순위의 줄 수. 세 값의 합은 total 과 다를 수 있다 — total 은 이 셋 밖의 우선순위까지 세기 때문이다."
+                            },
+                            "timeline": {
+                              "description": "1초 단위로 묶은 **앱 프로세스**의 로그 발생 추이 (기기 전역이 아니다). app.total / app.by_priority 와 같은 원본·같은 필터에서 나온다. 어느 구간에서 에러가 몰렸는지를 보려는 값이고, 그 구간의 프레임·메모리와 t_s 로 맞춰 볼 수 있다. min_prio 아래 우선순위는 여기에도 없다.",
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "t_s": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991,
+                                    "description": "세션 시작으로부터 몇 초째인지 (구간은 [t_s, t_s+1)). 값이 없는 초는 배열에 없다 — 0 으로 채우지 않는다. 빠진 초를 \"0\" 으로 읽지 말 것."
+                                  },
+                                  "count": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "error": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "t_s",
+                                  "count",
+                                  "error"
+                                ],
+                                "additionalProperties": false
+                              }
+                            }
+                          },
+                          "required": [
+                            "process",
+                            "pid",
+                            "total",
+                            "by_priority"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "**대상 앱 프로세스가 찍은 로그만** 센 것. 프로세스 특정 규칙은 frame / memory / cpu 와 같다, 그래서 네 메트릭이 같은 프로세스를 가리킨다.\n**null 은 0 이 아니라 \"내지 못했다\" 이다.** reason_code 가 갈래를 말한다 (process_not_in_trace / query_failed). **앱이 한 줄도 안 찍은 것은 null 이 아니라 total: 0 이다** — 둘을 같게 읽으면 안 된다.\n**크래시와 ANR 은 여기 없다.** 아래 device_crashes / device_anrs 설명을 보라 — 앱 pid 로 거르면 ANR 이 통째로 사라지기 때문이다."
+                    },
+                    "device_total": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "트레이스에 담긴 로그 줄 **전부**의 수. 이 값은 **기기 전역**이며 대상 앱만의 값이 아니다 — android.log 데이터소스는 logd 전체를 받고 프로세스로 거르지 않는다. 대상 앱만의 개수는 `app` 에 있다. 실측 대조(같은 세션, SM-S901N / Android 16): 기기 전역 W 1,095 / E 412 인데 대상 앱 프로세스만은 W 24 / E 13 이었다 — **45배 / 32배 차이다.** 우선순위로 거르지 않고 트레이스에 있는 줄을 그대로 센다(min_prio 설명 참고). 트레이스 버퍼가 넘쳤다면 그만큼 적다(measurement_overhead.trace_buffer_overrun 참고)."
+                    },
+                    "device_by_priority": {
+                      "type": "object",
+                      "properties": {
+                        "warn": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "error": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "fatal": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "warn",
+                        "error",
+                        "fatal"
+                      ],
+                      "additionalProperties": false,
+                      "description": "W/E/F 세 우선순위의 로그 줄 수. 이 값은 **기기 전역**이며 대상 앱만의 값이 아니다 — android.log 데이터소스는 logd 전체를 받고 프로세스로 거르지 않는다. 대상 앱만의 개수는 `app` 에 있다. 실측 대조(같은 세션, SM-S901N / Android 16): 기기 전역 W 1,095 / E 412 인데 대상 앱 프로세스만은 W 24 / E 13 이었다 — **45배 / 32배 차이다.** 세 값의 합은 device_total 과 다를 수 있다 — device_total 은 이 셋 밖의 우선순위 (문턱보다 낮은 줄이 섞여 온 경우)까지 세기 때문이다. 반대 방향의 누락은 없다."
+                    },
+                    "device_crashes": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "tag": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "pid": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "이 줄을 **찍은** 프로세스의 pid. 사건의 주체가 아니라 기록자다 — ANR 은 system_server 가 찍으므로 여기 system_server 의 pid 가 온다(실측 확인). 대상 앱이 직접 찍은 줄인지는 metrics.log.data.app.pid 와 비교해서 판단하라. **null 은 트레이스가 이 줄의 프로세스를 특정하지 못했다는 뜻이다** — android_logs 는 utid 만 갖고 있어 thread/process 테이블을 거쳐야 하는데 linux.process_stats 가 없거나 그 스레드를 못 본 경우가 있다."
+                              },
+                              "process": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "그 프로세스의 이름(트레이스 기준). pid 와 같은 규칙으로 null 일 수 있다."
+                              }
+                            },
+                            "required": [
+                              "tag",
+                              "message",
+                              "pid",
+                              "process"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "세션 동안 관측된 크래시(AndroidRuntime 의 FATAL EXCEPTION, libc 의 Fatal signal). **기기 전역이며 대상 앱으로 거르지 않는다 — 그것이 의도다.** 거르면 앱이 죽은 뒤 다른 프로세스가 남긴 줄이 사라진다. 대신 각 항목이 **찍은 프로세스의 pid/process** 를 함께 실으므로, 대상 앱 것만 보려면 data.app.pid 와 비교해 직접 거르라.\n실측(SM-S901N / Android 16): 네이티브 크래시를 내는 `libc` 태그 줄은 **그 프로세스 자신이** 찍었다(대상 앱 pid, 두 세션에서 각각 9줄). `AndroidRuntime` 태그도 그것을 내는 프로세스 자신이 찍는 것으로 관측됐다(기기 logcat 의 `RuntimeInit` 시작 줄이 그 명령 자신의 pid 로 찍혔다). **다만 `FATAL EXCEPTION` 줄 자체는 이 저장소가 실기기에서 한 줄도 보지 못했다** — 관측한 세션에 0건이었고, 확인하려면 사용자의 앱을 실제로 죽여야 한다. 그래서 자바 크래시가 항상 앱 프로세스로 찍힌다고 **단정하지 않으며**, 거르지 않는 이유가 여기에도 있다. crashes 와 anrs 를 합쳐 최대 200건까지만 담는다(ts 오름차순). 상한에 닿으면 status 가 partial 이 되고 reason_code 가 log_events_truncated 로 그 사실을 말한다 — 그 뒤에 더 있었는지는 이 결과로 알 수 없다. 개수는 잘리지 않는다. **null 은 세지 못했다는 뜻이다** — 이벤트 쿼리가 실패한 경우이며 reason_code 가 query_failed 로 그 사실을 말한다. 빈 배열([])은 \"쿼리는 성공했고 관측된 것이 없다\" 이다. 둘을 같은 뜻으로 읽으면 안 된다."
+                    },
+                    "device_anrs": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "tag": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "pid": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "이 줄을 **찍은** 프로세스의 pid. 사건의 주체가 아니라 기록자다 — ANR 은 system_server 가 찍으므로 여기 system_server 의 pid 가 온다(실측 확인). 대상 앱이 직접 찍은 줄인지는 metrics.log.data.app.pid 와 비교해서 판단하라. **null 은 트레이스가 이 줄의 프로세스를 특정하지 못했다는 뜻이다** — android_logs 는 utid 만 갖고 있어 thread/process 테이블을 거쳐야 하는데 linux.process_stats 가 없거나 그 스레드를 못 본 경우가 있다."
+                              },
+                              "process": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "그 프로세스의 이름(트레이스 기준). pid 와 같은 규칙으로 null 일 수 있다."
+                              }
+                            },
+                            "required": [
+                              "tag",
+                              "message",
+                              "pid",
+                              "process"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "세션 동안 관측된 ANR(ActivityManager 의 \"ANR in ...\"). **기기 전역이며 대상 앱으로 거를 수 없다.** 실측(SM-S901N / Android 16): 이 트레이스의 `ActivityManager` 태그 16줄은 **전부 system_server(pid 2414)가 찍었다.** ANR 은 앱이 아니라 system_server 가 기록하므로 대상 앱 pid 로 걸렀다면 ANR 이 **하나도 남지 않았을 것이다.** 어느 앱의 ANR 인지는 message 의 \"ANR in <패키지>\" 로 읽으라 — 항목의 pid/process 는 기록자(system_server)이지 멈춘 앱이 아니다. crashes 와 anrs 를 합쳐 최대 200건까지만 담는다(ts 오름차순). 상한에 닿으면 status 가 partial 이 되고 reason_code 가 log_events_truncated 로 그 사실을 말한다 — 그 뒤에 더 있었는지는 이 결과로 알 수 없다. 개수는 잘리지 않는다. **null 은 세지 못했다는 뜻이다** — 이벤트 쿼리가 실패한 경우이며 reason_code 가 query_failed 로 그 사실을 말한다. 빈 배열([])은 \"쿼리는 성공했고 관측된 것이 없다\" 이다. 둘을 같은 뜻으로 읽으면 안 된다."
+                    }
+                  },
+                  "required": [
+                    "min_prio",
+                    "app",
+                    "device_total",
+                    "device_by_priority",
+                    "device_crashes",
+                    "device_anrs"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "source",
+            "reason_code",
+            "reason",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        "thermal": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "collected",
+                "partial",
+                "unsupported",
+                "failed",
+                "skipped"
+              ],
+              "description": "이 메트릭의 수집 상태.\n- collected: 값이 전부 나왔다. data 는 non-null 이고 reason_code 는 null 이다.\n- partial: **두 가지를 겸한다.** (a) 값은 나왔지만 일부가 빠졌다(예: CPU 사용률은 있고 주파수가 없다) — 이때 data 는 non-null 이다. (b) **값이 아예 나오지 않았다** — 이때 `data` 는 **null** 이다. 둘 다 reason_code 가 어느 쪽인지 말한다. data 가 null 인 partial 을 내는 reason_code 는 이 버전에서 render_process_not_found, no_frames, frame_duration_out_of_range, no_cpu_samples, insufficient_samples, cpu_counters_did_not_advance, cpu_counters_not_monotonic, process_not_in_trace, no_rss_samples, no_log_entries, launch_time_unreported, launch_wait_timed_out, snapshot_unavailable, snapshot_unparsable, no_thermal_zones, thermal_hal_not_ready, app_uid_unknown, uid_not_in_netstats, counter_went_backwards 이다. **이 목록은 참고용이고 계약이 아니다** — 새 collector 가 생기면 늘어난다. 판정은 반드시 `data !== null`(또는 `status === 'collected'`)로 하고 이 목록으로 하지 말 것. 스냅샷 계열(snapshot_unavailable / snapshot_unparsable)이 특히 흔하다: 이 도구가 스냅샷을 찍기 전에 만들어진 옛 run 을 재산출하면 thermal / network 가 반드시 그 길을 지난다.\n**위 목록의 코드 셋은 양쪽에 걸친다** — 같은 코드가 메트릭에 따라 data 를 내기도 하고 안 내기도 한다: `snapshot_unavailable`(network 는 data null / thermal 은 non-null), `process_not_in_trace`(memory 는 null / cpu·log 는 기기 전역 값을 낸 채 app 만 null), `counter_went_backwards`(network 는 null / cpu 는 app 만 null). **이 코드들로 data 유무를 추론하지 말 것.** 목록을 계약으로 만들지 않은 이유가 이런 것이며, 이 코드들이 그 산 증거다.\n- unsupported: 이 기기가 이 메트릭을 낼 수 없다 (sdk 하한 미달, 데이터소스 미등록). data 는 null 이다.\n- failed: 예외 상황 전용이다 — 트레이스 원본이 없거나(trace_missing) trace_processor 쿼리가 예외로 터진 경우(query_failed). data 는 null 이다.\n- skipped: 수집을 시도조차 하지 않았다 (`--launch` 없이 시작한 세션의 startup). data 는 null 이다.\n**`failed` 만 걸러서는 수집 실패를 잡지 못한다.** 값이 있어야 하는 소비자는 `status === 'collected'` 이거나 `data !== null` 인지를 보라."
+            },
+            "source": {
+              "type": "string"
+            },
+            "reason_code": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "sdk_too_low",
+                    "data_source_not_registered",
+                    "trace_missing",
+                    "render_process_not_found",
+                    "no_frames",
+                    "frame_duration_out_of_range",
+                    "query_failed",
+                    "launch_not_requested",
+                    "launch_time_unreported",
+                    "launch_wait_timed_out",
+                    "no_cpu_samples",
+                    "insufficient_samples",
+                    "cpu_counters_did_not_advance",
+                    "cpu_counters_not_monotonic",
+                    "cpu_freq_unavailable",
+                    "process_not_in_trace",
+                    "no_rss_samples",
+                    "no_app_cpu_samples",
+                    "process_name_stale_in_trace",
+                    "no_meminfo_samples",
+                    "no_log_entries",
+                    "log_events_truncated",
+                    "snapshot_unavailable",
+                    "snapshot_unparsable",
+                    "no_thermal_zones",
+                    "thermal_hal_not_ready",
+                    "thermal_zones_changed",
+                    "app_uid_unknown",
+                    "uid_not_in_netstats",
+                    "counter_went_backwards",
+                    "netstats_uid_duplicated",
+                    "uid_shared_by_multiple_packages",
+                    "uid_packages_not_enumerable",
+                    "uid_not_in_package_list"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "기계가 매칭하는 안정적인 사유 키. 사람용 문장은 reason 에 있다."
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "사람이 읽는 사유. 문구는 다듬힐 수 있으니 매칭에 쓰지 말 것."
+            },
+            "data": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "zones": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "description": "센서 이름. **벤더가 정하는 임의 문자열이다** — 이 값으로 CPU/피부 온도를 판별하지 말 것. 판별은 type 으로 한다."
+                          },
+                          "type": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "`android.hardware.thermal` 의 TemperatureType 표준 enum: 0=CPU, 1=GPU, 2=BATTERY, 3=SKIN, 4=USB_PORT, 5=POWER_AMPLIFIER, 6=BCL_VOLTAGE, 7=BCL_CURRENT, 8=BCL_PERCENTAGE, 9=NPU. 기기가 안 주면 null."
+                          },
+                          "before_c": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "세션 시작 스냅샷의 온도(°C). **null 은 그 센서가 시작 시점에 없었다는 뜻이다.**"
+                          },
+                          "after_c": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "세션 종료 스냅샷의 온도(°C). **null 은 두 가지다** — 그 센서가 종료 시점에 없었거나, 종료 스냅샷 자체가 없다(아직 stop 하지 않은 세션). 어느 쪽인지는 reason_code 가 말한다. 0 과 혼동하면 안 된다: 이 기기들은 실제로 0.0°C 를 보고하는 센서를 갖고 있다."
+                          },
+                          "delta_c": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "after_c − before_c. **부호 있는 값이고, 음수가 정상이다** — 실기기 4세션 중 2세션에서 AP 온도가 내려갔다(32.1→30.8, 32.1→31.9). 이 값을 \"상승량\" 이나 \"발열\" 로 읽으면 안 된다. 어느 한쪽이 null 이면 null 이다. **source 가 `cached` 인 존에서는 이 값이 온도 변화가 아닐 수 있다** — 그 값은 갱신이 올 때만 바뀌고, 안 오면 몇 시간이고 같은 숫자가 남는다. source 설명을 반드시 함께 읽을 것."
+                          },
+                          "status_before": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "시작 시점 이 센서의 throttling 단계(`mStatus`, THERMAL_STATUS_*: 0=NONE … 6=SHUTDOWN)."
+                          },
+                          "status_after": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "종료 시점 이 센서의 throttling 단계."
+                          },
+                          "source": {
+                            "type": "string",
+                            "enum": [
+                              "hal",
+                              "cached"
+                            ],
+                            "description": "이 값이 dumpsys 의 어느 절에서 왔는지. `hal` = `Current temperatures from HAL`(덤프 시점에 HAL 에 직접 물은 값, 우선한다), `cached` = `Cached temperatures`(프레임워크가 콜백으로 들고 있던 값). HAL 이 이번에 안 준 센서가 cached 에만 남아 있는 경우가 실기기에서 관측되므로 버리지 않고 싣되, 출처를 함께 싣는다.\n**이 항목은 값 두 개(before_c / after_c)를 담으므로 출처도 둘일 수 있다. 어느 한쪽이라도 `cached` 면 이 필드는 `cached` 다** — 아래 경고가 두 값 중 하나에만 해당하더라도 그 존에는 적용되어야 하기 때문이다. 즉 `hal` 은 \"두 값 모두 HAL 이 직접 준 값\" 이라는 뜻이고, `cached` 는 \"적어도 한쪽이 갱신되지 않았을 수 있다\" 는 뜻이다. 어느 쪽이 그랬는지는 이 결과가 말하지 않는다.\n**`cached` 인 존의 delta_c 를 온도 변화로 읽으면 안 된다.** 이 값은 HAL 이 콜백을 보낼 때만 갱신되고, 갱신이 오지 않으면 같은 숫자가 그대로 남는다. 실측 근거: 어느 실기기(Android 16)의 cached 전용 존 `PA1THM` 은 약 3시간에 걸친 4세션의 전/후 덤프 8개에서 소수점까지 계속 27.0°C 였고, 같은 기간 HAL 이 주는 `AP` 는 30.8~41.6°C 로 움직였다. 그래서 `cached` 존의 delta_c 0 은 \"온도가 안 변했다\" 가 아니라 \"이 값이 갱신되지 않았다\" 일 수 있고, **이 도구는 둘을 구분하지 못한다.**"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "type",
+                          "before_c",
+                          "after_c",
+                          "delta_c",
+                          "status_before",
+                          "status_after",
+                          "source"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "세션 전/후 스냅샷에서 관측된 센서들. **이 값은 기기 전역이며 대상 앱의 온도가 아니다** — 같은 시간에 돈 다른 앱, 화면 밝기, USB 충전(이 도구는 adb 로 붙으므로 거의 항상 충전 중이다)이 전부 섞인다. 존 하나당 정확히 한 항목이다(전에는 같은 존이 두 절에서 두 번 실렸다).\n**순서는 \"기기가 보고한 순서\" 가 아니다.** 규칙은 이것이다: 시작 스냅샷의 `Current temperatures from HAL` 절 순서를 먼저 싣고, 그 절에 없던 센서를 `Cached temperatures` 절 순서로 뒤에 붙이며, 시작 스냅샷에 없고 종료 스냅샷에만 있던 센서가 맨 뒤에 온다. 실기기 원문은 `Cached temperatures:` 를 **먼저** 찍고 그 첫 항목이 `PA1THM` 인데, 이 배열에서는 `PA1THM` 이 **마지막**이다 — 원문 순서로 읽으면 안 된다. 다만 변화량 크기로 정렬하지는 **않는다**: 어느 센서가 중요한지는 이 도구가 말하지 않는다. 순서에 의미를 두지 말고 `name` 과 `type` 으로 찾으라.\n**전/후 두 점이므로 구간 중 최고 온도는 이 결과에 없다** — 원리적으로 알 수 없다. 값이 정확히 0.0 인 존이 실기기에서 관측된다(SUBBAT / SUBBATRAW). \"실제 0°C\" 인지 \"이 기기에 그 센서가 없다\" 인지 이 도구는 판별하지 않는다."
+                    },
+                    "device_status_before": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "시작 시점 기기 전체의 throttling 단계 (`dumpsys thermalservice` 의 `Thermal Status:`). THERMAL_STATUS_*: 0=NONE, 1=LIGHT, 2=MODERATE, 3=SEVERE, 4=CRITICAL, 5=EMERGENCY, 6=SHUTDOWN."
+                    },
+                    "device_status_after": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "종료 시점 기기 전체의 throttling 단계."
+                    },
+                    "status_override_before": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "시작 시점의 `IsStatusOverride`. true 면 기기의 throttling 단계가 실제 온도가 아니라 강제 설정된 값이라는 뜻이다 — 그때 device_status_* 는 관측이 아니다."
+                    },
+                    "status_override_after": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "종료 시점의 `IsStatusOverride`."
+                    },
+                    "hal_ready_before": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "시작 시점의 `HAL Ready`."
+                    },
+                    "hal_ready_after": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "종료 시점의 `HAL Ready`."
+                    },
+                    "headroom_thresholds": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "기기가 보고한 thermal headroom 임계 배열(`Temperature headroom thresholds:`). 인덱스가 THERMAL_STATUS_* 0..6 이고, 원문의 `NaN` 은 **null** 로 실린다(JSON 에 NaN 이 없다). **이 도구는 headroom 을 산출하지 않는다** — headroom 은 앱 프로세스 안에서 `PowerManager.getThermalHeadroom()` 으로만 얻을 수 있고 이 도구는 앱에 코드를 넣지 않는다. 그래서 이 배열은 위의 섭씨 온도와 **직접 비교할 수 없다**. 기기가 스스로 보고한 사실로만 싣는다. null 은 이 기기가 그 절을 안 찍었다는 뜻이다."
+                    }
+                  },
+                  "required": [
+                    "zones",
+                    "device_status_before",
+                    "device_status_after",
+                    "status_override_before",
+                    "status_override_after",
+                    "hal_ready_before",
+                    "hal_ready_after",
+                    "headroom_thresholds"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "source",
+            "reason_code",
+            "reason",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        "network": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "collected",
+                "partial",
+                "unsupported",
+                "failed",
+                "skipped"
+              ],
+              "description": "이 메트릭의 수집 상태.\n- collected: 값이 전부 나왔다. data 는 non-null 이고 reason_code 는 null 이다.\n- partial: **두 가지를 겸한다.** (a) 값은 나왔지만 일부가 빠졌다(예: CPU 사용률은 있고 주파수가 없다) — 이때 data 는 non-null 이다. (b) **값이 아예 나오지 않았다** — 이때 `data` 는 **null** 이다. 둘 다 reason_code 가 어느 쪽인지 말한다. data 가 null 인 partial 을 내는 reason_code 는 이 버전에서 render_process_not_found, no_frames, frame_duration_out_of_range, no_cpu_samples, insufficient_samples, cpu_counters_did_not_advance, cpu_counters_not_monotonic, process_not_in_trace, no_rss_samples, no_log_entries, launch_time_unreported, launch_wait_timed_out, snapshot_unavailable, snapshot_unparsable, no_thermal_zones, thermal_hal_not_ready, app_uid_unknown, uid_not_in_netstats, counter_went_backwards 이다. **이 목록은 참고용이고 계약이 아니다** — 새 collector 가 생기면 늘어난다. 판정은 반드시 `data !== null`(또는 `status === 'collected'`)로 하고 이 목록으로 하지 말 것. 스냅샷 계열(snapshot_unavailable / snapshot_unparsable)이 특히 흔하다: 이 도구가 스냅샷을 찍기 전에 만들어진 옛 run 을 재산출하면 thermal / network 가 반드시 그 길을 지난다.\n**위 목록의 코드 셋은 양쪽에 걸친다** — 같은 코드가 메트릭에 따라 data 를 내기도 하고 안 내기도 한다: `snapshot_unavailable`(network 는 data null / thermal 은 non-null), `process_not_in_trace`(memory 는 null / cpu·log 는 기기 전역 값을 낸 채 app 만 null), `counter_went_backwards`(network 는 null / cpu 는 app 만 null). **이 코드들로 data 유무를 추론하지 말 것.** 목록을 계약으로 만들지 않은 이유가 이런 것이며, 이 코드들이 그 산 증거다.\n- unsupported: 이 기기가 이 메트릭을 낼 수 없다 (sdk 하한 미달, 데이터소스 미등록). data 는 null 이다.\n- failed: 예외 상황 전용이다 — 트레이스 원본이 없거나(trace_missing) trace_processor 쿼리가 예외로 터진 경우(query_failed). data 는 null 이다.\n- skipped: 수집을 시도조차 하지 않았다 (`--launch` 없이 시작한 세션의 startup). data 는 null 이다.\n**`failed` 만 걸러서는 수집 실패를 잡지 못한다.** 값이 있어야 하는 소비자는 `status === 'collected'` 이거나 `data !== null` 인지를 보라."
+            },
+            "source": {
+              "type": "string"
+            },
+            "reason_code": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "sdk_too_low",
+                    "data_source_not_registered",
+                    "trace_missing",
+                    "render_process_not_found",
+                    "no_frames",
+                    "frame_duration_out_of_range",
+                    "query_failed",
+                    "launch_not_requested",
+                    "launch_time_unreported",
+                    "launch_wait_timed_out",
+                    "no_cpu_samples",
+                    "insufficient_samples",
+                    "cpu_counters_did_not_advance",
+                    "cpu_counters_not_monotonic",
+                    "cpu_freq_unavailable",
+                    "process_not_in_trace",
+                    "no_rss_samples",
+                    "no_app_cpu_samples",
+                    "process_name_stale_in_trace",
+                    "no_meminfo_samples",
+                    "no_log_entries",
+                    "log_events_truncated",
+                    "snapshot_unavailable",
+                    "snapshot_unparsable",
+                    "no_thermal_zones",
+                    "thermal_hal_not_ready",
+                    "thermal_zones_changed",
+                    "app_uid_unknown",
+                    "uid_not_in_netstats",
+                    "counter_went_backwards",
+                    "netstats_uid_duplicated",
+                    "uid_shared_by_multiple_packages",
+                    "uid_packages_not_enumerable",
+                    "uid_not_in_package_list"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "기계가 매칭하는 안정적인 사유 키. 사람용 문장은 reason 에 있다."
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "사람이 읽는 사유. 문구는 다듬힐 수 있으니 매칭에 쓰지 말 것."
+            },
+            "data": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "uid": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "이 값이 집계된 리눅스 uid. target_app.uid 와 같다."
+                    },
+                    "rx_bytes": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "세션 전/후 스냅샷 사이에 이 uid 가 **받은** 바이트. **uid 단위 값이며 패키지 단위가 아니다** — 같은 uid 를 공유하는 다른 패키지(sharedUserId)의 트래픽이 섞이고, 분리할 방법이 없다(맵의 키가 uid 뿐이다). 어느 패키지들이 이 uid 를 쓰는지는 shared_uid_packages 에 있다. **IP 계층의 바이트다** — L2/이더넷 헤더는 빠지고 IP+TCP/UDP 헤더는 들어간다. **loopback 을 포함한 모든 인터페이스의 합계이며 wifi / mobile 로 나뉘지 않는다** (`mAppUidStatsMap` 에 인터페이스 차원이 없다). loopback 통신은 송신과 수신 양쪽에서 두 번 세어진다. 1500바이트를 넘는 큰 패킷(GSO)은 커널이 휴리스틱으로 되계산하므로 고throughput 구간의 값은 정확한 wire 바이트가 아니라 근사치다. 방화벽/데이터세이버가 버린 **송신** 패킷은 세지 않고, 버려진 **수신** 패킷은 센다. VPN(TUN) 이 켜져 있으면 같은 트래픽이 앱 uid 와 VPN 앱 uid 양쪽에서 세어진다. **델타 구간은 세션 구간보다 조금 넓다.** 시작 스냅샷은 `am force-stop` 과 트레이스 시작과 `am start -W` 보다 **앞**에서 찍히므로 앱의 콜드 스타트 준비 구간이 포함되고, 종료 스냅샷은 트레이스를 회수한 **뒤**에 찍히므로 회수에 걸린 시간이 포함된다(트레이스가 클수록 길어진다). **device.state_*.captured_at 은 이 구간의 근사일 뿐 스냅샷을 찍은 시각이 아니다.** 두 값은 각각 start / stop 이 시작할 때 찍은 시계다. 특히 state_after.captured_at 은 **트레이스 회수 전**의 시각이라 종료 스냅샷보다 앞선다(실측: 트레이스 0.3~2.1MB 인 4세션에서 0.5~0.7초, 트레이스가 클수록 커진다). 그래서 이 바이트를 그 두 시각의 차로 나눠 **처리량(bytes/s)을 계산하면 안 된다** — 분자는 회수 구간을 포함하는데 분모는 제외한다. 스냅샷 시각이 필요하면 artifacts.raw 의 raw/netstats_{before,after}.txt 파일 mtime 이 그것에 더 가깝다. **0 은 \"관측된 바이트가 없었다\" 는 뜻이지 \"조회하지 못했다\" 가 아니다** — 조회하지 못한 경우 이 메트릭은 data 가 통째로 null 이고 reason_code 가 그 이유를 말한다."
+                    },
+                    "tx_bytes": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "같은 구간에 이 uid 가 **보낸** 바이트. **uid 단위 값이며 패키지 단위가 아니다** — 같은 uid 를 공유하는 다른 패키지(sharedUserId)의 트래픽이 섞이고, 분리할 방법이 없다(맵의 키가 uid 뿐이다). 어느 패키지들이 이 uid 를 쓰는지는 shared_uid_packages 에 있다. **IP 계층의 바이트다** — L2/이더넷 헤더는 빠지고 IP+TCP/UDP 헤더는 들어간다. **loopback 을 포함한 모든 인터페이스의 합계이며 wifi / mobile 로 나뉘지 않는다** (`mAppUidStatsMap` 에 인터페이스 차원이 없다). loopback 통신은 송신과 수신 양쪽에서 두 번 세어진다. 1500바이트를 넘는 큰 패킷(GSO)은 커널이 휴리스틱으로 되계산하므로 고throughput 구간의 값은 정확한 wire 바이트가 아니라 근사치다. 방화벽/데이터세이버가 버린 **송신** 패킷은 세지 않고, 버려진 **수신** 패킷은 센다. VPN(TUN) 이 켜져 있으면 같은 트래픽이 앱 uid 와 VPN 앱 uid 양쪽에서 세어진다. "
+                    },
+                    "rx_packets": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "같은 구간의 수신 패킷 수. GSO 구간에서는 커널이 되계산한 **추정** 개수다. **uid 단위 값이며 패키지 단위가 아니다** — 같은 uid 를 공유하는 다른 패키지(sharedUserId)의 트래픽이 섞이고, 분리할 방법이 없다(맵의 키가 uid 뿐이다). 어느 패키지들이 이 uid 를 쓰는지는 shared_uid_packages 에 있다. **IP 계층의 바이트다** — L2/이더넷 헤더는 빠지고 IP+TCP/UDP 헤더는 들어간다. **loopback 을 포함한 모든 인터페이스의 합계이며 wifi / mobile 로 나뉘지 않는다** (`mAppUidStatsMap` 에 인터페이스 차원이 없다). loopback 통신은 송신과 수신 양쪽에서 두 번 세어진다. 1500바이트를 넘는 큰 패킷(GSO)은 커널이 휴리스틱으로 되계산하므로 고throughput 구간의 값은 정확한 wire 바이트가 아니라 근사치다. 방화벽/데이터세이버가 버린 **송신** 패킷은 세지 않고, 버려진 **수신** 패킷은 센다. VPN(TUN) 이 켜져 있으면 같은 트래픽이 앱 uid 와 VPN 앱 uid 양쪽에서 세어진다. "
+                    },
+                    "tx_packets": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "같은 구간의 송신 패킷 수. 추정이라는 점까지 위와 같다. **uid 단위 값이며 패키지 단위가 아니다** — 같은 uid 를 공유하는 다른 패키지(sharedUserId)의 트래픽이 섞이고, 분리할 방법이 없다(맵의 키가 uid 뿐이다). 어느 패키지들이 이 uid 를 쓰는지는 shared_uid_packages 에 있다. **IP 계층의 바이트다** — L2/이더넷 헤더는 빠지고 IP+TCP/UDP 헤더는 들어간다. **loopback 을 포함한 모든 인터페이스의 합계이며 wifi / mobile 로 나뉘지 않는다** (`mAppUidStatsMap` 에 인터페이스 차원이 없다). loopback 통신은 송신과 수신 양쪽에서 두 번 세어진다. 1500바이트를 넘는 큰 패킷(GSO)은 커널이 휴리스틱으로 되계산하므로 고throughput 구간의 값은 정확한 wire 바이트가 아니라 근사치다. 방화벽/데이터세이버가 버린 **송신** 패킷은 세지 않고, 버려진 **수신** 패킷은 센다. VPN(TUN) 이 켜져 있으면 같은 트래픽이 앱 uid 와 VPN 앱 uid 양쪽에서 세어진다. "
+                    },
+                    "shared_uid_packages": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "`pm list packages -U` 스냅샷에서 **이 uid 를 쓰는 것으로 관측된 패키지 전부**(시스템 포함). **이 배열의 길이가 위 숫자들의 귀속 범위다.** 1개 → 위 숫자는 그 패키지만의 것이다 (그때만 이 메트릭의 status 가 collected 다). 2개 이상 → 그 패키지들의 **합계**이고 대상 앱 몫만 떼어 낼 수 없다 (mAppUidStatsMap 의 키가 uid 뿐이다). 그때 status 는 partial 이고 reason_code 는 uid_shared_by_multiple_packages 다. 실측 근거: 실기기(sdk 36)에서 uid 1000 을 **86개** 패키지가 공유했다. **null 과 [] 는 다른 사실이다.** null = **열거하지 못했다** — 스냅샷이 없거나, 이 uid 가 속한 안드로이드 user 를 그 목록이 한 줄도 열거하지 않았다. 후자는 삼성 시큐어 폴더(실측 user 150) 같은 경우로, `pm list packages -U` 가 그 user 에 대해 SecurityException 을 stderr 로 내고 **종료 코드 0** 으로 끝나 목록이 조용히 불완전해진다. 그런 uid 의 패키지명을 이 도구는 **알 수 없다**. [] = **열거했는데 이 uid 를 쓰는 패키지가 목록에 없었다** (대상 패키지 자신도 없다). 어느 쪽이든 status 는 partial 이고 reason_code 가 어느 갈래인지 말한다 (uid_packages_not_enumerable / uid_not_in_package_list). **단, reason_code 자리는 하나뿐이라 netstats_uid_duplicated 가 겹치면 그쪽이 먼저 실린다** — 귀속 범위를 판단할 때는 reason_code 가 아니라 **이 배열**을 보라. 부계정(secondary user)의 같은 앱은 다른 uid(user*100000 + appId)를 받으며 여기 포함되지 않는다."
+                    }
+                  },
+                  "required": [
+                    "uid",
+                    "rx_bytes",
+                    "tx_bytes",
+                    "rx_packets",
+                    "tx_packets",
+                    "shared_uid_packages"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "source",
+            "reason_code",
+            "reason",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "frame"
+      ],
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "collected",
+              "partial",
+              "unsupported",
+              "failed",
+              "skipped"
+            ],
+            "description": "이 메트릭의 수집 상태.\n- collected: 값이 전부 나왔다. data 는 non-null 이고 reason_code 는 null 이다.\n- partial: **두 가지를 겸한다.** (a) 값은 나왔지만 일부가 빠졌다(예: CPU 사용률은 있고 주파수가 없다) — 이때 data 는 non-null 이다. (b) **값이 아예 나오지 않았다** — 이때 `data` 는 **null** 이다. 둘 다 reason_code 가 어느 쪽인지 말한다. data 가 null 인 partial 을 내는 reason_code 는 이 버전에서 render_process_not_found, no_frames, frame_duration_out_of_range, no_cpu_samples, insufficient_samples, cpu_counters_did_not_advance, cpu_counters_not_monotonic, process_not_in_trace, no_rss_samples, no_log_entries, launch_time_unreported, launch_wait_timed_out, snapshot_unavailable, snapshot_unparsable, no_thermal_zones, thermal_hal_not_ready, app_uid_unknown, uid_not_in_netstats, counter_went_backwards 이다. **이 목록은 참고용이고 계약이 아니다** — 새 collector 가 생기면 늘어난다. 판정은 반드시 `data !== null`(또는 `status === 'collected'`)로 하고 이 목록으로 하지 말 것. 스냅샷 계열(snapshot_unavailable / snapshot_unparsable)이 특히 흔하다: 이 도구가 스냅샷을 찍기 전에 만들어진 옛 run 을 재산출하면 thermal / network 가 반드시 그 길을 지난다.\n**위 목록의 코드 셋은 양쪽에 걸친다** — 같은 코드가 메트릭에 따라 data 를 내기도 하고 안 내기도 한다: `snapshot_unavailable`(network 는 data null / thermal 은 non-null), `process_not_in_trace`(memory 는 null / cpu·log 는 기기 전역 값을 낸 채 app 만 null), `counter_went_backwards`(network 는 null / cpu 는 app 만 null). **이 코드들로 data 유무를 추론하지 말 것.** 목록을 계약으로 만들지 않은 이유가 이런 것이며, 이 코드들이 그 산 증거다.\n- unsupported: 이 기기가 이 메트릭을 낼 수 없다 (sdk 하한 미달, 데이터소스 미등록). data 는 null 이다.\n- failed: 예외 상황 전용이다 — 트레이스 원본이 없거나(trace_missing) trace_processor 쿼리가 예외로 터진 경우(query_failed). data 는 null 이다.\n- skipped: 수집을 시도조차 하지 않았다 (`--launch` 없이 시작한 세션의 startup). data 는 null 이다.\n**`failed` 만 걸러서는 수집 실패를 잡지 못한다.** 값이 있어야 하는 소비자는 `status === 'collected'` 이거나 `data !== null` 인지를 보라."
+          },
+          "source": {
+            "type": "string"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "sdk_too_low",
+                  "data_source_not_registered",
+                  "trace_missing",
+                  "render_process_not_found",
+                  "no_frames",
+                  "frame_duration_out_of_range",
+                  "query_failed",
+                  "launch_not_requested",
+                  "launch_time_unreported",
+                  "launch_wait_timed_out",
+                  "no_cpu_samples",
+                  "insufficient_samples",
+                  "cpu_counters_did_not_advance",
+                  "cpu_counters_not_monotonic",
+                  "cpu_freq_unavailable",
+                  "process_not_in_trace",
+                  "no_rss_samples",
+                  "no_app_cpu_samples",
+                  "process_name_stale_in_trace",
+                  "no_meminfo_samples",
+                  "no_log_entries",
+                  "log_events_truncated",
+                  "snapshot_unavailable",
+                  "snapshot_unparsable",
+                  "no_thermal_zones",
+                  "thermal_hal_not_ready",
+                  "thermal_zones_changed",
+                  "app_uid_unknown",
+                  "uid_not_in_netstats",
+                  "counter_went_backwards",
+                  "netstats_uid_duplicated",
+                  "uid_shared_by_multiple_packages",
+                  "uid_packages_not_enumerable",
+                  "uid_not_in_package_list"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "기계가 매칭하는 안정적인 사유 키. 사람용 문장은 reason 에 있다."
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "사람이 읽는 사유. 문구는 다듬힐 수 있으니 매칭에 쓰지 말 것."
+          },
+          "data": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "source",
+          "reason_code",
+          "reason",
+          "data"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "measurement_overhead": {
+      "type": "object",
+      "properties": {
+        "tracing_processes_cpu_time_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "traced / traced_probes 가 세션 구간에서 쓴 user+kernel CPU 시간의 합(ms). linux.process_stats 의 runtime.user_ns / runtime.kernel_ns 차이에서 나온다. 커널이 clock tick 단위로만 보고하므로 해상도는 10ms 다 — 짧은 세션에서 0 이 나오는 것은 \"측정 못 함\"이 아니라 \"10ms 미만\"이라는 뜻이다. perfetto CLI 프로세스도 세는 대상에 들어 있지만, 실측한 트레이스에서는 --detach 직후 종료해 process_stats 스캔에 잡히지 않았다 — 보장이 아니라 관측이며, 잡히면 합계에 들어간다. **이 값은 트레이싱의 총비용이 아니라 체계적인 하한이다.** 필드명대로 트레이싱 \"프로세스들\" 이 쓴 시간만 담는다 — 커널이 ftrace 이벤트를 링버퍼에 기록하는 비용은 인터럽트당한 프로세스(= 대상 앱일 수 있다)에 청구되므로 여기 들어오지 않는다. 켜는 ftrace 이벤트를 줄이면 그 몫도 줄지만 0 이 되지는 않는다. null 은 트레이스에 해당 카운터가 없었다는 뜻이다(record_process_runtime 이 꺼진 옛 캡처)."
+        },
+        "tracing_processes_cpu_share_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "위 CPU 시간을 같은 구간의 기기 전체 CPU 시간(모든 코어 합)으로 나눈 백분율. linux.sys_stats 의 cpu.times.* 가 없으면 분모를 알 수 없어 null 이다."
+        },
+        "tracing_processes_peak_rss_kb": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "트레이싱 프로세스들의 mem.rss 최댓값을 **프로세스별로 구해 더한 값**(kB). process_stats 표본의 타임스탬프가 프로세스마다 정확히 같지 않아 \"동시 최대\"를 정확히 낼 수 없으므로, 이 값은 진짜 동시 최대의 상계다. 과소평가하지 않는 쪽을 골랐다. 다만 각 프로세스의 최댓값 자체는 **1초 주기 표본의 최댓값**이다(proc_stats_poll_ms: 1000) — 표본과 표본 사이에 스쳐 간 순간 최고점은 이 값에 나타나지 않으므로, 이 상계가 모든 순간을 덮는다는 뜻은 아니다."
+        },
+        "adb_commands_during_session": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "**측정 창이 열린 동안** perftracker 를 통해 시도되어 차단된 adb 호출 수. 0 이 아니면 그 세션 데이터는 오염된 것이다. 이름과 달리 \"세션 전체\" 가 아니라 창이 열린 구간만 세며, 세는 대상도 둘로 갈린다:\n(1) perftracker 자신: `--launch` 세션에서는 트레이스가 시작된 **뒤** 측정 창이 열리기 **전에** perftracker 가 `am start -W` 와 `pidof` 를 기기로 보낸다(한 번의 adb 호출로 합쳐 보낸다). 그 호출은 창 밖이므로 **이 카운터에 잡히지 않는다** — 앱을 콜드로 띄우는 것이 그 세션의 목적이므로 의도된 동작이지만, 트레이스 안에 그 두 명령의 흔적이 남는다는 사실은 여기 적혀 있어야 한다. 창이 열린 뒤로는 perftracker 가 기기에 아무것도 보내지 않는다.\n(2) 다른 프로세스: 0 은 perftracker 가 아무것도 보내지 않았다는 뜻이지 아무도 기기를 건드리지 않았다는 뜻이 아니다. 다른 터미널에서 직접 실행한 adb 는 이 도구를 거치지 않으므로 잡히지 않으며, 도구가 그것을 관측하려면 세션 중에 기기에 물어야 하고 그 행위 자체가 이 도구가 금지하는 것이다.\n(3) **아직 stop 하지 않은 세션**(session.state 가 running): 이 카운터의 정본은 stop 이 남기는 값인데 그것이 아직 없다. 그래서 이 값은 활성 세션 포인터에 그때까지 쌓인 누적치이며, **읽은 시점까지의 사실이지 최종값이 아니다 — 세션이 계속 도는 동안 더 늘 수 있다.** stop 한 뒤 다시 extract 하면 최종값이 나온다. 포인터마저 없으면(--force 로 버려진 세션, 포인터를 만든 홈이 아닌 곳에서 연 run 디렉토리 등) 셀 방법이 없어 **null** 이다 — 기기에 물어보는 길은 없다. **null 은 0 이 아니다**: 0 은 \"세어 봤더니 없었다\", null 은 \"셀 수 없었다\" 이다. null 을 0 으로 접어 읽으면 오염됐을지 모르는 세션이 청정으로 둔갑한다. state 가 running 인 결과에는 같은 사실을 말하는 session_still_running 경고도 함께 실린다."
+        },
+        "trace_buffer_overrun": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "트레이스 버퍼가 넘쳐 데이터가 잘렸는지. trace_processor 의 stats 에서 traced_buf* 의 error/data_loss 항목을 세어 판단한다. true 면 이 결과의 모든 숫자가 그만큼 적다 — 특히 metrics.log 의 개수가 그렇다.\n**null 은 확인하지 못했다는 뜻이다** — false 가 아니다. 두 경로가 있다: (1) 트레이스 원본이 이 run 에 없다(아직 stop 하지 않은 세션, 또는 트레이스를 잃은 aborted 세션 — artifacts.trace 가 null 이다), (2) stats 쿼리 자체가 실패했다. null 을 false 로 접어 읽으면 확인한 적 없는 세션이 \"버퍼 정상\" 으로 둔갑한다."
+        }
+      },
+      "required": [
+        "tracing_processes_cpu_time_ms",
+        "tracing_processes_cpu_share_pct",
+        "tracing_processes_peak_rss_kb",
+        "adb_commands_during_session",
+        "trace_buffer_overrun"
+      ],
+      "additionalProperties": false
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "metric": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "metric",
+          "name",
+          "value",
+          "unit",
+          "source",
+          "url"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "properties": {
+        "trace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "raw": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "trace",
+        "raw"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "tool",
+    "session",
+    "device",
+    "target_app",
+    "metrics",
+    "measurement_overhead",
+    "references",
+    "warnings",
+    "artifacts"
+  ],
+  "additionalProperties": false
+}
