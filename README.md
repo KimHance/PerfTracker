@@ -328,7 +328,7 @@ npm run gui   # 빌드 · 서버 · 브라우저까지 이 한 줄이 다 합니
 | --- | --- | --- |
 | `perftracker doctor` | 환경과 기기 지원 여부를 점검 | 필요 |
 | `perftracker devices` | 연결된 기기와 스펙 요약 | 필요 |
-| `perftracker apps` | 설치된 서드파티 앱을 런처 이름으로 | 필요 |
+| `perftracker apps` | **열 수 있는** 앱을 런처 이름으로 (런처에 아이콘이 뜨는 것) | 필요 |
 | `perftracker schema` | `result.json` 의 JSON Schema 를 출력 | 불필요 |
 | `perftracker start` | 측정 시작 | 필요 |
 | `perftracker mark <라벨>` | 측정 중인 세션에 마킹 | **접촉 안 함** |

@@ -72,7 +72,7 @@ export function buildProgram(): Command {
 
   program
     .command('apps')
-    .description('설치된 서드파티 앱을 런처 이름으로 보여준다')
+    .description('사람이 열 수 있는 앱을 런처 이름으로 보여준다')
     .option('-d, --device <serial>', '대상 기기 serial')
     .action(async (opts: { device?: string }) => {
       const ctx = await createContext({ ...program.opts(), ...opts })

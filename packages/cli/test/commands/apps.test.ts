@@ -31,6 +31,6 @@ describe('formatApps', () => {
   })
 
   it('앱이 없으면 안내 문구를 낸다', () => {
-    expect(formatApps([])).toContain('설치된 서드파티 앱이 없습니다')
+    expect(formatApps([])).toContain('열 수 있는 앱이 없습니다')
   })
 })

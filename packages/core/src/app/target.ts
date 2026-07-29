@@ -19,7 +19,8 @@ import { detectForegroundPackage, matchApp } from './select.js'
  * 출처이기 때문이다. 서드파티 목록(`-3`)으로 uid 를 해석하면 시스템 앱을 대상으로 삼은
  * 세션에서 도구가 "이 앱의 uid 를 모른다" 고 말하게 되는데, 그것은 거짓이다 — 기기는
  * 그 답을 주고 있고 이 도구는 매 세션 그 목록을 통째로 저장까지 한다.
- * 라벨 검색(`matchApp`)만 서드파티 목록을 쓴다: 632개 패키지의 라벨을 해석할 수는 없다.
+ * 라벨 검색(`matchApp`)만 **열 수 있는 앱** 목록을 쓴다 (`listLaunchableApps`): 562개
+ * 패키지의 라벨을 해석할 수는 없고, 사람이 이름으로 부르는 앱은 런처에 뜨는 것들이다.
  */
 export async function resolveTargetApp(ctx: AdbContext, query?: string): Promise<TargetApp> {
   const installed = await listAllPackages(ctx.adb)
