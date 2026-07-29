@@ -25,10 +25,14 @@
 - 계층 규율 · 제약이 바뀜 → 해당 모듈 `AGENTS.md` 의 제약 절
 - 새 모듈/서브디렉토리 추가 → 이 파일의 모듈 맵 + 새 `AGENTS.md`
 - 지표 · 스키마 · 수집 경로 변경 → `README.md`(정본) + `docs/STATUS.md`
+- **명령 · 옵션 추가/이름 변경 → `README.md` 의 「명령 전체」 + `packages/cli/AGENTS.md`**
 - GUI 화면 · 카피 · 토큰 변경 → `docs/design/gui/HANDOFF.md` 와 어긋나지 않는지 확인
 
-문서가 코드에 대해 **숫자로** 말하면 그 숫자를 코드와 대조하는 테스트를 같이 넣는다
-(`packages/core/test/schema/readme.test.ts` 가 그 일을 한다).
+문서가 코드에 대해 **숫자로** 말하거나 **목록으로** 말하면 그것을 코드와 대조하는 테스트를
+같이 넣는다 — `packages/core/test/schema/readme.test.ts`(버킷·지표 개수)와
+`packages/cli/test/readme.test.ts`(등록된 명령이 전부 README 에 있는가)가 그 일을 한다.
+**그 테스트는 반드시 깨 본다.** 통과하는 테스트는 문서가 맞다는 증거가 아니다 —
+틀린 문서와 틀린 테스트는 사이좋게 통과한다.
 
 ## 모듈 맵
 

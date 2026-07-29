@@ -319,6 +319,65 @@ npm run gui   # 빌드 · 서버 · 브라우저까지 이 한 줄이 다 합니
 
 ---
 
+## 명령 전체
+
+위 흐름에 나오지 않는 것까지 포함한 목록입니다. **실제로 측정하는 것은 `start` 와 `stop`
+둘뿐이고** 나머지는 점검·조회·마킹·기록 관리입니다.
+
+| 명령 | 무엇 | 기기 |
+| --- | --- | --- |
+| `perftracker doctor` | 환경과 기기 지원 여부를 점검 | 필요 |
+| `perftracker devices` | 연결된 기기와 스펙 요약 | 필요 |
+| `perftracker apps` | 설치된 서드파티 앱을 런처 이름으로 | 필요 |
+| `perftracker schema` | `result.json` 의 JSON Schema 를 출력 | 불필요 |
+| `perftracker start` | 측정 시작 | 필요 |
+| `perftracker mark <라벨>` | 측정 중인 세션에 마킹 | **접촉 안 함** |
+| `perftracker status` | 진행 중인 세션 | **접촉 안 함** |
+| `perftracker stop` | 종료 · 트레이스 회수 · `result.json` 생성 | 필요 |
+| `perftracker extract <run-dir>` | 원본을 다시 파싱해 `result.json` 재생성 | 불필요 |
+| `perftracker runs list` | 기록 목록 | 불필요 |
+| `perftracker runs rename <id> <이름>` | 기록 이름 변경 (디렉토리 경로는 그대로) | 불필요 |
+| `perftracker runs rm <id>` | 기록 삭제 (run 디렉토리째) | 불필요 |
+| `perftracker gui` | 로컬 웹 GUI (Ctrl-C 까지 붙잡습니다) | 필요 |
+
+「접촉 안 함」은 기기가 연결돼 있어도 adb 를 **보내지 않는다**는 뜻입니다. 그래서 이 셋은
+측정 중에 불러도 안전합니다 — 마킹이 측정 결과를 바꾸지 않는 이유가 이것입니다.
+
+### 기록 관리 (`runs`)
+
+측정이 끝난 뒤의 파일 정리입니다. **GUI 의 기록 목록과 같은 일을 합니다** — 한쪽에만 있는
+기능을 만들지 않는 것이 이 도구의 규칙이고, 판정과 파일 조작은 양쪽 다 core 의 같은 코드를
+부릅니다.
+
+```bash
+npx perftracker runs                          # 목록 (list 가 기본)
+npx perftracker runs rename a3f9c1 "홈 스크롤 2차"
+npx perftracker runs rm a3f9c1                # 되돌릴 수 없습니다
+npx perftracker runs rm --all --yes           # 전부 (--yes 없으면 거부합니다)
+```
+
+`rm` 은 **기록이 아닌 폴더도 지웁니다.** `start` 가 죽어 `session.json` 조차 없는 폴더는
+목록에 안 뜨는데, 그런 것까지 지워야 "전부 지웠다" 가 사실이 됩니다. 다만 **측정 중인 세션의
+폴더는 남깁니다** — 그 자리는 `stop` 이 트레이스를 회수해 쓸 곳입니다.
+
+`--all` 이 `--yes` 를 요구하는 것은 되묻지 않기 위해서입니다. CI 에서 입력을 기다리면 빌드가
+타임아웃까지 매달립니다. id 를 직접 적은 삭제는 그 자체가 의사 표시라 묻지 않습니다.
+
+### 조회 결과를 JSON 으로 (`--json`)
+
+`doctor` · `devices` · `apps` · `status` · `runs` 는 `--json` 을 받습니다.
+
+```bash
+npx perftracker doctor --json     # 이 기기가 무엇을 잴 수 있는지 기계가 읽는 형태로
+npx perftracker devices --json
+```
+
+**사람이 읽는 문장이 기본이고 이것은 추가 모드입니다** — 사람과 기계(CI · LLM)가 둘 다
+소비자입니다. `start` / `stop` / `mark` 에는 없습니다: 그 셋의 출력은 이미 한 줄(경로 하나)이고,
+시작 전에 알아야 할 것은 `doctor --json` 이 전부 줍니다.
+
+---
+
 ## `result.json` 읽는 법
 
 전체 스키마는 언제든 꺼낼 수 있습니다. CI 검증이나 LLM 에게 계약을 알려줄 때 그대로 쓰세요.

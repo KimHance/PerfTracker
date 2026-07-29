@@ -7,10 +7,16 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
 
 | 경로 | 무엇 |
 | --- | --- |
-| `src/index.ts` | 명령 11개 등록 (`runs` 는 하위 셋) · 최상위 오류 처리 |
+| `src/program.ts` | 명령 11개 등록 (`runs` 는 하위 셋). **실행하지 않는다** |
+| `src/index.ts` | bin 진입점 — `parseAsync` 와 최상위 오류 처리뿐 |
 | `src/context.ts` | `--adb` / `--device` 를 core 의 컨텍스트로 |
 | `src/commands/` | 명령 하나당 파일 하나 |
+| `test/readme.test.ts` | 등록된 명령이 전부 README 에 있는지 대조 |
 | `test/on-device/` | **실기기가 있어야 도는 스펙.** `npm run test:device` 로만 실행 |
+
+**등록과 실행을 가른 이유는 테스트다.** 진입점이 곧 실행이면 import 하는 순간 `process.argv`
+를 파싱해 버려서, 명령 목록을 확인하려면 소스를 정규식으로 긁는 수밖에 없다. `program.ts` 를
+따로 두면 테스트가 **commander 가 실제로 등록한 트리**를 읽는다.
 
 명령: `doctor` `devices` `apps` `schema` · `start` `mark` `status` `stop` `extract` ·
 `runs`(`list`/`rename`/`rm`) · `gui`.
@@ -18,6 +24,10 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
 
 **기기에 접촉하지 않는 명령**은 `createContext` 를 부르지 않는다 — `mark` 와 `runs` 가 그렇다.
 그것이 규칙 1 을 지키는 방식이다: 조심해서 안 부르는 것이 아니라 **부를 수단이 없는 것**.
+
+**명령을 늘리면 README 의 「명령 전체」도 같은 커밋에서 고친다.** `runs` 셋이 한동안 문서에
+없었다 — 틀린 것이 아니라 빠진 것이라 읽는 사람은 알 길이 없었다. `test/readme.test.ts` 가
+이제 그것을 막는다.
 
 ## 제약
 
