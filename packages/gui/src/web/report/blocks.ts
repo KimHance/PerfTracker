@@ -326,7 +326,7 @@ export function buildDistribution(
 
 export interface BarsVm {
   none?: false
-  rows: { label: string; value: string; pct: number }[]
+  rows: { label: string; value: string; pct: number; note: string }[]
 }
 
 export function buildBars(b: BarsBlock, res: unknown): BarsVm | NoneVm {
@@ -348,10 +348,13 @@ export function buildBars(b: BarsBlock, res: unknown): BarsVm | NoneVm {
       const v = r[b.valueField]
       const share =
         denom !== null && typeof v === 'number' ? ` · ${nf((v / denom) * 100, 1)}%` : ''
+      const label = `${b.labelPrefix}${Array.isArray(lv) ? `CPU ${lv[0]}–${lv[lv.length - 1]}` : String(lv)}`
       return {
-        label: `${b.labelPrefix}${Array.isArray(lv) ? `CPU ${lv[0]}–${lv[lv.length - 1]}` : String(lv)}`,
+        label,
         value: `${fmtValue(v === undefined ? MISSING : v, b.fmt)}${share}`,
         pct: typeof v === 'number' && max > 0 ? Math.max(0, Math.min(100, (v / max) * 100)) : 0,
+        // 모르는 라벨은 설명 없이 개수만 낸다 — 기기가 새 이름을 내도 화면은 그대로 돈다.
+        note: b.labelNotes?.[String(lv)] ?? '',
       }
     }),
   }

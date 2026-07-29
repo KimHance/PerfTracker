@@ -110,6 +110,15 @@ export interface BarsBlock extends BlockBase {
   scaleMax: number | null
   /** 있으면 이 경로의 값을 분모로 퍼센트를 함께 적는다. 없으면 개수만 낸다. */
   percentOfPath?: string
+  /**
+   * 라벨별 한 줄 설명. **이 값이 무엇이고 어느 쪽이 나은가**를 적는다.
+   *
+   * 규칙 2 를 깨지 않는다 — 깨지는 것은 *이 세션의 숫자*에 점수를 매기거나 기준치와
+   * 비교할 때다. 여기 적는 것은 지표 자체의 뜻과 방향이고, 그것을 안 적으면 읽는 쪽이
+   * `Buffer Stuffing` 1,556장을 보고 `Dropped Frame` 101장보다 심각하다고 읽는다.
+   * 없는 라벨은 설명 없이 개수만 나온다 — 기기가 새 이름을 내도 화면은 그대로 돈다.
+   */
+  labelNotes?: Record<string, string>
 }
 
 export interface DeltaBlock extends BlockBase {
@@ -221,7 +230,7 @@ export const MANIFEST: Block[] = [
   {
     // 기기가 프레임마다 붙여 둔 것을 센 것이지 이 화면의 판정이 아니다. 그 사실은 색으로만
     // 말한다 — 카드마다 출처를 문장으로 적으면 화면이 설명서가 된다. 근거는 스키마에 있다.
-    kind: 'pairs', section: 'render', title: '프레임 수', metric: 'frame', span: 12,
+    kind: 'pairs', section: 'render', title: '프레임 수', metric: 'frame', span: 5,
     unit: '', tone: 'alt', path: 'metrics.frame.data.jank',
     keys: [
       { p: 'total_frames', l: '전체', f: 'int' },
@@ -229,6 +238,35 @@ export const MANIFEST: Block[] = [
       { p: 'late_frames', l: '마감 넘김', f: 'int' },
       { p: 'dropped_frames', l: '드랍', f: 'int', pct: 'total_frames' },
     ],
+  },
+  {
+    kind: 'bars', section: 'render', title: 'jank_type', metric: 'frame', span: 7,
+    unit: '', tone: 'alt',
+    path: 'metrics.frame.data.jank.by_type',
+    labelField: 'type', labelPrefix: '', valueField: 'count', fmt: 'int', scaleMax: null,
+    percentOfPath: 'metrics.frame.data.jank.total_frames',
+    // 기기가 쓰는 이름 그대로가 키다. 번역하지 않는다 — 트레이스를 직접 열어 본 사람이
+    // 같은 단어를 찾을 수 있어야 한다.
+    labelNotes: {
+      'Dropped Frame':
+        '만들어 놓고 화면에 못 나간 프레임. **적을수록 좋습니다** — 사람이 끊김으로 보는 것이 이것입니다.',
+      'App Deadline Missed':
+        '앱이 마감 안에 프레임을 못 냈습니다. **적을수록 좋고**, 원인이 앱 쪽(그리기·메인 스레드)에 있다는 신호입니다.',
+      'Buffer Stuffing':
+        '앱이 화면보다 빨리 그려 대기열이 쌓인 상태. 프레임 자체는 제때 나가므로 **많다고 곧 끊김은 아니지만** 입력 지연이 늘어납니다.',
+      'SurfaceFlinger Stuffing':
+        '합성 쪽 대기열이 쌓인 상태. 앱 하나가 아니라 화면 전체 합성 사정입니다.',
+      'SurfaceFlinger CPU Deadline Missed':
+        '합성기가 CPU 작업 마감을 놓쳤습니다. 앱 밖 원인이라 앱 코드로 줄이기 어렵습니다.',
+      'SurfaceFlinger GPU Deadline Missed':
+        '합성기가 GPU 작업 마감을 놓쳤습니다. 앱 밖 원인입니다.',
+      'Display HAL':
+        '디스플레이 드라이버 단계에서 늦었습니다. 앱이 어쩌지 못하는 자리입니다.',
+      'Unknown Jank':
+        '기기가 원인을 특정하지 못했습니다. 늦었다는 사실만 남습니다.',
+      'Prediction Error':
+        '기기가 예측한 프레임 시간과 실제가 어긋났습니다. 그 자체가 끊김은 아닙니다.',
+    },
   },
 
   // ── CPU: 시계열은 전부 선 ────────────────────────────────────

@@ -229,16 +229,31 @@ export function useWidth(): [number, (el: HTMLDivElement | null) => void] {
 
 /* ── 나머지 ─────────────────────────────────────────────────── */
 
+/** `**…**` 만 굵게. 마크다운을 들이지 않는다 — 이 화면이 쓰는 강조는 이것 하나다. */
+export function emphasize(text: string): React.ReactNode[] {
+  return text.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
+    part.startsWith('**') && part.endsWith('**') ? (
+      <b key={i}>{part.slice(2, -2)}</b>
+    ) : (
+      <span key={i}>{part}</span>
+    ),
+  )
+}
+
 export function BarsBody({ vm }: { vm: BarsVm }) {
+  const noted = vm.rows.some((r) => r.note !== '')
   return (
-    <div className="rp-bars">
+    <div className={`rp-bars${noted ? ' rp-bars-noted' : ''}`}>
       {vm.rows.map((r, i) => (
-        <div className="rp-bar-row" key={i}>
-          <span className="rp-bar-label">{r.label}</span>
-          <span className="rp-bar-track">
-            <i style={{ width: `${r.pct}%` }} />
-          </span>
-          <span className="rp-bar-value num">{r.value}</span>
+        <div className="rp-bar-item" key={i}>
+          <div className="rp-bar-row">
+            <span className="rp-bar-label">{r.label}</span>
+            <span className="rp-bar-track">
+              <i style={{ width: `${r.pct}%` }} />
+            </span>
+            <span className="rp-bar-value num">{r.value}</span>
+          </div>
+          {r.note !== '' && <p className="rp-bar-note">{emphasize(r.note)}</p>}
         </div>
       ))}
     </div>

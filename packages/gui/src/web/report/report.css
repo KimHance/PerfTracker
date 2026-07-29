@@ -219,6 +219,16 @@
 
 /* ── bars ──────────────────────────────────────────────────── */
 .rp-bars { display: grid; gap: 6px; }
+.rp-bars-noted { gap: var(--space-3); }
+.rp-bar-item { display: flex; flex-direction: column; gap: 3px; }
+/* 설명은 막대 아래, 라벨 열에 맞춰 들여쓴다 — 어느 항목의 말인지 눈으로 붙어야 한다. */
+.rp-bar-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--color-neutral-600);
+}
+.rp-bar-note b { color: var(--color-neutral-800); font-weight: 600; }
 .rp-bar-row {
   display: grid; grid-template-columns: 64px minmax(0, 1fr) 66px;
   align-items: center; gap: var(--space-2); font-size: 11.5px;

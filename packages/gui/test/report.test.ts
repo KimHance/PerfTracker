@@ -392,8 +392,35 @@ describe('jank_type', () => {
     expect(rows.find((r) => r.label === '드랍')!.value).toBe('5')
   })
 
+  it('항목마다 뜻과 방향을 적는다 — 개수만 보면 무엇이 문제인지 못 읽는다', () => {
+    const bars = block<BarsBlock>('jank_type')
+    const doc = {
+      metrics: {
+        frame: {
+          data: {
+            jank: {
+              total_frames: 1000,
+              by_type: [
+                { type: 'Buffer Stuffing', count: 800 },
+                { type: 'Dropped Frame', count: 101 },
+                { type: '기기가 새로 낸 이름', count: 3 },
+              ],
+            },
+          },
+        },
+      },
+    }
+    const rows = (buildBars(bars, doc) as { rows: { label: string; value: string; note: string }[] }).rows
+    expect(rows[0]!.note).toContain('많다고 곧 끊김은 아니지만')
+    expect(rows[1]!.note).toContain('적을수록 좋습니다')
+    // 모르는 라벨은 설명 없이 개수만 — 기기가 새 이름을 내도 화면은 그대로 돈다.
+    expect(rows[2]!.note).toBe('')
+    expect(rows[2]!.value).toBe('3 · 0.3%')
+  })
+
   it('두 번째 계열색을 쓴다 — 다른 카드와 구분된다', () => {
     expect(card.tone).toBe('alt')
+    expect(block<BarsBlock>('jank_type').tone).toBe('alt')
     // 색이 판정으로 읽히지 않게, 이 화면에서 tone 을 쓰는 곳은 frame 지표뿐이어야 한다.
     expect(MANIFEST.filter((b) => b.tone === 'alt').every((b) => b.metric === 'frame')).toBe(true)
   })
