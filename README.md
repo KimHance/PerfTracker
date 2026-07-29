@@ -535,6 +535,7 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
     "total_frames": 1938,
     "janky_frames": 1698,
     "late_frames": 330,
+    "dropped_frames": 101,
     "by_type": [
       { "type": "Buffer Stuffing", "count": 1556 },
       { "type": "App Deadline Missed", "count": 188 },
@@ -555,6 +556,10 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 - **`jank` 는 기기가 프레임마다 붙여 둔 꼬리표를 센 것입니다 — 이 도구의 판정이 아닙니다.**
   SurfaceFlinger 가 `actual_frame_timeline_slice.jank_type` 에 직접 적고, 우리는 개수만 냅니다.
   `dur` 와 같은 테이블에서 나오므로 기기에 더 물어보지 않습니다.
+  - **`dropped_frames` 부터 보세요.** 화면은 일정한 주기로 갱신되고(60Hz 면 16.67ms), 그때
+    새 프레임이 없으면 기기는 직전 프레임을 한 번 더 띄웁니다 — 사람이 끊김으로 보는 것이 그
+    순간입니다. 평균이 빨라도 드랍이 몰려 있으면 끊겨 보입니다
+    ([Android frame pacing](https://developer.android.com/games/sdk/frame-pacing)).
   - `by_type` 의 `type` 은 SurfaceFlinger 원문입니다 (`Dropped Frame` · `App Deadline Missed` ·
     `Buffer Stuffing` · `SurfaceFlinger Stuffing` · `Display HAL` 등).
   - **합이 `janky_frames` 를 넘을 수 있습니다.** 한 프레임에 꼬리표가 여러 개 붙으면

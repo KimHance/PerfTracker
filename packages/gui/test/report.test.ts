@@ -366,60 +366,42 @@ describe('README 가 말하는 숫자', () => {
   })
 })
 
-describe('프레임 꼬리표 — 기기가 붙인 것', () => {
-  const block = MANIFEST.find((b) => b.title === '프레임 꼬리표') as BarsBlock
+describe('jank_type', () => {
+  const card = block<PairsBlock>('프레임 수')
 
-  it('개수와 퍼센트를 함께 낸다', () => {
+  it('드랍은 개수와 퍼센트를 함께 낸다', () => {
     const doc = {
       metrics: {
         frame: {
-          data: {
-            jank: {
-              total_frames: 1000,
-              by_type: [
-                { type: 'Buffer Stuffing', count: 800 },
-                { type: 'Dropped Frame', count: 101 },
-              ],
-            },
-          },
+          data: { jank: { total_frames: 1938, janky_frames: 1698, late_frames: 330, dropped_frames: 101 } },
         },
       },
     }
-    const vm = buildBars(block, doc) as { rows: { label: string; value: string }[] }
-    expect(vm.rows[0]!.value).toBe('800 · 80.0%')
-    expect(vm.rows[1]!.value).toBe('101 · 10.1%')
+    const rows = (buildPairs(card, doc) as { rows: { label: string; value: string }[] }).rows
+    expect(rows.find((r) => r.label === '드랍')!.value).toBe('101 · 5.2%')
+    // pct 가 없는 행에는 비율을 붙이지 않는다 — 안 시킨 것을 하지 않는다.
+    expect(rows.find((r) => r.label === '전체')!.value).toBe('1,938')
   })
 
-  it('분모는 전체 프레임이다 — 막대의 합이 아니다', () => {
-    // 꼬리표는 겹치므로 합(1,100)으로 나누면 각 비율이 실제보다 작아진다.
-    const doc = {
-      metrics: {
-        frame: {
-          data: {
-            jank: {
-              total_frames: 1000,
-              by_type: [
-                { type: 'A', count: 600 },
-                { type: 'B', count: 500 },
-              ],
-            },
-          },
-        },
-      },
-    }
-    const vm = buildBars(block, doc) as { rows: { value: string }[] }
-    expect(vm.rows[0]!.value).toBe('600 · 60.0%')
+  it('분모가 없거나 0 이면 비율을 지어내지 않는다', () => {
+    const rows = (
+      buildPairs(card, { metrics: { frame: { data: { jank: { dropped_frames: 5 } } } } }) as {
+        rows: { label: string; value: string }[]
+      }
+    ).rows
+    expect(rows.find((r) => r.label === '드랍')!.value).toBe('5')
   })
 
-  it('분모가 없으면 퍼센트를 지어내지 않는다', () => {
-    const doc = { metrics: { frame: { data: { jank: { by_type: [{ type: 'A', count: 5 }] } } } } }
-    const vm = buildBars(block, doc) as { rows: { value: string }[] }
-    expect(vm.rows[0]!.value).toBe('5')
-  })
-
-  it('꼬리표 카드는 두 번째 계열색을 쓴다 — 다른 카드와 구분된다', () => {
-    expect(block.tone).toBe('alt')
+  it('두 번째 계열색을 쓴다 — 다른 카드와 구분된다', () => {
+    expect(card.tone).toBe('alt')
     // 색이 판정으로 읽히지 않게, 이 화면에서 tone 을 쓰는 곳은 frame 지표뿐이어야 한다.
     expect(MANIFEST.filter((b) => b.tone === 'alt').every((b) => b.metric === 'frame')).toBe(true)
+  })
+
+  it('렌더 섹션은 읽는 법을 한 문단으로 말한다', () => {
+    const note = SECTIONS.find((x) => x.id === 'render')!.note
+    expect(note).toBeDefined()
+    // 두괄식 — 첫 문장이 무엇부터 볼지 말해야 한다.
+    expect(note!.startsWith('**')).toBe(true)
   })
 })

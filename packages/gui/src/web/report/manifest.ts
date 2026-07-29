@@ -128,8 +128,11 @@ export interface DeltaBlock extends BlockBase {
 export interface PairsBlock extends BlockBase {
   kind: 'pairs'
   path: string
-  /** `p` 는 블록 `path` 기준 **상대** 경로다 (점 표기 가능). */
-  keys?: { p: string; l: string; f: Fmt }[]
+  /**
+   * `p` 는 블록 `path` 기준 **상대** 경로다 (점 표기 가능).
+   * `pct` 가 있으면 그 경로를 분모로 비율을 뒤에 붙인다 — 분모도 같은 기준의 상대 경로다.
+   */
+  keys?: { p: string; l: string; f: Fmt; pct?: string }[]
   /** 표준 key/value 로 안 떨어지는 모양. */
   arrayAs?: 'freq' | 'warnings'
 }
@@ -137,9 +140,23 @@ export interface PairsBlock extends BlockBase {
 export type Block =
   | StatBlock | DistributionBlock | SeriesBlock | BarsBlock | DeltaBlock | PairsBlock
 
-export const SECTIONS: { id: SectionId; label: string; tab: TabId }[] = [
+/**
+ * `note` 는 **이 지표를 무엇으로 읽으면 되는지**를 한 문장으로 말한다. 값에 대한 평가가
+ * 아니라 읽는 법이라 규칙 2 를 깨지 않는다 — "이 앱이 느리다" 가 아니라 "이 숫자는 이런
+ * 질문에 답한다" 다.
+ */
+export const SECTIONS: { id: SectionId; label: string; tab: TabId; note?: string }[] = [
   { id: 'startup', label: '앱 시작', tab: 'summary' },
-  { id: 'render', label: '렌더', tab: 'summary' },
+  {
+    id: 'render',
+    label: '렌더',
+    tab: 'summary',
+    note:
+      '**먼저 볼 것은 드랍입니다.** 화면은 일정한 주기로 갱신되고(60Hz 면 16.67ms), ' +
+      '그때 새 프레임이 없으면 기기는 직전 프레임을 한 번 더 띄웁니다 — 사람이 끊김으로 ' +
+      '보는 것이 그 순간입니다. 분포는 "얼마나 걸렸나", 드랍·마감은 "제때 냈나" 로 ' +
+      '서로 다른 질문에 답합니다. 평균이 빨라도 드랍이 몰려 있으면 끊겨 보입니다.',
+  },
   { id: 'cpu', label: 'CPU', tab: 'summary' },
   { id: 'memory', label: '메모리', tab: 'summary' },
   { id: 'log', label: '로그', tab: 'summary' },
@@ -202,21 +219,15 @@ export const MANIFEST: Block[] = [
     breakAfterEmptyBuckets: Infinity,
   },
   {
-    // 기기가 프레임마다 붙여 둔 꼬리표를 센 것이다 — 이 화면의 판정이 아니다.
-    // 그래서 `unit` 이 출처를 밝히고, 색만 달리해 "다른 종류의 값" 이라고 말한다.
-    kind: 'bars', section: 'render', title: '프레임 꼬리표', metric: 'frame', span: 6,
-    unit: 'SurfaceFlinger 가 붙인 것 · 겹칠 수 있음', tone: 'alt',
-    path: 'metrics.frame.data.jank.by_type',
-    labelField: 'type', labelPrefix: '', valueField: 'count', fmt: 'int', scaleMax: null,
-    percentOfPath: 'metrics.frame.data.jank.total_frames',
-  },
-  {
-    kind: 'pairs', section: 'render', title: '마감', metric: 'frame', span: 6,
-    unit: '기기가 센 것', tone: 'alt', path: 'metrics.frame.data.jank',
+    // 기기가 프레임마다 붙여 둔 것을 센 것이지 이 화면의 판정이 아니다. 그 사실은 색으로만
+    // 말한다 — 카드마다 출처를 문장으로 적으면 화면이 설명서가 된다. 근거는 스키마에 있다.
+    kind: 'pairs', section: 'render', title: '프레임 수', metric: 'frame', span: 12,
+    unit: '', tone: 'alt', path: 'metrics.frame.data.jank',
     keys: [
       { p: 'total_frames', l: '전체', f: 'int' },
-      { p: 'janky_frames', l: '꼬리표 붙은 프레임', f: 'int' },
-      { p: 'late_frames', l: '마감 넘긴 프레임', f: 'int' },
+      { p: 'janky_frames', l: 'jank_type 붙음', f: 'int' },
+      { p: 'late_frames', l: '마감 넘김', f: 'int' },
+      { p: 'dropped_frames', l: '드랍', f: 'int', pct: 'total_frames' },
     ],
   },
 

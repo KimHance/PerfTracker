@@ -437,11 +437,16 @@ export function buildPairs(b: PairsBlock, res: unknown): PairsVm | NoneVm {
 
   if (raw === MISSING || raw === null) return none(raw, b.path)
   return {
-    rows: (b.keys ?? []).map((k) => ({
-      label: k.l,
-      value: fmtValue(readPath(raw, k.p), k.f),
-      wrap: k.f === 'wrap',
-    })),
+    rows: (b.keys ?? []).map((k) => {
+      const v = readPath(raw, k.p)
+      const d = k.pct === undefined ? MISSING : readPath(raw, k.pct)
+      // 분모를 모르면 비율을 지어내지 않는다. 0 을 분모로 쓰지도 않는다.
+      const share =
+        typeof v === 'number' && typeof d === 'number' && d > 0
+          ? ` · ${nf((v / d) * 100, 1)}%`
+          : ''
+      return { label: k.l, value: `${fmtValue(v, k.f)}${share}`, wrap: k.f === 'wrap' }
+    }),
   }
 }
 

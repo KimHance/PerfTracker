@@ -149,6 +149,7 @@ export function ReportPage({ runId }: { runId: string }) {
               <span>{s.label}</span>
               <i />
             </h2>
+            {s.note !== undefined && <p className="rp-section-note">{renderNote(s.note)}</p>}
             <div className="rp-grid">
               {s.items.map(({ key, block, metric, vm }) => {
                 const isNone = (vm as NoneVm).none === true
@@ -213,6 +214,17 @@ export function ReportPage({ runId }: { runId: string }) {
         </div>
       )}
     </div>
+  )
+}
+
+/** `**…**` 만 굵게. 마크다운을 들이지 않는다 — 이 화면이 쓰는 강조는 이것 하나다. */
+function renderNote(note: string): React.ReactNode[] {
+  return note.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
+    part.startsWith('**') && part.endsWith('**') ? (
+      <b key={i}>{part.slice(2, -2)}</b>
+    ) : (
+      <span key={i}>{part}</span>
+    ),
   )
 }
 

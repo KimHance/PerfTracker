@@ -283,3 +283,13 @@
 .rp-card-alt .rp-bar-value { color: var(--color-alt-700); }
 .rp-card-alt .rp-card-title { color: var(--color-alt-700); }
 .rp-card-alt .rp-table td.num { color: var(--color-alt-700); }
+
+/* 섹션 설명. 값이 아니라 **읽는 법**이라 카드 밖, 제목 바로 아래에 둔다. */
+.rp-section-note {
+  margin: calc(var(--space-2) * -1) 0 var(--space-3);
+  max-width: 78ch;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--color-neutral-700);
+}
+.rp-section-note b { color: var(--color-neutral-900); font-weight: 600; }

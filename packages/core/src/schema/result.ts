@@ -233,6 +233,14 @@ export const FrameJankSchema = z.object({
         '(실측 Stream 세션: `None` 240장 중 41장). 반대로 `Buffer Stuffing` 은 꼬리표가 붙어도 ' +
         '`on_time_finish = 1` 인 경우가 대부분이었다.',
     ),
+  dropped_frames: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      '`jank_type` 에 `Dropped Frame` 이 들어간 프레임 수. `by_type` 에도 같은 값이 있지만, ' +
+        '**표시 주기를 통째로 넘긴 프레임**이라 따로 센다 — 사람이 끊김으로 보는 것이 이것이다.',
+    ),
   by_type: z
     .array(z.object({ type: z.string(), count: z.number().int().nonnegative() }))
     .describe(

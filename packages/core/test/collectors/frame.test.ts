@@ -422,6 +422,8 @@ describe('buildJank', () => {
     expect(byType['Buffer Stuffing']).toBe(1347 + 144)
     expect(byType['App Deadline Missed']).toBe(144)
     expect(byType['Dropped Frame']).toBe(101)
+    // 읽는 쪽이 가장 먼저 보는 값이라 경로를 찾게 하지 않고 따로 센다.
+    expect(buildJank(JANK_ROWS)!.dropped_frames).toBe(101)
   })
 
   it('by_type 의 합이 janky_frames 를 넘는 것이 정상이다', () => {
@@ -454,6 +456,7 @@ describe('buildJank', () => {
       total_frames: 10,
       janky_frames: 0,
       late_frames: 0,
+      dropped_frames: 0,
       by_type: [],
     })
   })

@@ -122,6 +122,9 @@ export function findOutOfRange(samples: FrameSample[]): number | undefined {
 /** 기기가 "문제 없음" 을 적는 값. 꼬리표가 아니라 꼬리표의 부재다. */
 const JANK_NONE = 'None'
 
+/** 표시 주기를 통째로 넘긴 프레임. SurfaceFlinger 가 쓰는 원문 그대로다. */
+const JANK_DROPPED = 'Dropped Frame'
+
 /**
  * 꼬리표 집계를 도메인 모양으로 옮긴다.
  *
@@ -157,6 +160,8 @@ export function buildJank(rows: FrameJankRow[] | null): FrameData['jank'] {
     total_frames: total,
     janky_frames: janky,
     late_frames: late,
+    // `by_type` 에도 있지만 따로 센다 — 읽는 쪽이 가장 먼저 보는 값이라 경로를 찾게 하지 않는다.
+    dropped_frames: byType.get(JANK_DROPPED) ?? 0,
     by_type: [...byType.entries()]
       .map(([type, count]) => ({ type, count }))
       .sort((a, b) => b.count - a.count || a.type.localeCompare(b.type)),
