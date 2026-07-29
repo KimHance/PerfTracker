@@ -229,6 +229,61 @@ describe('시계열 — null 인 초에서 선을 끊는다', () => {
   })
 })
 
+describe('시간축 — 잰 구간만 그린다', () => {
+  const doc = (session: Record<string, unknown>): unknown => ({ session })
+
+  /**
+   * 세션 길이까지 축을 그리던 시절에는 **모든 그래프 꼬리에 회색 띠**가 남았다.
+   * `start` 가 adb 왕복을 하는 동안 트레이서는 아직 돌지 않고 `stop` 은 먼저 멈추기 때문이다.
+   */
+  it('오른쪽 끝은 마지막 **온전한** 초다 — 세션 길이가 아니다', () => {
+    // 실기기: 세션 9.017초 · 트레이스 8.250초 · 마지막 표본 t_s=7.
+    // 8초 칸은 4분의 1만 측정된 구간이라 표본이 없는 것이 정상이다.
+    expect(computeMaxT(doc({ duration_ms: 9017, trace_span_ms: 8250 }), [])).toBe(7)
+    // 같은 세션을 옛 규칙으로 그리면 10초까지 가고 꼬리 세 칸이 빈다.
+    expect(computeMaxT(doc({ duration_ms: 9017 }), [])).toBe(10)
+  })
+
+  it('trace_span_ms 가 없는 옛 세션은 세션 길이로 물러선다', () => {
+    expect(computeMaxT(doc({ duration_ms: 5238 }), [])).toBe(6)
+  })
+
+  it('표본이 축보다 멀리 있으면 축이 표본까지 늘어난다 — 잰 것을 자르지 않는다', () => {
+    const withRow = { session: { trace_span_ms: 2000 }, metrics: { cpu: { data: { device_timeline: [{ t_s: 9, busy_pct: 1 }] } } } }
+    expect(computeMaxT(withRow, [])).toBe(9)
+  })
+})
+
+describe('마킹 — 시계열과 같은 0초로 옮긴다', () => {
+  const marksDoc = (session: Record<string, unknown>): unknown => ({ session })
+
+  /** 마킹은 세션 시작 기준, 시계열은 트레이스 시작 기준이다. 실측 0.88초 차이. */
+  it('trace_start_offset_ms 만큼 당긴다', () => {
+    const m = readMarks(marksDoc({
+      trace_start_offset_ms: 880,
+      marks: [{ offset_ms: 5880, label: '스크롤' }],
+    }))
+    expect(m[0]!.t).toBe(5)
+  })
+
+  /**
+   * **모르면 옮기지 않는다.** 0 으로 가정해 옮기면 어긋난 자리에 찍히면서 맞는 것처럼
+   * 보인다 — 옛 세션이 그 경우다.
+   */
+  it('offset 이 없으면 원래 자리에 둔다', () => {
+    const m = readMarks(marksDoc({ marks: [{ offset_ms: 5880, label: '스크롤' }] }))
+    expect(m[0]!.t).toBe(6)
+  })
+
+  it('트레이스보다 먼저 찍힌 마킹은 0초에 붙인다 — 축 밖으로 내보내지 않는다', () => {
+    const m = readMarks(marksDoc({
+      trace_start_offset_ms: 880,
+      marks: [{ offset_ms: 100, label: '바로 남김' }],
+    }))
+    expect(m[0]!.t).toBe(0)
+  })
+})
+
 describe('시간축은 하나다', () => {
   it('가장 긴 계열 · 표식 · 세션 길이 중 최댓값을 쓴다', () => {
     const doc = {

@@ -133,6 +133,9 @@ describe('stopSession — 정상 경로', () => {
       // 4) collectSnapshotSpecs — M3 이 늘린 둘. network collector 가 읽는다.
       `-s ${SERIAL} shell dumpsys netstats`,
       `-s ${SERIAL} shell pm list packages -U`,
+      // 5) 기기 시계. 마킹을 시계열과 같은 축에 놓는 데 쓴다 (`device/clock.ts`).
+      //    트레이서가 멈춘 뒤라 이 명령도 트레이스에 남지 않는다.
+      `-s ${SERIAL} shell date +%s%N`,
     ])
   })
 

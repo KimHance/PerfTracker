@@ -15,6 +15,7 @@
 | `src/device/` | 기기 목록 · 정적 스펙 · 전/후 상태 스냅샷 · `probeDevice` |
 | `src/app/` | 앱 목록 · 라벨 해석(`resources.arsc` 직접 파싱) · 대상 특정 · 빌드 속성 |
 | `src/perfetto/` | TraceConfig 조립 · `--detach` 세션 · `trace_processor` |
+| `src/device/clock.ts` | 기기 시계 − 호스트 시계. 마킹과 시계열의 0초를 잇는다 |
 | `src/host/` | **기기가 아닌 이 컴퓨터.** 이 패키지에서 `AdbClient` 를 안 받는 유일한 수집 지점 |
 
 ## 제약

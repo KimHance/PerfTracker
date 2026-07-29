@@ -1300,6 +1300,32 @@ export const SessionInfoSchema = z.object({
         '진행 중인 세션의 경과 시간이 필요하면 started_at 과 지금 시각으로 직접 구하라. ' +
         '이 도구는 그것을 세션의 길이라고 부르지 않는다.',
     ),
+  trace_span_ms: z
+    .number()
+    .int()
+    .nullable()
+    .optional()
+    .describe(
+      '**트레이스가 실제로 덮은 시간.** `duration_ms` 보다 짧다 — `start` 가 adb 왕복을 ' +
+        '몇 번 하는 동안 트레이서는 아직 돌지 않고, `stop` 은 트레이서를 먼저 멈춘다. ' +
+        '실측 네 세션 모두 1~3초 짧았다. **시계열을 그릴 때 축의 오른쪽 끝은 이 값이다** — ' +
+        '`duration_ms` 까지 그리면 잰 적 없는 구간이 "값이 없는 구간" 처럼 보인다. ' +
+        'null 은 트레이스를 못 읽었다는 뜻이다.',
+    ),
+  trace_start_offset_ms: z
+    .number()
+    .int()
+    .nullable()
+    .optional()
+    .describe(
+      '**세션 시작 → 트레이스 시작 (ms).** 이 도구에는 0초가 둘이라서 필요하다: 시계열의 ' +
+        '`t_s` 는 트레이스 시작이 0이고, `session.marks[].offset_ms` 는 세션 시작이 0이다. ' +
+        '**마킹을 시계열과 같은 축에 놓으려면 `offset_ms` 에서 이 값을 빼라.** ' +
+        '실측 0.88초 — 1초 눈금에서 한 칸이 밀리는 크기다. ' +
+        'null 이면 두 축의 관계를 모르는 것이므로 **마킹을 옮기지 말 것**(옮기면 조용히 ' +
+        '어긋난 자리에 찍힌다). 트레이스에 clock_snapshot 이 없거나 기기 시계를 못 읽은 ' +
+        '세션이 그렇다.',
+    ),
   options: z.object({ launch: z.boolean() }),
   /**
    * `[]` 는 **"아무도 아무것도 적지 않았다"** 는 사실이다 (규칙 3 의 예외가 아니라 그 자체다).

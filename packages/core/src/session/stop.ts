@@ -3,6 +3,7 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AdbClient } from '../adb/client.js'
 import { collectSnapshotSpecs } from '../collectors/registry.js'
+import { measureDeviceClockSkewMs } from '../device/clock.js'
 import { collectDeviceState, runSnapshots } from '../device/state.js'
 import { SessionStateError } from '../errors.js'
 import {
@@ -110,6 +111,8 @@ export async function stopSession(
   // `adb_commands_during_session` 은 여전히 0 이라 온-디바이스 테스트도 그것을 못 잡는다.
   const after = await collectDeviceState(ctx.adb, now)
   const afterSnapshots = await runSnapshots(ctx.adb, snapshotSpecs)
+  // 마킹과 시계열을 같은 축에 놓기 위한 값. 자세한 이유는 `device/clock.ts` 에 있다.
+  const deviceClockSkewMs = await measureDeviceClockSkewMs(ctx.adb)
   const rawFiles = [...manifest.artifacts.raw]
   for (const [key, text] of Object.entries({ ...after.raw, ...afterSnapshots })) {
     const rel = join('raw', `${key}_after.txt`)
@@ -132,7 +135,11 @@ export async function stopSession(
     adb_commands_during_session: adbCallsDuringSession,
     artifacts: { ...manifest.artifacts, trace: traceRelative, raw: rawFiles },
   })
-  await writeRunSession(session.runDir, session, { endedAt: now.toISOString(), state })
+  await writeRunSession(session.runDir, session, {
+    endedAt: now.toISOString(),
+    state,
+    deviceClockSkewMs,
+  })
   await clearActiveSession(session.serial, home)
 
   return { runDir: session.runDir, state }

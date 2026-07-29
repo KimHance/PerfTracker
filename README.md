@@ -271,9 +271,19 @@ npx perftracker mark "광고 재생" -d R5CT0000001       # 기기로 지정해�
 }
 ```
 
-`offset_ms / 1000` 은 각 지표 `timeline[].second` 와 **같은 축**입니다 — 그래서 시계열 위에
-그대로 세로선으로 얹을 수 있습니다. 진행 중인 세션이 하나뿐이면 아무것도 지정하지 않아도 되고,
-둘 이상인데 지정하지 않으면 **아무 데도 붙이지 않고 어느 세션인지 묻습니다.**
+**`offset_ms` 는 시계열의 `t_s` 와 0초가 다릅니다.** 마킹은 **세션 시작**(호스트 시계)이 0이고
+시계열은 **트레이스 시작**(기기 시계)이 0인데, `start` 가 adb 왕복을 하는 동안 트레이서는 아직
+돌지 않습니다 — 실측 0.82초 차이입니다. 시계열 위에 얹으려면 그만큼 당기세요:
+
+```
+t_s = (offset_ms − session.trace_start_offset_ms) / 1000
+```
+
+`trace_start_offset_ms` 가 `null` 이면 두 축의 관계를 모르는 것이므로 **옮기지 마세요.**
+0으로 가정하면 어긋난 자리에 찍히면서 맞는 것처럼 보입니다.
+
+진행 중인 세션이 하나뿐이면 아무것도 지정하지 않아도 되고, 둘 이상인데 지정하지 않으면
+**아무 데도 붙이지 않고 어느 세션인지 묻습니다.**
 
 ### 화면으로 하고 싶다면 (GUI)
 
@@ -399,7 +409,7 @@ npx perftracker schema > result.schema.json
 | --- | --- |
 | `schema_version` | 이 파일 형식의 버전 |
 | `tool` | 도구 이름·버전과 **이것을 돌린 컴퓨터**(`host.os` / `arch` / `node`) |
-| `session` | id, 이름, `state`, 시작/종료 시각, 길이 (아래 참고) |
+| `session` | id, 이름, `state`, 시작/종료 시각, 길이, **시간축 기준 두 개**(아래 참고) |
 | `device` | 기기 스펙(`static`)과 세션 전후 상태(`state_before` / `state_after`) |
 | `target_app` | 패키지, 라벨, 버전, 렌더 프로세스와 pid, **빌드 속성**(`debuggable` / `large_heap` / `min_sdk` / `target_sdk` / `primary_cpu_abi`) |
 | `metrics` | 메트릭들. 키가 곧 수집기 id (`frame` / `startup` / `cpu` / `memory` / `log` / `thermal` / `network`) |
@@ -414,6 +424,28 @@ npx perftracker schema > result.schema.json
 > 그리고 `device.state_after`. `measurement_overhead` 의 두 필드도 `null` 일 수 있습니다
 > (아래). `warnings` 에는 `session_still_running` 이 함께 실립니다.
 > `stop` 한 뒤 같은 run 디렉토리로 `extract` 를 다시 돌리면 전부 채워집니다.
+
+### 시계열을 그릴 때 쓰는 두 값
+
+**이 도구에는 0초가 둘입니다.** 시계열의 `t_s` 는 **트레이스 시작**(기기 시계)이 0이고,
+`session.marks[].offset_ms` 는 **세션 시작**(호스트 시계)이 0입니다. `start` 가 adb 왕복을
+하는 동안 트레이서는 아직 돌지 않아서 두 시각이 다릅니다.
+
+| 필드 | 무엇 | 어떻게 쓰나 |
+| --- | --- | --- |
+| `session.trace_span_ms` | 트레이스가 **실제로 덮은** 시간 | **시간축의 오른쪽 끝** |
+| `session.trace_start_offset_ms` | 세션 시작 → 트레이스 시작 | 마킹을 시계열 축으로 옮길 때 뺀다 |
+
+실측(SM-S901N): 세션 9,017ms · 트레이스 8,250ms · offset 817ms.
+
+**축을 `duration_ms` 까지 그리지 마세요.** 잰 적 없는 구간이 "값이 빠진 구간" 으로 보입니다.
+초 단위 집계는 온전히 덮인 초에서만 값이 나오므로 마지막 칸은 `floor(trace_span_ms / 1000) − 1`
+입니다.
+
+둘 다 `null` 일 수 있습니다 — 트레이스를 못 읽었거나(`trace_span_ms`), 트레이스에
+clock_snapshot 이 없거나 기기 시계를 못 읽은 경우(`trace_start_offset_ms`)입니다.
+**`trace_start_offset_ms` 가 `null` 이면 마킹을 옮기지 마세요.** 0으로 가정하면 어긋난 자리에
+찍히면서 맞는 것처럼 보입니다.
 
 ### `target_app` 의 빌드 속성
 

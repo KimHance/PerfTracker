@@ -14,6 +14,7 @@ import type {
 import { parseThermalZones } from '../device/state.js'
 import { SchemaValidationError, SessionStateError } from '../errors.js'
 import { collectHostInfo } from '../host/info.js'
+import { readTraceWindow } from './traceWindow.js'
 import { TraceProcessor } from '../perfetto/traceProcessor/client.js'
 import { ensureTraceProcessor } from '../perfetto/traceProcessor/locate.js'
 import { REFERENCES } from '../schema/references.js'
@@ -309,6 +310,11 @@ export async function extractRun(
     }
   }
 
+  const traceWindow =
+    tp !== null
+      ? await readTraceWindow(tp, startedAt.getTime(), session.deviceClockSkewMs)
+      : { spanMs: null, startOffsetMs: null }
+
   // 오버헤드는 부가 정보다. 못 재는 것이 result.json 전체를 못 내는 이유가 되면 안 되므로
   // computeOverhead 자체가 절대 던지지 않는다. 트레이스가 없으면 재려는 시도조차 안 한다.
   const overhead =
@@ -335,6 +341,10 @@ export async function extractRun(
       started_at: startedAt.toISOString(),
       ended_at: endedAt?.toISOString() ?? null,
       duration_ms: endedAt !== null ? endedAt.getTime() - startedAt.getTime() : null,
+      // 시계열의 축은 세션 길이가 아니라 **트레이스가 덮은 구간**이다. 마킹을 그 축으로
+      // 옮기는 데 필요한 offset 도 여기서 나온다 — 이유는 `extract/traceWindow.ts` 에 있다.
+      trace_span_ms: traceWindow.spanMs,
+      trace_start_offset_ms: traceWindow.startOffsetMs,
       options: session.options,
       // 사람이 적은 것을 도구가 시간순으로 옮기기만 한다 — 내용은 해석하지 않는다.
       // 값이 없으면 빈 배열이다: "아무도 적지 않았다" 는 확인된 사실이다.

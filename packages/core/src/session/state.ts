@@ -52,6 +52,20 @@ export interface ActiveSession {
    * CLI 세션은 마킹을 남길 경로가 없어 항상 비어 있다.
    */
   marks?: { offsetMs: number; label: string }[]
+  /**
+   * **기기 시계 − 호스트 시계 (ms).** `stop` 이 측정 창을 닫은 뒤 한 번 잰다.
+   *
+   * 왜 필요한가: 시계열의 `t_s` 는 **트레이스 시작**(기기 시계)이 0초인데 마킹의 `offsetMs`
+   * 는 **세션 시작**(호스트 시계)이 0이다. 두 0 이 다르면 마킹이 그래프에서 어긋난다.
+   * 트레이스의 시작 시각은 `TO_REALTIME` 으로 **기기** 벽시계를 얻을 수 있으므로, 그것을
+   * 호스트 시계로 옮기려면 두 시계의 차이가 있어야 한다.
+   *
+   * 실측(SM-S901N): -362ms 로 3회 측정 편차 2ms. 무시할 크기가 아니다.
+   *
+   * 못 읽었으면 `null` 이고, 그때 `trace_start_offset_ms` 도 `null` 이 된다 —
+   * 모르는 값으로 마킹을 옮기지 않는다.
+   */
+  deviceClockSkewMs?: number | null
 }
 
 export function newSessionId(rng: () => Buffer = () => randomBytes(3)): string {
