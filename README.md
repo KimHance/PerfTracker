@@ -458,7 +458,7 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   "process": "com.nhn.android.webtoon",
   "pid": 24193,
   "total_frames": 1412,
-  "buckets": [ { "from_ms": 0, "to_ms": 5, "count": 812 }, "...101개" ],
+  "buckets": [ { "from_ms": 0, "to_ms": 5, "count": 812 }, "...61개" ],
   "percentiles": { "p50": 9.2, "p90": 21.4, "p95": 28.1, "p99": 96.3 },
   "mean_ms": 12.8,
   "max_ms": 312.4,
@@ -466,8 +466,12 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 }
 ```
 
-- `buckets` 는 **항상 101개**로 고정입니다. 경계는 `[from, to)` 반개구간이고,
+- `buckets` 는 **항상 61개**로 고정입니다. 경계는 `[from, to)` 반개구간이고,
   마지막 버킷은 `to_ms: null` (= 700ms 이상, 상한 없음)입니다.
+  **폭은 구간마다 다릅니다** — 5~16ms 는 1ms, 16~50ms 는 2ms, 50~130ms 는 4ms 로 조밀하고,
+  130ms 부터는 30 → 50 → 100ms 로 넓어집니다. 130ms 를 넘은 프레임에서 분포가 답하는 질문은
+  "165냐 185냐" 가 아니라 "이런 것이 몇 개 있었나" 이고, 정확한 값은 `percentiles` 와
+  `max_ms` 가 소수점까지 말합니다.
   흔히 쓰이는 예산 부근을 1ms 로 조밀하게 보고 꼬리로 갈수록 폭을 넓힙니다.
 - 종료 이벤트를 못 받은 미완결 프레임(`dur = -1`)은 집계에서 **제외**됩니다.
 - `timeline` 은 **1초 단위 추이**입니다. `buckets` 와 같은 원본에서 나오고 같은 규칙으로
@@ -486,7 +490,7 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 >
 > | 무엇 | 어디 |
 > | --- | --- |
-> | 프레임 분포 | `metrics.frame.buckets` (101개) |
+> | 프레임 분포 | `metrics.frame.buckets` (61개) |
 > | 이 기기가 지금 몇 Hz 로 도는가 | `device.static.display.active_refresh_rate_hz` |
 > | 이 기기가 지원하는 주사율 | `device.static.display.supported_refresh_rates_hz` |
 > | 구글이 공개한 참고치 | [`references`](#references) (출처와 함께 기록만 되고 비교에 쓰이지 않음) |

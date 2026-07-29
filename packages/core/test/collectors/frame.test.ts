@@ -25,8 +25,28 @@ const NO_CAPTURE: CaptureFacts = {
 }
 
 describe('buildFrameBuckets', () => {
-  it('스펙이 정한 101개 버킷을 만든다', () => {
-    expect(buildFrameBuckets()).toHaveLength(101)
+  it('스펙이 정한 61개 버킷을 만든다', () => {
+    expect(buildFrameBuckets()).toHaveLength(61)
+  })
+
+  /**
+   * **꼬리 경계를 값으로 못 박는다.** 개수(61)만 세면 130 이상을 어떻게 잘랐는지가
+   * 테스트에 안 남고, 폭을 바꿔도 개수만 맞으면 통과한다. 여기가 이 파일에서 실제로
+   * 판단이 들어간 유일한 자리라 값으로 적는다.
+   */
+  it('130ms 이상은 30 → 50 → 100ms 로 넓어진다', () => {
+    const tail = buildFrameBuckets()
+      .filter((b) => b.from_ms >= 130)
+      .map((b) => b.from_ms)
+
+    expect(tail).toEqual([130, 160, 190, 220, 250, 300, 350, 400, 450, 500, 600, 700])
+  })
+
+  it('130ms 미만은 그대로다 — 60fps 16.67ms 가 사는 구간이라 건드리지 않는다', () => {
+    const head = buildFrameBuckets().filter((b) => b.from_ms < 130)
+    expect(head).toHaveLength(49)
+    // 16~18 버킷이 그 자리에 그대로 있어야 한다.
+    expect(head.some((b) => b.from_ms === 16 && b.to_ms === 18)).toBe(true)
   })
 
   it('첫 버킷은 0-5 하나다', () => {

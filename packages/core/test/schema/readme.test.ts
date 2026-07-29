@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { buildFrameBuckets } from '../../src/collectors/frame/index.js'
 import { METRIC_REASON_CODES } from '../../src/schema/reasons.js'
 import { SCHEMA_VERSION } from '../../src/schema/result.js'
 
@@ -38,6 +39,22 @@ describe('README 가 스키마에 대해 말하는 숫자', () => {
     const m = /`schema_version` 이 그 계약의 버전입니다 \(현재 `([^`]+)`\)/.exec(README)
     expect(m, 'README 에서 schema_version 문장을 찾지 못했다').not.toBeNull()
     expect(m![1]).toBe(SCHEMA_VERSION)
+  })
+
+  /**
+   * 버킷 개수는 README 가 **두 곳**에서 말한다. 경계를 조정하면 코드 한 줄이 바뀌는데
+   * 문서 두 줄은 안 바뀐다 — 실제로 101 → 61 로 줄일 때 이 대조가 없었으면 둘 다 낡았다.
+   */
+  it('버킷 개수가 buildFrameBuckets 와 같다 (두 곳 모두)', () => {
+    const n = buildFrameBuckets().length
+
+    const fixed = /`buckets` 는 \*\*항상 (\d+)개\*\*로 고정입니다/.exec(README)
+    expect(fixed, 'README 에서 "buckets 는 항상 N개" 문장을 찾지 못했다').not.toBeNull()
+    expect(Number(fixed![1])).toBe(n)
+
+    const table = /`metrics\.frame\.buckets` \((\d+)개\)/.exec(README)
+    expect(table, 'README 표에서 버킷 개수를 찾지 못했다').not.toBeNull()
+    expect(Number(table![1])).toBe(n)
   })
 
   /**
