@@ -326,7 +326,7 @@ export function buildDistribution(
 
 export interface BarsVm {
   none?: false
-  rows: { label: string; value: string; pct: number; note: string }[]
+  rows: { label: string; value: string; share: string; pct: number; note: string }[]
 }
 
 export function buildBars(b: BarsBlock, res: unknown): BarsVm | NoneVm {
@@ -347,11 +347,12 @@ export function buildBars(b: BarsBlock, res: unknown): BarsVm | NoneVm {
       const lv = r[b.labelField]
       const v = r[b.valueField]
       const share =
-        denom !== null && typeof v === 'number' ? ` · ${nf((v / denom) * 100, 1)}%` : ''
+        denom !== null && typeof v === 'number' ? `${nf((v / denom) * 100, 1)}%` : ''
       const label = `${b.labelPrefix}${Array.isArray(lv) ? `CPU ${lv[0]}–${lv[lv.length - 1]}` : String(lv)}`
       return {
         label,
-        value: `${fmtValue(v === undefined ? MISSING : v, b.fmt)}${share}`,
+        value: fmtValue(v === undefined ? MISSING : v, b.fmt),
+        share,
         pct: typeof v === 'number' && max > 0 ? Math.max(0, Math.min(100, (v / max) * 100)) : 0,
         // 모르는 라벨은 설명 없이 개수만 낸다 — 기기가 새 이름을 내도 화면은 그대로 돈다.
         note: b.labelNotes?.[String(lv)] ?? '',
@@ -399,7 +400,8 @@ export function buildDelta(b: DeltaBlock, res: unknown): DeltaVm | NoneVm {
 
 export interface PairsVm {
   none?: false
-  rows: { label: string; value: string; wrap: boolean }[]
+  /** `share` 는 값과 **따로** 낸다. 한 문자열로 붙이면 개수와 비율이 눈에서 섞인다. */
+  rows: { label: string; value: string; share: string; wrap: boolean }[]
 }
 
 export function buildPairs(b: PairsBlock, res: unknown): PairsVm | NoneVm {
@@ -413,6 +415,7 @@ export function buildPairs(b: PairsBlock, res: unknown): PairsVm | NoneVm {
       rows: (raw as { code: string; message: string }[]).map((w) => ({
         label: w.code,
         value: w.message,
+        share: '',
         wrap: true,
       })),
     }
@@ -433,6 +436,7 @@ export function buildPairs(b: PairsBlock, res: unknown): PairsVm | NoneVm {
         value:
           `${nf(g.f['avg_khz']! / 1000000, 2)} / ${nf(g.f['max_khz']! / 1000000, 2)} GHz` +
           ` · 표본 ${nf(g.f['samples']!, 0)}`,
+        share: '',
         wrap: false,
       })),
     }
@@ -446,9 +450,9 @@ export function buildPairs(b: PairsBlock, res: unknown): PairsVm | NoneVm {
       // 분모를 모르면 비율을 지어내지 않는다. 0 을 분모로 쓰지도 않는다.
       const share =
         typeof v === 'number' && typeof d === 'number' && d > 0
-          ? ` · ${nf((v / d) * 100, 1)}%`
+          ? `${nf((v / d) * 100, 1)}%`
           : ''
-      return { label: k.l, value: `${fmtValue(v, k.f)}${share}`, wrap: k.f === 'wrap' }
+      return { label: k.l, value: fmtValue(v, k.f), share, wrap: k.f === 'wrap' }
     }),
   }
 }

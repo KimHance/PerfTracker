@@ -377,10 +377,17 @@ describe('jank_type', () => {
         },
       },
     }
-    const rows = (buildPairs(card, doc) as { rows: { label: string; value: string }[] }).rows
-    expect(rows.find((r) => r.label === '드랍')!.value).toBe('101 · 5.2%')
-    // pct 가 없는 행에는 비율을 붙이지 않는다 — 안 시킨 것을 하지 않는다.
+    const rows = (buildPairs(card, doc) as { rows: { label: string; value: string; share: string }[] }).rows
+    // **값과 비율은 다른 필드다.** 한 문자열로 붙이면 화면에서 개수와 비율이 섞여 읽힌다.
+    const drop = rows.find((r) => r.label === '드랍')!
+    expect(drop.value).toBe('101')
+    expect(drop.share).toBe('5.2%')
+    // 분모가 같은 행은 전부 비율을 단다 — 하나만 달면 무엇에 대한 비율인지 안 읽힌다.
+    expect(rows.find((r) => r.label === 'jank_type 붙음')!.share).toBe('87.6%')
+    expect(rows.find((r) => r.label === '마감 넘김')!.share).toBe('17.0%')
+    // `전체` 는 분모 자신이라 100% 를 달지 않는다.
     expect(rows.find((r) => r.label === '전체')!.value).toBe('1,938')
+    expect(rows.find((r) => r.label === '전체')!.share).toBe('')
   })
 
   it('분모가 없거나 0 이면 비율을 지어내지 않는다', () => {
@@ -390,6 +397,7 @@ describe('jank_type', () => {
       }
     ).rows
     expect(rows.find((r) => r.label === '드랍')!.value).toBe('5')
+    expect(rows.find((r) => r.label === '드랍')!.share).toBe('')
   })
 
   it('항목마다 뜻과 방향을 적는다 — 개수만 보면 무엇이 문제인지 못 읽는다', () => {
@@ -415,7 +423,8 @@ describe('jank_type', () => {
     expect(rows[1]!.note).toContain('적을수록 좋습니다')
     // 모르는 라벨은 설명 없이 개수만 — 기기가 새 이름을 내도 화면은 그대로 돈다.
     expect(rows[2]!.note).toBe('')
-    expect(rows[2]!.value).toBe('3 · 0.3%')
+    expect(rows[2]!.value).toBe('3')
+    expect(rows[2]!.share).toBe('0.3%')
   })
 
   it('두 번째 계열색을 쓴다 — 다른 카드와 구분된다', () => {

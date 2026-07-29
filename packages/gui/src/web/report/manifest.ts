@@ -160,11 +160,7 @@ export const SECTIONS: { id: SectionId; label: string; tab: TabId; note?: string
     id: 'render',
     label: '렌더',
     tab: 'summary',
-    note:
-      '**먼저 볼 것은 드랍입니다.** 화면은 일정한 주기로 갱신되고(60Hz 면 16.67ms), ' +
-      '그때 새 프레임이 없으면 기기는 직전 프레임을 한 번 더 띄웁니다 — 사람이 끊김으로 ' +
-      '보는 것이 그 순간입니다. 분포는 "얼마나 걸렸나", 드랍·마감은 "제때 냈나" 로 ' +
-      '서로 다른 질문에 답합니다. 평균이 빨라도 드랍이 몰려 있으면 끊겨 보입니다.',
+    note: '**막대가 왼쪽에 몰릴수록 부드럽습니다.** 오른쪽으로 갈수록 오래 걸린 프레임입니다.',
   },
   { id: 'cpu', label: 'CPU', tab: 'summary' },
   { id: 'memory', label: '메모리', tab: 'summary' },
@@ -232,10 +228,12 @@ export const MANIFEST: Block[] = [
     // 말한다 — 카드마다 출처를 문장으로 적으면 화면이 설명서가 된다. 근거는 스키마에 있다.
     kind: 'pairs', section: 'render', title: '프레임 수', metric: 'frame', span: 5,
     unit: '', tone: 'alt', path: 'metrics.frame.data.jank',
+    // **분모가 같은 행은 전부 비율을 단다.** 드랍에만 달았더니 `전체` 가 곧 100% 인데
+    // 5.2% 가 무엇에 대한 비율인지 화면에서 읽히지 않았다. `전체` 자신은 분모라 달지 않는다.
     keys: [
       { p: 'total_frames', l: '전체', f: 'int' },
-      { p: 'janky_frames', l: 'jank_type 붙음', f: 'int' },
-      { p: 'late_frames', l: '마감 넘김', f: 'int' },
+      { p: 'janky_frames', l: 'jank_type 붙음', f: 'int', pct: 'total_frames' },
+      { p: 'late_frames', l: '마감 넘김', f: 'int', pct: 'total_frames' },
       { p: 'dropped_frames', l: '드랍', f: 'int', pct: 'total_frames' },
     ],
   },

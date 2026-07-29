@@ -252,6 +252,7 @@ export function BarsBody({ vm }: { vm: BarsVm }) {
               <i style={{ width: `${r.pct}%` }} />
             </span>
             <span className="rp-bar-value num">{r.value}</span>
+            <span className="rp-share num">{r.share}</span>
           </div>
           {r.note !== '' && <p className="rp-bar-note">{emphasize(r.note)}</p>}
         </div>
@@ -285,6 +286,7 @@ export function PairsBody({ vm }: { vm: PairsVm }) {
           <tr key={i}>
             <th>{r.label}</th>
             <td className={`num${r.wrap ? ' rp-wrap' : ''}`}>{r.value}</td>
+          <td className="rp-share num">{r.share}</td>
           </tr>
         ))}
       </tbody>
