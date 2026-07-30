@@ -676,7 +676,7 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 ### `metrics.startup`
 
 **이 값은 트레이스에서 계산한 것이 아니라 `am start -W` 가 보고한 숫자입니다.**
-일곱 지표 중 유일하게 트레이스를 읽지 않습니다 — `start` 가 앱을 띄우면서 받아
+트레이스를 읽지 않는 두 지표 중 하나입니다(다른 하나는 `hwui`) — `start` 가 앱을 띄우면서 받아
 `session.json` 에 적어 둔 것을 `extract` 가 그대로 옮깁니다. 그래서 이 지표는 TraceConfig 를
 한 블록도 늘리지 않고, SDK 하한도 데이터소스 요구도 없습니다 (`am start -W` 는 어느
 안드로이드에서나 돕니다).
