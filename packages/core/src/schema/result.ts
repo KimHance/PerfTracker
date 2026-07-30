@@ -304,6 +304,23 @@ export const HwuiDataSchema = z.object({
     .nullable()
     .optional()
     .describe(HWUI_HISTOGRAM_DESCRIPTION),
+  percentiles: z
+    .object({
+      p50: z.number().nullable(),
+      p90: z.number().nullable(),
+      p95: z.number().nullable(),
+      p99: z.number().nullable(),
+    })
+    .nullable()
+    .optional()
+    .describe(
+      '**위 histogram(세션 델타)에서 계산한 백분위.** `dumpsys gfxinfo` 도 자기 백분위를 ' +
+        '찍지만 그것은 프로세스 시작 이후 누적이라 세션 값이 아니다 — 그것을 실으면 분포와 ' +
+        '백분위가 서로 다른 구간을 말하게 된다. ' +
+        '**해상도는 프레임워크의 칸 폭이다**: 5~32ms 는 1ms 라 촘촘하고 그 뒤로 넓어지므로, ' +
+        '꼬리 백분위는 그 칸의 시작값으로 떨어진다(하한). 정확한 값이 필요하면 ' +
+        'metrics.frame.data.percentiles 를 보라 — 그쪽은 프레임마다의 실제 값에서 나온다.',
+    ),
 })
 export type HwuiData = z.infer<typeof HwuiDataSchema>
 

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { diffGfxinfo, parseGfxinfoCounters, parseGfxinfoHistogram, toHwuiHistogram } from '../../src/collectors/hwui/index.js'
+import { percentile } from '../../src/collectors/frame/index.js'
+import {
+  diffGfxinfo,
+  parseGfxinfoCounters,
+  parseGfxinfoHistogram,
+  percentileFromHistogram,
+  toHwuiHistogram,
+} from '../../src/collectors/hwui/index.js'
 
 /** 실기기(SM-S901N / sdk 36) `dumpsys gfxinfo com.android.settings` 출력 형식 그대로다. */
 const dump = (total: number, janky: number, pid = 12345): string =>
@@ -144,5 +151,43 @@ describe('toHwuiHistogram', () => {
   it('빈 것은 null 이다', () => {
     expect(toHwuiHistogram([])).toBeNull()
     expect(toHwuiHistogram(null)).toBeNull()
+  })
+})
+
+/**
+ * **백분위는 세션 히스토그램에서 낸다.** `dumpsys gfxinfo` 도 자기 백분위를 찍지만 그것은
+ * 프로세스 시작 이후 누적이라, 그대로 실으면 분포와 백분위가 서로 다른 구간을 말하게 된다.
+ *
+ * 실기기 교차 확인(Stream `--launch`, 프로세스가 세션 안에서 시작해 누적=세션):
+ * 우리 계산 8/25/38/89 = 기기 보고 8/25/38/89.
+ */
+describe('percentileFromHistogram', () => {
+  const bins = [
+    { ms: 5, frames: 50 },
+    { ms: 10, frames: 30 },
+    { ms: 20, frames: 15 },
+    { ms: 40, frames: 5 },
+  ]
+
+  it('누적 개수로 자리를 찾는다', () => {
+    expect(percentileFromHistogram(bins, 50)).toBe(5)
+    expect(percentileFromHistogram(bins, 90)).toBe(20)
+    expect(percentileFromHistogram(bins, 99)).toBe(40)
+  })
+
+  /**
+   * 지속 시간 백분위와 **같은 규칙**(ceil 랭크)이어야 두 화면의 같은 이름이 같은 뜻이 된다.
+   * 총합이 홀수여야 ceil 과 floor 가 갈린다 — 짝수로 재면 이 규칙을 지키는지 알 수 없다.
+   */
+  it('ceil 랭크를 쓴다 — 지속 시간 백분위와 같은 규칙', () => {
+    // 3장 중 p50: ceil(1.5)=2 번째 → 9. floor 였다면 1 번째 → 5 가 된다.
+    const odd = [{ ms: 5, frames: 1 }, { ms: 9, frames: 2 }]
+    expect(percentileFromHistogram(odd, 50)).toBe(9)
+    // 같은 입력을 지속 시간 쪽 함수에 넣어도 같은 답이 나와야 한다.
+    expect(percentile([5, 9, 9], 50)).toBe(9)
+  })
+
+  it('비었으면 null 이다 — 0 이 아니다', () => {
+    expect(percentileFromHistogram([], 50)).toBeNull()
   })
 })
