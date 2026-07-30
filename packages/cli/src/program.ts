@@ -9,6 +9,7 @@ import {
 import { formatApps } from './commands/apps.js'
 import { runGui } from './commands/gui.js'
 import { runMark } from './commands/mark.js'
+import { runReport } from './commands/report.js'
 import { runRunsList, runRunsRemove, runRunsRename } from './commands/runs.js'
 import { formatDoctor } from './commands/doctor.js'
 import { formatDevices } from './commands/devices.js'
@@ -145,6 +146,24 @@ export function buildProgram(): Command {
     .option('-o, --out <dir>', '기록이 있는 디렉토리', 'runs')
     .action(async (id: string | undefined, opts: { all: boolean; yes: boolean; out: string }) => {
       console.log(await runRunsRemove(id, opts))
+    })
+
+  /**
+   * 기록 하나를 파일 하나짜리 HTML 로. **`gui` 와 같은 화면인데 서버가 없다** —
+   * 읽는 사람이 측정한 사람과 다를 때 포트를 열어 달라고 할 수는 없다.
+   *
+   * `-o` 는 다른 명령과 **같은 뜻**(기록이 있는 디렉토리)이고, 쓸 자리는 `--file` 이다.
+   * 한 글자를 명령마다 다른 뜻으로 쓰면 그것이 가장 비싼 종류의 함정이 된다.
+   */
+  program
+    .command('report')
+    .description('기록을 파일 하나짜리 HTML 로 낸다 (서버 불필요 · 기기 불필요)')
+    .argument('<id>', '기록 id')
+    .option('-o, --out <dir>', '기록이 있는 디렉토리', 'runs')
+    .option('--file <경로>', '쓸 자리 (기본: <run 디렉토리>/report.html)')
+    .option('--no-open', '브라우저를 자동으로 열지 않는다')
+    .action(async (id: string, opts: { out: string; file?: string; open: boolean }) => {
+      console.log(await runReport(id, opts))
     })
 
   program

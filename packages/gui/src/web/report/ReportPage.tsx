@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { ReportDocument } from '../../contract/api.js'
+import { INLINE_REPORT_GLOBAL, type ReportDocument } from '../../contract/api.js'
 import { computeMaxT, readMarks } from './axis.js'
 import {
   buildBars,
@@ -29,7 +29,20 @@ import { buildHeader } from './header.js'
 import { type Block, MANIFEST, SECTIONS, type TabId, TABS } from './manifest.js'
 
 /**
+ * **한 파일로 만 보고서가 심어 둔 데이터.** `perftracker report` 가 `result.json` 을 여기
+ * 넣어 두면 서버가 없어도 화면이 뜬다 (`report/standalone.ts`).
+ */
+function inlineReport(): ReportDocument | null {
+  const v = (globalThis as Record<string, unknown>)[INLINE_REPORT_GLOBAL]
+  return v === undefined || v === null || typeof v !== 'object' ? null : (v as ReportDocument)
+}
+
+/**
  * 세션 보고서. 기록 목록에서 항목을 누르면 `?report=<id>` 로 새 창이 열린다.
+ *
+ * **데이터는 두 곳에서 온다.** GUI 에서는 서버가 주고(`/api/runs/:id/report`), `perftracker
+ * report` 가 만든 한 파일에서는 문서 안에 이미 심겨 있다. 후자에는 부를 서버가 없다 —
+ * `file://` 로 열리기 때문이다.
  *
  * **화면 전체가 `hoverT` 하나를 공유한다.** 한 시계열에 마우스를 올리면 나머지 시계열이 같은
  * 초를 가리키고, 마커를 짚어도 같은 값이 움직인다 — "CPU 가 튄 그 순간 메모리는" 을 눈을
@@ -45,6 +58,13 @@ export function ReportPage({ runId }: { runId: string }) {
   const [distW, distRef] = useWidth()
 
   useEffect(() => {
+    // 심겨 있으면 부를 곳이 없다 — `file://` 에서 `/api/…` 는 어차피 실패한다.
+    const inline = inlineReport()
+    if (inline !== null) {
+      setDoc(inline)
+      return
+    }
+
     let alive = true
     fetch(`/api/runs/${encodeURIComponent(runId)}/report`)
       .then(async (r) => {

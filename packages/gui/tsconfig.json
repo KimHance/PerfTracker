@@ -1,6 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "rootDir": "src", "outDir": "dist" },
-  "include": ["src/server", "src/contract"],
+  "include": ["src/server", "src/contract", "src/report"],
   "references": [{ "path": "../core" }]
 }

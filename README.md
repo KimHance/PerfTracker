@@ -354,6 +354,7 @@ npm run gui   # 빌드 · 서버 · 브라우저까지 이 한 줄이 다 합니
 | `perftracker runs list` | 기록 목록 | 불필요 |
 | `perftracker runs rename <id> <이름>` | 기록 이름 변경 (디렉토리 경로는 그대로) | 불필요 |
 | `perftracker runs rm <id>` | 기록 삭제 (run 디렉토리째) | 불필요 |
+| `perftracker report <id>` | 기록을 **파일 하나짜리 HTML** 로 (서버 불필요) | 불필요 |
 | `perftracker gui` | 로컬 웹 GUI (Ctrl-C 까지 붙잡습니다) | 필요 |
 
 「접촉 안 함」은 기기가 연결돼 있어도 adb 를 **보내지 않는다**는 뜻입니다. 그래서 이 셋은
@@ -378,6 +379,26 @@ npx perftracker runs rm --all --yes           # 전부 (--yes 없으면 거부�
 
 `--all` 이 `--yes` 를 요구하는 것은 되묻지 않기 위해서입니다. CI 에서 입력을 기다리면 빌드가
 타임아웃까지 매달립니다. id 를 직접 적은 삭제는 그 자체가 의사 표시라 묻지 않습니다.
+
+### 보고서를 파일 하나로 (`report`)
+
+`gui` 와 **같은 화면**인데 서버가 없습니다. 자산과 데이터를 전부 문서 안에 말아 넣어 더블클릭
+하면 열리는 HTML 하나를 냅니다.
+
+```bash
+npx perftracker report bc7a6a                 # → runs/<…>/report.html (브라우저가 열립니다)
+npx perftracker report bc7a6a --file /tmp/r.html
+npx perftracker report bc7a6a --no-open       # CI
+```
+
+**왜 파일 하나인가:** 측정한 사람과 읽는 사람이 다른 경우가 보통이고, 그때 "서버를 띄우고 이
+포트를 열어라" 는 전달 방법이 못 됩니다. 첨부해서 보내면 끝나야 합니다.
+
+글꼴 6개까지 data URI 로 넣어 **외부로 나가는 요청이 0** 입니다 (약 430KB). 인터넷 없는
+자리에서도, 이 도구가 없는 컴퓨터에서도 그대로 뜹니다.
+
+`-o` 는 다른 명령과 **같은 뜻**(기록이 있는 디렉토리)이고 쓸 자리는 `--file` 입니다 —
+한 글자를 명령마다 다른 뜻으로 쓰면 그것이 가장 비싼 종류의 함정이 됩니다.
 
 ### 조회 결과를 JSON 으로 (`--json`)
 

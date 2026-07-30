@@ -9,8 +9,12 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
 | --- | --- |
 | `src/program.ts` | 명령 11개 등록 (`runs` 는 하위 셋). **실행하지 않는다** |
 | `src/index.ts` | bin 진입점 — `parseAsync` 와 최상위 오류 처리뿐 |
+
+**`dist/index.js` 는 매 빌드마다 실행 권한을 잃는다.** `npm install` 이 붙여 준 권한을
+`tsc --build` 가 파일을 다시 쓰면서 떨어뜨리고, 그러면 `npx perftracker` 가 `Permission denied`
+로 죽는다. 루트 `build` 스크립트가 빌드 뒤에 다시 `chmod` 한다 — 잊고 지우면 조용히 재발한다.
 | `src/context.ts` | `--adb` / `--device` 를 core 의 컨텍스트로 |
-| `src/commands/` | 명령 하나당 파일 하나 |
+| `src/commands/` | 명령 하나당 파일 하나 (`open.ts` 만 예외 — `gui` 와 `report` 가 나눠 쓴다) |
 | `test/readme.test.ts` | 등록된 명령이 전부 README 에 있는지 대조 |
 | `test/on-device/` | **실기기가 있어야 도는 스펙.** `npm run test:device` 로만 실행 |
 
@@ -19,8 +23,8 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
 따로 두면 테스트가 **commander 가 실제로 등록한 트리**를 읽는다.
 
 명령: `doctor` `devices` `apps` `schema` · `start` `mark` `status` `stop` `extract` ·
-`runs`(`list`/`rename`/`rm`) · `gui`.
-실제 측정은 `start` / `stop` 둘뿐이고 나머지는 점검·조회·마킹·기록 관리다.
+`runs`(`list`/`rename`/`rm`) · `report` · `gui`.
+실제 측정은 `start` / `stop` 둘뿐이고 나머지는 점검·조회·마킹·기록 관리·보고서다.
 
 **기기에 접촉하지 않는 명령**은 `createContext` 를 부르지 않는다 — `mark` 와 `runs` 가 그렇다.
 그것이 규칙 1 을 지키는 방식이다: 조심해서 안 부르는 것이 아니라 **부를 수단이 없는 것**.
@@ -61,6 +65,11 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
   사람이 엉뚱한 곳을 뒤지지 않게.
 - **`runs rm --all` 은 `--yes` 없이 거부한다.** 되묻지 않는 이유는 CI 다 — 입력을 기다리면
   빌드가 타임아웃까지 매달린다. id 를 직접 적은 삭제는 그 자체가 의사 표시라 묻지 않는다.
+- **`report` 는 서버를 띄우지 않는다.** `gui` 와 같은 화면을 쓰지만 자산과 데이터를 문서
+  안에 말아 파일 하나를 낸다 (`@perftracker/gui` 의 `buildStandaloneReport`). 측정한 사람과
+  읽는 사람이 다를 때 "포트를 열어라" 는 전달 방법이 못 되기 때문이다.
+  **`-o` 의 뜻을 명령마다 바꾸지 않는다** — 여기서도 `-o` 는 *기록이 있는 디렉토리*이고,
+  쓸 자리는 `--file` 이다. 한 글자가 명령마다 다른 뜻이면 가장 비싼 종류의 함정이 된다.
 - **`gui` 는 끝나지 않는 명령이다.** 문자열을 돌려주지 않고 Ctrl-C 까지 서버를 붙잡는다.
   서버 구현은 `@perftracker/gui` 에 있고 CLI 는 그것을 부르기만 한다.
 - **core 의 판정을 다시 구현하지 않는다.** `doctor` 의 지표 지원 여부도 collector 의

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
-import { spawn } from 'node:child_process'
 import { startGuiServer, webRoot } from '@perftracker/gui'
+import { openInBrowser } from './open.js'
 
 /**
  * 로컬 GUI 를 띄운다. 서버가 정적 프론트엔드와 JSON API 를 함께 서빙한다 —
@@ -41,7 +41,7 @@ export async function runGui(opts: {
       `측정 중에는 기기에 어떤 명령도 보내지 않습니다.`,
   )
 
-  if (opts.open) openBrowser(server.url)
+  if (opts.open) openInBrowser(server.url)
 
   // Ctrl-C 로 끊길 때 열려 있던 세션을 건드리지 않는다 — 측정 중이었다면 그 세션은 여전히
   // 유효하고, `perftracker stop` 으로 이어서 끝낼 수 있다. 서버만 닫는다.
@@ -53,15 +53,4 @@ export async function runGui(opts: {
 
   // 서버가 살아 있는 동안 프로세스를 붙잡아 둔다.
   await new Promise<never>(() => {})
-}
-
-/** 브라우저를 여는 데 실패해도 서버는 이미 떠 있다 — URL 을 이미 찍었으므로 조용히 넘어간다. */
-function openBrowser(url: string): void {
-  const command =
-    process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'
-  try {
-    spawn(command, [url], { detached: true, stdio: 'ignore', shell: process.platform === 'win32' }).unref()
-  } catch {
-    // 무시한다. 사용자는 위에 찍힌 주소를 직접 열 수 있다.
-  }
 }

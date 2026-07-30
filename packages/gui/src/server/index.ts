@@ -221,3 +221,5 @@ function listen(server: Server, port: number): Promise<void> {
 
 export { GuiApi, type GuiOptions } from './api.js'
 export { webRoot }
+// 서버를 안 띄우고 보고서만 파일로 내는 길. 같은 `dist-web` 을 읽으므로 여기서 함께 낸다.
+export { buildStandaloneReport, type StandaloneReportInput } from '../report/standalone.js'

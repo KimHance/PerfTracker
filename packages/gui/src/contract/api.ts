@@ -272,3 +272,14 @@ export interface ClearRunsResult {
 export interface ApiErrorBody {
   message: string
 }
+
+// ─── 서버 없이 보는 보고서 ─────────────────────────────────────────────────
+
+/**
+ * **한 파일짜리 보고서가 문서에 심어 두는 전역의 이름.**
+ *
+ * 계약이라 여기 둔다 — 쓰는 쪽(`report/standalone.ts`)과 읽는 쪽(`web/main.tsx` ·
+ * `web/report/ReportPage.tsx`)이 다른 계층이고, 이름이 어긋나면 **빈 화면**이 된다.
+ * 조용히 깨지는 종류라 양쪽에 따로 적어 두지 않는다.
+ */
+export const INLINE_REPORT_GLOBAL = '__PERFTRACKER_REPORT__'
