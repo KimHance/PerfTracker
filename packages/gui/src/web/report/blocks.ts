@@ -70,6 +70,39 @@ export interface SeriesVm {
   tAt: (ratio: number) => number
 }
 
+/**
+ * **시간축 눈금.** 개수를 먼저 정하고 거기서 간격을 고른다 — 세션이 길어져도 라벨 수가
+ * 늘지 않는다. 예전에는 간격이 30초에서 멈춰서 5분짜리 세션이면 눈금이 12개가 됐고,
+ * 폭 256px 에 `300s` `330s` 가 겹쳐 뭉개졌다 (실측).
+ *
+ * 후보는 사람이 시간으로 읽는 값들이다 — 47초 같은 간격은 자동으로 나오지만 축으로는
+ * 못 쓴다. 다 넘치면(9시간 넘는 세션) 그때만 계산한 값을 쓴다.
+ */
+const TICK_STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600]
+/** 눈금 사이 칸 수. 라벨은 이보다 하나 많다 (0초부터 세므로). */
+const MAX_INTERVALS = 6
+
+/**
+ * **마지막은 항상 세션 끝이다.** 축의 오른쪽 끝이 몇 초인지 안 적히면 그래프 전체의
+ * 가로 폭이 무슨 뜻인지 알 수 없다.
+ *
+ * 끝 눈금이 바로 앞 눈금에 붙으면 앞의 것을 버린다 — 규칙적인 간격보다 **끝을 아는 것**이
+ * 쓸모 있다. 분포의 y축 꼭대기 눈금과 같은 판단이다.
+ */
+export function timeTicks(maxT: number): number[] {
+  const step = TICK_STEPS.find((s) => maxT / s <= MAX_INTERVALS) ?? Math.ceil(maxT / MAX_INTERVALS)
+
+  const xs: number[] = []
+  for (let t = 0; t <= maxT; t += step) xs.push(t)
+
+  const last = xs[xs.length - 1]!
+  if (last === maxT) return xs
+  // 남은 자리가 축의 14% 미만이면 글자가 겹친다 (`300s` 가 폭 256px 에서 그만큼 먹는다).
+  if (xs.length > 1 && (maxT - last) / maxT < 0.14) xs.pop()
+  xs.push(maxT)
+  return xs
+}
+
 export function buildSeries(
   b: SeriesBlock,
   res: unknown,
@@ -128,10 +161,7 @@ export function buildSeries(
   const gapRuns = runs((t) => !pts.has(t))
 
   const yVals = [yMin, yMin + (yMax - yMin) / 2, yMax]
-  const step = maxT <= 12 ? 3 : maxT <= 30 ? 10 : maxT <= 70 ? 20 : 30
-  const xs: number[] = []
-  for (let t = 0; t <= maxT; t += step) xs.push(t)
-  if (xs[xs.length - 1] !== maxT) xs.push(maxT)
+  const xs = timeTicks(maxT)
 
   const vv = [...pts.values()]
   const vAvg = vv.reduce((a, x) => a + x, 0) / vv.length

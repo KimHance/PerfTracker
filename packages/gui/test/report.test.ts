@@ -10,6 +10,7 @@ import {
   buildSeries,
   buildStat,
   metricState,
+  timeTicks,
   NO_DELTA,
   type NoneVm,
   type SeriesVm,
@@ -294,6 +295,42 @@ describe('마킹 — 시계열과 같은 0초로 옮긴다', () => {
       marks: [{ offset_ms: 100, label: '바로 남김' }],
     }))
     expect(m[0]!.t).toBe(0)
+  })
+})
+
+/**
+ * **긴 세션에서 라벨이 겹쳐 뭉개졌다** — 5분 30초 세션에서 `270s 300s330s` 로 보였다.
+ * 간격이 30초에서 멈춰 눈금이 12개가 됐기 때문이고, 축 폭은 256px 뿐이다.
+ */
+describe('시간축 눈금', () => {
+  it('세션이 길어져도 라벨 수가 늘지 않는다', () => {
+    for (const maxT of [8, 30, 70, 120, 333, 600, 1234, 3600, 7200]) {
+      expect(timeTicks(maxT).length, `${maxT}s`).toBeLessThanOrEqual(7)
+    }
+  })
+
+  it('사람이 시간으로 읽는 간격만 쓴다 — 47초 같은 것은 안 나온다', () => {
+    const ticks = timeTicks(333)
+    const gaps = ticks.slice(1, -1).map((t, i) => t - ticks[i]!)
+    for (const g of gaps) expect([1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600]).toContain(g)
+  })
+
+  /** 오른쪽 끝이 몇 초인지 안 적히면 그래프 가로 폭이 무슨 뜻인지 알 수 없다. */
+  it('마지막은 항상 세션 끝이다', () => {
+    for (const maxT of [8, 45, 333, 1234]) expect(timeTicks(maxT).at(-1)).toBe(maxT)
+  })
+
+  /** 끝 눈금이 앞 눈금에 붙으면 앞의 것을 버린다 — 규칙적인 간격보다 끝을 아는 것이 낫다. */
+  it('끝 눈금에 붙은 앞 눈금을 버린다', () => {
+    // 333 에서 60초 간격이면 300 이 남는데, 33초 차이(9.9%)는 글자가 겹친다.
+    expect(timeTicks(333)).not.toContain(300)
+    expect(timeTicks(333)).toEqual([0, 60, 120, 180, 240, 333])
+    // 45 에서 40 은 5초(11%) 차이라 버리고, 30 은 15초(33%) 차이라 남는다.
+    expect(timeTicks(45)).toEqual([0, 10, 20, 30, 45])
+  })
+
+  it('딱 떨어지면 끝을 두 번 적지 않는다', () => {
+    expect(timeTicks(120)).toEqual([0, 30, 60, 90, 120])
   })
 })
 
