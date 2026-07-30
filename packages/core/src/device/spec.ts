@@ -68,22 +68,60 @@ export function parseWmDensity(text: string): number {
 }
 
 /**
- * 가변 주사율 패널은 모드가 여럿이고 세션 중에도 바뀐다.
+ * **화면이 하나라는 보장이 없다.** 폴더블·외부 모니터·DeX·미러링이면 `dumpsys display` 에
+ * 화면마다 `mActiveSfDisplayMode` 가 하나씩 나온다. 예전에는 `.exec()` 로 **첫 번째**를
+ * 집었는데, 실측 SM-F936N(접힌 상태)에서 첫 번째가 **꺼져 있는 내부 화면**이었다:
+ *
+ *     mActiveSfDisplayMode=DisplayMode{... 1812x2176 ... peakRefreshRate=60.000004}   ← 꺼짐
+ *     mActiveSfDisplayMode=DisplayMode{...  904x2316 ... peakRefreshRate=120.00001}   ← 쓰는 중
+ *
+ * 그래서 해상도(`wm size`)는 커버 화면 것인데 주사율만 꺼진 화면 것인, **한 객체 안에 두
+ * 화면이 섞인** 값이 나갔다. `frame.deadlines` 가 8.33ms(=120Hz)라고 말하는 같은 파일에서.
+ *
+ * 지금은 `mViewports` 의 `isActive=true` 로 **쓰는 화면의 패널 크기**를 먼저 정하고 그
+ * 크기의 모드만 본다. 순서로 고르지 않는다 — 순서가 의미를 가진다는 보장이 어디에도 없다.
+ * 회전 중이면 가로세로가 뒤집혀 나올 수 있어 **순서 없이** 비교한다.
+ *
+ * **고르지 못하면 `null` 이다.** 화면이 여럿인데 어느 것인지 모르면서 하나를 찍으면
+ * 그것이 정확히 예전 버그다 (규칙 3).
+ *
+ * 가변 주사율 패널은 모드가 여럿이고 세션 중에도 바뀐다 — 이 값은 **세션 시작 직전 한
+ * 순간**의 스냅샷이다. 세션 동안 실제로 무엇이었는지는 `metrics.frame.data.deadlines` 가
+ * 프레임 단위로 말한다 (실측 한 세션에 8.33·16.67·41.67ms 가 함께 있었다).
  * 120.00001 같은 값이 그대로 나오므로 소수 둘째 자리에서 정리한다.
  */
 export function parseDisplayModes(text: string): { active: number | null; supported: number[] } {
   const round = (v: string): number => Math.round(Number(v) * 100) / 100
+  const key = (w: number, h: number): string => [w, h].sort((a, b) => a - b).join('x')
 
-  const supported = new Set<number>()
-  for (const m of text.matchAll(/DisplayMode\{[^}]*?peakRefreshRate=([\d.]+)/g)) {
-    supported.add(round(m[1]!))
-  }
+  // 쓰는 화면의 패널 크기. `isActive=true` 가 둘이면(있을 수 없지만) 고르지 않는다.
+  const active = [...text.matchAll(/DisplayViewport\{[^}]*?\}/g)]
+    .map((m) => /isActive=true[^}]*?deviceWidth=(\d+), deviceHeight=(\d+)/.exec(m[0]))
+    .filter((m): m is RegExpExecArray => m !== null)
+  const panel = active.length === 1 ? key(Number(active[0]![1]), Number(active[0]![2])) : null
 
-  const activeMatch = /mActiveSfDisplayMode=DisplayMode\{[^}]*?peakRefreshRate=([\d.]+)/.exec(text)
+  const modes = [
+    ...text.matchAll(/DisplayMode\{[^}]*?width=(\d+), height=(\d+)[^}]*?peakRefreshRate=([\d.]+)/g),
+  ].map((m) => ({ panel: key(Number(m[1]), Number(m[2])), hz: round(m[3]!), whole: m[0] }))
+
+  // 크기를 못 정했으면 화면이 하나뿐인 기기다 — 그때는 전부가 그 화면 것이다.
+  const mine = panel === null ? modes : modes.filter((m) => m.panel === panel)
+
+  const activeModes = [
+    ...text.matchAll(
+      /mActiveSfDisplayMode=DisplayMode\{[^}]*?width=(\d+), height=(\d+)[^}]*?peakRefreshRate=([\d.]+)/g,
+    ),
+  ].map((m) => ({ panel: key(Number(m[1]), Number(m[2])), hz: round(m[3]!) }))
+  const picked =
+    panel === null
+      ? activeModes.length === 1
+        ? activeModes[0]
+        : undefined
+      : activeModes.find((m) => m.panel === panel)
 
   return {
-    active: activeMatch ? round(activeMatch[1]!) : null,
-    supported: [...supported].sort((a, b) => a - b),
+    active: picked?.hz ?? null,
+    supported: [...new Set(mine.map((m) => m.hz))].sort((a, b) => a - b),
   }
 }
 

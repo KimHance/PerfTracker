@@ -626,6 +626,9 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
     같은 세션이 16.67ms 기준으로는 8.26%, 기기가 실제로 준 마감 기준으로는 27.3% 로 갈립니다.
   - **`device.static.display.active_refresh_rate_hz` 보다 이쪽을 믿으세요.** 그 필드는 세션
     시작 직전 한 순간의 스냅샷이고, 이쪽은 프레임마다 기기가 실제로 요구한 값입니다.
+    화면이 여럿인 기기(폴더블 · 외부 모니터 · DeX)에서는 그 필드가 **지금 쓰는 화면**의
+    값이고(`mViewports` 의 `isActive=true` 로 고릅니다), 어느 화면인지 못 고르면 `null`
+    입니다 — 순서로 고르면 커버 화면 해상도에 꺼진 내부 화면의 주사율이 붙습니다.
   - 안드로이드 **Macrobenchmark 도 같은 이유로 고정 예산을 쓰지 않습니다** —
     `frameOverrunMs` 는 "the amount of time a given frame misses **its deadline** by" 이고,
     같은 테이블을 쓰기 때문에 API 31+ 를 요구합니다.

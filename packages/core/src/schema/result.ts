@@ -1156,8 +1156,25 @@ export const DisplayInfoSchema = z.object({
   width_px: z.number().int(),
   height_px: z.number().int(),
   density_dpi: z.number().int(),
-  active_refresh_rate_hz: z.number().nullable(),
-  supported_refresh_rates_hz: z.array(z.number()),
+  active_refresh_rate_hz: z
+    .number()
+    .nullable()
+    .describe(
+      '**세션 시작 직전 한 순간**의 값이다. 가변 주사율 패널은 세션 중에도 바뀌므로 ' +
+        '이 한 숫자로 세션 전체를 말하지 말 것 — 실제로 무엇이었는지는 ' +
+        'metrics.frame.data.deadlines 가 프레임 단위로 말한다 (실측 한 세션에 8.33 · 16.67 · ' +
+        '41.67ms 가 함께 있었다). ' +
+        '**화면이 여럿이면 지금 쓰는 화면의 값이다** (`mViewports` 의 isActive=true 로 고른다). ' +
+        '어느 화면인지 못 고르면 null 이다 — 실측 SM-F936N(접힘)에서 dumpsys 가 먼저 내놓는 ' +
+        '것이 꺼진 내부 화면이라, 순서로 고르면 커버 화면 해상도에 내부 화면 주사율이 붙는다. ' +
+        'null 은 **모른다**는 뜻이다: sdk 30 처럼 이 값을 안 내는 기기가 있다.',
+    ),
+  supported_refresh_rates_hz: z
+    .array(z.number())
+    .describe(
+      '**active_refresh_rate_hz 와 같은 화면의 것만** 싣는다. 화면마다 지원 집합이 다를 수 ' +
+        '있어 합치면 그 화면에 없는 모드가 있다고 말하게 된다. 빈 배열은 못 읽었다는 뜻이다.',
+    ),
   orientation: z
     .enum(['portrait', 'landscape', 'square'])
     .nullable()

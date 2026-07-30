@@ -1,0 +1,25 @@
+  (SM-F936N · sdk 36 · 접힌 상태에서 받은 dumpsys display 의 발췌.
+   화면이 둘이고 첫 번째가 꺼져 있다 — 그것이 이 픽스처의 이유다.)
+  mViewports=[DisplayViewport{type=INTERNAL, valid=true, isActive=true, displayId=0, uniqueId='local:4630946213010294403', physicalPort=131, orientation=0, logicalFrame=Rect(0, 0 - 904, 2316), physicalFrame=Rect(0, 0 - 904, 2316), deviceWidth=904, deviceHeight=2316}, DisplayViewport{type=INTERNAL, valid=true, isActive=false, displayId=1, uniqueId='local:4630946474867211650', physicalPort=130, orientation=0, logicalFrame=Rect(0, 0 - 1812, 2176), physicalFrame=Rect(0, 0 - 1812, 2176), deviceWidth=1812, deviceHeight=2176}]
+    mStaticDisplayInfo=StaticDisplayInfo{isInternal=true, density=2.625, secure=true, deviceProductInfo=DeviceProductInfo{name=, manufacturerPnpId=QCM, productId=1, modelYear=null, manufactureDate=ManufactureDate{week=27, year=2006}, connectionToSinkType=1}, installOrientation=3}
+    mSfDisplayModes=
+      DisplayMode{id=0, width=1812, height=2176, xDpi=377.252, yDpi=375.989, peakRefreshRate=120.00001, vsyncRate=120.00001, appVsyncOffsetNanos=8333333, presentationDeadlineNanos=9233333, supportedHdrTypes=[2, 3, 4], group=2176}
+      DisplayMode{id=1, width=1812, height=2176, xDpi=377.252, yDpi=375.989, peakRefreshRate=96.00001, vsyncRate=96.00001, appVsyncOffsetNanos=10416666, presentationDeadlineNanos=11316666, supportedHdrTypes=[2, 3, 4], group=2176}
+      DisplayMode{id=2, width=1812, height=2176, xDpi=377.252, yDpi=375.989, peakRefreshRate=60.000004, vsyncRate=60.000004, appVsyncOffsetNanos=16666666, presentationDeadlineNanos=17666666, supportedHdrTypes=[2, 3, 4], group=2176}
+      DisplayMode{id=3, width=1812, height=2176, xDpi=377.252, yDpi=375.989, peakRefreshRate=48.000004, vsyncRate=48.000004, appVsyncOffsetNanos=20833333, presentationDeadlineNanos=21833333, supportedHdrTypes=[2, 3, 4], group=2176}
+      DisplayMode{id=4, width=1812, height=2176, xDpi=377.252, yDpi=375.989, peakRefreshRate=30.000002, vsyncRate=30.000002, appVsyncOffsetNanos=33333333, presentationDeadlineNanos=34333333, supportedHdrTypes=[2, 3, 4], group=2176}
+      DisplayMode{id=5, width=1812, height=2176, xDpi=377.252, yDpi=375.989, peakRefreshRate=24.000002, vsyncRate=24.000002, appVsyncOffsetNanos=41666666, presentationDeadlineNanos=42666666, supportedHdrTypes=[2, 3, 4], group=2176}
+      DisplayMode{id=6, width=1812, height=2176, xDpi=377.252, yDpi=375.989, peakRefreshRate=10.0, vsyncRate=10.0, appVsyncOffsetNanos=100000000, presentationDeadlineNanos=101000000, supportedHdrTypes=[2, 3, 4], group=2176}
+    mActiveSfDisplayMode=DisplayMode{id=2, width=1812, height=2176, xDpi=377.252, yDpi=375.989, peakRefreshRate=60.000004, vsyncRate=60.000004, appVsyncOffsetNanos=16666666, presentationDeadlineNanos=17666666, supportedHdrTypes=[2, 3, 4], group=2176}
+    mActiveRenderFrameRate=60.000004
+    mStaticDisplayInfo=StaticDisplayInfo{isInternal=true, density=2.625, secure=true, deviceProductInfo=DeviceProductInfo{name=, manufacturerPnpId=QCM, productId=1, modelYear=null, manufactureDate=ManufactureDate{week=27, year=2006}, connectionToSinkType=1}, installOrientation=0}
+    mSfDisplayModes=
+      DisplayMode{id=0, width=904, height=2316, xDpi=402.835, yDpi=402.92, peakRefreshRate=120.00001, vsyncRate=120.00001, appVsyncOffsetNanos=8333333, presentationDeadlineNanos=9233333, supportedHdrTypes=[2, 3, 4], group=904}
+      DisplayMode{id=1, width=904, height=2316, xDpi=402.835, yDpi=402.92, peakRefreshRate=96.00001, vsyncRate=96.00001, appVsyncOffsetNanos=10416666, presentationDeadlineNanos=11316666, supportedHdrTypes=[2, 3, 4], group=904}
+      DisplayMode{id=2, width=904, height=2316, xDpi=402.835, yDpi=402.92, peakRefreshRate=60.000004, vsyncRate=60.000004, appVsyncOffsetNanos=16666666, presentationDeadlineNanos=17666666, supportedHdrTypes=[2, 3, 4], group=904}
+      DisplayMode{id=3, width=904, height=2316, xDpi=402.835, yDpi=402.92, peakRefreshRate=48.000004, vsyncRate=48.000004, appVsyncOffsetNanos=20833333, presentationDeadlineNanos=21833333, supportedHdrTypes=[2, 3, 4], group=904}
+      DisplayMode{id=4, width=904, height=2316, xDpi=402.835, yDpi=402.92, peakRefreshRate=30.000002, vsyncRate=30.000002, appVsyncOffsetNanos=33333333, presentationDeadlineNanos=34333333, supportedHdrTypes=[2, 3, 4], group=904}
+      DisplayMode{id=5, width=904, height=2316, xDpi=402.835, yDpi=402.92, peakRefreshRate=24.000002, vsyncRate=24.000002, appVsyncOffsetNanos=41666666, presentationDeadlineNanos=42666666, supportedHdrTypes=[2, 3, 4], group=904}
+      DisplayMode{id=6, width=904, height=2316, xDpi=402.835, yDpi=402.92, peakRefreshRate=10.0, vsyncRate=10.0, appVsyncOffsetNanos=100000000, presentationDeadlineNanos=101000000, supportedHdrTypes=[2, 3, 4], group=904}
+    mActiveSfDisplayMode=DisplayMode{id=0, width=904, height=2316, xDpi=402.835, yDpi=402.92, peakRefreshRate=120.00001, vsyncRate=120.00001, appVsyncOffsetNanos=8333333, presentationDeadlineNanos=9233333, supportedHdrTypes=[2, 3, 4], group=904}
+    mActiveRenderFrameRate=120.00001

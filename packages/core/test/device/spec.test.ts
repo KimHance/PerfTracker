@@ -17,6 +17,10 @@ import {
 import { FakeProcessRunner } from '../support/fakeProcessRunner.js'
 
 const DISPLAY = readFileSync(fileURLToPath(new URL('../fixtures/dumpsys-display.txt', import.meta.url)), 'utf8')
+const FOLDABLE = readFileSync(
+  fileURLToPath(new URL('../fixtures/dumpsys-display-foldable.txt', import.meta.url)),
+  'utf8',
+)
 
 const GETPROP = [
   'ro.product.manufacturer=samsung',
@@ -100,6 +104,53 @@ describe('parseDisplayModes', () => {
 
   it('모드 정보가 없으면 빈 목록과 null 을 낸다', () => {
     expect(parseDisplayModes('nothing here')).toEqual({ active: null, supported: [] })
+  })
+
+  /**
+   * **실측 SM-F936N(접힌 상태).** 화면이 둘이고 `dumpsys` 가 먼저 내놓는 쪽이 **꺼진**
+   * 내부 화면(1812x2176 @60Hz)이다. 첫 번째를 집으면 60 이 나오는데, 그때 `wm size` 는
+   * 커버 화면(904x2316)을 답하고 `frame.deadlines` 는 8.33ms(=120Hz)를 낸다 —
+   * 한 객체 안에 두 화면이 섞인 값이 나갔다.
+   */
+  it('화면이 둘이면 쓰는 쪽을 고른다 — 순서로 고르지 않는다', () => {
+    expect(parseDisplayModes(FOLDABLE).active).toBe(120)
+  })
+
+  /**
+   * 지원 목록도 화면마다 다르다. 두 화면 것을 합치면 **그 화면에 없는 모드**가 있다고
+   * 말하게 된다.
+   *
+   * 실측 F936N 은 두 화면의 지원 집합이 우연히 같아서 그대로는 이 규칙을 못 본다 —
+   * 그래서 꺼진 화면(1812x2176)에만 없는 값 하나를 넣어 새어 나오는지 본다.
+   */
+  it('지원 목록도 쓰는 화면 것만 낸다', () => {
+    const leak = FOLDABLE.replace(
+      'width=1812, height=2176, xDpi=377.252, yDpi=375.989, peakRefreshRate=10.0',
+      'width=1812, height=2176, xDpi=377.252, yDpi=375.989, peakRefreshRate=7.0',
+    )
+    expect(leak).toContain('peakRefreshRate=7.0') // 원문에 심었고
+    expect(parseDisplayModes(leak).supported).not.toContain(7) // 새어 나오면 안 된다
+    expect(parseDisplayModes(FOLDABLE).supported).toEqual([10, 24, 30, 48, 60, 96, 120])
+  })
+
+  /**
+   * **고르지 못하면 찍지 않는다.** 화면이 여럿인데 어느 것인지 모르면서 하나를 고르면
+   * 그것이 정확히 예전 버그다 (규칙 3).
+   */
+  it('활성 화면을 못 정하면 null 이다 — 첫 번째로 때우지 않는다', () => {
+    const noViewport = FOLDABLE.split('\n').filter((l) => !l.includes('DisplayViewport')).join('\n')
+    expect(parseDisplayModes(noViewport).active).toBeNull()
+  })
+
+  /** 화면이 하나면 뷰포트를 못 읽어도 답이 하나뿐이라 모호하지 않다. */
+  it('화면이 하나면 뷰포트 없이도 고른다', () => {
+    expect(parseDisplayModes(DISPLAY).active).toBe(120)
+  })
+
+  /** 회전 중이면 가로세로가 뒤집혀 나올 수 있다 — 그때도 같은 화면이다. */
+  it('가로세로가 뒤집혀도 같은 화면으로 본다', () => {
+    const rotated = FOLDABLE.replace('deviceWidth=904, deviceHeight=2316', 'deviceWidth=2316, deviceHeight=904')
+    expect(parseDisplayModes(rotated).active).toBe(120)
   })
 })
 
