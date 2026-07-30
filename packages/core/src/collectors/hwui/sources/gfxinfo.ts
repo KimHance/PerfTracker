@@ -47,30 +47,66 @@ export function parseGfxinfoCounters(text: string): Record<string, number> | nul
   return found === 0 ? null : out
 }
 
+/** `** Graphics info for pid 30912 [pkg] **` 의 pid. 프로세스가 바뀌었는지 가르는 유일한 근거다. */
+export function parseGfxinfoPid(text: string): number | null {
+  const m = /^\*\* Graphics info for pid (\d+)/m.exec(text)
+  return m === null ? null : Number(m[1])
+}
+
 /**
- * 전/후 차이. **음수면 `null` 이다** — 세션 중 앱 프로세스가 죽어 누적이 리셋된 것이고,
- * 그때 차이는 이 세션의 값이 아니다. 0 으로 뭉개면 "아무 일도 없었다" 가 된다.
+ * 전/후 차이.
+ *
+ * **프로세스가 바뀌었으면 빼지 않고 `after` 를 그대로 쓴다.** 누적은 프로세스 시작부터인데
+ * 그 프로세스가 이 세션 안에서 시작했다면 누적값이 곧 세션값이다. `--launch` 세션이 항상
+ * 이 경우다 — `start` 가 앱을 force-stop 하고 콜드로 띄우므로, before 스냅샷은 곧 죽을
+ * 프로세스의 것이다. 실측(Stream `--launch`): before pid 30912 → after pid 1283, 그리고
+ * before 에는 카운터 줄이 **아예 없었다**.
+ *
+ * 그것을 빼려고 들면(또는 음수라고 버리면) **`--launch` 세션에서는 이 지표가 영영 안 나온다**
+ * — 콜드 스타트를 재는 세션이 가장 흔한 측정인데 말이다.
+ *
+ * 되돌아온 값은 `processRestarted` 로 그 사실을 함께 낸다. 프로세스가 세션 중 여러 번 죽었다면
+ * `after` 는 **마지막** 시작 이후만 담으므로, 그 한정을 사유로 붙일 수 있어야 한다.
  */
-export function diffGfxinfo(pair: SnapshotPair | undefined): HwuiCollection | null {
+export interface GfxinfoDelta {
+  collection: HwuiCollection
+  /** 전/후 프로세스가 다르다 — 값은 뺀 것이 아니라 새 프로세스의 누적 그대로다. */
+  processRestarted: boolean
+}
+
+export function diffGfxinfo(pair: SnapshotPair | undefined): GfxinfoDelta | null {
   if (pair === undefined || pair.before === null || pair.after === null) return null
 
-  const before = parseGfxinfoCounters(pair.before)
   const after = parseGfxinfoCounters(pair.after)
-  if (before === null || after === null) return null
+  // 종료 시점에 통계가 없으면 이 앱은 HWUI 로 그리지 않는다. 그것만은 어느 경우든 확실하다.
+  if (after === null) return null
+
+  const before = parseGfxinfoCounters(pair.before)
+  const beforePid = parseGfxinfoPid(pair.before)
+  const afterPid = parseGfxinfoPid(pair.after)
+
+  // 프로세스가 바뀌었거나 시작 쪽 통계가 없으면 뺄 대상이 없다 — after 가 곧 세션값이다.
+  const restarted = before === null || beforePid === null || afterPid === null || beforePid !== afterPid
 
   const counters = {} as HwuiCounters
   let any = false
 
   for (const { field } of COUNTERS) {
-    const b = before[field]
     const a = after[field]
-    if (b === undefined || a === undefined || a < b) {
+    if (a === undefined) {
       counters[field] = null
       continue
     }
-    counters[field] = a - b
-    any = true
+    if (restarted) {
+      counters[field] = a
+      any = true
+      continue
+    }
+    const b = before![field]
+    // 같은 프로세스인데 값이 줄었다 — 카운터가 리셋된 것이고 그 차이는 세션값이 아니다.
+    counters[field] = b === undefined || a < b ? null : a - b
+    if (counters[field] !== null) any = true
   }
 
-  return any ? { counters } : null
+  return any ? { collection: { counters }, processRestarted: restarted } : null
 }

@@ -185,6 +185,15 @@ export const METRIC_REASON_CODES = [
    */
   'hwui_stats_unavailable',
   /**
+   * HWUI 카운터가 **세션 델타가 아니라 프로세스 시작 이후 누적**이다.
+   *
+   * 세션 전후로 앱 프로세스가 바뀌었다는 뜻이고, `--launch` 세션은 **항상** 여기 해당한다
+   * (`start` 가 force-stop 후 콜드로 띄운다). 그 프로세스가 세션 안에서 시작했으므로 누적값이
+   * 곧 세션값이지만, 세션 중 앱이 여러 번 죽었다면 **마지막 시작 이후**만 담는다.
+   * detail: package
+   */
+  'hwui_counters_since_process_start',
+  /**
    * 이 uid 를 쓰는 패키지를 **열거하지 못했다.** `shared_uid_packages` 가 null 인 경우다.
    *
    * **`detail` 이 두 갈래를 명시한다:**
@@ -368,6 +377,11 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
     `netstats ${d['phase'] === 'after' ? '종료' : '시작'} 스냅샷에서 uid ${String(d['uid'])} 행이 ` +
     `서로 다른 값으로 두 번 나왔습니다 (BPF 맵 순회 재시작, AOSP b/220084230) — ` +
     `마지막 행을 썼지만 어느 쪽이 맞는지는 이 결과로 알 수 없습니다.`,
+  hwui_counters_since_process_start: (d) =>
+    `${String(d['package'])} 의 HWUI 수치는 세션 전후 차이가 아니라 **프로세스 시작 이후 누적**` +
+    `입니다 — 세션 중 프로세스가 새로 떴습니다(--launch 세션은 항상 그렇습니다). ` +
+    `그 프로세스가 세션 안에서 시작했으므로 세션값과 같지만, 앱이 여러 번 죽었다면 ` +
+    `마지막 시작 이후만 담습니다.`,
   hwui_stats_unavailable: (d) =>
     `${String(d['package'])} 가 dumpsys gfxinfo 로 렌더링 집계를 내지 않았습니다 — ` +
     `HWUI(View 계층)로 그리지 않는 앱이거나(Unity · Vulkan · OpenGL) 세션 중 한 번도 ` +

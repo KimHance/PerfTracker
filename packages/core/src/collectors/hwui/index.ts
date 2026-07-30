@@ -58,13 +58,25 @@ export const hwuiCollector: CaptureCollector<HwuiData> = {
   },
 
   async extract(ctx: BaseExtractContext): Promise<ExtractOutcome<HwuiData>> {
-    const collection = diffGfxinfo(ctx.capture.snapshots[GFXINFO_KEY])
-    if (collection === null) {
+    const delta = diffGfxinfo(ctx.capture.snapshots[GFXINFO_KEY])
+    if (delta === null) {
       return {
         collected: false,
         reason: { code: 'hwui_stats_unavailable', detail: { package: ctx.packageName } },
       }
     }
-    return { collected: true, data: toHwuiData(collection) }
+
+    const data = toHwuiData(delta.collection)
+    if (!delta.processRestarted) return { collected: true, data }
+
+    // 값은 나왔지만 **뺀 것이 아니다.** 그 한정을 숨기면 소비자는 이것을 세션 델타로 읽는다.
+    return {
+      collected: true,
+      data,
+      partialReason: {
+        code: 'hwui_counters_since_process_start',
+        detail: { package: ctx.packageName },
+      },
+    }
   },
 }
