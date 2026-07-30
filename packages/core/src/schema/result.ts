@@ -279,6 +279,16 @@ const FRAME_DEADLINES_DESCRIPTION =
   '직전 한 순간의 스냅샷이고, 이쪽은 프레임마다 기기가 실제로 요구한 값이다. ' +
   'sdk 31 미만이거나 마감 정보가 없으면 null 이다.'
 
+const HWUI_HISTOGRAM_DESCRIPTION =
+  '**프레임워크가 만든 프레임 시간 분포의 세션 델타.** metrics.frame.data.buckets 와 ' +
+  '**다른 것을 잰다**: 이쪽은 UI 스레드 + RenderThread 의 CPU 시간(안드로이드 Vitals 가 보는 값)이고, ' +
+  'frame 쪽은 서피스 프레임의 지속 시간이다. 실측 같은 세션에서 p99 가 53ms 대 39.56ms 로 갈렸다 — ' +
+  '둘 다 맞고 다른 질문에 답한다. ' +
+  '**버전 하한이 없다**: sdk 30 처럼 frame 이 미지원인 기기에서 분포를 볼 수 있는 유일한 길이다. ' +
+  '칸 경계는 프레임워크가 정한 것이라 frame 쪽 버킷과 다르다(5ms 부터 1ms 씩, 뒤로 갈수록 넓어진다). ' +
+  '프레임이 0인 칸은 싣지 않는다 — 154칸을 매번 실어 나를 이유가 없다. ' +
+  'to_ms 는 다음 칸의 from_ms 이고 마지막 칸은 null(상한 없음)이다.'
+
 /** 설명은 아래 HWUI_DESCRIPTION 에 있다. */
 export const HwuiDataSchema = z.object({
   total_frames: z.number().int().nonnegative().nullable(),
@@ -289,6 +299,11 @@ export const HwuiDataSchema = z.object({
   slow_bitmap_uploads: z.number().int().nonnegative().nullable(),
   slow_draw_commands: z.number().int().nonnegative().nullable(),
   deadline_missed: z.number().int().nonnegative().nullable(),
+  histogram: z
+    .array(FrameBucketSchema)
+    .nullable()
+    .optional()
+    .describe(HWUI_HISTOGRAM_DESCRIPTION),
 })
 export type HwuiData = z.infer<typeof HwuiDataSchema>
 

@@ -17,4 +17,10 @@ export interface HwuiCounters {
 
 export interface HwuiCollection {
   counters: HwuiCounters
+  /**
+   * 프레임 시간 히스토그램의 세션 델타. **트레이스의 분포와 다른 것을 잰다** —
+   * 이쪽은 UI 스레드 + RenderThread 의 CPU 시간(= Vitals 가 보는 값)이다.
+   * 못 읽었으면 `null` 이다.
+   */
+  histogram: { ms: number; frames: number }[] | null
 }

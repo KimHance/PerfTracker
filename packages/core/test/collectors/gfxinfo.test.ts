@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { diffGfxinfo, parseGfxinfoCounters } from '../../src/collectors/hwui/index.js'
+import { diffGfxinfo, parseGfxinfoCounters, parseGfxinfoHistogram, toHwuiHistogram } from '../../src/collectors/hwui/index.js'
 
 /** 실기기(SM-S901N / sdk 36) `dumpsys gfxinfo com.android.settings` 출력 형식 그대로다. */
 const dump = (total: number, janky: number, pid = 12345): string =>
@@ -20,6 +20,9 @@ const dump = (total: number, janky: number, pid = 12345): string =>
     'Number Slow bitmap uploads: 1',
     'Number Slow issue draw commands: 19',
     'Number Frame deadline missed: 94',
+    // **GPU 히스토그램이 먼저 온다.** 뒤에 두면 느슨한 패턴도 우연히 통과한다.
+    'GPU HISTOGRAM: 1ms=686 2ms=5183',
+    `HISTOGRAM: 5ms=${total - 10} 6ms=7 8ms=3`,
     '',
   ].join('\n')
 
@@ -89,5 +92,57 @@ describe('diffGfxinfo — 누적값의 전후 차이가 이 세션의 값이다'
 
   it('HWUI 통계를 안 내는 앱이면 null 이다', () => {
     expect(diffGfxinfo({ before: 'nothing', after: 'nothing' })).toBeNull()
+  })
+})
+
+describe('parseGfxinfoHistogram', () => {
+  it('HISTOGRAM 줄을 칸으로 읽는다', () => {
+    expect(parseGfxinfoHistogram(dump(20, 1))).toEqual([
+      { ms: 5, frames: 10 },
+      { ms: 6, frames: 7 },
+      { ms: 8, frames: 3 },
+    ])
+  })
+
+  /** `GPU HISTOGRAM` 은 **다른 분포**다. 섞이면 프레임 시간 분포가 통째로 거짓이 된다. */
+  it('GPU HISTOGRAM 을 프레임 히스토그램으로 읽지 않는다', () => {
+    const bins = parseGfxinfoHistogram(dump(20, 1))!
+    expect(bins.some((b) => b.frames === 5183)).toBe(false)
+  })
+
+  it('줄이 없으면 null 이다', () => {
+    expect(parseGfxinfoHistogram('Total frames rendered: 1\n')).toBeNull()
+  })
+})
+
+describe('히스토그램 세션 델타', () => {
+  it('같은 프로세스면 칸마다 뺀다', () => {
+    const d = diffGfxinfo({ before: dump(110, 5), after: dump(130, 8) })!
+    // 5ms 칸: (130-10) - (110-10) = 20. 나머지 칸은 그대로라 0 이 되어 빠진다.
+    expect(d.collection.histogram).toEqual([{ ms: 5, frames: 20 }])
+  })
+
+  it('프로세스가 바뀌면 after 를 그대로 쓴다', () => {
+    const d = diffGfxinfo({ before: dump(9999, 90, 30912), after: dump(30, 2, 1283) })!
+    expect(d.collection.histogram).toEqual([
+      { ms: 5, frames: 20 },
+      { ms: 6, frames: 7 },
+      { ms: 8, frames: 3 },
+    ])
+  })
+})
+
+describe('toHwuiHistogram', () => {
+  /** 분포 렌더러를 두 벌 만들지 않으려고 트레이스 버킷과 같은 모양으로 낸다. */
+  it('to_ms 는 다음 칸의 시작이고 마지막만 null 이다', () => {
+    expect(toHwuiHistogram([{ ms: 8, frames: 3 }, { ms: 5, frames: 10 }])).toEqual([
+      { from_ms: 5, to_ms: 8, count: 10 },
+      { from_ms: 8, to_ms: null, count: 3 },
+    ])
+  })
+
+  it('빈 것은 null 이다', () => {
+    expect(toHwuiHistogram([])).toBeNull()
+    expect(toHwuiHistogram(null)).toBeNull()
   })
 })

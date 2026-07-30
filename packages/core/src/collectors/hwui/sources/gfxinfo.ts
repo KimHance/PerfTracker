@@ -47,6 +47,29 @@ export function parseGfxinfoCounters(text: string): Record<string, number> | nul
   return found === 0 ? null : out
 }
 
+/**
+ * **프레임워크가 만든 프레임 시간 히스토그램.** `HISTOGRAM: 5ms=834 6ms=254 …` 한 줄이다.
+ *
+ * 트레이스의 분포와 **다른 것을 잰다**: 이쪽은 UI 스레드 + RenderThread 의 CPU 시간이고
+ * (Vitals 가 보는 그 값이다) 트레이스는 서피스 프레임의 지속 시간이다. 같은 세션에서
+ * p99 가 53ms 대 39.56ms 로 갈렸다 — 둘 다 맞고, 다른 질문에 답한다.
+ *
+ * **버전 하한이 없다.** sdk 30(A405S)에서도 154칸이 그대로 나온다 — `frame` 이 미지원인
+ * 기기에서 분포를 볼 수 있는 유일한 길이다.
+ *
+ * `GPU HISTOGRAM` 이라는 별개 줄이 있으므로 **줄 시작에 고정**한다. 안 그러면 두 분포가 섞인다.
+ */
+export function parseGfxinfoHistogram(text: string): { ms: number; frames: number }[] | null {
+  const m = /^HISTOGRAM: (.*)$/m.exec(text)
+  if (m === null) return null
+
+  const out: { ms: number; frames: number }[] = []
+  for (const [, ms, frames] of m[1]!.matchAll(/(\d+)ms=(\d+)/g)) {
+    out.push({ ms: Number(ms), frames: Number(frames) })
+  }
+  return out.length === 0 ? null : out
+}
+
 /** `** Graphics info for pid 30912 [pkg] **` 의 pid. 프로세스가 바뀌었는지 가르는 유일한 근거다. */
 export function parseGfxinfoPid(text: string): number | null {
   const m = /^\*\* Graphics info for pid (\d+)/m.exec(text)
@@ -108,5 +131,31 @@ export function diffGfxinfo(pair: SnapshotPair | undefined): GfxinfoDelta | null
     if (counters[field] !== null) any = true
   }
 
-  return any ? { collection: { counters }, processRestarted: restarted } : null
+  return any
+    ? { collection: { counters, histogram: diffHistogram(pair, restarted) }, processRestarted: restarted }
+    : null
+}
+
+/**
+ * 히스토그램도 카운터와 **같은 규칙**으로 접는다: 프로세스가 그대로면 칸마다 빼고, 바뀌었으면
+ * after 를 그대로 쓴다.
+ *
+ * 칸이 줄어든 경우(같은 프로세스인데 after < before)는 그 칸을 **0 으로 둔다** — 카운터와
+ * 달리 여기서 `null` 을 쓸 수 없다. 분포는 칸 하나가 비면 모양이 거짓이 되고, 그 상황은
+ * 애초에 카운터 쪽에서 `null` 로 이미 드러난다.
+ */
+function diffHistogram(
+  pair: SnapshotPair,
+  restarted: boolean,
+): { ms: number; frames: number }[] | null {
+  const after = parseGfxinfoHistogram(pair.after ?? '')
+  if (after === null) return null
+  if (restarted) return after.filter((b) => b.frames > 0)
+
+  const before = new Map(
+    (parseGfxinfoHistogram(pair.before ?? '') ?? []).map((b) => [b.ms, b.frames]),
+  )
+  return after
+    .map((b) => ({ ms: b.ms, frames: Math.max(0, b.frames - (before.get(b.ms) ?? 0)) }))
+    .filter((b) => b.frames > 0)
 }

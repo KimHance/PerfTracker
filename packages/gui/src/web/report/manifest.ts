@@ -14,7 +14,8 @@ import type { Fmt } from './format.js'
 
 export type BlockKind = 'stat' | 'distribution' | 'series' | 'bars' | 'delta' | 'pairs'
 
-export type SectionId = 'startup' | 'render' | 'cpu' | 'memory' | 'log' | 'context' | 'device'
+export type SectionId =
+  | 'startup' | 'render' | 'renderHwui' | 'cpu' | 'memory' | 'log' | 'context' | 'device'
 export type TabId = 'summary' | 'device'
 export type MetricId =
   | 'frame' | 'hwui' | 'startup' | 'cpu' | 'memory' | 'log' | 'thermal' | 'network'
@@ -159,9 +160,19 @@ export const SECTIONS: { id: SectionId; label: string; tab: TabId; note?: string
   { id: 'startup', label: '앱 시작', tab: 'summary' },
   {
     id: 'render',
-    label: '렌더',
+    label: '렌더 — 트레이스',
     tab: 'summary',
     note: '**막대가 왼쪽에 몰릴수록 부드럽습니다.** 오른쪽으로 갈수록 오래 걸린 프레임입니다.',
+  },
+  {
+    id: 'renderHwui',
+    label: '렌더 — 프레임워크',
+    tab: 'summary',
+    note:
+      '**같은 앱을 다른 눈으로 본 것입니다.** 위는 트레이스, 여기는 프레임워크가 자기 ' +
+      '렌더링을 직접 센 값(`dumpsys gfxinfo`)입니다. 재는 값이 달라서 숫자도 다릅니다 — ' +
+      '여기는 UI 스레드+RenderThread 의 CPU 시간이고, 안드로이드 Vitals 가 보는 것과 같습니다. ' +
+      '**버전 하한이 없어서 위가 통째로 비는 기기에서도 나옵니다.**',
   },
   { id: 'cpu', label: 'CPU', tab: 'summary' },
   { id: 'memory', label: '메모리', tab: 'summary' },
@@ -239,22 +250,6 @@ export const MANIFEST: Block[] = [
     ],
   },
   {
-    // 프레임워크가 직접 센 것 — 트레이스와 **다른 모집단**이다 (View 계층만). 나란히 두는
-    // 이유가 그것이다: 두 숫자가 다르면 그 차이 자체가 정보다.
-    kind: 'pairs', section: 'render', title: 'HWUI 집계', metric: 'hwui', span: 5,
-    unit: '', tone: 'alt', path: 'metrics.hwui.data',
-    keys: [
-      { p: 'total_frames', l: '전체', f: 'int' },
-      { p: 'janky_frames', l: 'janky', f: 'int', pct: 'total_frames' },
-      { p: 'deadline_missed', l: '마감 넘김', f: 'int', pct: 'total_frames' },
-      { p: 'missed_vsync', l: 'vsync 놓침', f: 'int' },
-      { p: 'slow_ui_thread', l: 'UI 스레드 느림', f: 'int' },
-      { p: 'slow_draw_commands', l: '그리기 명령 느림', f: 'int' },
-      { p: 'slow_bitmap_uploads', l: '비트맵 업로드 느림', f: 'int' },
-      { p: 'high_input_latency', l: '입력 지연 큼', f: 'int' },
-    ],
-  },
-  {
     // 기기가 프레임마다 배정한 마감. 값이 여럿이면 세션 중 주사율이 바뀐 것이다 —
     // 그 사실 없이는 지속 시간을 **무엇에 대해** 읽어야 하는지 알 수 없다.
     kind: 'bars', section: 'render', title: '기기가 준 마감', metric: 'frame', span: 12,
@@ -270,7 +265,7 @@ export const MANIFEST: Block[] = [
     },
   },
   {
-    kind: 'bars', section: 'render', title: 'jank_type', metric: 'frame', span: 7,
+    kind: 'bars', section: 'render', title: 'jank_type', metric: 'frame', span: 12,
     unit: '', tone: 'alt',
     path: 'metrics.frame.data.jank.by_type',
     labelField: 'type', labelPrefix: '', valueField: 'count', fmt: 'int', scaleMax: null,
@@ -297,6 +292,34 @@ export const MANIFEST: Block[] = [
       'Prediction Error':
         '기기가 예측한 프레임 시간과 실제가 어긋났습니다. 그 자체가 끊김은 아닙니다.',
     },
+  },
+
+  // ── 렌더: 프레임워크가 센 것 ─────────────────────────────────
+  {
+    // **버전 하한이 없는 유일한 분포다.** sdk 30 처럼 트레이스가 없는 기기에서는 이것만 남는다.
+    // 위 분포와 다른 것을 잰다(UI+RenderThread CPU 시간) — 같은 세션에서 p99 가 갈린다.
+    kind: 'distribution', section: 'renderHwui', title: '프레임 시간 분포',
+    metric: 'hwui', unit: 'ms', span: 12, tone: 'alt',
+    path: 'metrics.hwui.data.histogram',
+    // 프레임워크는 세션 델타에 대한 백분위를 주지 않는다. 지어내지 않고 비워 둔다.
+    percentilesPath: 'metrics.hwui.data.percentiles',
+    totalPath: 'metrics.hwui.data.total_frames',
+    breakAfterEmptyBuckets: Infinity,
+  },
+  {
+    // **트레이스에 없는 것만 낸다.** 전체·janky·마감 넘김을 여기서도 내면 위 섹션과 같은
+    // 이름이 두 번 나와서 "어느 게 진짜냐" 가 생긴다 — 실제로 그렇게 읽혔다.
+    // 그 셋은 `total_frames` 로 이미 분포 카드의 각주에 있다.
+    kind: 'pairs', section: 'renderHwui', title: '무엇이 느렸나', metric: 'hwui', span: 12,
+    unit: '', tone: 'alt', path: 'metrics.hwui.data',
+    keys: [
+      { p: 'slow_ui_thread', l: 'UI 스레드', f: 'int' },
+      { p: 'slow_draw_commands', l: '그리기 명령', f: 'int' },
+      { p: 'slow_bitmap_uploads', l: '비트맵 업로드', f: 'int' },
+      { p: 'missed_vsync', l: 'vsync 놓침', f: 'int' },
+      { p: 'high_input_latency', l: '입력 지연', f: 'int' },
+      { p: 'janky_frames', l: 'janky (프레임워크 판정)', f: 'int', pct: 'total_frames' },
+    ],
   },
 
   // ── CPU: 시계열은 전부 선 ────────────────────────────────────

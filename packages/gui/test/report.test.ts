@@ -498,3 +498,42 @@ describe('jank_type', () => {
     expect(note!.startsWith('**')).toBe(true)
   })
 })
+
+/**
+ * **같은 이름을 두 번 보여주면 "어느 게 진짜냐" 가 생긴다.** 실제로 그렇게 읽혔다 —
+ * 트레이스와 프레임워크가 각각 `전체`·`마감 넘김` 을 내고 있었고, 둘은 판정 주체가 달라
+ * 값이 다르다. 출처를 섹션으로 가르고 겹치는 이름을 없앴다.
+ */
+describe('렌더 섹션 — 출처가 구조로 드러난다', () => {
+  const labelsIn = (section: string): string[] =>
+    MANIFEST.filter((b) => b.section === section).flatMap((b) =>
+      b.kind === 'pairs' ? (b.keys ?? []).map((k) => k.l) : [],
+    )
+
+  it('트레이스와 프레임워크가 다른 섹션이다', () => {
+    const ids = SECTIONS.map((x) => x.id)
+    expect(ids).toContain('render')
+    expect(ids).toContain('renderHwui')
+    // 섹션마다 어디서 온 값인지 한 문단으로 말한다.
+    expect(SECTIONS.find((x) => x.id === 'renderHwui')!.note).toContain('gfxinfo')
+  })
+
+  it('두 섹션이 같은 이름의 값을 내지 않는다', () => {
+    const overlap = labelsIn('render').filter((l) => labelsIn('renderHwui').includes(l))
+    expect(overlap).toEqual([])
+  })
+
+  it('프레임워크 섹션은 트레이스에 없는 것을 낸다', () => {
+    expect(labelsIn('renderHwui')).toContain('UI 스레드')
+    expect(labelsIn('renderHwui')).toContain('입력 지연')
+  })
+
+  it('각 섹션의 블록은 자기 출처의 지표만 읽는다', () => {
+    for (const b of MANIFEST.filter((x) => x.section === 'render')) {
+      expect(b.path ?? '', b.title).toContain('metrics.frame')
+    }
+    for (const b of MANIFEST.filter((x) => x.section === 'renderHwui')) {
+      expect(b.path ?? '', b.title).toContain('metrics.hwui')
+    }
+  })
+})
