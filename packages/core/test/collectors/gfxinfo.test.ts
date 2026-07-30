@@ -123,13 +123,20 @@ describe('parseGfxinfoHistogram', () => {
 })
 
 describe('히스토그램 세션 델타', () => {
-  it('같은 프로세스면 칸마다 뺀다', () => {
+  /**
+   * **0 인 칸을 버리지 않는다.** 분포는 어디가 비어 있는가가 곧 정보이고, 있는 칸만 남기면
+   * 축이 세션마다 달라져 두 결과를 나란히 볼 수 없다.
+   */
+  it('같은 프로세스면 칸마다 빼고, 0 이 된 칸도 남긴다', () => {
     const d = diffGfxinfo({ before: dump(110, 5), after: dump(130, 8) })!
-    // 5ms 칸: (130-10) - (110-10) = 20. 나머지 칸은 그대로라 0 이 되어 빠진다.
-    expect(d.collection.histogram).toEqual([{ ms: 5, frames: 20 }])
+    expect(d.collection.histogram).toEqual([
+      { ms: 5, frames: 20 },
+      { ms: 6, frames: 0 },
+      { ms: 8, frames: 0 },
+    ])
   })
 
-  it('프로세스가 바뀌면 after 를 그대로 쓴다', () => {
+  it('프로세스가 바뀌면 after 를 칸째로 그대로 쓴다', () => {
     const d = diffGfxinfo({ before: dump(9999, 90, 30912), after: dump(30, 2, 1283) })!
     expect(d.collection.histogram).toEqual([
       { ms: 5, frames: 20 },

@@ -140,6 +140,10 @@ export function diffGfxinfo(pair: SnapshotPair | undefined): GfxinfoDelta | null
  * 히스토그램도 카운터와 **같은 규칙**으로 접는다: 프로세스가 그대로면 칸마다 빼고, 바뀌었으면
  * after 를 그대로 쓴다.
  *
+ * **칸을 하나도 버리지 않는다 — 0 인 칸도 그대로 싣는다.** 분포는 "어디가 비어 있는가" 가
+ * 곧 정보다. 프레임이 있는 칸만 남기면 축이 데이터에 맞춰 줄었다 늘었다 하고, 두 세션을
+ * 나란히 놓고 비교할 수가 없다. 화면도 같은 규칙이다(`breakAfterEmptyBuckets: Infinity`).
+ *
  * 칸이 줄어든 경우(같은 프로세스인데 after < before)는 그 칸을 **0 으로 둔다** — 카운터와
  * 달리 여기서 `null` 을 쓸 수 없다. 분포는 칸 하나가 비면 모양이 거짓이 되고, 그 상황은
  * 애초에 카운터 쪽에서 `null` 로 이미 드러난다.
@@ -150,12 +154,10 @@ function diffHistogram(
 ): { ms: number; frames: number }[] | null {
   const after = parseGfxinfoHistogram(pair.after ?? '')
   if (after === null) return null
-  if (restarted) return after.filter((b) => b.frames > 0)
+  if (restarted) return after
 
   const before = new Map(
     (parseGfxinfoHistogram(pair.before ?? '') ?? []).map((b) => [b.ms, b.frames]),
   )
-  return after
-    .map((b) => ({ ms: b.ms, frames: Math.max(0, b.frames - (before.get(b.ms) ?? 0)) }))
-    .filter((b) => b.frames > 0)
+  return after.map((b) => ({ ms: b.ms, frames: Math.max(0, b.frames - (before.get(b.ms) ?? 0)) }))
 }
