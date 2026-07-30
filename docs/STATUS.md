@@ -15,7 +15,7 @@
 - **PerfTracker 는 안드로이드 앱 성능을 앱을 고치지 않고 재는 CLI 입니다.**
   adb 로 붙어 Perfetto 트레이스를 남기고 호스트에서 파싱해 세션마다 `result.json` 하나를 냅니다.
 - **M0 ~ M3 이 끝났고 실기기 검증까지 마쳤습니다.** 지표 8개가 전부 돕니다.
-- **기준선:** `npm test` **1,002/1,002** (58 파일, 1초 남짓) · `npm run typecheck` · `npm run build`
+- **기준선:** `npm test` **1,004/1,004** (58 파일, 1초 남짓) · `npm run typecheck` · `npm run build`
   클린 · 온-디바이스 `npm run test:device` **11 스펙**.
   **`npm test` 전에 `npm run build` 가 필요합니다** — `packages/cli` 테스트가
   `@perftracker/core` 를 `dist/` 로 해석하므로, 갓 클론한 저장소에서 곧바로 `npm test` 를

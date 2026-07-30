@@ -147,12 +147,35 @@ describe('히스토그램 세션 델타', () => {
 })
 
 describe('toHwuiHistogram', () => {
-  /** 분포 렌더러를 두 벌 만들지 않으려고 트레이스 버킷과 같은 모양으로 낸다. */
-  it('to_ms 는 다음 칸의 시작이고 마지막만 null 이다', () => {
-    expect(toHwuiHistogram([{ ms: 8, frames: 3 }, { ms: 5, frames: 10 }])).toEqual([
-      { from_ms: 5, to_ms: 8, count: 10 },
-      { from_ms: 8, to_ms: null, count: 3 },
-    ])
+  /**
+   * **첫 칸은 0 에서 시작한다.** 프레임워크의 첫 칸 이름은 `5ms` 지만 그것은 "5ms 이하 전부"
+   * 이고 더 빠른 프레임을 담을 칸이 따로 없다 — `from_ms: 5` 로 적으면 0–5ms 가 화면에서
+   * 사라진 것처럼 보인다.
+   */
+  it('첫 칸이 0 에서 시작한다', () => {
+    const out = toHwuiHistogram([{ ms: 5, frames: 10 }, { ms: 8, frames: 3 }])!
+    expect(out[0]).toEqual({ from_ms: 0, to_ms: 8, count: 10 })
+  })
+
+  /**
+   * **700ms 에서 자르되 버리지 않는다.** 프레임워크 칸은 4950ms 까지 가는데 실제 데이터는
+   * 앞쪽에 몰려 있어 그대로 그리면 화면의 3분의 2가 빈다. 넘는 것은 마지막 한 칸으로 접어
+   * 칸의 합이 전체 프레임 수와 같게 둔다.
+   */
+  it('700ms 이상을 마지막 한 칸으로 접는다 — 합이 유지된다', () => {
+    const out = toHwuiHistogram([
+      { ms: 5, frames: 10 },
+      { ms: 700, frames: 2 },
+      { ms: 1500, frames: 3 },
+      { ms: 4950, frames: 1 },
+    ])!
+    expect(out[out.length - 1]).toEqual({ from_ms: 700, to_ms: null, count: 6 })
+    expect(out.reduce((n, b) => n + b.count, 0)).toBe(16)
+  })
+
+  it('700 아래는 0 인 칸도 남긴다', () => {
+    const out = toHwuiHistogram([{ ms: 5, frames: 10 }, { ms: 6, frames: 0 }, { ms: 7, frames: 1 }])!
+    expect(out.map((b) => b.count)).toEqual([10, 0, 1, 0])
   })
 
   it('빈 것은 null 이다', () => {

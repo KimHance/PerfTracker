@@ -5,19 +5,39 @@ import type { HwuiCollection } from './model.js'
  * 프레임워크 칸을 **트레이스 버킷과 같은 모양**으로 옮긴다. 그래야 화면의 분포 렌더러를
  * 그대로 쓸 수 있다 — 분포를 그리는 코드가 두 벌이 되면 하나는 언젠가 낡는다.
  *
- * `to_ms` 는 다음 칸의 시작이다. 마지막 칸만 `null`(상한 없음) — 프레임워크 히스토그램의
- * 마지막 칸이 실제로 그런 뜻이다.
+ * **700ms 에서 자른다.** 프레임워크 칸은 4950ms 까지 가는데 실제 데이터는 앞쪽에 몰려 있어서,
+ * 그대로 그리면 화면의 3분의 2가 빈 칸이 된다. 700ms 는 트레이스 버킷의 상한과 같은 자리다.
+ *
+ * **자르되 버리지 않는다.** 700ms 이상은 마지막 한 칸(`to_ms: null`)으로 접는다 — 그래야
+ * 칸의 합이 `total_frames` 와 같고, "느린 프레임이 몇 장 있었나" 를 여전히 읽을 수 있다.
+ * 그 아래는 **0 인 칸까지 전부 남긴다** (규칙: 버킷은 하나도 빠짐없이).
+ *
+ * **첫 칸은 0 에서 시작한다.** 프레임워크 히스토그램의 첫 칸 이름은 `5ms` 지만 그것은
+ * "5ms 이하 전부" 다 — 그보다 빠른 프레임을 담을 칸이 따로 없다. `from_ms: 5` 로 적으면
+ * 0–5ms 구간이 화면에서 사라진 것처럼 보인다.
  */
+export const HWUI_OVERFLOW_FROM_MS = 700
+
 export function toHwuiHistogram(
   histogram: { ms: number; frames: number }[] | null,
 ): NonNullable<HwuiData['histogram']> | null {
   if (histogram === null || histogram.length === 0) return null
   const sorted = [...histogram].sort((a, b) => a.ms - b.ms)
-  return sorted.map((b, i) => ({
-    from_ms: b.ms,
-    to_ms: i === sorted.length - 1 ? null : sorted[i + 1]!.ms,
+
+  const kept = sorted.filter((b) => b.ms < HWUI_OVERFLOW_FROM_MS)
+  const overflow = sorted
+    .filter((b) => b.ms >= HWUI_OVERFLOW_FROM_MS)
+    .reduce((n, b) => n + b.frames, 0)
+
+  const out: NonNullable<HwuiData['histogram']> = kept.map((b, i) => ({
+    from_ms: i === 0 ? 0 : b.ms,
+    to_ms: i === kept.length - 1 ? HWUI_OVERFLOW_FROM_MS : kept[i + 1]!.ms,
     count: b.frames,
   }))
+  // 자른 뒤에도 칸이 하나는 있어야 한다. 700 이상만 있는 트레이스는 실제로 없지만,
+  // 있다면 그 사실이 그대로 보여야 한다.
+  out.push({ from_ms: HWUI_OVERFLOW_FROM_MS, to_ms: null, count: overflow })
+  return out
 }
 
 /**
