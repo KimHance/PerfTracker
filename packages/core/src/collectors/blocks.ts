@@ -16,13 +16,8 @@
 /** 폴링 주기. `assertLowOverheadConfig` 의 1000ms 하한과 같은 값이다. */
 export const POLL_PERIOD_MS = 1000
 
-export const FRAMETIMELINE_BLOCK =
-  'data_sources { config { name: "android.surfaceflinger.frametimeline" } }'
-
 /**
- * 소비자 셋이 공유한다: **frame**, **memory**, **overhead**.
- *   - frame  : frametimeline 은 프레임 타이밍만 주고 process 테이블의 이름을 안 채운다 —
- *     이 블록이 그 이름을 채운다.
+ * 소비자 둘이 공유한다: **memory**, **overhead**.
  *   - memory : 앱의 `mem.rss` 계열.
  *   - overhead: `traced` / `traced_probes` 의 `runtime.*` 와 `mem.rss`.
  *

@@ -77,11 +77,14 @@ export interface DeviceView {
 // ─── 지표 지원 여부 ────────────────────────────────────────────────────────
 
 /** 지표 id 는 result.json 의 `metrics` 키와 같다. */
-export type MetricId = 'frame' | 'startup' | 'cpu' | 'memory' | 'log' | 'thermal' | 'network'
+export type MetricId = 'hwui' | 'startup' | 'cpu' | 'memory' | 'log' | 'thermal' | 'network'
 
 /** 화면에 그리는 순서. 서버 응답이 비어 있어도 이 순서로 자리를 잡는다. */
 export const METRIC_ORDER: readonly MetricId[] = [
-  'frame',
+  // **이 배열에 없는 지표는 화면에서 통째로 사라진다**: `server/view.ts` 가 doctor 결과를
+  // 이 집합으로 거른다. 한동안 `hwui` 가 빠져 있어서 sdk 30 에서 "5/7 측정 가능" 이라고만
+  // 말하고 정작 그 기기에서 되는 렌더 지표를 안 알려 줬다.
+  'hwui',
   'startup',
   'cpu',
   'memory',

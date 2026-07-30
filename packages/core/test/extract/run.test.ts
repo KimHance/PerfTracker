@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { SCHEMA_HELP, type NetworkData, type ThermalData } from '../../src/schema/result.js'
 import { CPU_TIMES_SQL } from '../../src/collectors/cpu/index.js'
-import { FRAME_PROCESS_SQL, frameSamplesSql } from '../../src/collectors/frame/index.js'
 import { SessionStateError } from '../../src/errors.js'
 import { BUFFER_STATS_SQL, extractRun, readSnapshots } from '../../src/extract/run.js'
 import { TRACING_OVERHEAD_SQL } from '../../src/extract/overhead.js'
@@ -164,12 +163,11 @@ async function makeRun(
       uid: overrides.appUid === undefined ? APP_UID : overrides.appUid,
       install_source: 'com.android.vending',
       launcher_activity: 'com.naver.webtoon.splash.SplashActivity',
-      render_process: null,
       pid: null,
     },
     env: {
       sdkInt: overrides.sdkInt ?? 36,
-      dataSources: ['android.surfaceflinger.frametimeline'],
+      dataSources: ['linux.process_stats', 'linux.sys_stats', 'linux.ftrace', 'android.log'],
     },
     warnings: [{ code: 'charging_during_session', message: 'USB 충전 중이었음' }],
     adb_commands_during_session: overrides.adbCommandsDuringSession ?? 0,
@@ -181,12 +179,6 @@ async function makeRun(
 
 function runner(tracePath: string): FakeProcessRunner {
   return new FakeProcessRunner()
-    .on(`query ${tracePath} ${FRAME_PROCESS_SQL}`, {
-      stdout: `"j"\n"[{"upid":2,"pid":24193,"name":"${PKG}","frames":4}]"\n`,
-    })
-    .on(`query ${tracePath} ${frameSamplesSql(2)}`, {
-      stdout: '"j"\n"[[0,8000000],[0,20000000],[0,4000000],[1,900000000]]"\n',
-    })
     .on(`query ${tracePath} ${BUFFER_STATS_SQL}`, { stdout: '"j"\n"[]"\n' })
     .on(`query ${tracePath} ${TRACING_OVERHEAD_SQL}`, {
       stdout:
@@ -213,8 +205,6 @@ describe('extractRun', () => {
     })
 
     expect(result.schema_version).toBe('1.1.0')
-    expect(result.metrics.frame.status).toBe('collected')
-    expect(result.metrics.frame.data?.total_frames).toBe(4)
     expect(result.session.duration_ms).toBe(42_735)
     expect(result.target_app.label).toBe('네이버 웹툰')
     expect(result.device.static.model).toBe('SM-S931N')
@@ -246,83 +236,16 @@ describe('extractRun', () => {
     expect(String(written['schema_help'])).toContain('null')
   })
 
-  it('Android 12 미만이면 frame 을 unsupported 로 남긴다', async () => {
-    const runDir = await makeRun({ sdkInt: 30 })
-
-    const result = await extractRun(runDir, {
-      traceProcessorPath: process.execPath,
-      runner: runner(join(runDir, 'trace.perfetto-trace')),
-    })
-
-    expect(result.metrics.frame.status).toBe('unsupported')
-    // 기계가 매칭하는 것은 코드, 사람이 읽는 것은 문장 — 두 필드가 따로 있다.
-    expect(result.metrics.frame.reason_code).toBe('sdk_too_low')
-    expect(result.metrics.frame.reason).toContain('sdk_int=30')
-    expect(result.metrics.frame.data).toBeNull()
-  })
-
-  it('트레이스가 없으면 trace_missing 코드를 남긴다', async () => {
-    const runDir = await makeRun({ trace: null })
-
-    const result = await extractRun(runDir, {
-      traceProcessorPath: process.execPath,
-      runner: new FakeProcessRunner(),
-    })
-
-    expect(result.metrics.frame.reason_code).toBe('trace_missing')
-  })
-
-  it('수집에 성공하면 target_app 의 렌더 프로세스와 pid 를 채운다', async () => {
-    const runDir = await makeRun()
-
-    const result = await extractRun(runDir, {
-      traceProcessorPath: process.execPath,
-      runner: runner(join(runDir, 'trace.perfetto-trace')),
-    })
-
-    expect(result.target_app.render_process).toBe(PKG)
-    expect(result.target_app.pid).toBe(24193)
-    expect(result.metrics.frame.reason_code).toBeNull()
-  })
-
-  it('렌더 프로세스를 못 찾은 것과 프레임이 없는 것을 다른 코드로 구분한다', async () => {
-    const runDir = await makeRun()
-    const trace = join(runDir, 'trace.perfetto-trace')
-    const noFrames = runner(trace).on(`query ${trace} ${frameSamplesSql(2)}`, {
-      stdout: '"j"\n"[]"\n',
-    })
-
-    const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: noFrames })
-
-    expect(result.metrics.frame.status).toBe('partial')
-    expect(result.metrics.frame.reason_code).toBe('no_frames')
-    expect(result.metrics.frame.reason).toContain('프레임')
-  })
-
-  it('트레이스가 없으면 frame 을 failed 로 남기고 나머지는 채운다', async () => {
-    const runDir = await makeRun({ trace: null })
-
-    const result = await extractRun(runDir, {
-      traceProcessorPath: process.execPath,
-      runner: new FakeProcessRunner(),
-    })
-
-    expect(result.metrics.frame.status).toBe('failed')
-    expect(result.device.static.model).toBe('SM-S931N')
-  })
-
   it('쿼리가 터져도 다른 필드는 살린다', async () => {
     const runDir = await makeRun()
     const trace = join(runDir, 'trace.perfetto-trace')
     const broken = new FakeProcessRunner()
-      .on(`query ${trace} ${FRAME_PROCESS_SQL}`, { code: 1, stderr: 'no such table' })
       .on(`query ${trace} ${BUFFER_STATS_SQL}`, { stdout: '"j"\n"[]"\n' })
 
     const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: broken })
 
-    expect(result.metrics.frame.status).toBe('failed')
-    expect(result.metrics.frame.reason_code).toBe('query_failed')
-    expect(result.metrics.frame.reason).toContain('no such table')
+    expect(result.metrics.cpu?.status).toBe('failed')
+    expect(result.metrics.cpu?.reason_code).toBe('query_failed')
     expect(result.measurement_overhead.trace_buffer_overrun).toBe(false)
   })
 
@@ -336,7 +259,7 @@ describe('extractRun', () => {
     })
 
     expect(result.session.state).toBe('running')
-    expect(result.metrics.frame.status).toBe('failed')
+    expect(result.metrics.cpu?.status).toBe('failed')
     expect(result.warnings.map((w) => w.code)).toContain('session_still_running')
     // 끝나지 않은 세션의 길이는 0 이 아니라 "모른다" 다 — 아래 M4 블록 참고.
     expect(result.session.duration_ms).toBeNull()
@@ -409,7 +332,6 @@ describe('extractRun', () => {
 
     const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: broken })
 
-    expect(result.metrics.frame.status).toBe('collected')
     expect(result.measurement_overhead.trace_buffer_overrun).toBeNull()
   })
 
@@ -445,7 +367,7 @@ describe('extractRun', () => {
       runner: new FakeProcessRunner(),
     })
 
-    expect(result.metrics.frame.status).toBe('failed')
+    expect(result.metrics.cpu?.status).toBe('failed')
     expect(result.metrics.startup?.status).toBe('collected')
     expect(result.metrics.startup?.data).toEqual({ total_time_ms: 1842, launch_state: 'COLD', status: null, wait_time_ms: null })
   })
@@ -490,64 +412,6 @@ describe('extractRun', () => {
     expect(result.measurement_overhead.tracing_processes_peak_rss_kb).toBeNull()
   })
 
-  /**
-   * 에뮬레이터 실측 재현 (Defect 0). `--launch` 로 띄운 앱이 트레이스에는 `zygote64` 라는
-   * 이름으로 들어 있고, capture 단계가 받아 둔 pid 만이 그것을 대상 앱과 이어 준다.
-   */
-  describe('트레이스의 프로세스 이름이 낡았을 때', () => {
-    const STALE_CANDIDATES =
-      '[{"upid":254,"pid":551,"name":"system_server","frames":37},' +
-      '{"upid":309,"pid":6037,"name":"zygote64","frames":11}]'
-
-    function staleRunner(tracePath: string): FakeProcessRunner {
-      return runner(tracePath)
-        .on(`query ${tracePath} ${FRAME_PROCESS_SQL}`, { stdout: `"j"\n"${STALE_CANDIDATES}"\n` })
-        .on(`query ${tracePath} ${frameSamplesSql(309)}`, {
-          stdout: '"j"\n"[[0,8000000],[0,20000000],[0,4000000]]"\n',
-        })
-    }
-
-    it('frame 이 zygote64 대신 패키지명을 내고 그 근거를 사유로 남긴다', async () => {
-      const runDir = await makeRun({ appPid: 6037 })
-      const result = await extractRun(runDir, {
-        traceProcessorPath: process.execPath,
-        runner: staleRunner(join(runDir, 'trace.perfetto-trace')),
-      })
-
-      expect(result.metrics.frame.data?.process).toBe(PKG)
-      expect(result.metrics.frame.data?.pid).toBe(6037)
-      expect(result.metrics.frame.status).toBe('partial')
-      expect(result.metrics.frame.reason_code).toBe('process_name_stale_in_trace')
-      expect(result.metrics.frame.reason).toContain('zygote64')
-      // target_app 까지 틀린 이름이 번지지 않는다.
-      expect(result.target_app.render_process).toBe(PKG)
-      expect(result.target_app.pid).toBe(6037)
-    })
-
-    it('pid 가 없던 시절의 session.json 은 추측 대신 render_process_not_found 를 낸다', async () => {
-      const runDir = await makeRun()
-      const result = await extractRun(runDir, {
-        traceProcessorPath: process.execPath,
-        runner: staleRunner(join(runDir, 'trace.perfetto-trace')),
-      })
-
-      expect(result.metrics.frame.data).toBeNull()
-      expect(result.metrics.frame.reason_code).toBe('render_process_not_found')
-      expect(result.target_app.render_process).toBeNull()
-    })
-
-    it('frame 이 값을 못 내도 캡처한 pid 는 target_app 에 남는다', async () => {
-      const runDir = await makeRun({ trace: null, appPid: 6037 })
-      const result = await extractRun(runDir, {
-        traceProcessorPath: process.execPath,
-        runner: new FakeProcessRunner(),
-      })
-
-      expect(result.metrics.frame.status).toBe('failed')
-      expect(result.target_app.pid).toBe(6037)
-      expect(result.target_app.render_process).toBeNull()
-    })
-  })
 
   /**
    * D3 의 핵심 약속: `capture.json` 의 형식 버전을 올리지 않았으므로 M3 이전 run 이 그대로
@@ -768,7 +632,8 @@ describe('extractRun', () => {
 
     const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: broken })
 
-    expect(result.metrics.frame.status).toBe('collected')
+    // 오버헤드 쿼리가 터져도 지표 자체는 나온다 — 둘은 다른 질의다.
+    expect(result.metrics.cpu?.data).not.toBeNull()
     expect(result.measurement_overhead.tracing_processes_cpu_time_ms).toBeNull()
   })
 })

@@ -2,7 +2,6 @@ import { access, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ProcessRunner } from '../adb/process.js'
 import { findPackageUid } from '../app/list.js'
-import { frameCollector } from '../collectors/frame/index.js'
 import { COLLECTORS } from '../collectors/registry.js'
 import { parseSnapshotRawPath, type SnapshotPair, snapshotText } from '../collectors/snapshots.js'
 import type {
@@ -21,7 +20,6 @@ import { REFERENCES } from '../schema/references.js'
 import { type MetricReason, renderReason } from '../schema/reasons.js'
 import {
   type DeviceState,
-  FrameDataSchema,
   type MetricResult,
   type MetricStatus,
   type Result,
@@ -323,7 +321,6 @@ export async function extractRun(
       : { cpuTimeMs: null, cpuSharePct: null, peakRssKb: null }
 
   // 렌더 프로세스는 트레이스를 파싱해야 알 수 있어 capture 단계에서는 null 이었다.
-  const frameData = FrameDataSchema.safeParse(metrics[frameCollector.id]?.data)
 
   const result: Result = {
     schema_version: SCHEMA_VERSION,
@@ -364,19 +361,9 @@ export async function extractRun(
         capture.snapshots['thermalservice']?.after ?? null,
       ),
     },
-    // frame 이 렌더 프로세스를 특정했으면 여기서 채운다 — 손에 쥐고도 안 쓰던 값이다.
-    // frame 이 값을 못 냈어도 pid 는 캡처 때 받아 둔 것이 있을 수 있다. 이름은 그렇지 않다 —
-    // 렌더 프로세스가 어느 것인지는 트레이스를 봐야만 알 수 있으므로 null 로 남긴다.
-    // uid 도 같은 규칙이다: 캡처가 못 적었어도 회수해 둔 원문에 답이 있으면 그것을 싣는다.
-    target_app: frameData.success
-      ? {
-          ...manifest.target_app,
-          uid: appUid,
-          render_process: frameData.data.process,
-          pid: frameData.data.pid,
-        }
-      : { ...manifest.target_app, uid: appUid, pid: manifest.target_app.pid ?? capture.appPid },
-    // 키는 collector.id 다. 스키마가 frame 을 알고 나머지는 MetricResult 모양으로 검증한다.
+    // uid 는 캡처가 못 적었어도 회수해 둔 원문에 답이 있으면 그것을 싣는다 —
+    // "나중에 더 나은 근거가 생기면 값을 갱신한다" 는 이 코드베이스의 관행이다.
+    target_app: { ...manifest.target_app, uid: appUid, pid: manifest.target_app.pid ?? capture.appPid },
     metrics: metrics as Result['metrics'],
     measurement_overhead: {
       tracing_processes_cpu_time_ms: overhead.cpuTimeMs,

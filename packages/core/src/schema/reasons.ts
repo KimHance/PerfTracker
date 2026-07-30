@@ -23,9 +23,6 @@ export const METRIC_REASON_CODES = [
   /** 회수된 트레이스 원본이 run 디렉토리에 없다. */
   'trace_missing',
   /** 트레이스 안에서 대상 앱의 렌더 프로세스를 특정하지 못했다. detail: package */
-  'render_process_not_found',
-  /** 프로세스는 찾았지만 완료된 프레임이 하나도 없다. detail: process */
-  'no_frames',
   /**
    * 프레임 duration 이 버킷에 넣을 수 없는 값이었다 (음수 또는 유한하지 않음).
    * SQL 이 `dur >= 0` 으로 거르므로 정상 트레이스에서는 나오지 않는다.
@@ -257,9 +254,6 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
   data_source_not_registered: (d) =>
     `이 기기에 perfetto 데이터소스가 등록되어 있지 않습니다: ${String(d['data_source'])}`,
   trace_missing: () => '트레이스 원본이 없습니다.',
-  render_process_not_found: (d) =>
-    `대상 앱(${String(d['package'])})의 렌더 프로세스를 트레이스에서 찾지 못했습니다.`,
-  no_frames: (d) => `렌더 프로세스(${String(d['process'])})에서 완료된 프레임을 찾지 못했습니다.`,
   frame_duration_out_of_range: (d) =>
     `렌더 프로세스(${String(d['process'])})의 프레임 duration 에 버킷 범위 밖의 값이 ` +
     `있습니다 (${String(d['duration_ms'])}ms) — 트레이스 쿼리는 성공했고 값 자체가 집계할 수 ` +
@@ -385,7 +379,7 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
   hwui_stats_unavailable: (d) =>
     `${String(d['package'])} 가 dumpsys gfxinfo 로 렌더링 집계를 내지 않았습니다 — ` +
     `HWUI(View 계층)로 그리지 않는 앱이거나(Unity · Vulkan · OpenGL) 세션 중 한 번도 ` +
-    `렌더링하지 않았습니다. metrics.frame 은 트레이스에서 오므로 이것과 무관하게 나옵니다.`,
+    `렌더링하지 않았습니다. Unity·Vulkan·OpenGL 앱이 그렇고, 그것은 Vitals 와 같은 한계입니다.`,
   uid_shared_by_multiple_packages: (d) =>
     `uid ${String(d['uid'])} 를 패키지 ${String(d['package_count'])}개가 함께 씁니다 — ` +
     `이 숫자는 그 ${String(d['package_count'])}개가 주고받은 것의 **합계**이고 대상 앱 몫만 ` +

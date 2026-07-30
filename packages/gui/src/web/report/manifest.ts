@@ -16,8 +16,7 @@ export type BlockKind = 'stat' | 'distribution' | 'series' | 'bars' | 'delta' | 
 
 export type SectionId = 'startup' | 'render' | 'cpu' | 'memory' | 'log' | 'context' | 'device'
 export type TabId = 'summary' | 'device'
-export type MetricId =
-  | 'frame' | 'hwui' | 'startup' | 'cpu' | 'memory' | 'log' | 'thermal' | 'network'
+export type MetricId = 'hwui' | 'startup' | 'cpu' | 'memory' | 'log' | 'thermal' | 'network'
 
 export interface BlockBase {
   kind: BlockKind
@@ -36,7 +35,6 @@ export interface BlockBase {
    *
    * 같은 `timeline` 이라도 위치가 다르기 때문이다:
    * ```
-   * metrics.frame.data.timeline        ← data 바로 아래
    * metrics.memory.data.timeline       ← 여기도
    * metrics.cpu.data.app.timeline      ← cpu 는 app 아래   ★
    * metrics.log.data.app.timeline      ← log 도 app 아래   ★
@@ -70,7 +68,7 @@ export interface DistributionBlock extends BlockBase {
    *
    * **마감(8.33ms·16.67ms)을 여기 두지 않는다.** 프레임마다 마감이 다르든 세션 중에 바뀌든
    * 그 비교는 기기가 이미 프레임 단위로 끝냈고, 읽는 쪽이 알고 싶은 것은 "그래서 몇 %가
-   * 걸렸나" 하나다. 마감 자체는 `result.json` 의 `metrics.frame.data.deadlines` 에 있다.
+   * 걸렸나" 하나다.
    *
    * 분자·분모가 **백분위와 같은 지표**여야 한다 — 출처가 갈리면 옆에 선 숫자끼리 모집단이
    * 달라진다.
@@ -186,7 +184,7 @@ export const TABS: { id: TabId; label: string }[] = [
 ]
 
 export const KNOWN_METRICS: MetricId[] =
-  ['frame', 'hwui', 'startup', 'cpu', 'memory', 'log', 'thermal', 'network']
+  ['hwui', 'startup', 'cpu', 'memory', 'log', 'thermal', 'network']
 
 /**
  * **일부러 안 그리는 지표.** 푸터의 "무시한 지표" 에서 뺀다.
@@ -194,11 +192,11 @@ export const KNOWN_METRICS: MetricId[] =
  * 그 경고는 *몰라서* 안 그린 것을 잡으려고 있다 — 새 지표가 생겼는데 아무도 매니페스트에
  * 안 넣은 상황. 여기 적힌 것은 이유가 있어 뺀 것이라 매번 경고를 띄우면 진짜 신호가 묻힌다.
  *
- * `frame`: 렌더 분포를 프레임워크(`hwui`) 기준으로 정했다. 트레이스 쪽도 같은 것을 재지만
- * 값이 달라, 한 화면에 둘을 놓으면 같은 이름이 두 번 나오고 "어느 게 진짜냐" 가 된다.
- * 데이터는 `result.json` 에 그대로 있다.
+ * **지금은 비어 있다.** 한동안 `frame` 이 여기 있었는데 — 화면엔 없고 `result.json` 에만
+ * 남아서 **사람은 보고서를, LLM 은 파일을 보며 다른 숫자를 들게 됐다.** 그래서 수집을
+ * 아예 접었다. 여기에 무언가를 넣기 전에 그 비대칭을 감당할 수 있는지 먼저 볼 것.
  */
-export const NOT_DRAWN_METRICS: MetricId[] = ['frame']
+export const NOT_DRAWN_METRICS: MetricId[] = []
 
 /** 이 화면이 해석할 줄 아는 스키마 메이저. 다르면 헤더가 먼저 말한다. */
 export const SCHEMA_MAJOR = 1
@@ -232,7 +230,6 @@ export const MANIFEST: Block[] = [
     keys: [
       { p: 'launcher_activity', l: '런처 액티비티', f: 'wrap' },
       { p: 'launcher_activity_candidates', l: '후보', f: 'list' },
-      { p: 'render_process', l: '렌더 프로세스', f: 'wrap' },
       { p: 'pid', l: 'pid', f: 'raw' },
     ],
   },
@@ -241,10 +238,8 @@ export const MANIFEST: Block[] = [
   {
     // **Vitals 가 보는 그 값이다** — UI 스레드 + RenderThread 의 CPU 시간, View 계층만.
     //
-    // 트레이스에도 분포가 있다(`metrics.frame.data.buckets`, 서피스 프레임 지속 시간).
-    // 화면에는 두지 않는다: 두 장을 나란히 놓았더니 읽는 쪽이 먼저 묻는 것이 "어느 게
-    // 진짜냐" 였다. 데이터는 `result.json` 에 그대로 있고, 화면이 답할 질문만 하나로 줄인다.
-    //
+    // **렌더는 이 한 경로뿐이다.** 트레이스로도 같은 것을 재던 시절이 있었는데, 화면이
+    // 하나만 그리게 되자 나머지가 `result.json` 에만 남아 사람과 LLM 이 다른 숫자를 봤다.
     // 버전 하한이 없어서 sdk 30 처럼 트레이스가 없는 기기에서도 이 카드는 그려진다.
     kind: 'distribution', section: 'render', title: '프레임 시간 분포',
     metric: 'hwui', unit: 'ms', span: 12, tone: 'alt',
@@ -258,9 +253,6 @@ export const MANIFEST: Block[] = [
     breakAfterEmptyBuckets: Infinity,
   },
   {
-    // 분포를 프레임워크 것으로 정했으므로 이 섹션은 **프레임워크 지표만** 낸다.
-    // 트레이스 쪽(`metrics.frame`)은 `result.json` 에 그대로 있고 화면에서만 뺐다 —
-    // 두 출처를 한 화면에 섞으면 같은 이름이 두 번 나오고 "어느 게 진짜냐" 가 된다.
     // **라벨은 `dumpsys gfxinfo` 의 줄 이름 그대로다 — 번역하지 않는다.** 옮기는 순간
     // 원문과 대조할 수 없고("그리기 명령" 을 gfxinfo 에서 grep 할 수 없다), 옮긴 말이
     // 원문보다 정확할 수도 없다. 기기가 영어로 준 것은 영어로 싣는다.
@@ -468,7 +460,6 @@ export const MANIFEST: Block[] = [
       { p: 'pid', l: 'pid', f: 'raw' },
       { p: 'install_source', l: '설치 경로', f: 'raw' },
       { p: 'launcher_activity', l: '진입점', f: 'wrap' },
-      { p: 'render_process', l: '렌더 프로세스', f: 'wrap' },
     ],
   },
   {

@@ -100,9 +100,8 @@ PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지> npm run test:d
 
 | 자리 | 하한 | 없으면 |
 | --- | --- | --- |
-| `frame` | sdk 31 (`frametimeline`) | `unsupported` + 사유를 단언 |
 | `network` · `netstats`/`packages` 스냅샷 | sdk 34 | 스냅샷 파일 자체가 없는 것이 정상 |
-| `hwui` | **없음** (`dumpsys gfxinfo`) | 하한이 없다 — sdk 30 에서 `frame` 이 미지원일 때도 나온다 |
+| `hwui` | **없음** (`dumpsys gfxinfo`) | 하한이 없다 — 어느 기기에서든 나온다 |
 | **`cpu.app` · `measurement_overhead` 의 CPU 두 필드** | **sdk 35** (`PROCESS_RUNTIME_MIN_SDK`) | `null` 이어야 한다. 0 이면 없던 사실을 만든 것 |
 
 마지막 줄이 함정이다: `cpu` 는 **지원되는 지표인데도** 앱 자리가 비는 기기가 있다.

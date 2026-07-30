@@ -14,7 +14,7 @@ import {
 import { runStart } from '../../src/commands/start.js'
 import { runStop } from '../../src/commands/stop.js'
 import { createContext } from '../../src/context.js'
-import { deviceCapabilities, DEVICE_OPTS, DEVICE_TARGET_APP, expectHonestlyUnsupported } from './target.js'
+import { deviceCapabilities, DEVICE_OPTS, DEVICE_TARGET_APP } from './target.js'
 
 /**
  * 실기기 또는 에뮬레이터가 필요하다. `npm run test:device` 로만 실행된다.
@@ -83,19 +83,13 @@ describe('M2 기기 통합', () => {
 
     // --- 에뮬레이터에서도 정직하게 참인 단언들 ---
 
-    // Frame: `--launch` 로 앱을 콜드 스타트시킨 세션은 실제로 프레임을 수집한다.
-    // (옛 README 의 "에뮬레이터는 actual_frame_timeline_slice 를 안 채운다" 는 런처만 조작한
-    // 세션의 관측이었다. --launch 세션 11회 연속으로 대상 앱의 프레임이 잡혔다.)
-    // 프레임 **수**는 단언하지 않는다 — 15초 세션에 4~9개라 통계적 의미는 실기기 몫이다.
-    const frame = result.metrics.frame
-    if (caps.supported.has('frame')) {
-      expect(frame.status, `frame: ${frame.reason ?? ''}`).toMatch(/^(collected|partial)$/)
-      expect(frame.data, `frame: ${frame.reason ?? ''}`).not.toBeNull()
-      expect(frame.data!.process.startsWith(result.target_app.package)).toBe(true)
-      expect(frame.data!.total_frames).toBeGreaterThan(0)
-    } else {
-      // sdk 31 미만. 못 재는 것 자체는 기기의 성질이고, 스펙이 볼 것은 **정직하게 보고하는가** 다.
-      expectHonestlyUnsupported(frame, 'frame', caps)
+    // 렌더: `dumpsys gfxinfo` 세션 전후 차이라 버전 하한이 없다 — 어느 기기에서든 나와야 한다.
+    // 프레임 **수**는 단언하지 않는다 — 15초 세션이라 통계적 의미는 실기기 몫이다.
+    const hwui = result.metrics.hwui
+    if (hwui !== undefined) {
+      expect(hwui.status, `hwui: ${hwui.reason ?? ''}`).toMatch(/^(collected|partial)$/)
+      expect(hwui.data, `hwui: ${hwui.reason ?? ''}`).not.toBeNull()
+      expect(hwui.data!.total_frames ?? 0).toBeGreaterThan(0)
     }
 
     // Startup.

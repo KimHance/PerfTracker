@@ -75,3 +75,4 @@ export function elapsedMs(tab: Tab, now: number): number {
   if (tab.startedAt === null) return 0
   return Math.max(0, now - tab.startedAt)
 }
+

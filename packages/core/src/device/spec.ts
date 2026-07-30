@@ -76,7 +76,7 @@ export function parseWmDensity(text: string): number {
  *     mActiveSfDisplayMode=DisplayMode{...  904x2316 ... peakRefreshRate=120.00001}   ← 쓰는 중
  *
  * 그래서 해상도(`wm size`)는 커버 화면 것인데 주사율만 꺼진 화면 것인, **한 객체 안에 두
- * 화면이 섞인** 값이 나갔다. `frame.deadlines` 가 8.33ms(=120Hz)라고 말하는 같은 파일에서.
+ * 화면이 섞인** 값이 나갔다. 기기가 실제로는 120Hz 로 돌고 있는데도.
  *
  * 지금은 `mViewports` 의 `isActive=true` 로 **쓰는 화면의 패널 크기**를 먼저 정하고 그
  * 크기의 모드만 본다. 순서로 고르지 않는다 — 순서가 의미를 가진다는 보장이 어디에도 없다.
@@ -86,8 +86,7 @@ export function parseWmDensity(text: string): number {
  * 그것이 정확히 예전 버그다 (규칙 3).
  *
  * 가변 주사율 패널은 모드가 여럿이고 세션 중에도 바뀐다 — 이 값은 **세션 시작 직전 한
- * 순간**의 스냅샷이다. 세션 동안 실제로 무엇이었는지는 `metrics.frame.data.deadlines` 가
- * 프레임 단위로 말한다 (실측 한 세션에 8.33·16.67·41.67ms 가 함께 있었다).
+ * 순간**의 스냅샷이라 세션 전체를 말하지 못한다 (실측 한 세션에 120Hz 와 60Hz 가 섞였다).
  * 120.00001 같은 값이 그대로 나오므로 소수 둘째 자리에서 정리한다.
  */
 export function parseDisplayModes(text: string): { active: number | null; supported: number[] } {

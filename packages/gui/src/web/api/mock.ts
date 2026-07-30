@@ -29,7 +29,8 @@ import type { ApiClient } from './client.js'
 
 /** 목업 전용 근사치. 실제 판정은 core 의 `collector.supports(env)` 가 한다. */
 const MOCK_METRIC_MIN_SDK: Record<(typeof METRIC_ORDER)[number], { min: number; label: string | null }> = {
-  frame: { min: 31, label: 'Android 12' },
+  // 하한이 없다 — `dumpsys gfxinfo` 라서 sdk 30 에서 frame 이 미지원일 때도 나온다.
+  hwui: { min: 0, label: null },
   startup: { min: 0, label: null },
   cpu: { min: 30, label: 'Android 11' },
   memory: { min: 30, label: 'Android 11' },

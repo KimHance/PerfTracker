@@ -1,4 +1,5 @@
 import type { DeviceView, MetricSupportView } from '../../contract/api.js'
+import { unsupportedChips } from './metrics.js'
 
 /**
  * 기기 스펙 한 줄.
@@ -23,7 +24,9 @@ export function formatSpecLine(device: DeviceView): string {
     `${spec.widthPx}x${spec.heightPx}${spec.refreshHz !== null ? `@${spec.refreshHz}Hz` : ''}`,
   ]
 
-  const missing = device.metrics.filter((m) => !m.ok).map((m) => m.id)
+  // **칩과 같은 단위로 말한다.** raw id 로 세던 시절 sdk 30 이 `frame·network 미지원` 이었는데
+  // 그 기기는 렌더를 hwui 로 잰다 — 있는 것을 없다고 말하고 있었다 (`format/metrics.ts`).
+  const missing = unsupportedChips(device.metrics).map((c) => c.label)
   const tail = missing.length > 0 ? ` — ${missing.join('·')} 미지원` : ''
   return `${parts.join(' · ')}${tail}`
 }
@@ -41,7 +44,10 @@ function deviceStateLine(state: DeviceView['state']): string {
   }
 }
 
-/** 못 재는 지표 수. 0 이면 배지를 달지 않는다. */
+/**
+ * 못 재는 것의 수. 0 이면 배지를 달지 않는다.
+ * **칩과 같은 단위로 센다** — 위 스펙 줄이 나열하는 것과 같은 수여야 한다.
+ */
 export function unsupportedCount(metrics: MetricSupportView[]): number {
-  return metrics.filter((m) => !m.ok).length
+  return unsupportedChips(metrics).length
 }

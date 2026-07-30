@@ -72,23 +72,25 @@ function minimalResult() {
       uid: 10359,
       install_source: 'com.android.vending',
       launcher_activity: 'com.naver.webtoon.splash.SplashActivity',
-      render_process: 'com.nhn.android.webtoon',
       pid: 24193,
     },
     metrics: {
-      frame: {
+      hwui: {
         status: 'collected' as const,
-        source: 'perfetto: actual_frame_timeline_slice.dur',
+        source: 'dumpsys gfxinfo (세션 전후 차이)',
         reason_code: null,
         reason: null,
         data: {
-          process: 'com.nhn.android.webtoon',
-          pid: 24193,
           total_frames: 450,
-          buckets: [{ from_ms: 0, to_ms: 5, count: 12 }],
-          percentiles: { p50: 9.2, p90: 21.4, p95: 28.1, p99: 96.3 },
-          mean_ms: 12.8,
-          max_ms: 312.4,
+          janky_frames: 12,
+          missed_vsync: 1,
+          high_input_latency: 0,
+          slow_ui_thread: 3,
+          slow_bitmap_uploads: 0,
+          slow_draw_commands: 2,
+          deadline_missed: 12,
+          histogram: [{ from_ms: 0, to_ms: 5, count: 12 }],
+          percentiles: { p50: 9, p90: 21, p95: 28, p99: 96 },
         },
       },
     },
@@ -112,11 +114,11 @@ describe('ResultSchema', () => {
 
   it('미지원 메트릭은 data 가 null 이어도 통과한다', () => {
     const r = minimalResult()
-    r.metrics.frame = {
+    r.metrics.hwui = {
       status: 'unsupported',
-      source: 'perfetto: actual_frame_timeline_slice.dur',
-      reason_code: 'sdk_too_low',
-      reason: 'Android 12 이상이 필요합니다 (기기 sdk_int=30, 최소 sdk_int=31).',
+      source: 'dumpsys gfxinfo (세션 전후 차이)',
+      reason_code: 'hwui_stats_unavailable',
+      reason: '이 앱은 HWUI 통계를 내지 않습니다.',
       data: null,
     } as never
     expect(() => ResultSchema.parse(r)).not.toThrow()
@@ -124,18 +126,18 @@ describe('ResultSchema', () => {
 
   it('알 수 없는 status 는 거부한다', () => {
     const r = minimalResult()
-    r.metrics.frame.status = 'good' as never
+    r.metrics.hwui.status = 'good' as never
     expect(() => ResultSchema.parse(r)).toThrow()
   })
 
   it('700+ 버킷은 to_ms 가 null 이다', () => {
     const r = minimalResult()
-    r.metrics.frame.data!.buckets = [{ from_ms: 700, to_ms: null, count: 3 }] as never
+    r.metrics.hwui.data!.histogram = [{ from_ms: 700, to_ms: null, count: 3 }] as never
     expect(() => ResultSchema.parse(r)).not.toThrow()
   })
 
   /**
-   * frame 은 **어떤 기준선과도 비교한 값을 싣지 않는다.** 여기 있던 `within_16_67ms_ratio` 는
+   * 렌더는 **어떤 기준선과도 비교한 값을 싣지 않는다.** 여기 있던 `within_16_67ms_ratio` 는
    * `references` 의 60fps 예산(16.67ms)을 collector 가 직접 비교해 낸 비율이었는데, 그 배열은
    * 스스로 "비교에 쓰이지 않고 기록만 된다" 고 선언한다. 게다가 120Hz 기기(예산 8.33ms)에서
    * 그 비율은 예산의 두 배 되는 선 아래 비율이었고, 도구는 주사율을 이미 알면서 그렇게 냈다.
@@ -149,13 +151,13 @@ describe('ResultSchema', () => {
       ...r,
       metrics: {
         ...r.metrics,
-        frame: { ...r.metrics.frame, data: { ...r.metrics.frame.data!, within_16_67ms_ratio: 0.874 } },
+        hwui: { ...r.metrics.hwui, data: { ...r.metrics.hwui.data!, within_16_67ms_ratio: 0.874 } },
       },
     }
     const parsed = ResultSchema.parse(withRatio)
-    expect(parsed.metrics.frame!.data).not.toHaveProperty('within_16_67ms_ratio')
+    expect(parsed.metrics.hwui!.data).not.toHaveProperty('within_16_67ms_ratio')
     // 비교의 재료는 그대로 있어야 한다 — 분포와 주사율 둘 다.
-    expect(parsed.metrics.frame!.data!.buckets.length).toBeGreaterThan(0)
+    expect(parsed.metrics.hwui!.data!.histogram!.length).toBeGreaterThan(0)
     expect(parsed.device.static.display).toHaveProperty('active_refresh_rate_hz')
   })
 
@@ -278,37 +280,12 @@ describe('resultJsonSchema', () => {
   })
 
   it('reason_code 의 값 집합을 스키마에 실어 보낸다 — CI 매처가 매칭할 대상이다', () => {
-    const frame = props(props(resultJsonSchema())['metrics'])['frame']
-    const reasonCode = JSON.stringify(props(frame)['reason_code'])
+    const hwui = props(props(resultJsonSchema())['metrics'])['hwui']
+    const reasonCode = JSON.stringify(props(hwui)['reason_code'])
 
     for (const code of METRIC_REASON_CODES) expect(reasonCode).toContain(code)
     // "안정적인 키" 라고 말만 하고 type: string 만 내보내면 소비자는 알 길이 없다.
     expect(reasonCode).not.toBe('{"type":["string","null"]}')
-  })
-
-  /**
-   * **`result.json` 하나만 받은 소비자(CI · LLM)는 두 프레임 지표를 이름으로 구분할 수 없다.**
-   * 실측 같은 세션에서 `janky_frames` 가 170 대 1,556, `p99` 가 53 대 39.56 으로 갈렸다 —
-   * 설명이 없으면 둘 중 하나를 임의로 골라 "이 앱의 p99" 라고 결론낸다.
-   *
-   * 이 저장소가 반복해서 터뜨린 결함 3번(한정이 `.describe()` 가 아니라 소스 주석에만)이
-   * 정확히 이 자리다. `z.toJSONSchema()` 는 런타임이라 소스 주석을 못 본다.
-   */
-  it('이름이 겹치는 두 프레임 지표를 스키마가 서로 가리킨다', () => {
-    const metrics = props(props(resultJsonSchema())['metrics'])
-    const frameData = props(props(metrics['frame'])['data']['anyOf'][0])
-    const hwuiData = props(props(metrics['hwui'])['data']['anyOf'][0])
-
-    // 짝을 이름으로 지목해야 한다 — "다른 것도 있다" 만으로는 찾아갈 수 없다.
-    for (const [name, node] of [
-      ['frame.total_frames', frameData['total_frames']],
-      ['frame.percentiles', frameData['percentiles']],
-      ['hwui.total_frames', hwuiData['total_frames']],
-      ['hwui.janky_frames', hwuiData['janky_frames']],
-    ] as [string, { description?: string }][]) {
-      expect(node.description, name).toBeDefined()
-      expect(node.description, name).toMatch(/metrics\.(frame|hwui)/)
-    }
   })
 
   /**
@@ -449,14 +426,14 @@ describe('resultJsonSchema', () => {
    * 비교하지 않기로 했다" 가 구별되지 않는다. 후자를 모르면 소비자는 임계 비율을 이 도구에
    * 다시 요구하게 된다.
    */
-  it('buckets 설명이 비교는 소비자 몫임을 말하고, 그 재료가 어디 있는지까지 가리킨다', () => {
-    const data = props(props(props(resultJsonSchema())['metrics'])['frame'])['data'] as {
+  it('histogram 설명이 비교는 소비자 몫임을 말하고, 그 재료가 어디 있는지까지 가리킨다', () => {
+    const data = props(props(props(resultJsonSchema())['metrics'])['hwui'])['data'] as {
       anyOf?: Record<string, any>[]
     }
     const object = data.anyOf?.find((b) => b['type'] === 'object') ?? data
-    const d = (props(object)['buckets'] as { description?: string }).description
+    const d = (props(object)['histogram'] as { description?: string }).description
 
-    expect(d, 'buckets 에 설명이 없다').toBeDefined()
+    expect(d, 'histogram 에 설명이 없다').toBeDefined()
     expect(d, '비교하지 않는다는 사실이 없다').toMatch(/비교하지 않는다/)
     // 재료가 어디 있는지 가리키지 않으면 "비교하지 마세요" 로만 읽힌다.
     expect(d, '주사율 필드를 가리키지 않는다').toContain('active_refresh_rate_hz')
@@ -540,7 +517,7 @@ describe('resultJsonSchema', () => {
    * 통과시켰다 (실측: 에뮬 6회 중 log 는 전부 partial+null).
    */
   it('status 네 값의 뜻을 스키마에 싣는다 — partial 이 data null 을 겸한다는 것까지', () => {
-    const status = (props(props(props(resultJsonSchema())['metrics'])['frame'])['status'] as {
+    const status = (props(props(props(resultJsonSchema())['metrics'])['hwui'])['status'] as {
       description?: string
     }).description
 
@@ -727,7 +704,7 @@ describe('resultJsonSchema', () => {
 
     expect(d).toMatch(/보장은 .type.\/.source. 필드를 가진 문서에만 적용된다/)
     expect(d).toContain('raw/thermalservice')
-    expect(d).toContain('target_app.render_process')
+    expect(d).toContain('target_app.uid')
   })
 
   it('JSON 으로 직렬화된다 (perftracker schema 가 그대로 출력한다)', () => {
@@ -736,7 +713,7 @@ describe('resultJsonSchema', () => {
 
   it('일곱 메트릭이 모두 JSON Schema 에 실린다 — catchall 로 뭉개지지 않는다', () => {
     const metrics = props(props(resultJsonSchema())['metrics'])
-    for (const id of ['frame', 'startup', 'cpu', 'memory', 'log', 'thermal', 'network']) {
+    for (const id of ['hwui', 'startup', 'cpu', 'memory', 'log', 'thermal', 'network']) {
       expect(metrics[id], `${id} 가 스키마에 없음`).toBeDefined()
     }
   })
@@ -860,8 +837,13 @@ describe('resultJsonSchema', () => {
     expect(d).toMatch(/data 유무를 추론하지 말/)
   })
 
-  it('frame 만 required 다 — 1.0.0 문서가 계속 유효해야 한다', () => {
+  /**
+   * **필수 지표가 하나도 없다.** 지표는 기기에 따라 빠질 수 있고(sdk 하한·데이터소스 미등록),
+   * 필수로 걸면 그 기기의 result.json 이 스키마를 통과하지 못한다. 1.0.0 시절 문서도 계속
+   * 유효해야 한다 — 그때는 hwui 자체가 없었다.
+   */
+  it('필수 지표가 없다 — 옛 문서도 계속 유효해야 한다', () => {
     const metrics = props(resultJsonSchema())['metrics'] as { required?: string[] }
-    expect(metrics.required).toEqual(['frame'])
+    expect(metrics.required ?? []).toEqual([])
   })
 })

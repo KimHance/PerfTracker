@@ -48,8 +48,6 @@ export const SCHEMA_VERSION = '1.1.0'
  * 바로 이런 것이고, describe 문구가 그 사실을 소비자에게 직접 말한다.
  */
 const DATA_NULL_PARTIAL_CODES = [
-  'render_process_not_found',
-  'no_frames',
   'frame_duration_out_of_range',
   'no_cpu_samples',
   'insufficient_samples',
@@ -157,30 +155,6 @@ const PROCESS_NAME_DESCRIPTION =
   '확인되지 않은 이름이 이 자리에 오는 일은 없다.'
 
 /**
- * 여기에 `within_16_67ms_ratio` 라는 필드가 있었다. 16.67ms(구글의 60fps 예산)를 **이 도구가
- * 직접 비교해서** 낸 비율이었고, 두 가지가 잘못돼 있었다.
- *
- * 1. `references` 는 스스로 "여기 있는 값들은 **비교에 쓰이지 않고 그대로 기록만** 된다" 고
- *    적어 놓고, collector 가 그중 하나를 가져다 실제로 비교했다. 도구가 판정하지 않는다는
- *    규칙을 도구 자신이 어긴 자리다.
- * 2. 그 숫자가 **틀린 방향으로** 읽혔다. 검증 기기(Galaxy S22)는 120Hz 이고 그 기기의 프레임
- *    예산은 8.33ms 다. 도구는 `device.static.display.active_refresh_rate_hz` 로 그것을 **이미
- *    알면서도** 60fps 기준으로 비율을 냈다. 그 기기에서 `0.95` 는 "95% 가 예산 안" 이 아니라
- *    "실제 예산의 두 배 되는 선 아래가 95%" 였다.
- *
- * 기준선은 기기의 주사율·안드로이드 버전·앱의 목표에 따라 달라진다. 그것을 고르는 일은 이
- * 데이터를 소비하는 쪽(CI·리포트·사람)의 몫이고, 재료는 이미 결과에 다 실려 있다.
- */
-const BUCKETS_DESCRIPTION =
-  '프레임 소요 시간의 분포. **이 도구는 어떤 기준선과도 비교하지 않는다** — 60fps(16.67ms) 든 ' +
-  '120Hz(8.33ms) 든, 임계값을 고르고 비율을 내는 일은 이 데이터를 읽는 쪽이 한다. ' +
-  '그 판단에 필요한 기기 정보는 device.static.display 의 active_refresh_rate_hz 와 ' +
-  'supported_refresh_rates_hz 에 있고, 구글이 공개한 참고치는 references 배열에 출처와 함께 ' +
-  '있다 (기록만 되고 비교에 쓰이지 않는다). ' +
-  '경계는 [from_ms, to_ms) 반개구간이고 마지막 버킷은 to_ms 가 null (= 상한 없음) 이다. ' +
-  '버킷 폭이 구간마다 다르므로 임계값이 버킷 경계와 어긋나면 그 비율은 버킷 폭만큼 근사가 된다.'
-
-/**
  * 시계열의 시간 축. **세션 시작(트레이스의 첫 표본)으로부터 몇 초째인가**를 정수로 센다.
  *
  * 벽시계 시각이 아니라 상대 초인 이유: 트레이스의 시각은 부팅 후 나노초(BOOTTIME)라
@@ -195,104 +169,24 @@ const TIMELINE_T_DESCRIPTION =
   '세션 시작으로부터 몇 초째인지 (구간은 [t_s, t_s+1)). 값이 없는 초는 배열에 없다 — ' +
   '0 으로 채우지 않는다. 빠진 초를 "0" 으로 읽지 말 것.'
 
-export const FrameTimelinePointSchema = z.object({
-  t_s: z.number().int().nonnegative().describe(TIMELINE_T_DESCRIPTION),
-  /** 그 1초 동안 완결된 프레임 수. 화면이 얼마나 자주 갱신됐는지에 대응한다. */
-  count: z.number().int().nonnegative(),
-  /** 그 1초 안에서의 중앙값·최댓값. 세션 전체 percentiles 와 같은 단위(ms)다. */
-  p50_ms: z.number(),
-  max_ms: z.number(),
-})
-export type FrameTimelinePoint = z.infer<typeof FrameTimelinePointSchema>
 
-const FRAME_TIMELINE_DESCRIPTION =
-  '1초 단위로 묶은 프레임 추이. 세션 전체 집계(buckets · percentiles)와 **같은 원본**에서 ' +
-  '나오며 같은 규칙으로 미완결 프레임(dur < 0)을 제외한다. 집계만으로는 구분되지 않는 것 ' +
-  '(내내 고르게 느렸는지, 특정 구간에서만 튀었는지)을 보려는 값이다. ' +
-  '이 배열이 있다고 기기에 더 많은 것을 물은 것은 아니다 — 트레이스에 이미 있던 값을 ' +
-  '접지 않고 그대로 낸 것뿐이라 측정 부하는 같다.'
 
-export const FrameJankSchema = z.object({
-  total_frames: z
-    .number().int().nonnegative()
-    .describe(
-      '꼬리표를 셀 수 있었던 프레임 수. **metrics.frame.data.total_frames 와 같아야 정상이고**, ' +
-        '다르면 트레이스가 두 질의 사이에 다른 답을 준 것이다 — 그 사실을 감추지 않으려고 ' +
-        '따로 싣는다. metrics.hwui.data.total_frames 와는 원래 다르다(세는 대상이 다르다).',
-    ),
-  janky_frames: z
-    .number()
-    .int()
-    .nonnegative()
-    .describe('`jank_type` 이 `None` 이 아닌 프레임 수. **어느 꼬리표든 하나라도 붙은 것**을 센다.'),
-  late_frames: z
-    .number()
-    .int()
-    .nonnegative()
-    .describe(
-      '`on_time_finish = 0` 인 프레임 수 — 마감 안에 끝내지 못한 것. `janky_frames` 와 ' +
-        '**다른 사실이다**: 꼬리표가 `None` 인데도 늦게 끝난 프레임이 실재한다 ' +
-        '(실측 Stream 세션: `None` 240장 중 41장). 반대로 `Buffer Stuffing` 은 꼬리표가 붙어도 ' +
-        '`on_time_finish = 1` 인 경우가 대부분이었다.',
-    ),
-  dropped_frames: z
-    .number()
-    .int()
-    .nonnegative()
-    .describe(
-      '`jank_type` 에 `Dropped Frame` 이 들어간 프레임 수. `by_type` 에도 같은 값이 있지만, ' +
-        '**표시 주기를 통째로 넘긴 프레임**이라 따로 센다 — 사람이 끊김으로 보는 것이 이것이다.',
-    ),
-  by_type: z
-    .array(z.object({ type: z.string(), count: z.number().int().nonnegative() }))
-    .describe(
-      '꼬리표별 프레임 수, 많은 순. `type` 은 SurfaceFlinger 가 쓰는 원문이다 ' +
-        '(`Dropped Frame` · `App Deadline Missed` · `Buffer Stuffing` · ' +
-        '`SurfaceFlinger Stuffing` · `Display HAL` 등) — 우리가 정한 분류가 아니다. ' +
-        '**합이 `janky_frames` 를 넘을 수 있다**: 한 프레임에 꼬리표가 여러 개 붙으면 ' +
-        '(`"App Deadline Missed, Buffer Stuffing"`) 각각에 세어진다.',
-    ),
-})
-export type FrameJank = z.infer<typeof FrameJankSchema>
-
-const FRAME_JANK_DESCRIPTION =
-  '**기기가 프레임마다 붙여 둔 꼬리표를 센 것이다 — 이 도구의 판정이 아니다.** ' +
-  'SurfaceFlinger 가 `actual_frame_timeline_slice.jank_type` 에 직접 적고, 우리는 개수만 낸다. ' +
-  '어느 꼬리표가 심각한지는 정하지 않는다 — 실측에서 `Buffer Stuffing` 이 1,347장으로 ' +
-  '압도적이었는데 그 대부분은 마감 안에 끝났다(`on_time_finish = 1`). ' +
-  '**`janky_frames / total_frames` 를 그대로 "품질" 로 읽지 말 것.** ' +
-  '`dur` 와 같은 테이블·같은 트레이스에서 나오므로 기기에 더 물어보지 않는다. ' +
-  '`null` 은 **꼬리표를 읽지 못했다**는 뜻이지 문제가 없었다는 뜻이 아니다.'
-
-export const FrameDeadlineSchema = z.object({
-  /** 기기가 배정한 마감(ms). 8.33 이면 120Hz, 16.67 이면 60Hz 다. */
-  ms: z.number(),
-  frames: z.number().int().nonnegative(),
-})
-
-const FRAME_DEADLINES_DESCRIPTION =
-  '**기기가 이 세션 동안 프레임에 배정한 마감들.** 이 도구가 고른 값이 아니라 트레이스의 ' +
-  'expected_frame_timeline_slice 에서 그대로 온다. ' +
-  '**값이 여럿이면 세션 중 주사율이 바뀐 것이다** — 실측 한 세션에 8.33ms(3,599장)와 ' +
-  '16.67ms(66장)가 함께 있었고, 10~12초에 60Hz 로 떨어졌다가 돌아왔다. ' +
-  '이 배열이 있어야 buckets·percentiles 를 **무엇에 대해** 읽어야 하는지 알 수 있다: ' +
-  '같은 세션이 16.67ms 기준으로는 8.26%, 기기가 실제로 준 마감 기준으로는 27.3% 로 갈린다. ' +
-  '**device.static.display.active_refresh_rate_hz 보다 이 값을 믿어라** — 그쪽은 세션 시작 ' +
-  '직전 한 순간의 스냅샷이고, 이쪽은 프레임마다 기기가 실제로 요구한 값이다. ' +
-  'sdk 31 미만이거나 마감 정보가 없으면 null 이다.'
 
 const HWUI_HISTOGRAM_DESCRIPTION =
-  '**프레임워크가 만든 프레임 시간 분포의 세션 델타.** metrics.frame.data.buckets 와 ' +
-  '**다른 것을 잰다**: 이쪽은 UI 스레드 + RenderThread 의 CPU 시간(안드로이드 Vitals 가 보는 값)이고, ' +
-  'frame 쪽은 서피스 프레임의 지속 시간이다. 실측 같은 세션에서 p99 가 53ms 대 39.56ms 로 갈렸다 — ' +
-  '둘 다 맞고 다른 질문에 답한다. ' +
-  '**버전 하한이 없다**: sdk 30 처럼 frame 이 미지원인 기기에서 분포를 볼 수 있는 유일한 길이다. ' +
-  '칸 경계는 프레임워크가 정한 것이라 frame 쪽 버킷과 다르다(5ms 부터 1ms 씩, 뒤로 갈수록 넓어진다). ' +
+  '**프레임워크가 만든 프레임 시간 분포의 세션 델타.** UI 스레드 + RenderThread 의 CPU 시간이고 ' +
+  '안드로이드 Vitals 가 보는 값이다. ' +
+  '**이 도구는 어떤 기준선과도 비교하지 않는다** — 60fps(16.67ms) 든 120Hz(8.33ms) 든 어느 선을 ' +
+  '쓸지는 기기·안드로이드 버전·그 앱의 목표에 달렸고 그것을 고르는 일은 읽는 쪽의 몫이다. ' +
+  '그 판단에 필요한 재료는 결과에 다 있다: 기기 정보는 device.static.display 의 ' +
+  'active_refresh_rate_hz 와 supported_refresh_rates_hz 에, 구글이 공개한 참고치는 references ' +
+  '배열에 출처와 함께 있다 (기록만 되고 비교에 쓰이지 않는다). ' +
+  '칸 폭이 일정하지 않으므로 임계값이 칸 경계와 어긋나면 그 비율은 칸 폭만큼 근사가 된다. ' +
+  '**버전 하한이 없다**: sdk 30 에서도 그대로 나온다. ' +
+  '칸 경계는 프레임워크가 정한다(5ms 부터 1ms 씩, 뒤로 갈수록 넓어진다). ' +
   '**칸을 하나도 버리지 않는다 — 0 인 칸도 그대로 싣는다.** 분포는 어디가 비어 있는가가 곧 ' +
   '정보이고, 프레임이 있는 칸만 남기면 축이 세션마다 달라져 두 결과를 나란히 볼 수 없다. ' +
   '**700ms 에서 자른다** — 프레임워크 칸은 4950ms 까지 가는데 실제 데이터는 앞쪽에 몰려 있어 ' +
-  '그대로 그리면 화면의 3분의 2가 빈 칸이 된다. 700ms 는 metrics.frame.data.buckets 의 상한과 ' +
-  '같은 자리다. **자르되 버리지 않는다**: 700ms 이상은 마지막 한 칸(to_ms: null)으로 접으므로 ' +
+  '그대로 그리면 화면의 3분의 2가 빈 칸이 된다. **자르되 버리지 않는다**: 700ms 이상은 마지막 한 칸(to_ms: null)으로 접으므로 ' +
   '칸의 합은 total_frames 와 같다. **칸 이름은 그 칸의 끝이다** — 프레임워크가 6ms=155 라고 ' +
   '하면 6ms 걸린 프레임 수이므로 구간으로는 [5, 6) 이고, 첫 칸 5ms 는 "5ms 이하 전부" 라 ' +
   '[0, 5) 가 된다. ' +
@@ -314,16 +208,13 @@ export const HwuiDataSchema = z.object({
   total_frames: z
     .number().int().nonnegative().nullable()
     .describe(
-      '`Total frames rendered` 의 세션 델타. **metrics.frame.data.total_frames 와 다른 것을 ' +
-        '센다** — 이쪽은 View 계층 렌더링만이고 저쪽은 서피스 프레임이다. 다른 것이 정상이다.',
+      '`Total frames rendered` 의 세션 델타. View 계층 렌더링만 센다.',
     ),
   janky_frames: z
     .number().int().nonnegative().nullable()
     .describe(
-      '`Janky frames` 의 세션 델타. **metrics.frame.data.jank.janky_frames 와 다른 값이다** — ' +
-        '실측 같은 세션에서 170 대 1,556 으로 갈렸다. 저쪽은 SurfaceFlinger 가 붙인 꼬리표가 ' +
-        '하나라도 있는 프레임 수이고, 이쪽은 프레임워크(HWUI)의 자체 판정이다. ' +
-        '안드로이드 Vitals 가 보는 모집단은 이쪽이다. ' +
+      '`Janky frames` 의 세션 델타. 프레임워크(HWUI)의 자체 판정이고 안드로이드 Vitals 가 ' +
+        '보는 모집단이 이것이다. ' +
         HWUI_VERSION_CAVEAT,
     ),
   missed_vsync: z.number().int().nonnegative().nullable().describe(HWUI_CAUSE_DESCRIPTION),
@@ -354,75 +245,22 @@ export const HwuiDataSchema = z.object({
         '백분위가 서로 다른 구간을 말하게 된다. ' +
         '**해상도는 프레임워크의 칸 폭이다**: 5~32ms 는 1ms 라 촘촘하고 그 뒤로 넓어지므로, ' +
         '꼬리 백분위는 그 칸의 시작값으로 떨어진다(하한). 정확한 값이 필요하면 ' +
-        'metrics.frame.data.percentiles 를 보라 — 그쪽은 프레임마다의 실제 값에서 나온다.',
+        '정확한 값이 아니라 하한이라는 뜻이다.',
     ),
 })
 export type HwuiData = z.infer<typeof HwuiDataSchema>
 
 const HWUI_DESCRIPTION =
   '**프레임워크(HWUI)가 자기 렌더링을 직접 센 값. `dumpsys gfxinfo <패키지>` 의 세션 전후 차이다.** ' +
-  'metrics.frame 과 **대체가 아니라 짝이다** — 세는 대상이 다르다. 이쪽은 View 계층 렌더링만이라 ' +
-  'SurfaceView 나 그 배경 레이어가 섞이지 않고, 안드로이드 Vitals 가 보는 모집단과 같다. ' +
-  '대신 초 단위 추이와 분포가 없다(그쪽은 frame 이 담당한다). 그 대신 프레임 시간 말고 ' +
-  '**원인**을 준다: UI 스레드 / 비트맵 업로드 / 그리기 명령 / 입력 지연. ' +
-  'total_frames 가 frame.data.total_frames 와 다를 수 있고, 다른 것이 정상이다 — ' +
-  '실측에서 둘이 212 로 일치해 frame 쪽 정의를 확증한 적도 있다. ' +
+  '**렌더링을 재는 유일한 경로다.** View 계층 렌더링만이라 SurfaceView 나 그 배경 레이어가 ' +
+  '섞이지 않고, 안드로이드 Vitals 가 보는 모집단과 같다. 프레임 시간 분포·백분위와 함께 ' +
+  '**원인**을 준다: UI 스레드 / 비트맵 업로드 / 그리기 명령 / 입력 지연. 초 단위 추이는 없다. ' +
   '**누적 카운터의 차이**라 측정 중에는 기기에 아무것도 보내지 않는다 (network 의 uid 델타와 같다). ' +
   'janky 의 정의는 프레임워크의 것이고 이 도구가 정한 것이 아니다 — 어느 쪽이 나쁜지는 판정하지 않는다. ' +
   '값이 null 인 경우: 그 줄이 출력에 없었거나, 세션 중 앱 프로세스가 죽어 누적이 리셋됐다. ' +
   '**0 과 다른 말이다.** 지표 전체가 없으면(reason_code: hwui_stats_unavailable) 이 앱이 HWUI 로 ' +
   '그리지 않는 것이다 — Unity·Vulkan·OpenGL 이 그렇고, 그것은 Vitals 와 같은 한계다.'
 
-const FRAME_DESCRIPTION =
-  '**트레이스가 본 서피스 프레임.** `actual_frame_timeline_slice` 를 `display_frame_token` 으로 ' +
-  '접어 프레임 하나당 한 줄로 만든 것이다 (접지 않으면 레이어마다 한 행이라 실측 2.4배가 나온다). ' +
-  'metrics.hwui 와 **대체가 아니라 짝이다** — 세는 대상이 다르다. 이쪽은 서피스 프레임의 지속 ' +
-  '시간이라 SurfaceView 와 그 배경 레이어가 섞이고, 저쪽은 View 계층 렌더링만이라 안드로이드 ' +
-  'Vitals 가 보는 모집단과 같다. 실측 같은 세션에서 p99 가 39.56 대 53 으로 갈렸다 — ' +
-  '**둘 다 맞고 다른 질문에 답한다.** 어느 쪽이 그 앱의 "진짜" 값인지 이 도구는 정하지 않는다. ' +
-  '이쪽만 있는 것: **초 단위 추이**(timeline)와 **기기가 붙인 꼬리표**(jank.by_type) ' +
-  '그리고 **기기가 배정한 마감**(deadlines). 저쪽만 있는 것: 원인별 카운터와 버전 하한 없음. ' +
-  'sdk 31 미만에서는 이 지표 전체가 없다(reason_code: sdk_too_low) — 그때도 hwui 는 나온다.'
-
-export const FrameDataSchema = z.object({
-  process: z.string().describe(PROCESS_NAME_DESCRIPTION),
-  /** 그 프로세스의 pid. target_app.render_process / target_app.pid 가 여기서 채워진다. */
-  pid: z.number().int(),
-  total_frames: z
-    .number().int().nonnegative()
-    .describe(
-      '`display_frame_token` 으로 접은 뒤의 프레임 수. **metrics.hwui.data.total_frames 와 ' +
-        '다른 것을 센다** — 이쪽은 서피스 프레임이고 저쪽은 View 계층 렌더링만이다. ' +
-        '다른 것이 정상이다.',
-    ),
-  buckets: z.array(FrameBucketSchema).describe(BUCKETS_DESCRIPTION),
-  percentiles: z
-    .object({
-      p50: z.number(),
-      p90: z.number(),
-      p95: z.number(),
-      p99: z.number(),
-    })
-    .describe(
-      '위 buckets 와 **같은 원본(프레임마다의 실제 지속 시간)** 에서 나온다 — 버킷 경계에 ' +
-        '걸리지 않은 소수점까지 정확하다. ' +
-        '**metrics.hwui.data.percentiles 와 다른 값이다**: 실측 같은 세션에서 p99 가 ' +
-        '39.56 대 53 으로 갈렸다. 저쪽은 UI 스레드 + RenderThread 의 CPU 시간(Vitals 가 보는 ' +
-        '값)이고 이쪽은 서피스 프레임의 지속 시간이다 — 둘 다 맞고 다른 질문에 답한다. ' +
-        '**어느 쪽이 그 앱의 "진짜 p99" 인지 이 도구는 정하지 않는다.**',
-    ),
-  mean_ms: z
-    .number()
-    .describe('위 percentiles 와 같은 원본의 산술 평균. 꼬리에 끌려가므로 p50 과 함께 읽을 것.'),
-  max_ms: z.number().describe('위 percentiles 와 같은 원본의 최댓값 — 그 세션의 가장 느린 한 장.'),
-  timeline: z.array(FrameTimelinePointSchema).optional().describe(FRAME_TIMELINE_DESCRIPTION),
-  // `optional` 과 `nullable` 이 서로 다른 말이다 — **필드가 없다**는 이 값을 낼 줄 모르던
-  // 시절의 세션이고(`timeline` 과 같은 이유로 optional 이다), **null** 은 이번에 읽지
-  // 못했다는 뜻이다. 옛 run 을 `extract` 로 다시 산출할 때 전자가 실제로 나온다.
-  jank: FrameJankSchema.nullable().optional().describe(FRAME_JANK_DESCRIPTION),
-  deadlines: z.array(FrameDeadlineSchema).nullable().optional().describe(FRAME_DEADLINES_DESCRIPTION),
-})
-export type FrameData = z.infer<typeof FrameDataSchema>
 
 export const StartupDataSchema = z.object({
   /**
@@ -1162,8 +1000,7 @@ export const DisplayInfoSchema = z.object({
     .describe(
       '**세션 시작 직전 한 순간**의 값이다. 가변 주사율 패널은 세션 중에도 바뀌므로 ' +
         '이 한 숫자로 세션 전체를 말하지 말 것 — 실제로 무엇이었는지는 ' +
-        'metrics.frame.data.deadlines 가 프레임 단위로 말한다 (실측 한 세션에 8.33 · 16.67 · ' +
-        '41.67ms 가 함께 있었다). ' +
+        '세션 전체를 말하지 못한다 (실측 한 세션에 120Hz 와 60Hz 가 섞여 있었다). ' +
         '**화면이 여럿이면 지금 쓰는 화면의 값이다** (`mViewports` 의 isActive=true 로 고른다). ' +
         '어느 화면인지 못 고르면 null 이다 — 실측 SM-F936N(접힘)에서 dumpsys 가 먼저 내놓는 ' +
         '것이 꺼진 내부 화면이라, 순서로 고르면 커버 화면 해상도에 내부 화면 주사율이 붙는다. ' +
@@ -1303,8 +1140,8 @@ export const DeviceStateSchema = z.object({
         '**존 하나당 한 항목이라는 보장은 `type`/`source` 필드를 가진 문서에만 적용된다.** ' +
         'M3 이전의 파서는 두 절을 구분 없이 긁어 같은 존을 두 번 실었다(실기기 8존이 15항목). ' +
         '이 결과는 `raw/thermalservice_{before,after}.txt` 원문이 run 디렉토리에 남아 있으면 ' +
-        'extract 가 그 원문에서 이 배열을 **다시 만들어** 중복을 없앤다 — 같은 방식의 선례가 ' +
-        '`target_app.render_process` 다(capture 때 몰랐던 것을 extract 가 더 나은 근거로 채운다). ' +
+        'extract 가 그 원문에서 이 배열을 **다시 만들어** 중복을 없앤다 — capture 때 몰랐던 것을 ' +
+        'extract 가 더 나은 근거로 채우는 것(target_app.uid 가 그렇다)이 이 코드베이스의 관행이다. ' +
         '원문이 없으면 capture.json 에 기록된 값을 그대로 옮기며, 그 값에는 중복이 남아 있을 수 ' +
         '있다. 그래서 **`type`/`source` 가 없는 항목이 보이면 중복을 의심해야 한다.** ' +
         '`capture.json` 쪽 값은 그대로 두므로 두 파일의 이 필드가 다를 수 있다.\n' +
@@ -1360,7 +1197,6 @@ export const TargetAppSchema = z.object({
         '고르지 않았으면 null. 이 값이 있으면 launcher_activity 는 기기가 지정해 준 것이 ' +
         '아니라 선택된 것이다.',
     ),
-  render_process: z.string().nullable(),
   pid: z.number().int().nullable(),
 
   /**
@@ -1653,7 +1489,6 @@ export const ResultSchema = z.object({
    */
   metrics: z
     .object({
-      frame: metricResultSchema(FrameDataSchema).describe(FRAME_DESCRIPTION),
       startup: metricResultSchema(StartupDataSchema).optional(),
       cpu: metricResultSchema(CpuDataSchema).optional(),
       memory: metricResultSchema(MemoryDataSchema).optional(),

@@ -33,7 +33,6 @@ export function targetApp(overrides: Partial<TargetApp> = {}): TargetApp {
     uid: 10359,
     install_source: 'com.android.vending',
     launcher_activity: 'com.naver.webtoon.splash.SplashActivity',
-    render_process: null,
     pid: null,
     ...overrides,
   }

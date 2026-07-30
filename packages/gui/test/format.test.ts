@@ -89,7 +89,6 @@ describe('기기 스펙 한 줄', () => {
     },
     measuring: false,
     metrics: [
-      { id: 'frame', ok: true, reason: '측정 가능' },
       { id: 'network', ok: true, reason: '측정 가능' },
     ],
   }
@@ -108,16 +107,26 @@ describe('기기 스펙 한 줄', () => {
     expect(formatSpecLine({ ...base, spec: { ...base.spec!, refreshHz: null } })).not.toContain('@')
   })
 
-  it('못 재는 지표를 줄 끝에 붙인다', () => {
+  /**
+   * **칩과 같은 단위로 말한다.** raw id 로 세던 시절 sdk 30 이 `frame·network 미지원` 이었는데
+   * 그 기기는 렌더를 hwui 로 잰다 — 있는 것을 없다고 말하고 있었다.
+   */
+  it('못 재는 것을 줄 끝에 붙인다', () => {
     const line = formatSpecLine({
       ...base,
       metrics: [
-        { id: 'frame', ok: false, reason: 'x' },
+        { id: 'hwui', ok: true, reason: '측정 가능' },
         { id: 'network', ok: false, reason: 'x' },
         { id: 'cpu', ok: true, reason: '측정 가능' },
       ],
     })
-    expect(line).toContain('— frame·network 미지원')
+    expect(line).toContain('— network 미지원')
+  })
+
+  /** 판정을 안 받은 것은 세지 않는다 — 모르는 것과 못 재는 것은 다른 사실이다. */
+  it('판정이 없는 지표는 미지원으로 세지 않는다', () => {
+    const line = formatSpecLine({ ...base, metrics: [{ id: 'cpu', ok: true, reason: '측정 가능' }] })
+    expect(line).not.toContain('미지원')
   })
 
   it('측정 중이라 스펙을 안 읽은 것과 못 읽은 것을 구분한다', () => {
@@ -127,6 +136,6 @@ describe('기기 스펙 한 줄', () => {
 
   it('미지원 지표 수를 센다', () => {
     expect(unsupportedCount(base.metrics)).toBe(0)
-    expect(unsupportedCount([{ id: 'frame', ok: false, reason: 'x' }])).toBe(1)
+    expect(unsupportedCount([{ id: 'network', ok: false, reason: 'x' }])).toBe(1)
   })
 })

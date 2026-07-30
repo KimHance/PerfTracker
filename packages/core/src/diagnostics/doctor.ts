@@ -105,14 +105,13 @@ export async function runDoctor(opts: AdbContextOptions = {}): Promise<DoctorChe
       }
 
       /**
-       * **이 기기에서 어떤 지표를 잴 수 있는가.** 데이터소스 이름만 보여주면
-       * `android.surfaceflinger.frametimeline` 이 없다는 사실이 **무엇을 못 잰다는 뜻인지**
-       * 사용자가 알 수 없다. 지표 이름으로 다시 말한다.
+       * **이 기기에서 어떤 지표를 잴 수 있는가.** 데이터소스 이름만 보여주면 그것이 없다는
+       * 사실이 **무엇을 못 잰다는 뜻인지** 사용자가 알 수 없다. 지표 이름으로 다시 말한다.
        *
        * 왜 여기서 말해야 하는가: 예전에는 이것을 `stop` 뒤 `result.json` 을 열어야 알았다.
        * 사람이 30초 동안 앱을 조작하고 나서야 "프레임이 안 잡혔다" 를 아는 것은
        * **측정을 한 번 더 하게 만드는 정보**이고, 그것은 기기를 꽂은 순간 알 수 있었던 사실이다
-       * (실측: SM-A405S / Android 11 은 frame·network 둘 다 원리적으로 불가).
+       * (실측: SM-A405S / Android 11 은 network 가 원리적으로 불가).
        */
       const env = { sdkInt: probe.sdkInt, dataSources: probe.dataSources }
       for (const line of metricSupportChecks(env)) checks.push(line)

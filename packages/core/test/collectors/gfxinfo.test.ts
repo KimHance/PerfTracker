@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { percentile } from '../../src/collectors/frame/index.js'
 import {
   diffGfxinfo,
   parseGfxinfoCounters,
@@ -215,15 +214,13 @@ describe('percentileFromHistogram', () => {
   })
 
   /**
-   * 지속 시간 백분위와 **같은 규칙**(ceil 랭크)이어야 두 화면의 같은 이름이 같은 뜻이 된다.
-   * 총합이 홀수여야 ceil 과 floor 가 갈린다 — 짝수로 재면 이 규칙을 지키는지 알 수 없다.
+   * **ceil 랭크다.** 총합이 홀수여야 ceil 과 floor 가 갈린다 — 짝수로 재면 이 규칙을
+   * 지키는지 알 수 없다.
    */
-  it('ceil 랭크를 쓴다 — 지속 시간 백분위와 같은 규칙', () => {
+  it('ceil 랭크를 쓴다', () => {
     // 3장 중 p50: ceil(1.5)=2 번째 → 9. floor 였다면 1 번째 → 5 가 된다.
     const odd = [{ ms: 5, frames: 1 }, { ms: 9, frames: 2 }]
     expect(percentileFromHistogram(odd, 50)).toBe(9)
-    // 같은 입력을 지속 시간 쪽 함수에 넣어도 같은 답이 나와야 한다.
-    expect(percentile([5, 9, 9], 50)).toBe(9)
   })
 
   it('비었으면 null 이다 — 0 이 아니다', () => {

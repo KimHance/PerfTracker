@@ -1,7 +1,6 @@
 import { mergeTraceConfigBlocks } from '../perfetto/config.js'
 import { renderReason } from '../schema/reasons.js'
 import { cpuCollector } from './cpu/index.js'
-import { frameCollector } from './frame/index.js'
 import { hwuiCollector } from './hwui/index.js'
 import { logCollector } from './log/index.js'
 import { memoryCollector } from './memory/index.js'
@@ -17,9 +16,9 @@ import type { Collector, CollectorEnv } from './types.js'
  * 나중에 power 가 여기 한 줄로 붙는다.
  */
 export const COLLECTORS: Collector<unknown>[] = [
-  frameCollector,
-  // frame 바로 옆이다. 둘은 같은 것을 다른 눈으로 본다 — 대체가 아니라 짝이라는 것을
-  // 배열 순서로도 말한다 (`hwui/index.ts` 참고).
+  // 렌더는 하나다. 예전에는 트레이스(`frame`)로도 같은 것을 재서 두 벌을 냈는데,
+  // 보고서가 hwui 만 그리게 되자 **화면에 없는 데이터가 result.json 에만 남았다** —
+  // 사람은 보고서를, LLM 은 파일을 보는데 둘이 다른 숫자를 들고 있게 된다.
   hwuiCollector,
   startupCollector,
   cpuCollector,

@@ -58,8 +58,7 @@ export function percentileFromHistogram(
   const total = bins.reduce((n, b) => n + b.frames, 0)
   if (total === 0) return null
 
-  // 지속 시간 백분위와 **같은 규칙**이다 (ceil 랭크, 그 자리의 값). 규칙이 갈리면 두 화면의
-  // 같은 이름이 다른 뜻이 된다.
+  // ceil 랭크 — 그 자리에 놓인 칸의 값을 쓴다.
   const rank = Math.ceil((p / 100) * total)
   let seen = 0
   for (const b of [...bins].sort((a, x) => a.ms - x.ms)) {

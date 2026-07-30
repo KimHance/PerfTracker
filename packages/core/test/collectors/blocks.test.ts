@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   ANDROID_LOG_BLOCK,
   ANDROID_LOG_MIN_PRIO,
-  FRAMETIMELINE_BLOCK,
   FTRACE_POWER_BLOCK,
   POLL_PERIOD_MS,
   PROCESS_RUNTIME_MIN_SDK,
@@ -17,7 +16,6 @@ const PROCESS_STATS_NEW = processStatsBlock(PROCESS_RUNTIME_MIN_SDK)
 const PROCESS_STATS_OLD = processStatsBlock(PROCESS_RUNTIME_MIN_SDK - 1)
 
 const ALL = [
-  FRAMETIMELINE_BLOCK,
   PROCESS_STATS_NEW,
   SYS_STATS_BLOCK,
   FTRACE_POWER_BLOCK,
@@ -25,7 +23,6 @@ const ALL = [
 ]
 
 const ALL_OLD = [
-  FRAMETIMELINE_BLOCK,
   PROCESS_STATS_OLD,
   SYS_STATS_BLOCK,
   FTRACE_POWER_BLOCK,
@@ -135,12 +132,6 @@ describe('데이터소스 블록', () => {
  * 눈에 보이는 diff 로 드러난다.
  */
 describe('데이터소스 블록 — 전체 텍스트 고정', () => {
-  it('FRAMETIMELINE_BLOCK', () => {
-    expect(FRAMETIMELINE_BLOCK).toBe(
-      'data_sources { config { name: "android.surfaceflinger.frametimeline" } }',
-    )
-  })
-
   it('processStatsBlock — A15+ (record_process_runtime 포함)', () => {
     expect(PROCESS_STATS_NEW).toBe(
       'data_sources { config { name: "linux.process_stats" process_stats_config { ' +

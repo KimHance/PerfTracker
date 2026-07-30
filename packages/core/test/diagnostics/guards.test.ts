@@ -113,7 +113,6 @@ describe('metricSupportChecks — 기기가 못 재는 지표를 미리 말한�
   const A16 = {
     sdkInt: 36,
     dataSources: [
-      'android.surfaceflinger.frametimeline',
       'linux.process_stats',
       'linux.sys_stats',
       'android.log',
@@ -124,10 +123,9 @@ describe('metricSupportChecks — 기기가 못 재는 지표를 미리 말한�
    * **실측(SM-A405S / Android 11).** 예전에는 이것을 `stop` 뒤 result.json 을 열어야 알았다 —
    * 사람이 30초 조작하고 나서야 "프레임이 없다" 를 아는 것은 측정을 한 번 더 하게 만든다.
    */
-  it('Android 11 에서 frame·network 를 못 잰다고 말한다', () => {
+  it('Android 11 에서 network 를 못 잰다고 말한다', () => {
     const byId = new Map(metricSupportChecks(A11).map((c) => [c.name, c]))
 
-    expect(byId.get('metric: frame')?.ok).toBe(false)
     expect(byId.get('metric: network')?.ok).toBe(false)
     // 나머지 다섯은 이 기기에서도 나온다 — "이 폰은 아무것도 못 잰다" 가 아니다.
     for (const id of ['startup', 'cpu', 'memory', 'log', 'thermal']) {
@@ -136,10 +134,10 @@ describe('metricSupportChecks — 기기가 못 재는 지표를 미리 말한�
   })
 
   it('사유가 최소 sdk 를 숫자로 말한다 — 데이터소스 이름만으로는 뭘 못 재는지 모른다', () => {
-    const frame = metricSupportChecks(A11).find((c) => c.name === 'metric: frame')
+    const frame = metricSupportChecks(A11).find((c) => c.name === 'metric: network')
 
     expect(frame?.detail).toContain('sdk_int=30')
-    expect(frame?.detail).toContain('31')
+    expect(frame?.detail).toContain('34')
   })
 
   it('전부 지원되는 기기에서는 모두 ok 다', () => {
@@ -166,7 +164,7 @@ describe('hasBlockingFailure — 고칠 수 있는 것만 실패로 센다', () 
   it('capability 실패는 종료 코드를 바꾸지 않는다', () => {
     const checks: DoctorCheck[] = [
       { name: 'adb', ok: true, kind: 'requirement', detail: '' },
-      { name: 'metric: frame', ok: false, kind: 'capability', detail: '' },
+      { name: 'metric: network', ok: false, kind: 'capability', detail: '' },
     ]
 
     expect(hasBlockingFailure(checks)).toBe(false)
@@ -175,7 +173,7 @@ describe('hasBlockingFailure — 고칠 수 있는 것만 실패로 센다', () 
   it('requirement 실패는 종료 코드를 바꾼다', () => {
     const checks: DoctorCheck[] = [
       { name: 'adb', ok: false, kind: 'requirement', detail: 'adb 를 찾지 못했습니다' },
-      { name: 'metric: frame', ok: true, kind: 'capability', detail: '' },
+      { name: 'metric: network', ok: true, kind: 'capability', detail: '' },
     ]
 
     expect(hasBlockingFailure(checks)).toBe(true)

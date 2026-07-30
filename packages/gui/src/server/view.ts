@@ -25,7 +25,7 @@ export function toDoctorView(checks: DoctorCheck[]): DoctorCheckView[] {
 }
 
 /**
- * doctor 결과에서 지표 7개의 판정만 꺼낸다.
+ * doctor 결과에서 지표 판정만 꺼낸다 (개수는 `METRIC_ORDER` 가 정한다).
  *
  * **화면이 SDK 표를 들고 판단하지 않게 하려는 것이 이 함수의 전부다.** 실제 판정은
  * `collector.supports(env)` 이고, 그것은 SDK 뿐 아니라 그 기기에 perfetto 데이터소스가

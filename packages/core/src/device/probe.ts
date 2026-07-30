@@ -8,7 +8,6 @@ export interface DeviceProbe {
 
 /** 캡처를 시작하기 전에 반드시 등록되어 있어야 하는 perfetto 데이터소스. */
 export const REQUIRED_DATA_SOURCES = [
-  'android.surfaceflinger.frametimeline',
   'linux.process_stats',
   'linux.sys_stats',
 ] as const

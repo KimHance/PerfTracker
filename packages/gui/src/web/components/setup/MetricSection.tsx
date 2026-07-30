@@ -1,4 +1,4 @@
-import { METRIC_ORDER } from '../../../contract/api.js'
+import { metricChips } from '../../format/metrics.js'
 import { selectedDevice } from '../../state/derive.js'
 import type { Tab } from '../../state/model.js'
 import { useStore } from '../../state/StoreContext.jsx'
@@ -12,12 +12,17 @@ import { SectionHead } from '../ui/SectionHead.jsx'
  *
  * 판정은 여기서 하지 않는다 — 서버가 doctor 와 같은 경로(`collector.supports(env)`)로 채워
  * 준 것을 그대로 그린다. 화면이 따로 판단하면 "된다고 했는데 안 되는" 상태가 생긴다.
+ *
+ * **설명 문단을 두지 않는다.** 칩 자체가 ✓/✗ 로 말하고 이유는 툴팁에 있으며 몇 개가 되는지는
+ * 머리말이 센다. 그 아래 한 문단을 더 깔면 읽는 사람이 먼저 보는 것(어느 칩이 ✗ 인가)이
+ * 글에 묻힌다. 지표 개수를 문장에 박아 두면 지표가 늘 때 조용히 거짓이 되기도 한다 —
+ * 실제로 "7개 지표" 라고 적힌 채 여덟 번째가 들어왔다.
  */
 export function MetricSection({ tab }: { tab: Tab }) {
   const { state } = useStore()
   const device = selectedDevice(state, tab)
-  const metrics = device?.metrics ?? []
-  const okCount = metrics.filter((m) => m.ok).length
+  const chips = metricChips(device?.metrics ?? [])
+  const okCount = chips.filter((c) => c.ok).length
 
   return (
     <section>
@@ -27,36 +32,18 @@ export function MetricSection({ tab }: { tab: Tab }) {
         aside={
           device === null || device.spec === null
             ? '기기를 먼저 선택하세요'
-            : `${okCount}/${METRIC_ORDER.length} 측정 가능 · SDK ${device.spec.sdkInt}`
+            : `${okCount}/${chips.length} 측정 가능 · SDK ${device.spec.sdkInt}`
         }
       />
 
       <div className="chip-row">
-        {METRIC_ORDER.map((id) => {
-          const support = metrics.find((m) => m.id === id) ?? null
-          // 기기를 고르기 전에는 되는지 안 되는지 모른다 — 모르는 것을 "가능" 으로 그리지 않는다.
-          const ok = support?.ok ?? false
-          return (
-            <span
-              key={id}
-              className={ok ? 'chip chip-ok' : 'chip chip-off'}
-              title={support?.reason ?? '기기를 선택하면 판정합니다'}
-            >
-              {ok ? '✓' : '✗'} {id}
-            </span>
-          )
-        })}
+        {chips.map((c) => (
+          <span key={c.label} className={c.ok ? 'chip chip-ok' : 'chip chip-off'} title={c.reason}>
+            {c.ok ? '✓' : '✗'} {c.label}
+          </span>
+        ))}
       </div>
 
-      <p className="section-note">{note(device === null, okCount, metrics.length)}</p>
     </section>
   )
-}
-
-function note(noDevice: boolean, okCount: number, total: number): string {
-  if (noDevice || total === 0) {
-    return '기기를 선택하면 doctor 와 같은 판정으로 7개 지표의 측정 가능 여부를 표시합니다.'
-  }
-  if (okCount === total) return '이 기기는 7개 지표를 모두 측정할 수 있습니다.'
-  return '칩에 마우스를 올리면 이유가 보입니다. 못 재는 지표가 있어도 세션은 막히지 않고 나머지는 정상 수집됩니다 — 고칠 수 없는 기기의 성질입니다.'
 }

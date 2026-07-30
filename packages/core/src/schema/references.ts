@@ -6,7 +6,7 @@ import type { Reference } from './result.js'
  */
 export const REFERENCES: Reference[] = [
   {
-    metric: 'frame',
+    metric: 'hwui',
     name: '60fps frame budget',
     value: 16.67,
     unit: 'ms',
@@ -14,7 +14,7 @@ export const REFERENCES: Reference[] = [
     url: 'https://developer.android.com/topic/performance/vitals/render',
   },
   {
-    metric: 'frame',
+    metric: 'hwui',
     name: 'frozen frame threshold',
     value: 700,
     unit: 'ms',

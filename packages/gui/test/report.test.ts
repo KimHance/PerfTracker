@@ -47,14 +47,14 @@ const LOWEND = sample('low-end')
 const block = <T>(title: string): T => MANIFEST.find((b) => b.title === title) as T
 
 /**
- * 트레이스 분포는 화면에서 뺐지만(카드는 프레임워크 것 하나다) **데이터는 그대로 있고**
- * 빌더의 규칙도 그대로다. 빌더를 보는 테스트는 매니페스트 카드가 아니라 이 블록을 쓴다.
+ * 빌더의 규칙을 보는 테스트는 매니페스트 카드가 아니라 이 블록을 쓴다 — 카드가 어느 경로를
+ * 보든 "버킷을 접지 않는다" 같은 규칙은 같아야 한다.
  */
 const TRACE_DIST: DistributionBlock = {
-  kind: 'distribution', section: 'render', title: '트레이스 분포(테스트용)',
-  metric: 'frame', span: 12,
-  path: 'metrics.frame.data.buckets',
-  percentilesPath: 'metrics.frame.data.percentiles',
+  kind: 'distribution', section: 'render', title: '분포(테스트용)',
+  metric: 'hwui', span: 12,
+  path: 'metrics.hwui.data.histogram',
+  percentilesPath: 'metrics.hwui.data.percentiles',
   breakAfterEmptyBuckets: Infinity,
 }
 
@@ -109,10 +109,14 @@ describe('표본 셋이 전부 렌더된다', () => {
 })
 
 describe('low-end — 못 잰 것을 숨기지 않는다', () => {
-  it('frame 이 통째로 없으면 분포는 "수집 안 함" 이다 — 빈 차트가 아니다', () => {
+  /**
+   * **sdk 30 에서도 분포가 나온다.** `hwui` 는 `dumpsys gfxinfo` 에서 와서 버전 하한이 없다 —
+   * 렌더를 트레이스로만 재던 시절 이 기기는 분포가 통째로 비었다.
+   */
+  it('sdk 30 기기에서도 분포가 그려진다', () => {
     const vm = buildDistribution(block<DistributionBlock>('프레임 시간 분포'), LOWEND, 900)
-    expect((vm as NoneVm).none).toBe(true)
-    expect((vm as NoneVm).label).toContain(NONE_MISSING)
+    expect((vm as NoneVm).none).toBeUndefined()
+    expect((vm as { bars: unknown[] }).bars.length).toBeGreaterThan(0)
   })
 
   /**
@@ -135,7 +139,6 @@ describe('low-end — 못 잰 것을 숨기지 않는다', () => {
    * 그 자리가 비면 화면이 자기가 못 잰 것을 숨긴 셈이 된다.
    */
   it('미수집 지표는 카드 배지로 닿는다', () => {
-    expect(metricState(LOWEND, 'frame').status).toBe('unsupported')
     expect(metricState(LOWEND, 'network').status).toBe('unsupported')
   })
 
@@ -376,7 +379,7 @@ describe('분포', () => {
 
   it('상한 없는 마지막 버킷은 "이상" 으로 읽힌다', () => {
     const vm = buildDistribution(TRACE_DIST, FULL, 900)
-    const buckets = readPath(FULL, 'metrics.frame.data.buckets') as unknown[]
+    const buckets = readPath(FULL, 'metrics.hwui.data.histogram') as unknown[]
     const tip = (vm as { tipOf: (i: number) => { head: string } }).tipOf(buckets.length - 1)
     expect(tip.head).toContain('이상')
   })
@@ -575,8 +578,8 @@ describe('stat', () => {
 
 describe('지표 상태', () => {
   it('status 와 reason_code 를 끌어온다', () => {
-    expect(metricState(LOWEND, 'frame').status).toBe('unsupported')
-    expect(metricState(LOWEND, 'frame').reasonCode).toBe('sdk_too_low')
+    expect(metricState(LOWEND, 'network').status).toBe('unsupported')
+    expect(metricState(LOWEND, 'network').reasonCode).toBe('sdk_too_low')
   })
 
   it('지표에 속하지 않는 블록은 상태가 없다', () => {
@@ -586,7 +589,7 @@ describe('지표 상태', () => {
 
 describe('매니페스트에 없는 지표', () => {
   it('무시한 개수를 푸터에 남긴다 — 조용히 버리면 새 지표가 생겨도 아무도 모른다', () => {
-    const h = buildHeader({ metrics: { frame: { status: 'collected' }, battery: { status: 'collected' } } })
+    const h = buildHeader({ metrics: { hwui: { status: 'collected' }, battery: { status: 'collected' } } })
     expect(h.ignored).toEqual(['battery'])
     expect(h.footerIgnored).toContain('battery')
   })
@@ -657,19 +660,20 @@ describe('프레임워크 지표 카드', () => {
 
   it('두 번째 계열색을 쓴다 — 다른 카드와 구분된다', () => {
     expect(card.tone).toBe('alt')
-    // 색이 판정으로 읽히지 않게, tone 을 쓰는 곳은 frame/hwui 뿐이어야 한다.
-    expect(
-      MANIFEST.filter((b) => b.tone === 'alt').every((b) => b.metric === 'frame' || b.metric === 'hwui'),
-    ).toBe(true)
+    // 색이 판정으로 읽히지 않게, tone 을 쓰는 곳은 렌더(hwui) 뿐이어야 한다.
+    expect(MANIFEST.filter((b) => b.tone === 'alt').every((b) => b.metric === 'hwui')).toBe(true)
   })
 
   /**
    * **일부러 안 그리는 것과 몰라서 안 그리는 것은 다르다.** 후자만 푸터가 경고해야 한다 —
    * 이유가 있어 뺀 지표가 매번 뜨면 진짜 신호(아무도 안 넣은 새 지표)가 묻힌다.
+   *
+   * **지금은 목록이 비어 있다.** 한동안 `frame` 이 여기 있었는데, 화면엔 없고 파일에만
+   * 남아서 사람과 LLM 이 다른 숫자를 봤다 — 그래서 수집을 접었다.
    */
-  it('일부러 안 그리는 지표는 "무시한 지표" 로 세지 않는다', () => {
-    expect(NOT_DRAWN_METRICS).toContain('frame')
-    expect(buildHeader(FULL).ignored).not.toContain('frame')
+  it('안 그리는 목록이 비어 있고, 그래서 푸터가 조용하다', () => {
+    expect(NOT_DRAWN_METRICS).toEqual([])
+    expect(buildHeader(FULL).footerIgnored).toBe('')
   })
 
   it('렌더 섹션은 프레임워크 지표만 낸다', () => {

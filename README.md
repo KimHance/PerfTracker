@@ -42,22 +42,20 @@ adb 로 붙어서 Perfetto 트레이스를 기기에 남기고, 그것을 호스
 
 ## 어느 안드로이드에서 되는가
 
-**Android 11(sdk 30)부터 동작합니다.** 다만 두 지표에는 더 높은 하한이 있습니다:
+**Android 11(sdk 30)부터 동작합니다.** 한 지표에만 더 높은 하한이 있습니다:
 
 | 지표 | 최소 | 왜 |
 | --- | --- | --- |
-| `frame` | **Android 12** (sdk 31) | `android.surfaceflinger.frametimeline` 데이터소스가 그때 생겼습니다 |
 | `network` | **Android 14** (sdk 34) | `dumpsys netstats` 의 `mAppUidStatsMap` 절이 그때부터입니다 |
 | 나머지 6개 | Android 11 | thermal 만 sdk 29 하한이 따로 있습니다 |
 
-**`frame` 이 안 되는 기기에서도 렌더링은 볼 수 있습니다.** `hwui` 는 `dumpsys gfxinfo` 에서
-와서 버전 하한이 없습니다 — 실측 SM-A405S(sdk 30)에서 `frame` 은 `sdk_too_low` 인데 `hwui` 는
-전체 160장·janky 66 을 냈습니다. 다만 분포·백분위·초 단위 추이는 `frame` 에만 있습니다.
+**렌더링은 어느 기기에서나 볼 수 있습니다.** `hwui` 는 `dumpsys gfxinfo` 에서 와서 버전
+하한이 없습니다 — 실측 SM-A405S(sdk 30)에서도 전체 799장·분포 70칸이 나왔습니다.
 
 **기기를 꽂고 `perftracker doctor` 를 돌리면 그 기기에서 무엇을 잴 수 있는지 알려줍니다:**
 
 ```
-✗ metric: frame     이 기기에서는 측정할 수 없습니다 — sdk_int=30 로는 수집할 수 없습니다 (최소 31, Android 12)
+✗ metric: network   이 기기에서는 측정할 수 없습니다 — sdk_int=30 로는 수집할 수 없습니다 (최소 34, Android 14)
 ✓ metric: hwui      측정 가능
 ✓ metric: startup   측정 가능
 ✓ metric: cpu       측정 가능
@@ -178,7 +176,7 @@ export ANDROID_HOME="$HOME/Library/Android/sdk"
 준비물은 **USB 디버깅 켜기**가 전부입니다. 기기에 아무것도 설치하지 않고 루팅도 필요 없습니다.
 
 - **Android 12(API 31) 이상**이어야 프레임 타이밍(`android.surfaceflinger.frametimeline`)을
-  얻을 수 있습니다. 그 아래에서는 `metrics.frame` 이 `unsupported` / `sdk_too_low` 입니다.
+  얻을 수 있습니다.
 - **`metrics.network` 은 Android 14(sdk 34) 이상**에서만 나옵니다 (아래 해당 절 참고).
 - **기기를 하나만 연결해 두세요.** 에뮬레이터를 함께 켜 두면 기기가 둘이 되어
   `AmbiguousDeviceError` 가 납니다. 굳이 둘을 두려면 `-d, --device <serial>` 로 지목하세요
@@ -439,7 +437,7 @@ npx perftracker schema > result.schema.json
 | `session` | id, 이름, `state`, 시작/종료 시각, 길이, **시간축 기준 두 개**(아래 참고) |
 | `device` | 기기 스펙(`static`)과 세션 전후 상태(`state_before` / `state_after`) |
 | `target_app` | 패키지, 라벨, 버전, 렌더 프로세스와 pid, **빌드 속성**(`debuggable` / `large_heap` / `min_sdk` / `target_sdk` / `primary_cpu_abi`) |
-| `metrics` | 메트릭들. 키가 곧 수집기 id (`frame` / `startup` / `cpu` / `memory` / `log` / `thermal` / `network`) |
+| `metrics` | 메트릭들. 키가 곧 수집기 id (`hwui` / `startup` / `cpu` / `memory` / `log` / `thermal` / `network`) |
 | `measurement_overhead` | 이 측정이 기기에 개입한 정도의 **하한** (아래 참고) |
 | `references` | 구글 공개 기준치. **비교에 쓰이지 않고 기록만 된다** |
 | `warnings` | 관측된 사건 (평가 아님) |
@@ -534,11 +532,11 @@ clock_snapshot 이 없거나 기기 시계를 못 읽은 경우(`trace_start_off
 - `source` — 이 숫자를 **어떤 방법으로 쟀는지**의 기록
 - `reason_code` — 기계가 읽는 안정적인 키. 문구가 바뀌어도 이건 안 바뀝니다.
   CI 매칭은 반드시 이걸로 하세요. (예: `sdk_too_low`, `render_process_not_found`,
-  `no_frames`, `trace_missing`, `data_source_not_registered`, `query_failed`)
+  `trace_missing`, `data_source_not_registered`, `query_failed`)
 
-  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **36개**입니다
+  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **34개**입니다
   > (`1.0.0` 은 6개였습니다). 그중 `process_name_stale_in_trace` 는 `1.0.0` 부터 있던
-  > `metrics.frame` 에도 실립니다. 이 숫자는 테스트가 `METRIC_REASON_CODES` 와 대조해
+  > `metrics.hwui` 에도 실립니다. 이 숫자는 테스트가 `METRIC_REASON_CODES` 와 대조해
   > 고정하므로 코드보다 낡을 수 없습니다.
 - `reason` — 사람이 읽는 한국어 문장. 다듬힐 수 있으니 매칭에 쓰지 마세요.
 - `data` — 메트릭별 본문. 수집되지 않았으면 `null`
@@ -576,81 +574,6 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 개수를 세어 보세요. 위에 적힌 개수보다 적으면 낡은 것입니다. `thermal_zones` 항목에
 `source` 가 없어도 마찬가지입니다.
 
-### `metrics.frame`
-
-프레임 하나하나의 실제 소요 시간(`actual_frame_timeline_slice.dur`)에서 나옵니다.
-
-```json
-{
-  "process": "com.nhn.android.webtoon",
-  "pid": 24193,
-  "total_frames": 1412,
-  "buckets": [ { "from_ms": 0, "to_ms": 5, "count": 812 }, "...61개" ],
-  "percentiles": { "p50": 9.2, "p90": 21.4, "p95": 28.1, "p99": 96.3 },
-  "mean_ms": 12.8,
-  "max_ms": 312.4,
-  "timeline": [ { "t_s": 0, "count": 119, "p50_ms": 6.81, "max_ms": 24.03 }, "..." ],
-  "deadlines": [ { "ms": 8.33, "frames": 3118 }, { "ms": 16.67, "frames": 66 } ],
-  "jank": {
-    "total_frames": 1938,
-    "janky_frames": 1698,
-    "late_frames": 330,
-    "dropped_frames": 101,
-    "by_type": [
-      { "type": "Buffer Stuffing", "count": 1556 },
-      { "type": "App Deadline Missed", "count": 188 },
-      { "type": "Dropped Frame", "count": 101 }
-    ]
-  }
-}
-```
-
-- `buckets` 는 **항상 61개**로 고정입니다. 경계는 `[from, to)` 반개구간이고,
-  마지막 버킷은 `to_ms: null` (= 700ms 이상, 상한 없음)입니다.
-  **폭은 구간마다 다릅니다** — 5~16ms 는 1ms, 16~50ms 는 2ms, 50~130ms 는 4ms 로 조밀하고,
-  130ms 부터는 30 → 50 → 100ms 로 넓어집니다. 130ms 를 넘은 프레임에서 분포가 답하는 질문은
-  "165냐 185냐" 가 아니라 "이런 것이 몇 개 있었나" 이고, 정확한 값은 `percentiles` 와
-  `max_ms` 가 소수점까지 말합니다.
-  흔히 쓰이는 예산 부근을 1ms 로 조밀하게 보고 꼬리로 갈수록 폭을 넓힙니다.
-- **한 줄이 화면에 나간 프레임 하나입니다.** 트레이스는 원래 **레이어마다** 한 행을 내는데
-  (SurfaceView 를 쓰면 그 뒤 `Background for …` 짝까지), 그대로 세면 실측에서 2.4배가 됐습니다
-  — 33초에 6,932장, 초당 210장이라는 120Hz 기기에서 나올 수 없는 수입니다. 그래서 같은 화면
-  갱신에 묶인 것들을 접고 **그중 가장 오래 걸린 레이어**를 그 프레임의 값으로 씁니다.
-  레이어 **이름으로 거르지 않습니다** — 구조로 접은 결과가 실기기에서 프레임워크 자신의
-  집계(`hwui.total_frames`)와 **정확히 같은 수**로 떨어졌습니다 (212 = 212).
-- 종료 이벤트를 못 받은 미완결 프레임(`dur = -1`)은 집계에서 **제외**됩니다.
-- **`deadlines` 는 기기가 프레임에 배정한 마감입니다 — 이 도구가 고른 값이 아닙니다.**
-  **값이 여럿이면 세션 중 주사율이 바뀐 것입니다.** 실측 한 세션에 8.33ms 3,118장과
-  16.67ms 66장이 함께 있었습니다 (10~12초에 60Hz 로 떨어졌다 돌아옴).
-  - 이 배열이 있어야 `buckets` · `percentiles` 를 **무엇에 대해** 읽을지 알 수 있습니다.
-    같은 세션이 16.67ms 기준으로는 8.26%, 기기가 실제로 준 마감 기준으로는 27.3% 로 갈립니다.
-  - **`device.static.display.active_refresh_rate_hz` 보다 이쪽을 믿으세요.** 그 필드는 세션
-    시작 직전 한 순간의 스냅샷이고, 이쪽은 프레임마다 기기가 실제로 요구한 값입니다.
-    화면이 여럿인 기기(폴더블 · 외부 모니터 · DeX)에서는 그 필드가 **지금 쓰는 화면**의
-    값이고(`mViewports` 의 `isActive=true` 로 고릅니다), 어느 화면인지 못 고르면 `null`
-    입니다 — 순서로 고르면 커버 화면 해상도에 꺼진 내부 화면의 주사율이 붙습니다.
-  - 안드로이드 **Macrobenchmark 도 같은 이유로 고정 예산을 쓰지 않습니다** —
-    `frameOverrunMs` 는 "the amount of time a given frame misses **its deadline** by" 이고,
-    같은 테이블을 쓰기 때문에 API 31+ 를 요구합니다.
-> **여기에 "몇 % 가 기준 안에 들었다" 는 값이 없습니다. 일부러 없습니다.**
->
-> 프레임 예산은 기기의 주사율에 따라 달라집니다 — 60Hz 는 16.67ms 지만 120Hz 는 **8.33ms**,
-> 90Hz 는 11.1ms 입니다. 어느 선을 쓸지는 기기·안드로이드 버전·그 앱이 목표하는 바에 따라
-> 달라지고, 그것을 고르는 일은 이 데이터를 읽는 쪽의 몫입니다.
->
-> 판단에 필요한 것은 결과에 다 있습니다:
->
-> | 무엇 | 어디 |
-> | --- | --- |
-> | 프레임 분포 | `metrics.frame.buckets` (61개) |
-> | 이 기기가 지금 몇 Hz 로 도는가 | `device.static.display.active_refresh_rate_hz` |
-> | 이 기기가 지원하는 주사율 | `device.static.display.supported_refresh_rates_hz` |
-> | 구글이 공개한 참고치 | [`references`](#references) (출처와 함께 기록만 되고 비교에 쓰이지 않음) |
->
-> 한 가지 한계: 버킷 폭이 구간마다 달라서 **임계값이 버킷 경계와 어긋나면 그 비율은 버킷
-> 폭만큼 근사**가 됩니다. 16.67ms 는 `16~18ms` 버킷 안에, 8.33ms 는 `8~9ms` 버킷 안에
-> 있습니다. 정확한 경계가 필요하면 `trace.perfetto-trace` 원본이 그대로 남아 있습니다.
-
 ### `metrics.hwui`
 
 **프레임워크(HWUI)가 자기 렌더링을 직접 센 값**입니다. `dumpsys gfxinfo <패키지>` 를 세션 전과
@@ -670,20 +593,20 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 }
 ```
 
-**`frame` 과 대체가 아니라 짝입니다.** 세는 대상이 다릅니다:
+**렌더링을 재는 길은 이것 하나입니다.** 한동안 트레이스(`android.surfaceflinger.frametimeline`)
+로도 같은 것을 재서 `metrics.frame` 을 함께 냈는데, **보고서가 `hwui` 만 그리게 되자 화면에
+없는 데이터가 `result.json` 에만 남았습니다.** 사람은 보고서를 보고 LLM 은 파일을 보는데
+둘이 다른 숫자를 들게 됩니다 — 같은 세션에서 `janky_frames` 가 170 대 1,556, `p99` 가
+53 대 39.56 으로 갈렸습니다. 그래서 수집을 접었습니다.
 
-| | `frame` | `hwui` |
-| --- | --- | --- |
-| 출처 | 트레이스 | 프레임워크 |
-| 모집단 | 화면에 나간 프레임 (레이어를 접은 것) | **View 계층만** — Vitals 와 같은 범위 |
-| 초 단위 추이 | 있음 | 없음 |
-| 분포 | 있음 (우리 버킷) | **있음** (프레임워크 버킷 · `histogram`) |
-| 백분위 | 있음 | 없음 |
-| **원인별 개수** | 없음 | **있음** |
-
-`total_frames` 가 `frame.data.total_frames` 와 다를 수 있고, **다른 것이 정상**입니다.
-실측에서 둘이 212 로 일치해 `frame` 쪽 프레임 정의를 확증한 적도 있습니다 — 서로 다른 두
-경로가 같은 수를 내는 것이 그 정의가 옳다는 증거였습니다.
+| | `hwui` |
+| --- | --- |
+| 출처 | 프레임워크 (`dumpsys gfxinfo` 세션 전후 차이) |
+| 모집단 | **View 계층만** — 안드로이드 Vitals 와 같은 범위 |
+| 버전 하한 | **없음** |
+| 분포 · 백분위 | 있음 (프레임워크 버킷) |
+| 원인별 개수 | 있음 |
+| 초 단위 추이 | 없음 |
 
 - `janky_frames` 의 정의는 **프레임워크의 것**이고 이 도구가 정한 것이 아닙니다.
   어느 쪽이 나쁜지는 판정하지 않습니다.
@@ -700,11 +623,8 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 - 뒤의 다섯은 프레임 시간이 아니라 **원인**입니다 — UI 스레드가 느렸는지, 비트맵 업로드인지,
   그리기 명령인지, 입력 지연인지. 트레이스에는 없는 축입니다.
 - **`histogram` 은 프레임워크가 만든 프레임 시간 분포**입니다 (세션 델타).
-  `metrics.frame.data.buckets` 와 **다른 것을 잽니다** — 이쪽은 UI 스레드 + RenderThread 의
-  CPU 시간(Vitals 가 보는 값), 저쪽은 서피스 프레임의 지속 시간입니다. 실측 같은 세션에서
-  p99 가 **53ms 대 39.56ms** 로 갈렸습니다. 둘 다 맞고 다른 질문에 답합니다.
-  - **버전 하한이 없는 유일한 분포입니다.** sdk 30(SM-A405S) 실측에서 `frame` 은
-    `sdk_too_low` 인데 이 히스토그램은 27칸 · 215장이 나왔습니다.
+  **UI 스레드 + RenderThread 의 CPU 시간**이고, 그것이 Vitals 가 보는 값입니다.
+  - **버전 하한이 없습니다.** sdk 30(SM-A405S) 실측에서도 70칸 · 799장이 나왔습니다.
   - 칸 경계는 프레임워크가 정합니다(1ms 씩 시작해 뒤로 갈수록 넓어짐) — 우리 버킷과 다릅니다.
     `to_ms` 는 다음 칸의 시작입니다.
   - **칸 이름은 그 칸의 끝입니다.** 프레임워크가 `6ms=155` 라고 하면 6ms 걸린 프레임 수이므로
@@ -714,8 +634,7 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
     않습니다(`HISTOGRAM: 5ms=480 6ms=155 …` 의 첫 항목이 그것입니다). 나머지가 1ms 폭이라
     첫 칸만 유독 높게 보이는데, 그것은 뭉갠 것이 아니라 원본의 해상도입니다.
   - **700ms 에서 자릅니다.** 프레임워크 칸은 4950ms 까지 가는데 실제 데이터는 앞쪽에 몰려
-    있어 그대로 그리면 화면의 3분의 2가 빕니다. 700ms 는 `frame.data.buckets` 의 상한과 같은
-    자리입니다. **자르되 버리지 않습니다** — 그 이상은 마지막 한 칸(`to_ms: null`)으로 접어서
+    있어 그대로 그리면 화면의 3분의 2가 빕니다. **자르되 버리지 않습니다** — 그 이상은 마지막 한 칸(`to_ms: null`)으로 접어서
     칸의 합이 `total_frames` 와 같습니다.
   - **그 아래는 0 인 칸도 전부 실립니다.** 분포는 어디가 비어 있는가가 곧 정보이고, 있는 칸만
     남기면 축이 세션마다 달라져 두 결과를 나란히 볼 수 없습니다.
@@ -723,8 +642,7 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   백분위를 찍지만 그것은 프로세스 시작 이후 누적이라 세션 값이 아닙니다 — 그대로 실으면
   분포와 백분위가 서로 다른 구간을 말하게 됩니다.
   - **해상도는 프레임워크의 칸 폭**입니다. 5~32ms 는 1ms 라 촘촘하고 뒤로 갈수록 넓어지므로
-    꼬리 백분위는 그 칸의 시작값(하한)으로 떨어집니다. 소수점까지 필요하면
-    `metrics.frame.data.percentiles` 를 보세요 — 그쪽은 프레임마다의 실제 값에서 나옵니다.
+    꼬리 백분위는 그 칸의 시작값(하한)으로 떨어집니다 — 정확한 값이 아니라 하한이라는 뜻입니다.
   - 실기기 교차 확인(`--launch` 세션이라 누적=세션): 우리 계산 8/25/38/89 = 기기 보고 8/25/38/89.
 - 값이 `null` 인 경우: 그 줄이 출력에 없었거나, 세션 중 앱 프로세스가 죽어 누적이 리셋됐습니다.
   **0 과 다른 말입니다.**
@@ -757,7 +675,7 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 
 - `total_time_ms` — `am start -W` 의 `TotalTime`. 프로세스 시작부터 첫 프레임까지입니다.
   **ActivityManager 가 보고한 숫자를 그대로 옮긴 것**이지 이 도구가 트레이스에서 잰 값이
-  아닙니다. 그래서 같은 세션의 `metrics.frame` 과는 출처가 다릅니다.
+  아닙니다.
   **`null` 은 기기가 이 값을 내지 않았다는 뜻입니다** (아래 `status` 참조) — 0 이 아닙니다.
 - `launch_state` — 기기가 준 `LaunchState` 원문 (`COLD` / `WARM` / `HOT`).
   **enum 으로 좁히지 않습니다** — 우리가 정하는 값이 아니라 기기가 뱉는 문자열이기

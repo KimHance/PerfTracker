@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { frameCollector } from '../../src/collectors/frame/index.js'
+import { cpuCollector } from '../../src/collectors/cpu/index.js'
 import { networkCollector } from '../../src/collectors/network/index.js'
 import {
   COLLECTORS,
@@ -16,7 +16,6 @@ import { buildTraceConfig } from '../../src/perfetto/config.js'
 const OK = {
   sdkInt: 36,
   dataSources: [
-    'android.surfaceflinger.frametimeline',
     'linux.process_stats',
     'linux.sys_stats',
     'linux.ftrace',
@@ -31,8 +30,8 @@ describe('COLLECTORS 레지스트리', () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it('frame 과 startup 이 등록되어 있다', () => {
-    expect(COLLECTORS).toContain(frameCollector)
+  it('hwui 와 startup 이 등록되어 있다', () => {
+    expect(COLLECTORS).toContain(hwuiCollector)
     expect(COLLECTORS).toContain(startupCollector)
   })
 
@@ -45,7 +44,7 @@ describe('COLLECTORS 레지스트리', () => {
 describe('collectTraceConfigBlocks', () => {
   it('지원되는 collector 의 블록만 모은다', () => {
     expect(collectTraceConfigBlocks(OK)).toEqual(
-      expect.arrayContaining(frameCollector.traceConfigBlocks({ sdkInt: 36, dataSources: [] })),
+      expect.arrayContaining(cpuCollector.traceConfigBlocks({ sdkInt: 36, dataSources: [] })),
     )
     // startup 은 지원되지만 블록을 하나도 안 낸다 — 구형 기기에서는 config 가 빈다.
     expect(collectTraceConfigBlocks(OLD)).toEqual([])
@@ -56,8 +55,8 @@ describe('collectTraceConfigBlocks', () => {
   })
 
   it('중복 데이터소스를 접는다 — 두 collector 가 같은 것을 요구해도 블록은 한 번만 나간다', () => {
-    // 오늘은 collector 가 하나지만, 규칙은 지금 고정한다.
-    const doubled = [...frameCollector.traceConfigBlocks({ sdkInt: 36, dataSources: [] }), ...frameCollector.traceConfigBlocks({ sdkInt: 36, dataSources: [] })]
+    const one = cpuCollector.traceConfigBlocks({ sdkInt: 36, dataSources: [] })
+    const doubled = [...one, ...one]
     const config = buildTraceConfig({
       dataSourceBlocks: [...new Set(doubled)],
     })
@@ -80,7 +79,6 @@ describe('collectTraceConfigBlocks', () => {
     const names = collectTraceConfigBlocks(OK).map((b) => /name:\s*"([^"]+)"/.exec(b)?.[1])
     expect(new Set(names)).toEqual(
       new Set([
-        'android.surfaceflinger.frametimeline',
         'linux.process_stats',
         'linux.sys_stats',
         'linux.ftrace',
@@ -124,7 +122,7 @@ describe('supportedCollectors / unsupportedReasons', () => {
   it('미지원 항목만 사유와 함께 한국어로 낸다', () => {
     const reasons = unsupportedReasons(OLD)
     expect(reasons.length).toBe(COLLECTORS.length - supportedCollectors(OLD).length)
-    expect(reasons.some((r) => r.startsWith('frame:'))).toBe(true)
+    expect(reasons.some((r) => r.startsWith('network:'))).toBe(true)
     expect(reasons.join('\n')).toContain('sdk_int=30')
     // 지원되는 항목은 "알 수 없음" 같은 잡음으로 목록을 채우지 않는다.
     expect(reasons.some((r) => r.startsWith('startup:'))).toBe(false)
