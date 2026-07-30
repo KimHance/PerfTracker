@@ -151,7 +151,7 @@ metrics.memory.data.system_timeline
 ### kind별 추가 필드
 
 - **series** — `field`, `subField`/`subLabel`(같은 축의 점선 보조선, 부분집합일 때만 · 쌓지 않음), `transform`, `sampling: 'cumulative'|'gauge'|'count'`, `baseline: 'zero'|'data'`, `fmt`
-- **distribution** — `percentilesPath`, `totalPath`, `breakAfterEmptyBuckets`(현재 `Infinity` — **버킷은 전부 보여준다**)
+- **distribution** — `percentilesPath`, `share`(백분위 옆에 세울 비율 하나: `{label, countPath, totalPath}`), `breakAfterEmptyBuckets`(현재 `Infinity` — **버킷은 전부 보여준다**)
 - **bars** — `labelField`(배열이면 `CPU 0–3` 처럼 범위로), `labelPrefix`, `valueField`, `fmt`, `scaleMax`(`null` 이면 데이터 최댓값)
 - **delta** — 배열형: `labelField` `beforeField` `afterField` `fmt` / 객체형: `beforePath` `afterPath` `keys[]`
 - **pairs** — `keys: [{p, l, f}]` (`p` 는 블록 `path` 기준 상대 경로, 점 표기 가능) 또는 `arrayAs: 'freq'` 같은 특수 변환
@@ -258,15 +258,17 @@ viewBox `측정된 컨테이너 폭 × 190`, 여백 `{l:44, r:10, t:18, b:30}`. 
 
 - `ResizeObserver` 로 컨테이너 폭을 재고, 폭에 맞춰 **막대 두께와 눈금 라벨 개수를 조절**합니다:
   - `slotW = (W - 54) / 버킷수`, `GAP` = slotW 9↑ 2 / 5↑ 1 / 3↑ 0.6 / 그 외 0.3, `BW = max(1, slotW - GAP)`, `rx = min(2, BW/3)`
-  - 라벨 간격 `labelEvery = ceil(버킷수 / max(4, floor((W-54)/62)))` — 넓으면 촘촘히(`0ms 12ms 24ms…`), 좁으면 드물게
+  - 라벨 간격 `labelEvery = ceil(버킷수 / max(4, floor((W-54)/62)))` — 넓으면 촘촘히, 좁으면 드물게
+  - **눈금은 칸의 시작이 아니라 끝입니다**(`5ms 15ms 25ms…`). 시작값을 쓰면 첫 칸 아래에 `0ms` 가 서는데 프레임 대부분이 그 칸에 있어 "0ms 에 끝난 프레임이 480장" 으로 읽힙니다. 데이터 쪽도 같은 규칙입니다 — 프레임워크의 `6ms=155` 는 `[5, 6)` 이고 첫 칸 `5ms` 는 `[0, 5)` 입니다. 상한 없는 칸만 `700ms+`.
 - **버킷은 접지 않고 전부 보여줍니다**(101칸). 접기 로직은 남아 있지만 `breakAfterEmptyBuckets: Infinity` 로 꺼져 있습니다.
 - 세로축: 0 부터 최대 count 까지 `niceMax(max/4)` 간격 눈금 + 격자
 - 백분위: `percentiles` 의 p50/p90/p95/p99 를 큰 숫자로 위에 표기하고, 차트에는 **점선만** 얹습니다(라벨은 겹쳐서 뺐습니다). x 위치는 그 값을 포함하는 버킷의 슬롯입니다.
+- 그 줄 오른쪽 끝에 `share` 타일 하나(`JANK 10.1%`)를 세로선(`.rp-pct-sep`)으로 갈라 세웁니다. **백분위와 같은 지표에서 옵니다** — 출처가 갈리면 옆에 선 숫자끼리 모집단이 달라집니다. 분자·분모를 못 읽으면 타일이 아예 서지 않습니다.
 - **호버는 슬롯 전체 높이의 투명 히트 영역**입니다 — 막대가 아닙니다. 얇은 막대·빈 구간도 잡히고 슬롯이 맞닿아 있어 틈이 없습니다(마우스를 움직여도 깜빡이지 않음). 같은 슬롯 안에서는 6px 이상 움직이지 않으면 상태를 갱신하지 않습니다.
 - 짚은 슬롯은 `--color-accent` opacity .14 배경으로 표시.
 - 툴팁: `position:fixed`, 마우스 +14px, `border:1px solid var(--color-text)`, `--shadow-md`, `border-radius:var(--radius-md)`. 내용 = **구간 / 프레임 수 / 전체의 N%**.
   **누적 비율을 보여주지 않습니다** — 버킷은 시간축이 아니라 지속 시간 구간이라 "0에서 끝으로 누적된다" 는 인상을 주면 안 됩니다.
-- 각주: `{N} 프레임 · 버킷 {M}칸 전부 · 가로축 = 버킷 순서` (버킷 폭이 일정하지 않다는 사실)
+- 각주: **없습니다.** `빈 버킷 N칸 접음` 만 실제로 접혔을 때 나옵니다(지금은 안 접으므로 늘 빈 문자열). 카드에 읽는 법을 설명하지 않습니다 — 카드마다 한 줄씩 붙으면 화면이 글이 됩니다. 지표의 성질은 `README.md` 가 정본입니다.
 
 ### bars
 
@@ -274,11 +276,21 @@ viewBox `측정된 컨테이너 폭 × 190`, 여백 `{l:44, r:10, t:18, b:30}`. 
 
 ### delta
 
-4열 표: 라벨 / before(`--color-neutral-700`) / `→` / after. 행마다 hairline.
+5열 표: 라벨 / before(`--color-neutral-700`) / `→` / after / **차이**. 행마다 hairline.
+
+- 차이의 단위는 before·after 와 **같은 포맷터**가 붙입니다 — 퍼센트면 `%`, 온도면 `°C`, kB 필드면 MB. 오른 값에만 `+` 를 붙입니다(음수 부호는 포맷터가 이미 붙임).
+- 적을 차이가 없으면 `-` 입니다 — 안 변했거나(0), 뺄 수 없거나(`wifi` · `예`), 한쪽을 못 읽었거나(측정 중인 세션의 `state_after`). 셋을 한 글자로 합쳐도 **왼쪽 두 칸이 이미 셋을 가릅니다**(`37.1°C → 37.1°C` 대 `100% → 값 없음`). 칸을 비워 두지는 않습니다.
+- **증감에 색을 쓰지 않습니다.** 온도가 내려간 것이 "좋다" 가 되면 규칙 2 를 깬 것입니다.
 
 ### pairs
 
-2열 표. `f:'wrap'` 인 값만 `word-break:break-all`.
+3열 표(라벨 / 값 / 비율). `f:'wrap'` 인 값만 `word-break:break-all`. 비율은 `pct` 가 선언된 키에만 붙고, **값과 따로 낸 칸**입니다 — 한 문자열로 붙이면 개수와 비율이 눈에서 섞입니다.
+
+**라벨은 옮겨 적지 않습니다.** `dumpsys gfxinfo` 의 `Slow issue draw commands` 를 "그리기 명령" 으로 쓰면 원문에서 grep 되지 않고, 우리 스키마 필드를 "앱 warn" 으로 쓰면 `result.json` 에서 찾을 수 없습니다. 기기가 영어로 준 이름은 **그 이름 그대로**, 우리 필드는 **경로 그대로**(`logcat 줄 수` 카드) 싣습니다. 우리말은 카드 제목에만 씁니다.
+
+### stat
+
+값 / (값이 없으면) `reason_code` / 부가 문장. 큼직한 `값 없음` 만 있으면 도구가 고장 난 것으로 읽히므로 **왜인지를 같이 냅니다** — 카드에는 코드만(`.rp-stat-why`, 등폭), 문장은 `title` 툴팁으로. **값이 있을 때는 붙이지 않습니다**: `partial` 지표의 사유가 멀쩡한 숫자 밑에 서면 그 숫자까지 의심하게 됩니다.
 
 ---
 

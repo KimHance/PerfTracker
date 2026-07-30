@@ -216,6 +216,8 @@
   letter-spacing: 0.01em;
 }
 .rp-pct-u { font-size: 11px; font-weight: 400; color: var(--color-neutral-600); margin-left: 3px; }
+/* 백분위(ms)와 마감 비율(%)은 다른 것이다 — 같은 줄에 두되 눈으로 갈린다. */
+.rp-pct-sep { padding-left: var(--space-4); border-left: 1px solid var(--color-border); }
 
 /* ── bars ──────────────────────────────────────────────────── */
 .rp-bars { display: grid; gap: 6px; }
@@ -257,6 +259,11 @@
 .rp-wrap { word-break: break-all; }
 .rp-delta .rp-before { color: var(--color-neutral-700); }
 .rp-delta .rp-arrow { text-align: center; color: var(--color-neutral-500); width: 24px; }
+/* 차이. 판정이 아니라 세 번째 숫자라 색으로 좋고 나쁨을 말하지 않는다 (규칙 2) —
+   증감을 빨강/초록으로 칠하면 온도가 내려간 것이 "좋다" 가 된다. */
+.rp-delta .rp-delta-v {
+  color: var(--color-neutral-600); padding-left: var(--space-3); white-space: nowrap;
+}
 
 /* ── stat ──────────────────────────────────────────────────── */
 .rp-stat-title { font-size: 11px; color: var(--color-neutral-600); }
@@ -267,6 +274,11 @@
 .rp-stat-dim { font-size: 16px; color: var(--color-neutral-500); }
 .rp-stat-unit { font-size: 12px; font-weight: 400; color: var(--color-neutral-600); margin-left: 4px; }
 .rp-stat-sub { font-size: 10.5px; color: var(--color-neutral-600); margin-top: 4px; }
+/* 값이 없는 이유(reason_code). 스키마 식별자라 본문 글꼴이 아니라 등폭으로 쓴다. */
+.rp-stat-why {
+  font-family: ui-monospace, Menlo, monospace; font-size: 10.5px;
+  color: var(--color-neutral-600); margin-top: 5px;
+}
 
 /* ── 툴팁 · 푸터 ───────────────────────────────────────────── */
 .rp-tip {

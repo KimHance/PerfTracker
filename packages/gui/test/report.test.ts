@@ -10,6 +10,7 @@ import {
   buildSeries,
   buildStat,
   metricState,
+  NO_DELTA,
   type NoneVm,
   type SeriesVm,
 } from '../src/web/report/blocks.js'
@@ -53,7 +54,6 @@ const TRACE_DIST: DistributionBlock = {
   metric: 'frame', span: 12,
   path: 'metrics.frame.data.buckets',
   percentilesPath: 'metrics.frame.data.percentiles',
-  totalPath: 'metrics.frame.data.total_frames',
   breakAfterEmptyBuckets: Infinity,
 }
 
@@ -343,6 +343,63 @@ describe('분포', () => {
     const tip = (vm as { tipOf: (i: number) => { head: string } }).tipOf(buckets.length - 1)
     expect(tip.head).toContain('이상')
   })
+
+  /**
+   * **가로 눈금은 칸의 시작이 아니라 끝이다.** 시작값을 쓰면 첫 칸 아래에 `0ms` 가 서는데,
+   * 프레임 대부분이 그 칸에 있으므로 "0ms 에 끝난 프레임이 480장" 으로 읽힌다.
+   * 데이터 쪽이 이미 같은 규칙(`6ms=155` → `[5, 6)`)이라 축만 어긋나 있었다.
+   */
+  it('가로 눈금은 칸의 끝이다 — 첫 칸 아래에 0ms 가 서지 않는다', () => {
+    const card: DistributionBlock = { ...TRACE_DIST, path: 'b', percentilesPath: 'p' }
+    const doc = {
+      b: [
+        { from_ms: 0, to_ms: 5, count: 480 },
+        { from_ms: 5, to_ms: 6, count: 12 },
+        { from_ms: 6, to_ms: null, count: 3 },
+      ],
+    }
+    const vm = buildDistribution(card, doc, 900) as { xLabels: { label: string }[] }
+    const labels = vm.xLabels.map((t) => t.label)
+
+    expect(labels[0]).toBe('5ms')
+    expect(labels).not.toContain('0ms')
+    // 상한이 없는 칸은 끝이 없으므로 시작값에 `+` 를 붙인다.
+    expect(labels).toContain('6ms+')
+  })
+
+  const shareOf = (doc: unknown): { k: string; v: string } | null => {
+    const card: DistributionBlock = {
+      ...TRACE_DIST, path: 'b', percentilesPath: 'p',
+      share: { label: 'jank', countPath: 'c', totalPath: 't' },
+    }
+    const vm = buildDistribution(card, { b: [{ from_ms: 0, to_ms: 5, count: 1 }], ...(doc as object) }, 900)
+    return (vm as { share: { k: string; v: string } | null }).share
+  }
+
+  /**
+   * **마감이 8.33ms 든 16.67ms 든 상관없는 하나의 숫자다.** 그 비교는 기기가 프레임마다
+   * 자기 마감으로 이미 끝냈고, 읽는 쪽이 알고 싶은 것은 "그래서 몇 %" 하나다.
+   */
+  it('백분위 옆에 jank 비율 하나를 세운다', () => {
+    expect(shareOf({ c: 170, t: 1682 })).toEqual({ k: 'jank', v: '10.1' })
+  })
+
+  /** 분자든 분모든 못 읽었으면 자리가 빈다 — 0% 를 지어내지 않는다. */
+  it('분자나 분모를 못 읽으면 세우지 않는다', () => {
+    expect(shareOf({ c: null, t: 1682 })).toBeNull()
+    expect(shareOf({ c: 170 })).toBeNull()
+    expect(shareOf({ c: 170, t: 0 })).toBeNull()
+  })
+})
+
+/**
+ * **옮겨 적은 이름은 대조를 끊는다.** gfxinfo 라벨을 "그리기 명령" 으로 쓰면 원문에서
+ * grep 되지 않고, 우리 스키마 필드를 "앱 warn" 으로 쓰면 `result.json` 에서 찾을 수 없다.
+ */
+describe('logcat 카드는 스키마 필드 이름을 그대로 쓴다', () => {
+  it('라벨이 곧 경로다', () => {
+    for (const k of block<PairsBlock>('logcat 줄 수').keys ?? []) expect(k.l, k.p).toBe(k.p)
+  })
 })
 
 describe('pairs · bars · delta', () => {
@@ -370,9 +427,66 @@ describe('pairs · bars · delta', () => {
     const vm = buildDelta(b, {
       device: { state_before: { battery_level: 100 }, state_after: null },
     })
-    const rows = (vm as { rows: { label: string; before: string; after: string }[] }).rows
+    const rows = (vm as { rows: { label: string; before: string; after: string; delta: string }[] }).rows
     expect(rows[0]!.before).toBe('100%')
     expect(rows[0]!.after).toBe(NONE_NULL)
+    // 한쪽을 못 읽었으면 뺄 것이 없다. 0 으로 채우면 "안 변했다" 는 없던 사실이 된다.
+    expect(rows[0]!.delta).toBe(NO_DELTA)
+  })
+
+  const stateRows = (before: unknown, after: unknown): Record<string, string>[] => {
+    const vm = buildDelta(block<DeltaBlock>('기기 상태 (전 → 후)'), {
+      device: { state_before: before, state_after: after },
+    })
+    const rows = (vm as { rows: { label: string; delta: string }[] }).rows
+    return rows.map((r) => ({ label: r.label, delta: r.delta }))
+  }
+
+  /**
+   * **차이의 단위는 before·after 와 같은 포맷터가 붙인다.** 여기서 단위를 따로 정하면
+   * 한 줄의 세 숫자 중 하나만 다른 단위로 적히는 날이 온다.
+   */
+  it('차이에 같은 단위가 붙는다 — 퍼센트면 %, 온도면 °C, kB 필드면 MB', () => {
+    const rows = stateRows(
+      { battery_level: 100, battery_temp_c: 37.1, mem_available_kb: 4_294_656 },
+      { battery_level: 96, battery_temp_c: 37.0, mem_available_kb: 4_281_344 },
+    )
+    expect(rows.find((r) => r['label'] === '배터리')!['delta']).toBe('-4%')
+    expect(rows.find((r) => r['label'] === '배터리 온도')!['delta']).toBe('-0.1°C')
+    expect(rows.find((r) => r['label'] === '가용 메모리')!['delta']).toBe('-13 MB')
+  })
+
+  it('오른 값에는 + 를 붙인다', () => {
+    expect(stateRows({ battery_temp_c: 45.8 }, { battery_temp_c: 48.2 })[1]!['delta']).toBe('+2.4°C')
+  })
+
+  /**
+   * **적을 차이가 없는 세 경우가 다 `-` 다.** 셋을 한 글자로 합쳐도 규칙 3 을 깨지 않는다 —
+   * 바로 왼쪽 두 칸이 이미 셋을 가른다 (`37.1°C → 37.1°C` 대 `100% → 값 없음`).
+   */
+  it('안 변했으면 - 다', () => {
+    expect(stateRows({ battery_temp_c: 37.1 }, { battery_temp_c: 37.1 })[1]!['delta']).toBe(NO_DELTA)
+  })
+
+  /** `wifi - wifi` 는 뜻이 없다. 값이 달라도(`wifi` → `lte`) 뺄 수는 없다. */
+  it('뺄 수 없는 값은 - 다', () => {
+    const rows = stateRows({ charging: true, network: 'wifi' }, { charging: true, network: 'lte' })
+    expect(rows.find((r) => r['label'] === '충전')!['delta']).toBe(NO_DELTA)
+    expect(rows.find((r) => r['label'] === '네트워크')!['delta']).toBe(NO_DELTA)
+  })
+
+  /** 칸이 비면 렌더가 깨진 것처럼 보이고, 그 줄만 다른 표처럼 읽힌다. */
+  it('차이 칸은 비지 않는다', () => {
+    for (const r of stateRows({ charging: true }, { charging: true })) {
+      expect(r['delta'], r['label']).not.toBe('')
+    }
+  })
+
+  it('배열형(온도 존)도 같은 규칙이다', () => {
+    const vm = buildDelta(block<DeltaBlock>('온도 (세션 전 → 후)'), {
+      metrics: { thermal: { data: { zones: [{ name: 'AP', before_c: 45.8, after_c: 48.2 }] } } },
+    })
+    expect((vm as { rows: { delta: string }[] }).rows[0]!.delta).toBe('+2.4°C')
   })
 })
 
@@ -382,6 +496,43 @@ describe('stat', () => {
     expect(vm.value).toBe(NONE_MISSING)
     expect(vm.unit).toBe('')
     expect(vm.dim).toBe(true)
+  })
+
+  /**
+   * **`값 없음` 만 크게 띄우면 도구가 고장 난 것처럼 보인다.** 실제로는 `am start -W` 가
+   * timeout 을 보고해 `TotalTime` 이 안 찍힌 것이고, 그 사실은 `reason_code` 에 이미 있다.
+   */
+  it('값이 없으면 그 이유(reason_code)를 함께 낸다', () => {
+    const doc = {
+      metrics: {
+        startup: {
+          status: 'partial',
+          reason: 'am start -W 가 Status: timeout 을 보고했습니다',
+          reason_code: 'launch_wait_timed_out',
+          data: { total_time_ms: null, wait_time_ms: 10259 },
+        },
+      },
+    }
+    const vm = buildStat(block<StatBlock>('앱 시작'), doc)
+    expect(vm.why?.code).toBe('launch_wait_timed_out')
+    // 긴 문장은 툴팁으로 간다 — 카드에 문단을 깔지 않는다.
+    expect(vm.why?.full).toContain('timeout')
+  })
+
+  /**
+   * `partial` 은 나온 필드와 안 나온 필드를 같이 갖는다. 멀쩡한 숫자 밑에 사유를 달면
+   * 그 숫자까지 의심하게 된다.
+   */
+  it('값이 있으면 사유를 붙이지 않는다', () => {
+    const doc = {
+      metrics: {
+        startup: {
+          status: 'partial', reason: '무언가', reason_code: 'launch_wait_timed_out',
+          data: { total_time_ms: 718 },
+        },
+      },
+    }
+    expect(buildStat(block<StatBlock>('앱 시작'), doc).why).toBeNull()
   })
 })
 
@@ -451,11 +602,11 @@ describe('프레임워크 지표 카드', () => {
       },
     }
     const rows = (buildPairs(card, doc) as { rows: { label: string; value: string; share: string }[] }).rows
-    const janky = rows.find((r) => r.label === 'janky')!
+    const janky = rows.find((r) => r.label === 'Janky frames')!
     expect(janky.value).toBe('170')
     expect(janky.share).toBe('10.1%')
-    // `전체` 는 분모 자신이라 100% 를 달지 않는다.
-    expect(rows.find((r) => r.label === '전체')!.share).toBe('')
+    // 분모 자신에는 100% 를 달지 않는다.
+    expect(rows.find((r) => r.label === 'Total frames rendered')!.share).toBe('')
   })
 
   it('분모가 없으면 비율을 지어내지 않는다', () => {
@@ -464,7 +615,7 @@ describe('프레임워크 지표 카드', () => {
         rows: { label: string; share: string }[]
       }
     ).rows
-    expect(rows.find((r) => r.label === 'janky')!.share).toBe('')
+    expect(rows.find((r) => r.label === 'Janky frames')!.share).toBe('')
   })
 
   it('두 번째 계열색을 쓴다 — 다른 카드와 구분된다', () => {
@@ -489,6 +640,18 @@ describe('프레임워크 지표 카드', () => {
       expect(b.metric, b.title).toBe('hwui')
       expect(b.path ?? '', b.title).toContain('metrics.hwui')
     }
+  })
+
+  /**
+   * `path` 만 보면 `share` 처럼 중첩된 경로를 놓친다 — 렌더 섹션이 참조하는 **모든** 문자열
+   * 경로를 훑는다. 트레이스 값이 하나라도 끼면 같은 화면에 두 모집단이 서게 된다.
+   */
+  it('렌더 섹션의 어느 경로도 트레이스를 가리키지 않는다', () => {
+    const paths = MANIFEST.filter((x) => x.section === 'render').flatMap((b) =>
+      JSON.stringify(b).match(/metrics\.[a-z_.]+/g) ?? [],
+    )
+    expect(paths.length).toBeGreaterThan(0)
+    for (const p of paths) expect(p).toMatch(/^metrics\.hwui\./)
   })
 })
 
@@ -526,9 +689,9 @@ describe('렌더 섹션', () => {
         },
       },
     }
-    const vm = buildDistribution(card, sdk30, 900) as { bars: unknown[] }
+    const vm = buildDistribution(card, sdk30, 900)
     expect((vm as NoneVm).none).toBeUndefined()
-    expect(vm.bars.length).toBeGreaterThan(0)
+    expect((vm as { bars: unknown[] }).bars.length).toBeGreaterThan(0)
   })
 
   it('없으면 카드는 남고 "수집 안 함" 이다', () => {
@@ -546,7 +709,7 @@ describe('렌더 섹션', () => {
    * 바로 옆에 붙었기 때문이다 — 축의 최댓값이 더 쓸모 있으므로 규칙적인 쪽을 밀어낸다.
    */
   it('y축 눈금이 겹치지 않는다', () => {
-    const card: DistributionBlock = { ...TRACE_DIST, path: 'b', totalPath: 't', percentilesPath: 'p' }
+    const card: DistributionBlock = { ...TRACE_DIST, path: 'b', percentilesPath: 'p' }
     const doc = { b: [{ from_ms: 0, to_ms: 5, count: 480 }, { from_ms: 5, to_ms: 6, count: 1 }] }
     const vm = buildDistribution(card, doc, 900) as { yTicks: { label: string }[] }
     const labels = vm.yTicks.map((t) => t.label)
@@ -559,7 +722,36 @@ describe('렌더 섹션', () => {
   })
 
   it('프레임워크 카드는 트레이스에 없는 것을 낸다', () => {
-    expect(labels()).toContain('UI 스레드')
-    expect(labels()).toContain('입력 지연')
+    expect(labels()).toContain('Slow UI thread')
+    expect(labels()).toContain('High input latency')
+  })
+
+  /**
+   * **기기가 영어로 준 이름은 영어로 싣는다.** 옮기면 원문과 대조할 수 없다 —
+   * "그리기 명령" 은 `dumpsys gfxinfo` 출력에서 grep 되지 않는다.
+   */
+  it('gfxinfo 줄 이름을 번역하지 않는다', () => {
+    for (const l of labels()) expect(l, l).toMatch(/^[\x20-\x7E]+$/)
+  })
+
+  /**
+   * `High input latency` 는 실측에서 전체 프레임 수를 넘었다 (2,759 대 1,682 · 33 대 26).
+   * 분모가 아닌 값에 비율을 붙이면 100% 넘는 숫자가 나온다.
+   */
+  it('원인별 횟수에는 비율을 붙이지 않는다', () => {
+    const card = block<PairsBlock>('원인별 횟수')
+    expect((card.keys ?? []).every((k) => k.pct === undefined)).toBe(true)
+  })
+
+  /**
+   * `Janky frames` 와 `Frame deadline missed` 는 **별개 카운터**다. sdk 36(SM-F936N)에서는
+   * 다섯 표본 전부 같은 값이었지만 sdk 30(SM-A405S)에서는 157 대 8 로 갈렸다 —
+   * 같아 보인다고 하나를 지우면 sdk 30 에서 없는 사실을 만든다.
+   */
+  it('같은 값이 나와도 두 카운터를 다 낸다', () => {
+    const card = block<PairsBlock>('프레임 수')
+    const ps = (card.keys ?? []).map((k) => k.p)
+    expect(ps).toContain('janky_frames')
+    expect(ps).toContain('deadline_missed')
   })
 })

@@ -306,7 +306,7 @@ function Body({
       const d = vm as Parameters<typeof DistributionChart>[0]['vm']
       return (
         <>
-          <Percentiles items={d.percentiles} />
+          <Percentiles items={d.percentiles} share={d.share} />
           <div ref={distRef}>
             <DistributionChart vm={d} hot={hotBucket} onHot={setHotBucket} onTip={setTip} />
           </div>

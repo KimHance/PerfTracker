@@ -1,4 +1,5 @@
 import type { Mark } from './axis.js'
+import type { Fmt } from './format.js'
 import { clock, fmtAxis, fmtValue, niceMax, nf, NONE_MISSING, NONE_NULL } from './format.js'
 import type {
   BarsBlock,
@@ -207,9 +208,31 @@ export interface DistributionVm {
   yTicks: { y: number; gy: number; label: string }[]
   pLines: { x: number; label: string }[]
   percentiles: { k: string; v: string }[]
+  /** 백분위 옆에 서는 비율 하나(jank %). 분자·분모를 못 읽었으면 `null` 이다. */
+  share: { k: string; v: string } | null
   footnote: string
   /** 툴팁 내용. **누적 비율을 넣지 않는다** — 버킷은 시간축이 아니라 지속 시간 구간이다. */
   tipOf: (idx: number) => { head: string; value: string; sub: string } | null
+}
+
+/**
+ * **백분위 옆에 세우는 비율 하나.**
+ *
+ * 마감이 8.33ms 든 16.67ms 든, 세션 중에 바뀌었든 상관없다 — 그 비교는 기기가 **프레임마다
+ * 자기 마감으로** 이미 끝냈고 `janky_frames` 가 그 결과의 합이다. 우리가 기준선을 고르는
+ * 것이 아니라 기기가 내린 판정을 세는 것이라 규칙 2 를 깨지 않는다.
+ *
+ * 분자든 분모든 못 읽었으면 `null` 이다 — 0% 를 지어내지 않는다 (규칙 3).
+ */
+function buildShare(
+  spec: DistributionBlock['share'],
+  res: unknown,
+): { k: string; v: string } | null {
+  if (spec === undefined) return null
+  const count = readPath(res, spec.countPath)
+  const total = readPath(res, spec.totalPath)
+  if (typeof count !== 'number' || typeof total !== 'number' || total === 0) return null
+  return { k: spec.label, v: nf((count / total) * 100, 1) }
 }
 
 export function buildDistribution(
@@ -271,7 +294,12 @@ export function buildDistribution(
     bars.push({ idx: s.idx, x, y: DH - DPAD.b - h, w: bw, h, rx: Math.min(2, bw / 3) })
     hits.push({ idx: s.idx, x: x - gap / 2, w: slotW })
     slotCenter.set(s.idx, x + bw / 2)
-    if (si % labelEvery === 0) xLabels.push({ x: x + bw / 2, label: `${s.b.from_ms}ms` })
+    // **눈금은 칸의 끝이다.** 시작값을 쓰면 첫 칸 아래에 `0ms` 가 서고, 그 칸에 프레임이
+    // 몰려 있으므로 "0ms 에 끝난 프레임이 480장" 으로 읽힌다. 데이터 쪽이 이미 같은 규칙을
+    // 쓰고 있다 (`toHwuiHistogram`: 프레임워크의 `6ms=155` → `[5, 6)`) — 축만 어긋나 있었다.
+    if (si % labelEvery === 0) {
+      xLabels.push({ x: x + bw / 2, label: s.b.to_ms === null ? `${s.b.from_ms}ms+` : `${s.b.to_ms}ms` })
+    }
     x += slotW
   })
 
@@ -301,12 +329,6 @@ export function buildDistribution(
     }
   }
 
-  const notes = [
-    `${fmtValue(readPath(res, b.totalPath), 'int')} 프레임`,
-    `버킷 ${buckets.length}칸 전부 · 가로축 = 버킷 순서`,
-  ]
-  if (collapsed > 0) notes.push(`빈 버킷 ${collapsed}칸 접음`)
-
   return {
     width: W,
     bars,
@@ -316,7 +338,10 @@ export function buildDistribution(
     yTicks: yVals.map((v) => ({ y: cy(v) + 3.5, gy: cy(v), label: nf(Math.round(v), 0) })),
     pLines,
     percentiles,
-    footnote: notes.join(' · '),
+    share: buildShare(b.share, res),
+    // 각주는 **실제로 일어난 일**만 적는다 — 읽는 법을 설명하는 문장은 카드에 두지 않는다.
+    // 지금은 접지 않으므로(`breakAfterEmptyBuckets: Infinity`) 늘 빈 문자열이다.
+    footnote: collapsed > 0 ? `빈 버킷 ${collapsed}칸 접음` : '',
     tipOf: (idx) => {
       const bk = buckets[idx]
       if (bk === undefined) return null
@@ -370,7 +395,34 @@ export function buildBars(b: BarsBlock, res: unknown): BarsVm | NoneVm {
 
 export interface DeltaVm {
   none?: false
-  rows: { label: string; before: string; after: string }[]
+  /** `delta` 는 말할 것이 없으면 `NO_DELTA` 다 — 빈칸이 아니다. */
+  rows: { label: string; before: string; after: string; delta: string }[]
+}
+
+/**
+ * 차이 칸에 적을 것이 없을 때. **빈칸으로 두지 않는다** — 빈칸은 렌더가 깨진 것처럼 보이고,
+ * 칸이 비면 그 줄만 다른 표처럼 읽힌다.
+ */
+export const NO_DELTA = '-'
+
+/**
+ * **전/후 차이.** 단위는 before·after 와 **같은 포맷터**가 붙인다 — 퍼센트면 `%`, 온도면
+ * `°C`, kB 필드면 MB. 여기서 단위를 따로 정하면 한 줄의 세 숫자 중 하나만 다른 단위로
+ * 적히는 날이 온다.
+ *
+ * `NO_DELTA` 가 되는 경우는 셋이고 **전부 "이 칸에 적을 차이가 없다"** 는 한 가지 뜻이다:
+ * 안 변했거나(0), 뺄 수 없는 값이거나(`wifi` · `예`), 한쪽을 못 읽었거나(측정 중인 세션의
+ * `state_after` 는 `null` 이다).
+ *
+ * 셋을 한 글자로 합쳐도 규칙 3 을 깨지 않는다 — **바로 왼쪽 두 칸이 이미 셋을 가른다.**
+ * `37.1°C → 37.1°C` 는 재 봤더니 그대로이고 `100% → 값 없음` 은 못 읽은 것이다.
+ */
+function fmtDelta(before: Read, after: Read, f: Fmt | undefined): string {
+  if (typeof before !== 'number' || typeof after !== 'number') return NO_DELTA
+  const d = after - before
+  if (d === 0) return NO_DELTA
+  // 음수 부호는 포맷터가 이미 붙인다. 여기서 더하는 것은 양수의 `+` 뿐이다.
+  return `${d > 0 ? '+' : ''}${fmtValue(d, f)}`
 }
 
 export function buildDelta(b: DeltaBlock, res: unknown): DeltaVm | NoneVm {
@@ -380,12 +432,17 @@ export function buildDelta(b: DeltaBlock, res: unknown): DeltaVm | NoneVm {
     const after = readPath(res, b.afterPath!)
     if (before === MISSING && after === MISSING) return none(MISSING, b.beforePath)
     return {
-      rows: b.keys.map((k) => ({
-        label: k.l,
-        before: fmtValue(before === MISSING ? MISSING : readPath(before, k.p), k.f),
+      rows: b.keys.map((k) => {
+        const bv = before === MISSING ? MISSING : readPath(before, k.p)
         // 측정 중인 세션은 state_after 가 null 이다 — 0 이 아니다.
-        after: fmtValue(after === MISSING ? MISSING : after === null ? null : readPath(after, k.p), k.f),
-      })),
+        const av = after === MISSING ? MISSING : after === null ? null : readPath(after, k.p)
+        return {
+          label: k.l,
+          before: fmtValue(bv, k.f),
+          after: fmtValue(av, k.f),
+          delta: fmtDelta(bv, av, k.f),
+        }
+      }),
     }
   }
 
@@ -397,11 +454,16 @@ export function buildDelta(b: DeltaBlock, res: unknown): DeltaVm | NoneVm {
   if (raw === MISSING || raw === null || isEmptyArray(raw)) return none(raw, b.path)
   const labelField = b.labelField ?? 'name'
   return {
-    rows: (raw as Record<string, unknown>[]).map((r) => ({
-      label: String(r[labelField]),
-      before: fmtValue(b.beforeField === undefined ? MISSING : (r[b.beforeField] ?? null), b.fmt),
-      after: fmtValue(b.afterField === undefined ? MISSING : (r[b.afterField] ?? null), b.fmt),
-    })),
+    rows: (raw as Record<string, unknown>[]).map((r) => {
+      const bv = b.beforeField === undefined ? MISSING : ((r[b.beforeField] ?? null) as Read)
+      const av = b.afterField === undefined ? MISSING : ((r[b.afterField] ?? null) as Read)
+      return {
+        label: String(r[labelField]),
+        before: fmtValue(bv, b.fmt),
+        after: fmtValue(av, b.fmt),
+        delta: fmtDelta(bv, av, b.fmt),
+      }
+    }),
   }
 }
 
@@ -469,17 +531,29 @@ export interface StatVm {
   value: string
   unit: string
   dim: boolean
+  /**
+   * **값이 없는 이유.** `값 없음` 만 큼직하게 띄우면 읽는 쪽은 도구가 고장 난 줄 안다 —
+   * 실제로는 `am start -W` 가 timeout 을 보고해 `TotalTime` 이 안 찍힌 것이고, 그 사실은
+   * `metrics.<지표>.reason_code` 에 이미 있다. `full` 은 문장이라 툴팁으로 간다.
+   */
+  why: { code: string; full: string | null } | null
   sub: string
 }
 
 export function buildStat(b: StatBlock, res: unknown): StatVm {
   const v = readPath(res, b.path)
   const dim = v === MISSING || v === null
+  // **값이 있을 때는 붙이지 않는다.** `partial` 지표는 값이 나온 필드와 안 나온 필드를 같이
+  // 갖는데, 사유를 멀쩡한 숫자 밑에 달면 그 숫자를 의심하게 만든다.
+  const st = dim ? metricState(res, b.metric) : null
   return {
     value: fmtValue(v, b.fmt),
     // 값이 없는데 단위를 붙이면 `수집 안 함 ms` 가 된다.
     unit: dim ? '' : (b.unit ?? ''),
     dim,
+    why: st?.reasonCode === undefined || st?.reasonCode === null
+      ? null
+      : { code: st.reasonCode, full: st.reason },
     sub: (b.sub ?? []).map((s) => `${s.l} ${fmtValue(readPath(res, s.p), s.f)}`).join(' · '),
   }
 }

@@ -274,6 +274,7 @@ export function DeltaBody({ vm }: { vm: DeltaVm }) {
             <td className="num rp-before">{r.before}</td>
             <td className="rp-arrow">→</td>
             <td className="num">{r.after}</td>
+            <td className="num rp-delta-v">{r.delta}</td>
           </tr>
         ))}
       </tbody>
@@ -305,12 +306,24 @@ export function StatBody({ vm, title }: { vm: StatVm; title: string }) {
         {vm.value}
         {vm.unit !== '' && <span className="rp-stat-unit">{vm.unit}</span>}
       </div>
+      {vm.why !== null && (
+        <div className="rp-stat-why" title={vm.why.full ?? undefined}>
+          {vm.why.code}
+        </div>
+      )}
       {vm.sub !== '' && <div className="rp-stat-sub num">{vm.sub}</div>}
     </>
   )
 }
 
-export function Percentiles({ items }: { items: { k: string; v: string }[] }) {
+export function Percentiles({
+  items,
+  share,
+}: {
+  items: { k: string; v: string }[]
+  /** 백분위 옆에 서는 비율(jank %). 못 읽었으면 `null` 이고, 그때는 아무것도 그리지 않는다. */
+  share: { k: string; v: string } | null
+}) {
   return (
     <div className="rp-pcts">
       {items.map((p) => (
@@ -322,6 +335,15 @@ export function Percentiles({ items }: { items: { k: string; v: string }[] }) {
           </b>
         </div>
       ))}
+      {share !== null && (
+        <div className="rp-pct rp-pct-sep">
+          <span className="rp-pct-k">{share.k.toUpperCase()}</span>
+          <b className="num">
+            {share.v}
+            <span className="rp-pct-u">%</span>
+          </b>
+        </div>
+      )}
     </div>
   )
 }

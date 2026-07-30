@@ -65,7 +65,17 @@ export interface DistributionBlock extends BlockBase {
   kind: 'distribution'
   path: string
   percentilesPath: string
-  totalPath: string
+  /**
+   * 백분위 옆에 세울 비율 하나. `countPath / totalPath` 를 퍼센트로 낸다.
+   *
+   * **마감(8.33ms·16.67ms)을 여기 두지 않는다.** 프레임마다 마감이 다르든 세션 중에 바뀌든
+   * 그 비교는 기기가 이미 프레임 단위로 끝냈고, 읽는 쪽이 알고 싶은 것은 "그래서 몇 %가
+   * 걸렸나" 하나다. 마감 자체는 `result.json` 의 `metrics.frame.data.deadlines` 에 있다.
+   *
+   * 분자·분모가 **백분위와 같은 지표**여야 한다 — 출처가 갈리면 옆에 선 숫자끼리 모집단이
+   * 달라진다.
+   */
+  share?: { label: string; countPath: string; totalPath: string }
   /**
    * 빈 버킷이 이만큼 이어지면 축을 끊는다.
    *
@@ -240,30 +250,40 @@ export const MANIFEST: Block[] = [
     metric: 'hwui', unit: 'ms', span: 12, tone: 'alt',
     path: 'metrics.hwui.data.histogram',
     percentilesPath: 'metrics.hwui.data.percentiles',
-    totalPath: 'metrics.hwui.data.total_frames',
+    share: {
+      label: 'jank',
+      countPath: 'metrics.hwui.data.janky_frames',
+      totalPath: 'metrics.hwui.data.total_frames',
+    },
     breakAfterEmptyBuckets: Infinity,
   },
   {
     // 분포를 프레임워크 것으로 정했으므로 이 섹션은 **프레임워크 지표만** 낸다.
     // 트레이스 쪽(`metrics.frame`)은 `result.json` 에 그대로 있고 화면에서만 뺐다 —
     // 두 출처를 한 화면에 섞으면 같은 이름이 두 번 나오고 "어느 게 진짜냐" 가 된다.
+    // **라벨은 `dumpsys gfxinfo` 의 줄 이름 그대로다 — 번역하지 않는다.** 옮기는 순간
+    // 원문과 대조할 수 없고("그리기 명령" 을 gfxinfo 에서 grep 할 수 없다), 옮긴 말이
+    // 원문보다 정확할 수도 없다. 기기가 영어로 준 것은 영어로 싣는다.
     kind: 'pairs', section: 'render', title: '프레임 수', metric: 'hwui', span: 6,
-    unit: '', tone: 'alt', path: 'metrics.hwui.data',
+    unit: 'dumpsys gfxinfo', tone: 'alt', path: 'metrics.hwui.data',
     keys: [
-      { p: 'total_frames', l: '전체', f: 'int' },
-      { p: 'janky_frames', l: 'janky', f: 'int', pct: 'total_frames' },
-      { p: 'deadline_missed', l: '마감 넘김', f: 'int', pct: 'total_frames' },
+      { p: 'total_frames', l: 'Total frames rendered', f: 'int' },
+      { p: 'janky_frames', l: 'Janky frames', f: 'int', pct: 'total_frames' },
+      { p: 'deadline_missed', l: 'Frame deadline missed', f: 'int', pct: 'total_frames' },
     ],
   },
   {
-    kind: 'pairs', section: 'render', title: '무엇이 느렸나', metric: 'hwui', span: 6,
-    unit: '', tone: 'alt', path: 'metrics.hwui.data',
+    // **프레임 수가 아니다.** 한 프레임이 여러 항목에 잡히고, 실측에서 High input latency 가
+    // 전체 프레임 수를 넘었다 (2,759 대 1,682 · 8,503 대 7,514 · 33 대 26). 그래서 이 카드에는
+    // `pct` 를 달지 않는다 — 분모가 없는 값에 비율을 붙이면 100% 넘는 숫자가 나온다.
+    kind: 'pairs', section: 'render', title: '원인별 횟수', metric: 'hwui', span: 6,
+    unit: 'dumpsys gfxinfo', tone: 'alt', path: 'metrics.hwui.data',
     keys: [
-      { p: 'slow_ui_thread', l: 'UI 스레드', f: 'int' },
-      { p: 'slow_draw_commands', l: '그리기 명령', f: 'int' },
-      { p: 'slow_bitmap_uploads', l: '비트맵 업로드', f: 'int' },
-      { p: 'missed_vsync', l: 'vsync 놓침', f: 'int' },
-      { p: 'high_input_latency', l: '입력 지연', f: 'int' },
+      { p: 'slow_ui_thread', l: 'Slow UI thread', f: 'int' },
+      { p: 'slow_draw_commands', l: 'Slow issue draw commands', f: 'int' },
+      { p: 'slow_bitmap_uploads', l: 'Slow bitmap uploads', f: 'int' },
+      { p: 'missed_vsync', l: 'Missed Vsync', f: 'int' },
+      { p: 'high_input_latency', l: 'High input latency', f: 'int' },
     ],
   },
 
@@ -349,17 +369,20 @@ export const MANIFEST: Block[] = [
     subField: 'error', subLabel: 'error', sampling: 'count', fmt: 'int', baseline: 'zero',
   },
   {
-    kind: 'pairs', section: 'log', title: '우선순위별', metric: 'log', span: 4,
-    unit: '앱 / 기기 전체', path: 'metrics.log.data',
+    // 제목이 "우선순위별" 이었다. 무엇의 우선순위인지도, 앱 것인지 기기 것인지도 그 말로는
+    // 알 수 없다. **라벨은 스키마 필드 경로 그대로다** — `result.json` 에서 그대로 찾을 수
+    // 있어야 하고, 옮겨 적은 우리말은 그 대조를 끊는다 (gfxinfo 라벨과 같은 이유).
+    kind: 'pairs', section: 'log', title: 'logcat 줄 수', metric: 'log', span: 4,
+    unit: 'metrics.log.data', path: 'metrics.log.data',
     keys: [
-      { p: 'min_prio', l: '수집 문턱', f: 'raw' },
-      { p: 'app.total', l: '앱 합계', f: 'int' },
-      { p: 'app.by_priority.warn', l: '앱 warn', f: 'int' },
-      { p: 'app.by_priority.error', l: '앱 error', f: 'int' },
-      { p: 'app.by_priority.fatal', l: '앱 fatal', f: 'int' },
-      { p: 'device_total', l: '기기 합계', f: 'int' },
-      { p: 'device_by_priority.warn', l: '기기 warn', f: 'int' },
-      { p: 'device_by_priority.error', l: '기기 error', f: 'int' },
+      { p: 'min_prio', l: 'min_prio', f: 'raw' },
+      { p: 'app.total', l: 'app.total', f: 'int' },
+      { p: 'app.by_priority.warn', l: 'app.by_priority.warn', f: 'int' },
+      { p: 'app.by_priority.error', l: 'app.by_priority.error', f: 'int' },
+      { p: 'app.by_priority.fatal', l: 'app.by_priority.fatal', f: 'int' },
+      { p: 'device_total', l: 'device_total', f: 'int' },
+      { p: 'device_by_priority.warn', l: 'device_by_priority.warn', f: 'int' },
+      { p: 'device_by_priority.error', l: 'device_by_priority.error', f: 'int' },
     ],
   },
 
