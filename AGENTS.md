@@ -39,7 +39,7 @@
 | 경로 | 무엇 |
 | --- | --- |
 | [packages/core](packages/core/AGENTS.md) | 수집·파싱·스키마. 기기 접촉은 전부 여기를 지난다 |
-| [packages/core/src/collectors](packages/core/src/collectors/AGENTS.md) | 지표 7개. data/domain 4계층 |
+| [packages/core/src/collectors](packages/core/src/collectors/AGENTS.md) | 지표 8개. data/domain 4계층 |
 | [packages/cli](packages/cli/AGENTS.md) | commander 진입점. core 를 부르고 사람이 읽는 문장으로 바꾼다 |
 | [packages/gui](packages/gui/AGENTS.md) | 로컬호스트 웹 GUI. `perftracker gui` 가 띄우는 HTTP 서버 + 화면 |
 

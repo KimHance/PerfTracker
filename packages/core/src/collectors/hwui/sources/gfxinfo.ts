@@ -1,5 +1,5 @@
 import type { SnapshotPair } from '../../snapshots.js'
-import type { FrameHwuiCollection } from '../model.js'
+import type { HwuiCollection, HwuiCounters } from '../model.js'
 
 /**
  * **`dumpsys gfxinfo <패키지>` 의 집계.** 프레임워크(HWUI)가 자기 렌더링을 직접 센 값이다.
@@ -14,7 +14,7 @@ import type { FrameHwuiCollection } from '../model.js'
 export const GFXINFO_KEY = 'gfxinfo'
 
 /** 우리가 읽는 숫자들. 이름은 `dumpsys` 출력의 라벨 그대로다. */
-const COUNTERS: { field: keyof FrameHwuiCollection['counters']; label: string }[] = [
+const COUNTERS: { field: keyof HwuiCounters; label: string }[] = [
   { field: 'totalFrames', label: 'Total frames rendered' },
   { field: 'jankyFrames', label: 'Janky frames' },
   { field: 'missedVsync', label: 'Number Missed Vsync' },
@@ -51,14 +51,14 @@ export function parseGfxinfoCounters(text: string): Record<string, number> | nul
  * 전/후 차이. **음수면 `null` 이다** — 세션 중 앱 프로세스가 죽어 누적이 리셋된 것이고,
  * 그때 차이는 이 세션의 값이 아니다. 0 으로 뭉개면 "아무 일도 없었다" 가 된다.
  */
-export function diffGfxinfo(pair: SnapshotPair | undefined): FrameHwuiCollection | null {
+export function diffGfxinfo(pair: SnapshotPair | undefined): HwuiCollection | null {
   if (pair === undefined || pair.before === null || pair.after === null) return null
 
   const before = parseGfxinfoCounters(pair.before)
   const after = parseGfxinfoCounters(pair.after)
   if (before === null || after === null) return null
 
-  const counters = {} as FrameHwuiCollection['counters']
+  const counters = {} as HwuiCounters
   let any = false
 
   for (const { field } of COUNTERS) {

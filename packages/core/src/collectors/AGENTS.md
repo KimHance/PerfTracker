@@ -1,6 +1,6 @@
 # collectors
 
-지표 7개: `frame` · `startup` · `cpu` · `memory` · `log` · `thermal` · `network`.
+지표 8개: `frame` · `hwui` · `startup` · `cpu` · `memory` · `log` · `thermal` · `network`.
 `registry.ts` 의 `COLLECTORS` 배열이 실제로 소비된다 — `start` 가 TraceConfig 블록을 모으고
 `extract` 가 순회해 `metrics` 를 채운다.
 
@@ -40,10 +40,11 @@
   `frame.jank` 도 같다 — 기기가 `jank_type` 에 붙여 둔 꼬리표를 **세기만** 하고 어느 것이
   심각한지 정하지 않는다. 꼬리표는 집합이라 `by_type` 의 합이 `janky_frames` 를 넘는 것이
   정상이고, 하나만 고르면 세지 않은 것을 0 으로 만드는 셈이 된다.
-- **한 지표가 두 소스를 가질 수 있고, 그때 둘은 다른 것을 센다.** `frame` 은 트레이스
-  (`actual_frame_timeline_slice`)와 프레임워크 집계(`dumpsys gfxinfo` 전후 델타)를 함께 낸다 —
-  전자는 초 단위 추이와 분포, 후자는 View 계층만 센 Vitals 모집단과 원인별 개수다.
-  숫자가 다르면 그것이 정보다. **한쪽으로 맞추려고 다른 쪽을 접지 말 것.**
+- **같은 것을 다른 눈으로 보는 지표는 나눈다.** `frame`(트레이스)과 `hwui`(`dumpsys gfxinfo`
+  전후 델타)가 그렇다 — 전자는 초 단위 추이와 분포, 후자는 View 계층만 센 Vitals 모집단과
+  원인별 개수다. 숫자가 다르면 그것이 정보다. **한쪽으로 맞추려고 다른 쪽을 접지 말 것.**
+  안에 넣을지 밖으로 낼지는 **실패 조건이 같은가**로 가른다: `hwui` 는 트레이스가 없어도
+  나오므로(sdk 30 에서 `frame` 은 미지원인데 `hwui` 는 나온다) 별도 지표다.
 - **레이어마다 한 행인 테이블은 접어야 프레임이 된다.** `actual_frame_timeline_slice` 를
   그대로 세면 실측 2.4배가 나온다 (SurfaceView + Background 짝). `display_frame_token` 으로
   접고 최댓값을 쓴다 — **이름으로 거르지 않는다** (`appProcess.ts` 와 같은 이유).

@@ -262,7 +262,8 @@ const FRAME_JANK_DESCRIPTION =
   '`dur` 와 같은 테이블·같은 트레이스에서 나오므로 기기에 더 물어보지 않는다. ' +
   '`null` 은 **꼬리표를 읽지 못했다**는 뜻이지 문제가 없었다는 뜻이 아니다.'
 
-export const FrameHwuiSchema = z.object({
+/** 설명은 아래 HWUI_DESCRIPTION 에 있다. */
+export const HwuiDataSchema = z.object({
   total_frames: z.number().int().nonnegative().nullable(),
   janky_frames: z.number().int().nonnegative().nullable(),
   missed_vsync: z.number().int().nonnegative().nullable(),
@@ -272,18 +273,21 @@ export const FrameHwuiSchema = z.object({
   slow_draw_commands: z.number().int().nonnegative().nullable(),
   deadline_missed: z.number().int().nonnegative().nullable(),
 })
-export type FrameHwui = z.infer<typeof FrameHwuiSchema>
+export type HwuiData = z.infer<typeof HwuiDataSchema>
 
-const FRAME_HWUI_DESCRIPTION =
+const HWUI_DESCRIPTION =
   '**프레임워크(HWUI)가 자기 렌더링을 직접 센 값. `dumpsys gfxinfo <패키지>` 의 세션 전후 차이다.** ' +
-  '같은 metrics.frame 안에 있지만 **트레이스와 다른 것을 센다**: 이쪽은 View 계층 렌더링만이라 ' +
+  'metrics.frame 과 **대체가 아니라 짝이다** — 세는 대상이 다르다. 이쪽은 View 계층 렌더링만이라 ' +
   'SurfaceView 나 그 배경 레이어가 섞이지 않고, 안드로이드 Vitals 가 보는 모집단과 같다. ' +
-  '그래서 total_frames 가 위의 total_frames 와 다를 수 있고, 다른 것이 정상이다. ' +
-  '대신 초 단위 추이는 없다 — 그쪽은 트레이스가 담당한다. 둘은 대체가 아니라 짝이다. ' +
+  '대신 초 단위 추이와 분포가 없다(그쪽은 frame 이 담당한다). 그 대신 프레임 시간 말고 ' +
+  '**원인**을 준다: UI 스레드 / 비트맵 업로드 / 그리기 명령 / 입력 지연. ' +
+  'total_frames 가 frame.data.total_frames 와 다를 수 있고, 다른 것이 정상이다 — ' +
+  '실측에서 둘이 212 로 일치해 frame 쪽 정의를 확증한 적도 있다. ' +
   '**누적 카운터의 차이**라 측정 중에는 기기에 아무것도 보내지 않는다 (network 의 uid 델타와 같다). ' +
   'janky 의 정의는 프레임워크의 것이고 이 도구가 정한 것이 아니다 — 어느 쪽이 나쁜지는 판정하지 않는다. ' +
-  '값이 null 인 경우: 그 줄이 출력에 없었거나(Unity·Vulkan·OpenGL 앱은 HWUI 통계를 내지 않는다), ' +
-  '세션 중 앱 프로세스가 죽어 누적이 리셋됐다. **0 과 다른 말이다.**'
+  '값이 null 인 경우: 그 줄이 출력에 없었거나, 세션 중 앱 프로세스가 죽어 누적이 리셋됐다. ' +
+  '**0 과 다른 말이다.** 지표 전체가 없으면(reason_code: hwui_stats_unavailable) 이 앱이 HWUI 로 ' +
+  '그리지 않는 것이다 — Unity·Vulkan·OpenGL 이 그렇고, 그것은 Vitals 와 같은 한계다.'
 
 export const FrameDataSchema = z.object({
   process: z.string().describe(PROCESS_NAME_DESCRIPTION),
@@ -304,7 +308,6 @@ export const FrameDataSchema = z.object({
   // 시절의 세션이고(`timeline` 과 같은 이유로 optional 이다), **null** 은 이번에 읽지
   // 못했다는 뜻이다. 옛 run 을 `extract` 로 다시 산출할 때 전자가 실제로 나온다.
   jank: FrameJankSchema.nullable().optional().describe(FRAME_JANK_DESCRIPTION),
-  hwui: FrameHwuiSchema.nullable().optional().describe(FRAME_HWUI_DESCRIPTION),
 })
 export type FrameData = z.infer<typeof FrameDataSchema>
 
@@ -1527,6 +1530,7 @@ export const ResultSchema = z.object({
       log: metricResultSchema(LogDataSchema).optional(),
       thermal: metricResultSchema(ThermalDataSchema).optional(),
       network: metricResultSchema(NetworkDataSchema).optional(),
+      hwui: metricResultSchema(HwuiDataSchema).describe(HWUI_DESCRIPTION).optional(),
     })
     .catchall(metricResultSchema(z.unknown())),
   measurement_overhead: MeasurementOverheadSchema,

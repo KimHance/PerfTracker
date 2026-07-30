@@ -486,7 +486,9 @@ describe('jank_type', () => {
     expect(card.tone).toBe('alt')
     expect(block<BarsBlock>('jank_type').tone).toBe('alt')
     // 색이 판정으로 읽히지 않게, 이 화면에서 tone 을 쓰는 곳은 frame 지표뿐이어야 한다.
-    expect(MANIFEST.filter((b) => b.tone === 'alt').every((b) => b.metric === 'frame')).toBe(true)
+    expect(
+      MANIFEST.filter((b) => b.tone === 'alt').every((b) => b.metric === 'frame' || b.metric === 'hwui'),
+    ).toBe(true)
   })
 
   it('렌더 섹션은 읽는 법을 한 문단으로 말한다', () => {

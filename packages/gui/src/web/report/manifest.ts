@@ -16,7 +16,8 @@ export type BlockKind = 'stat' | 'distribution' | 'series' | 'bars' | 'delta' | 
 
 export type SectionId = 'startup' | 'render' | 'cpu' | 'memory' | 'log' | 'context' | 'device'
 export type TabId = 'summary' | 'device'
-export type MetricId = 'frame' | 'startup' | 'cpu' | 'memory' | 'log' | 'thermal' | 'network'
+export type MetricId =
+  | 'frame' | 'hwui' | 'startup' | 'cpu' | 'memory' | 'log' | 'thermal' | 'network'
 
 export interface BlockBase {
   kind: BlockKind
@@ -175,7 +176,7 @@ export const TABS: { id: TabId; label: string }[] = [
 ]
 
 export const KNOWN_METRICS: MetricId[] =
-  ['frame', 'startup', 'cpu', 'memory', 'log', 'thermal', 'network']
+  ['frame', 'hwui', 'startup', 'cpu', 'memory', 'log', 'thermal', 'network']
 
 /** 이 화면이 해석할 줄 아는 스키마 메이저. 다르면 헤더가 먼저 말한다. */
 export const SCHEMA_MAJOR = 1
@@ -240,8 +241,8 @@ export const MANIFEST: Block[] = [
   {
     // 프레임워크가 직접 센 것 — 트레이스와 **다른 모집단**이다 (View 계층만). 나란히 두는
     // 이유가 그것이다: 두 숫자가 다르면 그 차이 자체가 정보다.
-    kind: 'pairs', section: 'render', title: 'HWUI 집계', metric: 'frame', span: 5,
-    unit: '', tone: 'alt', path: 'metrics.frame.data.hwui',
+    kind: 'pairs', section: 'render', title: 'HWUI 집계', metric: 'hwui', span: 5,
+    unit: '', tone: 'alt', path: 'metrics.hwui.data',
     keys: [
       { p: 'total_frames', l: '전체', f: 'int' },
       { p: 'janky_frames', l: 'janky', f: 'int', pct: 'total_frames' },

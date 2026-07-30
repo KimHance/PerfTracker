@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { diffGfxinfo, parseGfxinfoCounters } from '../../src/collectors/frame/index.js'
+import { diffGfxinfo, parseGfxinfoCounters } from '../../src/collectors/hwui/index.js'
 
 /** 실기기(SM-S901N / sdk 36) `dumpsys gfxinfo com.android.settings` 출력 형식 그대로다. */
 const dump = (total: number, janky: number): string =>

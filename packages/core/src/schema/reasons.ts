@@ -176,6 +176,15 @@ export const METRIC_REASON_CODES = [
    */
   'uid_shared_by_multiple_packages',
   /**
+   * `dumpsys gfxinfo <패키지>` 가 렌더링 집계를 내지 않았다.
+   *
+   * **기기가 아니라 앱의 성질이다** — Unity · Vulkan · OpenGL 로 그리는 앱은 HWUI 를 쓰지
+   * 않아 이 통계가 없다 (안드로이드 Vitals 도 같은 이유로 그 앱들을 집계하지 않는다).
+   * 세션 중 앱이 한 번도 렌더링하지 않은 경우도 여기로 온다.
+   * detail: package
+   */
+  'hwui_stats_unavailable',
+  /**
    * 이 uid 를 쓰는 패키지를 **열거하지 못했다.** `shared_uid_packages` 가 null 인 경우다.
    *
    * **`detail` 이 두 갈래를 명시한다:**
@@ -359,6 +368,10 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
     `netstats ${d['phase'] === 'after' ? '종료' : '시작'} 스냅샷에서 uid ${String(d['uid'])} 행이 ` +
     `서로 다른 값으로 두 번 나왔습니다 (BPF 맵 순회 재시작, AOSP b/220084230) — ` +
     `마지막 행을 썼지만 어느 쪽이 맞는지는 이 결과로 알 수 없습니다.`,
+  hwui_stats_unavailable: (d) =>
+    `${String(d['package'])} 가 dumpsys gfxinfo 로 렌더링 집계를 내지 않았습니다 — ` +
+    `HWUI(View 계층)로 그리지 않는 앱이거나(Unity · Vulkan · OpenGL) 세션 중 한 번도 ` +
+    `렌더링하지 않았습니다. metrics.frame 은 트레이스에서 오므로 이것과 무관하게 나옵니다.`,
   uid_shared_by_multiple_packages: (d) =>
     `uid ${String(d['uid'])} 를 패키지 ${String(d['package_count'])}개가 함께 씁니다 — ` +
     `이 숫자는 그 ${String(d['package_count'])}개가 주고받은 것의 **합계**이고 대상 앱 몫만 ` +

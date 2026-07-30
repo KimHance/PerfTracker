@@ -14,7 +14,7 @@
 
 - **PerfTracker 는 안드로이드 앱 성능을 앱을 고치지 않고 재는 CLI 입니다.**
   adb 로 붙어 Perfetto 트레이스를 남기고 호스트에서 파싱해 세션마다 `result.json` 하나를 냅니다.
-- **M0 ~ M3 이 끝났고 실기기 검증까지 마쳤습니다.** 지표 7개가 전부 돕니다.
+- **M0 ~ M3 이 끝났고 실기기 검증까지 마쳤습니다.** 지표 8개가 전부 돕니다.
 - **기준선:** `npm test` **980/980** (58 파일, 1초 남짓) · `npm run typecheck` · `npm run build`
   클린 · 온-디바이스 `npm run test:device` **11 스펙**.
   **`npm test` 전에 `npm run build` 가 필요합니다** — `packages/cli` 테스트가
@@ -501,9 +501,18 @@ network 의 uid 델타와 같은 방식입니다.
 (`debug.hwui.profile = false`) 집계는 나옵니다. `framestats`(프레임별 단계 분해)는 마지막
 120장만 남아 세션을 담을 수 없어 쓰지 않았습니다 — 담으려면 측정 중 폴링이고 규칙 1 위반입니다.
 
-> **아직 남은 한계:** `hwui` 가 `metrics.frame.data` 안에 있어서, 트레이스 쪽 수집이
-> 실패하면(sdk 30 미지원 · 렌더 프로세스 못 찾음) 함께 사라집니다. **gfxinfo 가 가장 쓸모
-> 있는 자리가 바로 그때**라 자리를 옮길지 판단이 필요합니다.
+**지표를 하나 늘렸습니다 (7 → 8).** 처음에는 `metrics.frame.data.hwui` 였는데, 그러면 트레이스
+쪽이 실패할 때 함께 사라졌습니다 — **gfxinfo 가 가장 쓸모 있는 자리가 정확히 그때**입니다.
+`CaptureCollector` 로 올려 트레이스가 없어도 나옵니다.
+
+**실기기로 그 자리를 확인했습니다** (SM-A405S / sdk 30):
+
+```
+frame  status=unsupported  sdk_too_low          ← frametimeline 이 없는 기기
+hwui   status=collected    전체 160 · janky 66 · 입력 지연 큼 156 · UI 스레드 느림 1
+```
+
+옮기기 전이었다면 이 기기에서는 렌더링에 대해 **아무것도** 못 냈습니다.
 
 ### ✅ 시간축의 0초가 둘이었다 (2026-07-29)
 

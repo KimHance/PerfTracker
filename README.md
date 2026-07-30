@@ -14,9 +14,9 @@ adb 로 붙어서 Perfetto 트레이스를 기기에 남기고, 그것을 호스
 
 ---
 
-## 무엇을 재는가 — 지표 7개
+## 무엇을 재는가 — 지표 8개
 
-`result.json` 의 `metrics` 아래에 이 일곱 개가 들어갑니다. 키가 곧 수집기 id 입니다.
+`result.json` 의 `metrics` 아래에 이 여덟 개가 들어갑니다. 키가 곧 수집기 id 입니다.
 
 | 지표 | 귀속 범위 | 무엇인가 | 어디서 나오는가 |
 | --- | --- | --- | --- |
@@ -27,6 +27,7 @@ adb 로 붙어서 Perfetto 트레이스를 기기에 남기고, 그것을 호스
 | [`log`](#metricslog) | **앱 + 기기 전역** | 우선순위별 로그 개수, 크래시·ANR 목록 | perfetto `android.log` |
 | [`thermal`](#metricsthermal) | 기기 전역 | 센서별 온도의 세션 전/후 차이 | `dumpsys thermalservice` 전/후 스냅샷 |
 | [`network`](#metricsnetwork) | **uid** | 세션 동안 오간 바이트·패킷 | `dumpsys netstats` 전/후 스냅샷 |
+| [`hwui`](#metricshwui) | 앱 | 프레임워크가 직접 센 렌더링 집계와 **원인별 개수** | `dumpsys gfxinfo` 전/후 스냅샷 |
 
 범위 열을 그냥 넘기지 마세요. 이 도구가 가장 자주 오해받은 자리입니다:
 
@@ -509,7 +510,7 @@ clock_snapshot 이 없거나 기기 시계를 못 읽은 경우(`trace_start_off
   CI 매칭은 반드시 이걸로 하세요. (예: `sdk_too_low`, `render_process_not_found`,
   `no_frames`, `trace_missing`, `data_source_not_registered`, `query_failed`)
 
-  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **34개**입니다
+  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **35개**입니다
   > (`1.0.0` 은 6개였습니다). 그중 `process_name_stale_in_trace` 는 `1.0.0` 부터 있던
   > `metrics.frame` 에도 실립니다. 이 숫자는 테스트가 `METRIC_REASON_CODES` 와 대조해
   > 고정하므로 코드보다 낡을 수 없습니다.
@@ -563,11 +564,6 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   "mean_ms": 12.8,
   "max_ms": 312.4,
   "timeline": [ { "t_s": 0, "count": 119, "p50_ms": 6.81, "max_ms": 24.03 }, "..." ],
-  "hwui": {
-    "total_frames": 212, "janky_frames": 3, "deadline_missed": 3,
-    "missed_vsync": 0, "high_input_latency": 187,
-    "slow_ui_thread": 0, "slow_bitmap_uploads": 0, "slow_draw_commands": 2
-  },
   "jank": {
     "total_frames": 1938,
     "janky_frames": 1698,
@@ -596,40 +592,6 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   레이어 **이름으로 거르지 않습니다** — 구조로 접은 결과가 실기기에서 프레임워크 자신의
   집계(`hwui.total_frames`)와 **정확히 같은 수**로 떨어졌습니다 (212 = 212).
 - 종료 이벤트를 못 받은 미완결 프레임(`dur = -1`)은 집계에서 **제외**됩니다.
-- **`hwui` 는 프레임워크가 직접 센 값**입니다 (`dumpsys gfxinfo <패키지>` 의 세션 전후 차이).
-  누적 카운터의 델타라 측정 중에는 기기에 아무것도 보내지 않습니다.
-  - **트레이스와 다른 것을 셉니다.** 이쪽은 View 계층 렌더링만이라 SurfaceView 가 섞이지
-    않고, 안드로이드 Vitals 가 보는 모집단과 같습니다. 대신 초 단위 추이가 없습니다 —
-    그쪽은 트레이스가 담당합니다. 둘은 대체가 아니라 짝입니다.
-  - 프레임 시간 말고 **원인**도 줍니다: UI 스레드가 느렸는지, 비트맵 업로드인지, 그리기
-    명령인지, 입력 지연인지.
-  - `null` 인 경우: 그 줄이 출력에 없었거나(Unity·Vulkan·OpenGL 앱은 HWUI 통계를 내지
-    않습니다 — Vitals 와 같은 한계), 세션 중 앱 프로세스가 죽어 누적이 리셋됐습니다.
-- **`jank` 는 기기가 프레임마다 붙여 둔 꼬리표를 센 것입니다 — 이 도구의 판정이 아닙니다.**
-  SurfaceFlinger 가 `actual_frame_timeline_slice.jank_type` 에 직접 적고, 우리는 개수만 냅니다.
-  `dur` 와 같은 테이블에서 나오므로 기기에 더 물어보지 않습니다.
-  - **`dropped_frames` 부터 보세요.** 화면은 일정한 주기로 갱신되고(60Hz 면 16.67ms), 그때
-    새 프레임이 없으면 기기는 직전 프레임을 한 번 더 띄웁니다 — 사람이 끊김으로 보는 것이 그
-    순간입니다. 평균이 빨라도 드랍이 몰려 있으면 끊겨 보입니다
-    ([Android frame pacing](https://developer.android.com/games/sdk/frame-pacing)).
-  - `by_type` 의 `type` 은 SurfaceFlinger 원문입니다 (`Dropped Frame` · `App Deadline Missed` ·
-    `Buffer Stuffing` · `SurfaceFlinger Stuffing` · `Display HAL` 등).
-  - **합이 `janky_frames` 를 넘을 수 있습니다.** 한 프레임에 꼬리표가 여러 개 붙으면
-    (`"App Deadline Missed, Buffer Stuffing"`) 각각에 세어집니다. 하나만 고르면 나머지가
-    사라지므로 겹치는 채로 둡니다.
-  - `late_frames`(`on_time_finish = 0`)는 `janky_frames` 와 **다른 사실**입니다. 꼬리표가
-    `None` 인데 늦게 끝난 프레임이 실재합니다 (실측: `None` 240장 중 41장). 반대로
-    `Buffer Stuffing` 은 꼬리표가 붙어도 마감 안에 끝난 경우가 대부분이었습니다.
-  - **`janky_frames / total_frames` 를 그대로 "품질" 로 읽지 마세요.** 실측 한 세션에서 88%가
-    꼬리표를 달았는데 그 대부분이 `Buffer Stuffing` 이었고 마감은 지켰습니다.
-  - `null` 은 **꼬리표를 읽지 못했다**는 뜻이고, 필드 자체가 없으면 이 값을 낼 줄 모르던
-    시절의 세션입니다. 둘 다 "문제가 없었다" 가 아닙니다.
-- `timeline` 은 **1초 단위 추이**입니다. `buckets` 와 같은 원본에서 나오고 같은 규칙으로
-  미완결 프레임을 거릅니다. 집계만으로는 구분되지 않는 것 — 내내 고르게 느렸는지, 특정
-  구간에서만 튀었는지 — 을 보려는 값입니다. **값이 없는 초는 배열에 없습니다**(0 으로 채우지
-  않습니다: 앱이 화면을 안 바꾸면 프레임이 아예 안 나오는 것이 정상이라, 0 으로 메우면
-  "한 장도 못 그렸다" 와 "그 초의 표본이 없다" 가 같은 모양이 됩니다).
-
 > **여기에 "몇 % 가 기준 안에 들었다" 는 값이 없습니다. 일부러 없습니다.**
 >
 > 프레임 예산은 기기의 주사율에 따라 달라집니다 — 60Hz 는 16.67ms 지만 120Hz 는 **8.33ms**,
@@ -648,6 +610,52 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 > 한 가지 한계: 버킷 폭이 구간마다 달라서 **임계값이 버킷 경계와 어긋나면 그 비율은 버킷
 > 폭만큼 근사**가 됩니다. 16.67ms 는 `16~18ms` 버킷 안에, 8.33ms 는 `8~9ms` 버킷 안에
 > 있습니다. 정확한 경계가 필요하면 `trace.perfetto-trace` 원본이 그대로 남아 있습니다.
+
+### `metrics.hwui`
+
+**프레임워크(HWUI)가 자기 렌더링을 직접 센 값**입니다. `dumpsys gfxinfo <패키지>` 를 세션 전과
+후에 한 번씩 찍어 **차이**를 냅니다 — 누적 카운터라 측정 중에는 기기에 아무것도 보내지 않습니다
+(`network` 의 uid 델타와 같은 방식).
+
+```json
+{
+  "total_frames": 212,
+  "janky_frames": 3,
+  "deadline_missed": 3,
+  "missed_vsync": 0,
+  "high_input_latency": 187,
+  "slow_ui_thread": 0,
+  "slow_bitmap_uploads": 0,
+  "slow_draw_commands": 2
+}
+```
+
+**`frame` 과 대체가 아니라 짝입니다.** 세는 대상이 다릅니다:
+
+| | `frame` | `hwui` |
+| --- | --- | --- |
+| 출처 | 트레이스 | 프레임워크 |
+| 모집단 | 화면에 나간 프레임 (레이어를 접은 것) | **View 계층만** — Vitals 와 같은 범위 |
+| 초 단위 추이 | 있음 | 없음 |
+| 분포·백분위 | 있음 | 없음 |
+| **원인별 개수** | 없음 | **있음** |
+
+`total_frames` 가 `frame.data.total_frames` 와 다를 수 있고, **다른 것이 정상**입니다.
+실측에서 둘이 212 로 일치해 `frame` 쪽 프레임 정의를 확증한 적도 있습니다 — 서로 다른 두
+경로가 같은 수를 내는 것이 그 정의가 옳다는 증거였습니다.
+
+- `janky_frames` 의 정의는 **프레임워크의 것**이고 이 도구가 정한 것이 아닙니다.
+  어느 쪽이 나쁜지는 판정하지 않습니다.
+- 뒤의 다섯은 프레임 시간이 아니라 **원인**입니다 — UI 스레드가 느렸는지, 비트맵 업로드인지,
+  그리기 명령인지, 입력 지연인지. 트레이스에는 없는 축입니다.
+- 값이 `null` 인 경우: 그 줄이 출력에 없었거나, 세션 중 앱 프로세스가 죽어 누적이 리셋됐습니다.
+  **0 과 다른 말입니다.**
+- 지표 전체가 없으면(`reason_code: hwui_stats_unavailable`) 이 앱이 HWUI 로 그리지 않는
+  것입니다 — Unity · Vulkan · OpenGL 이 그렇고, **Vitals 와 같은 한계**입니다.
+
+**개발자 옵션을 켤 필요는 없습니다.** 「HWUI 렌더링 프로파일」이 꺼진 상태에서도 이 집계는
+나옵니다 (실측 sdk 36). 그 옵션이 켜는 `framestats`(프레임별 단계 분해)는 마지막 120장만
+남아 세션을 담을 수 없어 쓰지 않습니다 — 담으려면 측정 중 폴링이고 규칙 1 위반입니다.
 
 ### `metrics.startup`
 

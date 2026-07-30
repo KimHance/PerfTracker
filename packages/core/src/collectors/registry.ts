@@ -2,6 +2,7 @@ import { mergeTraceConfigBlocks } from '../perfetto/config.js'
 import { renderReason } from '../schema/reasons.js'
 import { cpuCollector } from './cpu/index.js'
 import { frameCollector } from './frame/index.js'
+import { hwuiCollector } from './hwui/index.js'
 import { logCollector } from './log/index.js'
 import { memoryCollector } from './memory/index.js'
 import { networkCollector } from './network/index.js'
@@ -17,6 +18,9 @@ import type { Collector, CollectorEnv } from './types.js'
  */
 export const COLLECTORS: Collector<unknown>[] = [
   frameCollector,
+  // frame 바로 옆이다. 둘은 같은 것을 다른 눈으로 본다 — 대체가 아니라 짝이라는 것을
+  // 배열 순서로도 말한다 (`hwui/index.ts` 참고).
+  hwuiCollector,
   startupCollector,
   cpuCollector,
   memoryCollector,

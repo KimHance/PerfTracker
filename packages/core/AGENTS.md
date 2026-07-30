@@ -8,7 +8,7 @@
 | --- | --- |
 | `src/index.ts` | 공개 배럴. **구체 프로세스 실행기는 일부러 내보내지 않는다** |
 | `src/adb/` | `AdbClient` 와 측정 창 래치. 기기로 가는 모든 길목 |
-| `src/collectors/` | 지표 7개 ([AGENTS.md](src/collectors/AGENTS.md)) |
+| `src/collectors/` | 지표 8개 ([AGENTS.md](src/collectors/AGENTS.md)) |
 | `src/session/` | `start` / `stop` / 활성 세션 포인터 / 마킹 / **기록 목록**(`runs.ts`) |
 | `src/extract/` | 트레이스 재파싱 → `result.json` 조립 |
 | `src/schema/` | `result.json` 의 zod 스키마 · `reason_code` · `references` |

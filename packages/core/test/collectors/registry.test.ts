@@ -8,6 +8,7 @@ import {
   supportedCollectors,
   unsupportedReasons,
 } from '../../src/collectors/registry.js'
+import { hwuiCollector } from '../../src/collectors/hwui/index.js'
 import { startupCollector } from '../../src/collectors/startup.js'
 import { thermalCollector } from '../../src/collectors/thermal/index.js'
 import { buildTraceConfig } from '../../src/perfetto/config.js'
@@ -97,7 +98,8 @@ describe('supportedCollectors / unsupportedReasons', () => {
     expect(supportedCollectors(OK)).toHaveLength(COLLECTORS.length)
     // startup 은 어디서나 지원된다 — 구형 기기에서도 목록이 비지 않는다.
     // thermal 은 sdk 29 하한이라 sdk 30 인 이 기기에서도 지원된다.
-    expect(supportedCollectors(OLD)).toEqual([startupCollector, thermalCollector])
+    // hwui 는 기기 성질로 막지 않는다 — 값이 안 나오는 것은 앱의 성질이라 extract 의 사유다.
+    expect(supportedCollectors(OLD)).toEqual([hwuiCollector, startupCollector, thermalCollector])
   })
 
   it('sdk 28 기기에서는 thermal 이 미지원이고 사유가 Android 10 을 말한다', () => {
