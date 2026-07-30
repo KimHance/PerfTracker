@@ -564,6 +564,7 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   "mean_ms": 12.8,
   "max_ms": 312.4,
   "timeline": [ { "t_s": 0, "count": 119, "p50_ms": 6.81, "max_ms": 24.03 }, "..." ],
+  "deadlines": [ { "ms": 8.33, "frames": 3118 }, { "ms": 16.67, "frames": 66 } ],
   "jank": {
     "total_frames": 1938,
     "janky_frames": 1698,
@@ -592,6 +593,16 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   레이어 **이름으로 거르지 않습니다** — 구조로 접은 결과가 실기기에서 프레임워크 자신의
   집계(`hwui.total_frames`)와 **정확히 같은 수**로 떨어졌습니다 (212 = 212).
 - 종료 이벤트를 못 받은 미완결 프레임(`dur = -1`)은 집계에서 **제외**됩니다.
+- **`deadlines` 는 기기가 프레임에 배정한 마감입니다 — 이 도구가 고른 값이 아닙니다.**
+  **값이 여럿이면 세션 중 주사율이 바뀐 것입니다.** 실측 한 세션에 8.33ms 3,118장과
+  16.67ms 66장이 함께 있었습니다 (10~12초에 60Hz 로 떨어졌다 돌아옴).
+  - 이 배열이 있어야 `buckets` · `percentiles` 를 **무엇에 대해** 읽을지 알 수 있습니다.
+    같은 세션이 16.67ms 기준으로는 8.26%, 기기가 실제로 준 마감 기준으로는 27.3% 로 갈립니다.
+  - **`device.static.display.active_refresh_rate_hz` 보다 이쪽을 믿으세요.** 그 필드는 세션
+    시작 직전 한 순간의 스냅샷이고, 이쪽은 프레임마다 기기가 실제로 요구한 값입니다.
+  - 안드로이드 **Macrobenchmark 도 같은 이유로 고정 예산을 쓰지 않습니다** —
+    `frameOverrunMs` 는 "the amount of time a given frame misses **its deadline** by" 이고,
+    같은 테이블을 쓰기 때문에 API 31+ 를 요구합니다.
 > **여기에 "몇 % 가 기준 안에 들었다" 는 값이 없습니다. 일부러 없습니다.**
 >
 > 프레임 예산은 기기의 주사율에 따라 달라집니다 — 60Hz 는 16.67ms 지만 120Hz 는 **8.33ms**,

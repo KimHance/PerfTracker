@@ -114,6 +114,30 @@ export function buildFrameTimeline(samples: FrameSample[]): FrameTimelinePoint[]
     })
 }
 
+/**
+ * **기기가 이 세션 동안 요구한 마감들.** 값이 여럿이면 세션 중 주사율이 바뀐 것이다.
+ *
+ * 우리는 임계값을 고르지 않는다. 대신 기기가 무엇을 요구했는지를 그대로 싣는다 — 그것이
+ * 없으면 읽는 쪽은 지속 시간만 보고 "무엇에 대해 늦은 것인지" 를 알 수 없다.
+ * 실측 한 세션에 8.33ms(3,599장)와 16.67ms(66장)가 함께 있었다.
+ *
+ * 많은 순으로 낸다. 하나도 모르면 `null` 이다 (빈 배열이 아니다 — 마감이 없었던 것이 아니라
+ * 이 경로가 알려 주지 않은 것이다).
+ */
+export function buildDeadlines(samples: FrameSample[]): FrameData['deadlines'] {
+  const byMs = new Map<number, number>()
+  for (const s of samples) {
+    if (s.deadlineMs === null) continue
+    const key = round(s.deadlineMs, 2)
+    byMs.set(key, (byMs.get(key) ?? 0) + 1)
+  }
+  if (byMs.size === 0) return null
+
+  return [...byMs.entries()]
+    .map(([ms, frames]) => ({ ms, frames }))
+    .sort((a, b) => b.frames - a.frames || a.ms - b.ms)
+}
+
 /** 버킷에 넣을 수 없는 값이 섞여 있으면 그 값을 돌려준다. 호출자가 사유로 바꾼다. */
 export function findOutOfRange(samples: FrameSample[]): number | undefined {
   return samples.find((s) => !isBucketableDuration(s.durationMs))?.durationMs
@@ -193,5 +217,6 @@ export function toFrameData(collection: FrameCollection): FrameData {
     max_ms: round(sorted[sorted.length - 1]!, 2),
     timeline: buildFrameTimeline(collection.samples),
     jank: buildJank(collection.jank),
+    deadlines: buildDeadlines(collection.samples),
   }
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   bucketFrames,
   buildFrameBuckets,
+  buildDeadlines,
   buildFrameTimeline,
   buildJank,
   frameCollector,
@@ -10,6 +11,7 @@ import {
   percentile,
 } from '../../src/collectors/frame/index.js'
 import { FRAME_PROCESS_SQL } from '../../src/collectors/frame/index.js'
+import type { FrameSample } from '../../src/collectors/frame/index.js'
 import type { CaptureFacts } from '../../src/collectors/types.js'
 import { buildTraceConfig } from '../../src/perfetto/config.js'
 import { TraceProcessor } from '../../src/perfetto/traceProcessor/client.js'
@@ -405,15 +407,23 @@ describe('buildFrameTimeline', () => {
    * (행 6,932 vs 프레임 2,875) 빈 배경 레이어가 0–5ms 칸에 몰려 분포 모양까지 바뀌었다.
    */
   it('화면 갱신 하나로 접는다 — 레이어마다 세지 않는다', () => {
-    expect(frameSamplesSql(7)).toContain('group by display_frame_token')
-    // 그 프레임을 위해 앱이 쓴 시간 = 가장 오래 걸린 레이어.
-    expect(frameSamplesSql(7)).toContain('max(dur)')
+    // 그 프레임을 위해 앱이 쓴 시간 = 가장 오래 걸린 레이어 하나를 대표로 삼는다.
+    expect(frameSamplesSql(7)).toContain('partition by a.display_frame_token')
+    expect(frameSamplesSql(7)).toContain('order by a.dur desc')
+    expect(frameSamplesSql(7)).toContain('rn = 1')
   })
 
   /**
    * 분포와 꼬리표가 **같은 대표 행**을 봐야 한다. 한쪽만 레이어를 전부 세면 분모가 갈려
    * 비율이 조용히 어긋난다.
    */
+  /** 마감을 안 실으면 지속 시간이 **무엇에 대해** 늦은 것인지 읽는 쪽이 알 수 없다. */
+  it('기기가 준 마감을 함께 가져온다', () => {
+    expect(frameSamplesSql(7)).toContain('expected_frame_timeline_slice')
+    // left join 이어야 한다 — 마감을 모르는 프레임까지 버리면 분포가 조용히 줄어든다.
+    expect(frameSamplesSql(7)).toContain('left join')
+  })
+
   it('꼬리표도 같은 대표 행을 쓴다', () => {
     expect(frameJankSql(7)).toContain('partition by display_frame_token')
     expect(frameJankSql(7)).toContain('order by dur desc')
@@ -484,5 +494,31 @@ describe('buildJank', () => {
   it('꼬리표 질의도 미완결 프레임을 같은 규칙으로 제외한다', () => {
     // `dur >= 0` 이 빠지면 표본 질의와 분모가 달라져 비율이 조용히 틀어진다.
     expect(frameJankSql(7)).toContain('dur >= 0')
+  })
+})
+
+/**
+ * **마감은 기기가 프레임마다 준다.** 실측 한 세션에 8.33ms 3,599장과 16.67ms 66장이 함께
+ * 있었다 — 10~12초에 60Hz 로 떨어졌다가 돌아왔다. 그 사실을 접으면 읽는 쪽이 지속 시간을
+ * 무엇에 대해 읽어야 하는지 알 수 없다.
+ */
+describe('buildDeadlines', () => {
+  const s = (deadlineMs: number | null): FrameSample => ({ second: 0, durationMs: 8, deadlineMs })
+
+  it('세션 중 주사율이 바뀐 것이 값 여러 개로 남는다', () => {
+    const d = buildDeadlines([s(8.33), s(8.33), s(16.67)])!
+    expect(d).toEqual([
+      { ms: 8.33, frames: 2 },
+      { ms: 16.67, frames: 1 },
+    ])
+  })
+
+  it('마감을 모르는 프레임은 세지 않는다', () => {
+    expect(buildDeadlines([s(8.33), s(null)])).toEqual([{ ms: 8.33, frames: 1 }])
+  })
+
+  /** 빈 배열은 "마감이 없었다" 로 읽힌다 — 그런 일은 없다. 모르는 것은 null 이다. */
+  it('하나도 모르면 null 이다 — 빈 배열이 아니다', () => {
+    expect(buildDeadlines([s(null), s(null)])).toBeNull()
   })
 })

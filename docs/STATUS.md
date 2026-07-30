@@ -15,7 +15,7 @@
 - **PerfTracker 는 안드로이드 앱 성능을 앱을 고치지 않고 재는 CLI 입니다.**
   adb 로 붙어 Perfetto 트레이스를 남기고 호스트에서 파싱해 세션마다 `result.json` 하나를 냅니다.
 - **M0 ~ M3 이 끝났고 실기기 검증까지 마쳤습니다.** 지표 8개가 전부 돕니다.
-- **기준선:** `npm test` **980/980** (58 파일, 1초 남짓) · `npm run typecheck` · `npm run build`
+- **기준선:** `npm test` **986/986** (58 파일, 1초 남짓) · `npm run typecheck` · `npm run build`
   클린 · 온-디바이스 `npm run test:device` **11 스펙**.
   **`npm test` 전에 `npm run build` 가 필요합니다** — `packages/cli` 테스트가
   `@perftracker/core` 를 `dist/` 로 해석하므로, 갓 클론한 저장소에서 곧바로 `npm test` 를
@@ -459,6 +459,40 @@ SM-A405S(Android 11)에서 `am start -W` 가 매번 `Status: timeout` 을 냅니
 `frametimeline` 이 없어(sdk 30) **끝점을 잡을 수단이 없습니다.** `process.start_ts` 도 NULL 이라
 시작점도 없습니다 — 켜려면 ftrace 이벤트를 늘려야 하고 오버헤드 예산을 다시 봐야 합니다.
 즉 "이미 되는 기기를 더 정확하게" 는 되지만 "안 되는 기기를 되게" 는 못 합니다.
+
+### ✅ 마감은 기기가 프레임마다 준다 (2026-07-30)
+
+**"Vitals 기준으로 뽑자" 는 요청에서 시작해 기준선을 어디에 둘지 정리했습니다.**
+
+마감은 고정값이 아니었습니다. 실측 한 세션(Stream 38초) 안에 **두 종류**가 있었습니다:
+
+| 마감 | 프레임 | |
+| ---: | ---: | --- |
+| 8.33ms | 3,118 | 120Hz |
+| 16.67ms | 66 | 60Hz — 10~12초 구간 |
+
+그래서 16.67ms 를 박으면 안 됩니다. 같은 세션이 **16.67ms 기준 8.26% vs 기기 실제 마감 기준
+27.3%** 로 갈립니다 — `within_16_67ms_ratio` 를 뺐던 이유가 프레임 단위로 재확인됐습니다.
+
+**구글 자기 도구도 고정 예산을 안 씁니다.** Macrobenchmark 의 `frameOverrunMs` 는
+"the amount of time a given frame misses **its deadline** by" 이고 같은 테이블을 쓰기 때문에
+API 31+ 를 요구합니다. 16.67ms 고정은 Play Console 대시보드 쪽 이야기입니다.
+
+**그 `frameOverrunMs` 를 재현하려다 접었습니다.** 실제 공식은
+`max(actual.endTs, RenderThread.endTs) − expected.endTs` 인데 RenderThread 슬라이스는 atrace
+`gfx`/`view` 를 켜야 나오고, 그건 측정 중 대상 앱에 부하를 청구합니다. 근사식을 만들어 보니
+기기 자신의 `on_time_finish` 와 **30% 어긋났습니다** — 우리가 만든 숫자가 기기 판정과 다르면
+새 사실이 아니라 새 버그라서 버렸습니다.
+
+**결론: 판정은 기기 것을 쓰고, 마감은 사실로 싣습니다.**
+
+| | 어디서 | 우리가 하는 일 |
+| --- | --- | --- |
+| 늦었나 | `on_time_finish` | 세기만 |
+| 왜 | `jank_type` | 쪼개서 세기만 |
+| **무엇에 대해 늦었나** | `expected_frame_timeline_slice` | **그대로 싣기** (`deadlines`) |
+
+기준선을 **고르는** 것과 기기가 고른 것을 **전달하는** 것은 다른 일입니다.
 
 ### ✅ 프레임을 세고 있지 않았다 — 레이어를 세고 있었다 (2026-07-30)
 

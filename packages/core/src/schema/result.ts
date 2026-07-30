@@ -262,6 +262,23 @@ const FRAME_JANK_DESCRIPTION =
   '`dur` 와 같은 테이블·같은 트레이스에서 나오므로 기기에 더 물어보지 않는다. ' +
   '`null` 은 **꼬리표를 읽지 못했다**는 뜻이지 문제가 없었다는 뜻이 아니다.'
 
+export const FrameDeadlineSchema = z.object({
+  /** 기기가 배정한 마감(ms). 8.33 이면 120Hz, 16.67 이면 60Hz 다. */
+  ms: z.number(),
+  frames: z.number().int().nonnegative(),
+})
+
+const FRAME_DEADLINES_DESCRIPTION =
+  '**기기가 이 세션 동안 프레임에 배정한 마감들.** 이 도구가 고른 값이 아니라 트레이스의 ' +
+  'expected_frame_timeline_slice 에서 그대로 온다. ' +
+  '**값이 여럿이면 세션 중 주사율이 바뀐 것이다** — 실측 한 세션에 8.33ms(3,599장)와 ' +
+  '16.67ms(66장)가 함께 있었고, 10~12초에 60Hz 로 떨어졌다가 돌아왔다. ' +
+  '이 배열이 있어야 buckets·percentiles 를 **무엇에 대해** 읽어야 하는지 알 수 있다: ' +
+  '같은 세션이 16.67ms 기준으로는 8.26%, 기기가 실제로 준 마감 기준으로는 27.3% 로 갈린다. ' +
+  '**device.static.display.active_refresh_rate_hz 보다 이 값을 믿어라** — 그쪽은 세션 시작 ' +
+  '직전 한 순간의 스냅샷이고, 이쪽은 프레임마다 기기가 실제로 요구한 값이다. ' +
+  'sdk 31 미만이거나 마감 정보가 없으면 null 이다.'
+
 /** 설명은 아래 HWUI_DESCRIPTION 에 있다. */
 export const HwuiDataSchema = z.object({
   total_frames: z.number().int().nonnegative().nullable(),
@@ -308,6 +325,7 @@ export const FrameDataSchema = z.object({
   // 시절의 세션이고(`timeline` 과 같은 이유로 optional 이다), **null** 은 이번에 읽지
   // 못했다는 뜻이다. 옛 run 을 `extract` 로 다시 산출할 때 전자가 실제로 나온다.
   jank: FrameJankSchema.nullable().optional().describe(FRAME_JANK_DESCRIPTION),
+  deadlines: z.array(FrameDeadlineSchema).nullable().optional().describe(FRAME_DEADLINES_DESCRIPTION),
 })
 export type FrameData = z.infer<typeof FrameDataSchema>
 

@@ -255,6 +255,21 @@ export const MANIFEST: Block[] = [
     ],
   },
   {
+    // 기기가 프레임마다 배정한 마감. 값이 여럿이면 세션 중 주사율이 바뀐 것이다 —
+    // 그 사실 없이는 지속 시간을 **무엇에 대해** 읽어야 하는지 알 수 없다.
+    kind: 'bars', section: 'render', title: '기기가 준 마감', metric: 'frame', span: 12,
+    unit: '', tone: 'alt',
+    path: 'metrics.frame.data.deadlines',
+    labelField: 'ms', labelPrefix: '', valueField: 'frames', fmt: 'int', scaleMax: null,
+    percentOfPath: 'metrics.frame.data.total_frames',
+    labelNotes: {
+      '8.33': '120Hz. 이 프레임들은 **8.33ms 안에** 끝냈어야 합니다 — 16.67ms 는 60fps 기기의 예산입니다.',
+      '16.67': '60Hz. 화면이 이 구간에서 60Hz 로 내려갔습니다 — 요구가 그만큼 느슨해집니다.',
+      '11.11': '90Hz.',
+      '33.33': '30Hz.',
+    },
+  },
+  {
     kind: 'bars', section: 'render', title: 'jank_type', metric: 'frame', span: 7,
     unit: '', tone: 'alt',
     path: 'metrics.frame.data.jank.by_type',

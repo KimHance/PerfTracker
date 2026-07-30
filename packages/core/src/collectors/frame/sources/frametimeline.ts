@@ -53,11 +53,20 @@ export const FRAME_PROCESS_SQL =
  */
 export function frameSamplesSql(upid: number): string {
   return (
-    'select json_group_array(json_array(sec, dur)) as j from (' +
-    `select cast((min(ts) - ${TRACE_START_SUBQUERY}) / 1000000000 as int) as sec, ` +
-    'max(dur) as dur ' +
-    `from actual_frame_timeline_slice where upid = ${upid} and dur >= 0 ` +
-    'group by display_frame_token order by min(ts))'
+    'select json_group_array(json_array(sec, dur, deadline)) as j from (' +
+    `select cast((a.ts - ${TRACE_START_SUBQUERY}) / 1000000000 as int) as sec, ` +
+    'a.dur as dur, ' +
+    // **기기가 그 프레임에 배정한 마감.** 고정값이 아니다 — 주사율에 따라 다르고 세션
+    // 중에도 바뀐다 (실측 한 세션: 8.33ms 3,599장 · 16.67ms 66장, 10~12초에 60Hz 로 떨어짐).
+    // 이 값을 그대로 실어야 읽는 쪽이 "무엇에 대해 늦은 것인가" 를 알 수 있다.
+    // 짝이 없으면 null 이다 — 0 으로 채우면 "마감이 0" 이라는 없던 사실이 된다.
+    'e.dur as deadline, ' +
+    'row_number() over (partition by a.display_frame_token order by a.dur desc) as rn ' +
+    'from actual_frame_timeline_slice a ' +
+    'left join expected_frame_timeline_slice e ' +
+    'on e.surface_frame_token = a.surface_frame_token and e.upid = a.upid ' +
+    `where a.upid = ${upid} and a.dur >= 0) ` +
+    'where rn = 1 order by sec'
   )
 }
 
@@ -103,7 +112,9 @@ export async function collectFromFrametimeline(ctx: ExtractContext): Promise<Fra
   const resolved = resolveAppProcess(candidates, ctx.packageName, ctx.capture.appPid)
   if (resolved === null) return { collection: null, resolved: null }
 
-  const rows = await ctx.tp.queryJson<[number, number][]>(frameSamplesSql(resolved.candidate.upid))
+  const rows = await ctx.tp.queryJson<[number, number, (number | null)?][]>(
+    frameSamplesSql(resolved.candidate.upid),
+  )
 
   // 꼬리표를 못 읽는 것이 프레임 전체를 못 내는 이유가 되면 안 된다. 못 읽었으면 `null` 이고,
   // 그것은 "문제가 없었다" 와 다른 말이다.
@@ -122,7 +133,13 @@ export async function collectFromFrametimeline(ctx: ExtractContext): Promise<Fra
     collection: {
       process: resolved.name,
       pid: resolved.candidate.pid,
-      samples: rows.map(([second, durNs]) => ({ second, durationMs: durNs / 1e6 })),
+        samples: rows.map(([second, durNs, deadlineNs]) => ({
+        second,
+        durationMs: durNs / 1e6,
+        // `null` 뿐 아니라 **열 자체가 없는 경우**도 막는다 — 옛 trace_processor 나 짝이 없는
+        // 프레임이 그렇다. `undefined / 1e6` 은 NaN 이 되어 스키마를 통과해 버릴 수도 있다.
+        deadlineMs: typeof deadlineNs === 'number' ? deadlineNs / 1e6 : null,
+      })),
       jank,
     },
   }
