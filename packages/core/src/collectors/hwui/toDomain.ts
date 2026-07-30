@@ -12,9 +12,9 @@ import type { HwuiCollection } from './model.js'
  * 칸의 합이 `total_frames` 와 같고, "느린 프레임이 몇 장 있었나" 를 여전히 읽을 수 있다.
  * 그 아래는 **0 인 칸까지 전부 남긴다** (규칙: 버킷은 하나도 빠짐없이).
  *
- * **첫 칸은 0 에서 시작한다.** 프레임워크 히스토그램의 첫 칸 이름은 `5ms` 지만 그것은
- * "5ms 이하 전부" 다 — 그보다 빠른 프레임을 담을 칸이 따로 없다. `from_ms: 5` 로 적으면
- * 0–5ms 구간이 화면에서 사라진 것처럼 보인다.
+ * **칸 이름은 그 칸의 끝이다.** 프레임워크가 `6ms=155` 라고 하면 6ms 가 걸린 프레임 수이므로
+ * 구간으로는 `[5, 6)` 이다. 첫 칸 `5ms` 는 "5ms 이하 전부" 라 `[0, 5)` 가 된다.
+ * 이름을 그대로 `from_ms` 에 넣으면 한 칸씩 밀리고 0–5ms 구간이 사라진 것처럼 보인다.
  */
 export const HWUI_OVERFLOW_FROM_MS = 700
 
@@ -24,14 +24,14 @@ export function toHwuiHistogram(
   if (histogram === null || histogram.length === 0) return null
   const sorted = [...histogram].sort((a, b) => a.ms - b.ms)
 
-  const kept = sorted.filter((b) => b.ms < HWUI_OVERFLOW_FROM_MS)
+  const kept = sorted.filter((b) => b.ms <= HWUI_OVERFLOW_FROM_MS)
   const overflow = sorted
-    .filter((b) => b.ms >= HWUI_OVERFLOW_FROM_MS)
+    .filter((b) => b.ms > HWUI_OVERFLOW_FROM_MS)
     .reduce((n, b) => n + b.frames, 0)
 
   const out: NonNullable<HwuiData['histogram']> = kept.map((b, i) => ({
-    from_ms: i === 0 ? 0 : b.ms,
-    to_ms: i === kept.length - 1 ? HWUI_OVERFLOW_FROM_MS : kept[i + 1]!.ms,
+    from_ms: i === 0 ? 0 : kept[i - 1]!.ms,
+    to_ms: b.ms,
     count: b.frames,
   }))
   // 자른 뒤에도 칸이 하나는 있어야 한다. 700 이상만 있는 트레이스는 실제로 없지만,
