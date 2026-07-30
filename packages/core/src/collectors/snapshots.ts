@@ -50,6 +50,25 @@ export const NETSTATS_SNAPSHOT: SnapshotSpec = { key: 'netstats', command: 'dump
 export const PACKAGE_UIDS_SNAPSHOT: SnapshotSpec = { key: 'packages', command: 'pm list packages -U' }
 
 /**
+ * **프레임워크가 직접 센 렌더링 집계.** `dumpsys gfxinfo <패키지>` 는 앱이 시작된 뒤로 누적된
+ * 값을 낸다 — 총 프레임 수, janky 프레임 수, 백분위, "UI 스레드가 느렸다" 같은 원인별 개수.
+ *
+ * **트레이스와 다른 것을 센다.** 이쪽은 HWUI, 즉 **View 계층 렌더링만**이다. 그래서
+ * SurfaceView 나 그 배경 레이어가 섞이지 않고, 안드로이드 Vitals 가 보는 모집단과 같다.
+ * 트레이스는 그 대신 초 단위 추이와 분포를 준다 — 둘은 대체가 아니라 짝이다.
+ *
+ * **누적값이라 전/후 차이가 곧 이 세션의 값이다.** 측정 중에는 아무것도 보내지 않는다 —
+ * network 의 uid 델타와 같은 방식이다. 실측으로 두 번 부르는 사이 6,492 → 6,593 으로
+ * 올라가는 것을 확인했다.
+ *
+ * 명령에 패키지가 들어가므로 이 상수만 함수다. `mergeSnapshotSpecs` 의 규칙(같은 key 는 같은
+ * command 로만)은 그대로 지켜진다 — 한 세션의 대상 앱은 하나다.
+ */
+export function gfxinfoSnapshot(packageName: string): SnapshotSpec {
+  return { key: 'gfxinfo', command: `dumpsys gfxinfo ${packageName}` }
+}
+
+/**
  * 규칙은 `mergeTraceConfigBlocks` 와 같다: **같은 key 는 완전히 같은 command 로만
  * 요청할 수 있다.** 같으면 하나로 접고, 다르면 던진다.
  */

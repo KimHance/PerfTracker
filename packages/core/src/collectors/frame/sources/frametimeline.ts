@@ -24,6 +24,26 @@ export const FRAME_PROCESS_SQL =
 
 
 /**
+ * **한 줄이 화면에 나간 프레임 하나다.**
+ *
+ * `actual_frame_timeline_slice` 는 **레이어마다** 한 행을 낸다. 앱이 SurfaceView 를 쓰면 그
+ * 뒤에 까는 `Background for …` 짝까지 붙어서, 화면 한 번 갱신에 이 앱 행이 최대 20개까지
+ * 달린다. 실측(Stream 33초): 행 6,932개인데 실제로 나간 프레임은 2,875개 — **2.4배**였고,
+ * 초당 210장이라는 120Hz 기기에서 나올 수 없는 수가 나왔다.
+ *
+ * 부풀기만 하는 것이 아니라 **분포 모양이 바뀐다.** 빈 배경 레이어는 그릴 것이 없어 1~2ms 에
+ * 끝나 0–5ms 칸에 몰린다 — "앱이 3ms 만에 그렸다" 가 아니라 "빈 레이어가 3ms 만에 끝났다"
+ * 인데 화면에서는 구분되지 않는다. 실측 0–5ms 1,064장 중 643장이 UI 창이 아닌 레이어였다.
+ *
+ * 그래서 `display_frame_token`(같은 화면 갱신에 묶인 것들)으로 접고 **그중 가장 오래 걸린
+ * 레이어**를 그 프레임의 값으로 쓴다 — "이 프레임을 위해 앱이 쓴 시간" 이다.
+ *
+ * **레이어 이름으로 거르지 않는다.** 이름 목록으로 막는 방어가 성립하지 않는 것은 이 저장소가
+ * 이미 겪었다 (`collectors/appProcess.ts`). 구조로 접은 결과는 실측에서 앱 UI 창 2,658 ·
+ * 스플래시 181 · 그 밖 36 으로, 이름을 매칭했을 때와 사실상 같은 자리에 닿는다. 남은 36개는
+ * 그 갱신에 UI 창 프레임이 아예 없던 경우(영상만 갱신)이고, 그때는 그것이 정말로 그 프레임에
+ * 앱이 한 일이다.
+ *
  * `dur >= 0` 이 필수다. trace_processor 는 종료 이벤트를 못 받은 slice 에 `dur = -1` 을 내는데,
  * --stop 이 트레이스를 끊는 순간 진행 중이던 프레임이 정확히 그 모양이다.
  * 거르지 않으면 그 유령 프레임이 **가장 빠른 버킷에 앉는다** — 끝나지 않은 프레임이 0ms 대의
@@ -33,9 +53,11 @@ export const FRAME_PROCESS_SQL =
  */
 export function frameSamplesSql(upid: number): string {
   return (
-    'select json_group_array(json_array(' +
-    `cast((ts - ${TRACE_START_SUBQUERY}) / 1000000000 as int), dur)) as j ` +
-    `from actual_frame_timeline_slice where upid = ${upid} and dur >= 0 order by ts`
+    'select json_group_array(json_array(sec, dur)) as j from (' +
+    `select cast((min(ts) - ${TRACE_START_SUBQUERY}) / 1000000000 as int) as sec, ` +
+    'max(dur) as dur ' +
+    `from actual_frame_timeline_slice where upid = ${upid} and dur >= 0 ` +
+    'group by display_frame_token order by min(ts))'
   )
 }
 
@@ -51,13 +73,18 @@ export function frameSamplesSql(upid: number): string {
  *
  * `on_time_finish` 는 별개 사실이다: 꼬리표가 `None` 인데도 늦게 끝난 프레임이 실측으로
  * 있었다 (Stream 세션: `None` 240장 중 41장).
+ *
+ * **표본과 같은 대표 행을 쓴다** — 화면 갱신 하나당 가장 오래 걸린 레이어. 여기만 레이어를
+ * 전부 세면 분포의 분모와 꼬리표의 분모가 달라져 비율이 조용히 어긋난다.
  */
 export function frameJankSql(upid: number): string {
   return (
     "select json_group_array(json_array(jank_type, on_time_finish, n)) as j from (" +
-    'select jank_type as jank_type, on_time_finish as on_time_finish, count(*) as n ' +
-    `from actual_frame_timeline_slice where upid = ${upid} and dur >= 0 ` +
-    'group by jank_type, on_time_finish)'
+    'select jank_type, on_time_finish, count(*) as n from (' +
+    'select jank_type, on_time_finish, ' +
+    'row_number() over (partition by display_frame_token order by dur desc) as rn ' +
+    `from actual_frame_timeline_slice where upid = ${upid} and dur >= 0) ` +
+    'where rn = 1 group by jank_type, on_time_finish)'
   )
 }
 

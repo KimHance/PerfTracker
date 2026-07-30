@@ -40,6 +40,13 @@
   `frame.jank` 도 같다 — 기기가 `jank_type` 에 붙여 둔 꼬리표를 **세기만** 하고 어느 것이
   심각한지 정하지 않는다. 꼬리표는 집합이라 `by_type` 의 합이 `janky_frames` 를 넘는 것이
   정상이고, 하나만 고르면 세지 않은 것을 0 으로 만드는 셈이 된다.
+- **한 지표가 두 소스를 가질 수 있고, 그때 둘은 다른 것을 센다.** `frame` 은 트레이스
+  (`actual_frame_timeline_slice`)와 프레임워크 집계(`dumpsys gfxinfo` 전후 델타)를 함께 낸다 —
+  전자는 초 단위 추이와 분포, 후자는 View 계층만 센 Vitals 모집단과 원인별 개수다.
+  숫자가 다르면 그것이 정보다. **한쪽으로 맞추려고 다른 쪽을 접지 말 것.**
+- **레이어마다 한 행인 테이블은 접어야 프레임이 된다.** `actual_frame_timeline_slice` 를
+  그대로 세면 실측 2.4배가 나온다 (SurfaceView + Background 짝). `display_frame_token` 으로
+  접고 최댓값을 쓴다 — **이름으로 거르지 않는다** (`appProcess.ts` 와 같은 이유).
 - `thermal` · `network` 에는 시계열이 없다 (전/후 두 점뿐 — 중간은 규칙 1 위반 없이 못 얻는다).
 - **기기 전역 시계열은 이미 받은 표본을 다시 접는 것이다.** `cpu.device_timeline` 과
   `memory.system_timeline` 은 집계와 **같은 카운터**를 초 단위로 나눈 값이라 데이터소스도

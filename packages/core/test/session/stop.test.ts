@@ -130,7 +130,9 @@ describe('stopSession — 정상 경로', () => {
       `-s ${SERIAL} shell echo "brightness=$(settings get system screen_brightness) low_power=$(settings get global low_power) anim=$(settings get global animator_duration_scale)"`,
       `-s ${SERIAL} shell grep MemAvailable /proc/meminfo`,
       `-s ${SERIAL} shell ip route get 8.8.8.8`,
-      // 4) collectSnapshotSpecs — M3 이 늘린 둘. network collector 가 읽는다.
+      // 4) collectSnapshotSpecs — frame(gfxinfo) · network(netstats · packages).
+      //    gfxinfo 는 누적값이라 전/후 차이가 이 세션의 값이 된다.
+      `-s ${SERIAL} shell dumpsys gfxinfo ${session.packageName}`,
       `-s ${SERIAL} shell dumpsys netstats`,
       `-s ${SERIAL} shell pm list packages -U`,
       // 5) 기기 시계. 마킹을 시계열과 같은 축에 놓는 데 쓴다 (`device/clock.ts`).

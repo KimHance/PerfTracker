@@ -44,7 +44,7 @@ export function collectTraceConfigBlocks(env: CollectorEnv): string[] {
  * `collectTraceConfigBlocks` 와 완전히 대칭이고, 규칙은 `mergeSnapshotSpecs` 에 있다.
  */
 export function collectSnapshotSpecs(env: CollectorEnv): SnapshotSpec[] {
-  return mergeSnapshotSpecs(supportedCollectors(env).flatMap((c) => c.captureSnapshots?.() ?? []))
+  return mergeSnapshotSpecs(supportedCollectors(env).flatMap((c) => c.captureSnapshots?.(env) ?? []))
 }
 
 /**

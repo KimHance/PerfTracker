@@ -5,6 +5,13 @@ import type { SnapshotPair, SnapshotSpec } from './snapshots.js'
 export interface CollectorEnv {
   sdkInt: number
   dataSources: string[]
+  /**
+   * 대상 앱의 패키지. **스냅샷 명령이 앱마다 달라지는 경우에만 쓴다** (`dumpsys gfxinfo <pkg>`).
+   *
+   * `supports()` 는 이 값을 보지 않는다 — 지표를 낼 수 있는지는 기기의 성질이지 앱의 성질이
+   * 아니다. `doctor` 처럼 앱을 정하기 전에 부르는 경로가 있어서 optional 이다.
+   */
+  packageName?: string
 }
 
 /**
@@ -144,7 +151,7 @@ interface CollectorBase {
    * `CaptureFacts.snapshots` 는 `artifacts.raw` 전체를 노출한다. 선언은 오직
    * "capture 가 이 명령을 **추가로** 실행해 달라" 는 뜻이다.
    */
-  captureSnapshots?(): SnapshotSpec[]
+  captureSnapshots?(env: CollectorEnv): SnapshotSpec[]
 }
 
 /** 트레이스를 파싱해야 값이 나오는 collector. */

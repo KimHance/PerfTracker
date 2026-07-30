@@ -210,7 +210,7 @@ export async function startSession(
   await beginStart(ctx, { force: opts.force, ...(opts.home !== undefined ? { home: opts.home } : {}) })
 
   const probe = await probeDevice(ctx.adb)
-  const env = { sdkInt: probe.sdkInt, dataSources: probe.dataSources }
+  const env = { sdkInt: probe.sdkInt, dataSources: probe.dataSources, packageName: app.package }
 
   // --launch 는 반드시 force-stop 전에 검증한다. 켤 수 없는 것이 확실한데 먼저 죽여 버리면
   // 앱이 죽은 채로 남고, 그 상태가 측정 대상이 된다.

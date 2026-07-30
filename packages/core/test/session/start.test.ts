@@ -271,7 +271,9 @@ describe('startSession — 오케스트레이션 불변식', () => {
       `-s ${SERIAL} shell echo "brightness=$(settings get system screen_brightness) low_power=$(settings get global low_power) anim=$(settings get global animator_duration_scale)"`,
       `-s ${SERIAL} shell grep MemAvailable /proc/meminfo`,
       `-s ${SERIAL} shell ip route get 8.8.8.8`,
-      // collectSnapshotSpecs — M3 이 늘린 둘. network collector 가 읽는다.
+      // collectSnapshotSpecs — frame(gfxinfo) · network(netstats · packages).
+      //   gfxinfo 는 누적값이라 전/후 차이가 이 세션의 값이 된다.
+      `-s ${SERIAL} shell dumpsys gfxinfo com.nhn.android.webtoon`,
       `-s ${SERIAL} shell dumpsys netstats`,
       `-s ${SERIAL} shell pm list packages -U`,
       // 콜드 상태 보장 → 트레이스 → 앱 실행

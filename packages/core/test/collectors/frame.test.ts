@@ -399,6 +399,26 @@ describe('buildFrameTimeline', () => {
     expect(frameSamplesSql(7)).toContain('select start_ts from trace_bounds')
     expect(frameSamplesSql(7)).toContain('dur >= 0')
   })
+
+  /**
+   * **한 줄이 화면에 나간 프레임 하나여야 한다.** 레이어마다 세면 실측에서 2.4배가 됐고
+   * (행 6,932 vs 프레임 2,875) 빈 배경 레이어가 0–5ms 칸에 몰려 분포 모양까지 바뀌었다.
+   */
+  it('화면 갱신 하나로 접는다 — 레이어마다 세지 않는다', () => {
+    expect(frameSamplesSql(7)).toContain('group by display_frame_token')
+    // 그 프레임을 위해 앱이 쓴 시간 = 가장 오래 걸린 레이어.
+    expect(frameSamplesSql(7)).toContain('max(dur)')
+  })
+
+  /**
+   * 분포와 꼬리표가 **같은 대표 행**을 봐야 한다. 한쪽만 레이어를 전부 세면 분모가 갈려
+   * 비율이 조용히 어긋난다.
+   */
+  it('꼬리표도 같은 대표 행을 쓴다', () => {
+    expect(frameJankSql(7)).toContain('partition by display_frame_token')
+    expect(frameJankSql(7)).toContain('order by dur desc')
+    expect(frameJankSql(7)).toContain('rn = 1')
+  })
 })
 
 /**

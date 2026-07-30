@@ -1,6 +1,6 @@
 import type { FrameBucket, FrameData, FrameTimelinePoint } from '../../schema/result.js'
 import { round } from '../num.js'
-import type { FrameCollection, FrameJankRow, FrameSample } from './model.js'
+import type { FrameCollection, FrameHwuiCollection, FrameJankRow, FrameSample } from './model.js'
 
 const OVERFLOW_FROM_MS = 700
 
@@ -174,7 +174,23 @@ export function buildJank(rows: FrameJankRow[] | null): FrameData['jank'] {
  *
  * 어떤 기준선과도 비교하지 않는다. 분포와 백분위만 낸다 (`BUCKETS_DESCRIPTION` 참고).
  */
-export function toFrameData(collection: FrameCollection): FrameData {
+/** 데이터 모델 → 스키마. 이름만 snake_case 로 옮긴다 — 계산은 이미 소스에서 끝났다. */
+export function toFrameHwui(hwui: FrameHwuiCollection | null): FrameData['hwui'] {
+  if (hwui === null) return null
+  const c = hwui.counters
+  return {
+    total_frames: c.totalFrames,
+    janky_frames: c.jankyFrames,
+    missed_vsync: c.missedVsync,
+    high_input_latency: c.highInputLatency,
+    slow_ui_thread: c.slowUiThread,
+    slow_bitmap_uploads: c.slowBitmapUploads,
+    slow_draw_commands: c.slowDrawCommands,
+    deadline_missed: c.deadlineMissed,
+  }
+}
+
+export function toFrameData(collection: FrameCollection, hwui: FrameHwuiCollection | null = null): FrameData {
   const durationsMs = collection.samples.map((s) => s.durationMs)
   const sorted = [...durationsMs].sort((a, b) => a - b)
 
@@ -193,5 +209,6 @@ export function toFrameData(collection: FrameCollection): FrameData {
     max_ms: round(sorted[sorted.length - 1]!, 2),
     timeline: buildFrameTimeline(collection.samples),
     jank: buildJank(collection.jank),
+    hwui: toFrameHwui(hwui),
   }
 }

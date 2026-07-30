@@ -1,6 +1,7 @@
 import type { FrameData } from '../../schema/result.js'
 import { staleNameReason } from '../appProcess.js'
 import { FRAMETIMELINE_BLOCK, processStatsBlock } from '../blocks.js'
+import { gfxinfoSnapshot } from '../snapshots.js'
 import type {
   CollectorEnv,
   ExtractContext,
@@ -13,11 +14,13 @@ import {
   FRAMETIMELINE_DATA_SOURCE,
   FRAMETIMELINE_MIN_SDK,
 } from './sources/frametimeline.js'
+import { diffGfxinfo, GFXINFO_KEY } from './sources/gfxinfo.js'
 import { findOutOfRange, toFrameData } from './toDomain.js'
 
 export * from './model.js'
 export * from './toDomain.js'
 export * from './sources/frametimeline.js'
+export * from './sources/gfxinfo.js'
 
 /**
  * **수집 경로를 고르고, 그 결과를 도메인 모델로 옮긴다.** 계층은 셋이다:
@@ -70,6 +73,15 @@ export const frameCollector: TraceCollector<FrameData> = {
     return [FRAMETIMELINE_BLOCK, processStatsBlock(env.sdkInt)]
   },
 
+  /**
+   * 프레임워크 자신의 집계를 전/후로 한 번씩 찍는다. 트레이스와 **다른 것을 세므로**
+   * 대체가 아니라 짝이다 — 자세한 이유는 `collectors/snapshots.ts` 의 `gfxinfoSnapshot`.
+   * 대상 앱을 모르는 경로(`doctor`)에서는 명령을 내지 않는다.
+   */
+  captureSnapshots(env: CollectorEnv) {
+    return env.packageName === undefined ? [] : [gfxinfoSnapshot(env.packageName)]
+  },
+
   async extract(ctx: ExtractContext): Promise<ExtractOutcome<FrameData>> {
     const { collection, resolved } = await collectFromFrametimeline(ctx)
     if (collection === null || resolved === null) {
@@ -100,7 +112,9 @@ export const frameCollector: TraceCollector<FrameData> = {
       }
     }
 
-    const data = toFrameData(collection)
+    // 프레임워크 자신의 집계. 못 읽어도 트레이스 쪽 값은 그대로 나간다 — 둘은 짝이지
+    // 의존 관계가 아니다.
+    const data = toFrameData(collection, diffGfxinfo(ctx.capture.snapshots[GFXINFO_KEY]))
 
     // 이름이 아니라 pid 로 확인한 경우, 트레이스가 다른 이름을 알고 있다는 사실을 숨기지 않는다.
     const stale = staleNameReason(resolved, ctx.packageName)

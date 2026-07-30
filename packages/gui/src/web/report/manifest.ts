@@ -226,7 +226,7 @@ export const MANIFEST: Block[] = [
   {
     // 기기가 프레임마다 붙여 둔 것을 센 것이지 이 화면의 판정이 아니다. 그 사실은 색으로만
     // 말한다 — 카드마다 출처를 문장으로 적으면 화면이 설명서가 된다. 근거는 스키마에 있다.
-    kind: 'pairs', section: 'render', title: '프레임 수', metric: 'frame', span: 5,
+    kind: 'pairs', section: 'render', title: '프레임 수', metric: 'frame', span: 12,
     unit: '', tone: 'alt', path: 'metrics.frame.data.jank',
     // **분모가 같은 행은 전부 비율을 단다.** 드랍에만 달았더니 `전체` 가 곧 100% 인데
     // 5.2% 가 무엇에 대한 비율인지 화면에서 읽히지 않았다. `전체` 자신은 분모라 달지 않는다.
@@ -235,6 +235,22 @@ export const MANIFEST: Block[] = [
       { p: 'janky_frames', l: 'jank_type 붙음', f: 'int', pct: 'total_frames' },
       { p: 'late_frames', l: '마감 넘김', f: 'int', pct: 'total_frames' },
       { p: 'dropped_frames', l: '드랍', f: 'int', pct: 'total_frames' },
+    ],
+  },
+  {
+    // 프레임워크가 직접 센 것 — 트레이스와 **다른 모집단**이다 (View 계층만). 나란히 두는
+    // 이유가 그것이다: 두 숫자가 다르면 그 차이 자체가 정보다.
+    kind: 'pairs', section: 'render', title: 'HWUI 집계', metric: 'frame', span: 5,
+    unit: '', tone: 'alt', path: 'metrics.frame.data.hwui',
+    keys: [
+      { p: 'total_frames', l: '전체', f: 'int' },
+      { p: 'janky_frames', l: 'janky', f: 'int', pct: 'total_frames' },
+      { p: 'deadline_missed', l: '마감 넘김', f: 'int', pct: 'total_frames' },
+      { p: 'missed_vsync', l: 'vsync 놓침', f: 'int' },
+      { p: 'slow_ui_thread', l: 'UI 스레드 느림', f: 'int' },
+      { p: 'slow_draw_commands', l: '그리기 명령 느림', f: 'int' },
+      { p: 'slow_bitmap_uploads', l: '비트맵 업로드 느림', f: 'int' },
+      { p: 'high_input_latency', l: '입력 지연 큼', f: 'int' },
     ],
   },
   {

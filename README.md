@@ -563,6 +563,11 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   "mean_ms": 12.8,
   "max_ms": 312.4,
   "timeline": [ { "t_s": 0, "count": 119, "p50_ms": 6.81, "max_ms": 24.03 }, "..." ],
+  "hwui": {
+    "total_frames": 212, "janky_frames": 3, "deadline_missed": 3,
+    "missed_vsync": 0, "high_input_latency": 187,
+    "slow_ui_thread": 0, "slow_bitmap_uploads": 0, "slow_draw_commands": 2
+  },
   "jank": {
     "total_frames": 1938,
     "janky_frames": 1698,
@@ -584,7 +589,22 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   "165냐 185냐" 가 아니라 "이런 것이 몇 개 있었나" 이고, 정확한 값은 `percentiles` 와
   `max_ms` 가 소수점까지 말합니다.
   흔히 쓰이는 예산 부근을 1ms 로 조밀하게 보고 꼬리로 갈수록 폭을 넓힙니다.
+- **한 줄이 화면에 나간 프레임 하나입니다.** 트레이스는 원래 **레이어마다** 한 행을 내는데
+  (SurfaceView 를 쓰면 그 뒤 `Background for …` 짝까지), 그대로 세면 실측에서 2.4배가 됐습니다
+  — 33초에 6,932장, 초당 210장이라는 120Hz 기기에서 나올 수 없는 수입니다. 그래서 같은 화면
+  갱신에 묶인 것들을 접고 **그중 가장 오래 걸린 레이어**를 그 프레임의 값으로 씁니다.
+  레이어 **이름으로 거르지 않습니다** — 구조로 접은 결과가 실기기에서 프레임워크 자신의
+  집계(`hwui.total_frames`)와 **정확히 같은 수**로 떨어졌습니다 (212 = 212).
 - 종료 이벤트를 못 받은 미완결 프레임(`dur = -1`)은 집계에서 **제외**됩니다.
+- **`hwui` 는 프레임워크가 직접 센 값**입니다 (`dumpsys gfxinfo <패키지>` 의 세션 전후 차이).
+  누적 카운터의 델타라 측정 중에는 기기에 아무것도 보내지 않습니다.
+  - **트레이스와 다른 것을 셉니다.** 이쪽은 View 계층 렌더링만이라 SurfaceView 가 섞이지
+    않고, 안드로이드 Vitals 가 보는 모집단과 같습니다. 대신 초 단위 추이가 없습니다 —
+    그쪽은 트레이스가 담당합니다. 둘은 대체가 아니라 짝입니다.
+  - 프레임 시간 말고 **원인**도 줍니다: UI 스레드가 느렸는지, 비트맵 업로드인지, 그리기
+    명령인지, 입력 지연인지.
+  - `null` 인 경우: 그 줄이 출력에 없었거나(Unity·Vulkan·OpenGL 앱은 HWUI 통계를 내지
+    않습니다 — Vitals 와 같은 한계), 세션 중 앱 프로세스가 죽어 누적이 리셋됐습니다.
 - **`jank` 는 기기가 프레임마다 붙여 둔 꼬리표를 센 것입니다 — 이 도구의 판정이 아닙니다.**
   SurfaceFlinger 가 `actual_frame_timeline_slice.jank_type` 에 직접 적고, 우리는 개수만 냅니다.
   `dur` 와 같은 테이블에서 나오므로 기기에 더 물어보지 않습니다.
