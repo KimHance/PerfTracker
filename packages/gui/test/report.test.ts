@@ -15,7 +15,7 @@ import {
 } from '../src/web/report/blocks.js'
 import { fmtValue, NONE_MISSING, NONE_NULL } from '../src/web/report/format.js'
 import { buildHeader } from '../src/web/report/header.js'
-import { MANIFEST, SECTIONS } from '../src/web/report/manifest.js'
+import { MANIFEST, NOT_DRAWN_METRICS, SECTIONS } from '../src/web/report/manifest.js'
 import { MISSING, readPath } from '../src/web/report/read.js'
 import type {
   BarsBlock,
@@ -436,82 +436,59 @@ describe('README 가 말하는 숫자', () => {
   })
 })
 
-describe('jank_type', () => {
+/**
+ * `jank_type`·`기기가 준 마감`·트레이스 `프레임 수` 카드는 화면에서 뺐다 — 렌더를
+ * 프레임워크(`hwui`) 기준으로 정했고, 두 출처를 한 화면에 놓으면 같은 이름이 두 번 나온다.
+ * **데이터는 `result.json` 에 그대로 있다.** 아래는 남은 카드들이 지켜야 할 것.
+ */
+describe('프레임워크 지표 카드', () => {
   const card = block<PairsBlock>('프레임 수')
 
-  it('드랍은 개수와 퍼센트를 함께 낸다', () => {
+  it('개수와 퍼센트를 함께 낸다', () => {
     const doc = {
       metrics: {
-        frame: {
-          data: { jank: { total_frames: 1938, janky_frames: 1698, late_frames: 330, dropped_frames: 101 } },
-        },
+        hwui: { data: { total_frames: 1682, janky_frames: 170, deadline_missed: 273 } },
       },
     }
     const rows = (buildPairs(card, doc) as { rows: { label: string; value: string; share: string }[] }).rows
-    // **값과 비율은 다른 필드다.** 한 문자열로 붙이면 화면에서 개수와 비율이 섞여 읽힌다.
-    const drop = rows.find((r) => r.label === '드랍')!
-    expect(drop.value).toBe('101')
-    expect(drop.share).toBe('5.2%')
-    // 분모가 같은 행은 전부 비율을 단다 — 하나만 달면 무엇에 대한 비율인지 안 읽힌다.
-    expect(rows.find((r) => r.label === 'jank_type 붙음')!.share).toBe('87.6%')
-    expect(rows.find((r) => r.label === '마감 넘김')!.share).toBe('17.0%')
+    const janky = rows.find((r) => r.label === 'janky')!
+    expect(janky.value).toBe('170')
+    expect(janky.share).toBe('10.1%')
     // `전체` 는 분모 자신이라 100% 를 달지 않는다.
-    expect(rows.find((r) => r.label === '전체')!.value).toBe('1,938')
     expect(rows.find((r) => r.label === '전체')!.share).toBe('')
   })
 
-  it('분모가 없거나 0 이면 비율을 지어내지 않는다', () => {
+  it('분모가 없으면 비율을 지어내지 않는다', () => {
     const rows = (
-      buildPairs(card, { metrics: { frame: { data: { jank: { dropped_frames: 5 } } } } }) as {
-        rows: { label: string; value: string }[]
+      buildPairs(card, { metrics: { hwui: { data: { janky_frames: 5 } } } }) as {
+        rows: { label: string; share: string }[]
       }
     ).rows
-    expect(rows.find((r) => r.label === '드랍')!.value).toBe('5')
-    expect(rows.find((r) => r.label === '드랍')!.share).toBe('')
-  })
-
-  it('항목마다 뜻과 방향을 적는다 — 개수만 보면 무엇이 문제인지 못 읽는다', () => {
-    const bars = block<BarsBlock>('jank_type')
-    const doc = {
-      metrics: {
-        frame: {
-          data: {
-            jank: {
-              total_frames: 1000,
-              by_type: [
-                { type: 'Buffer Stuffing', count: 800 },
-                { type: 'Dropped Frame', count: 101 },
-                { type: '기기가 새로 낸 이름', count: 3 },
-              ],
-            },
-          },
-        },
-      },
-    }
-    const rows = (buildBars(bars, doc) as { rows: { label: string; value: string; note: string }[] }).rows
-    // 설명은 화면에서 툴팁으로 나가지만 뷰모델에는 그대로 있다 — 렌더러가 정할 일이다.
-    expect(rows[0]!.note).toContain('많다고 곧 끊김은 아니지만')
-    expect(rows[1]!.note).toContain('적을수록 좋습니다')
-    // 모르는 라벨은 설명 없이 개수만 — 기기가 새 이름을 내도 화면은 그대로 돈다.
-    expect(rows[2]!.note).toBe('')
-    expect(rows[2]!.value).toBe('3')
-    expect(rows[2]!.share).toBe('0.3%')
+    expect(rows.find((r) => r.label === 'janky')!.share).toBe('')
   })
 
   it('두 번째 계열색을 쓴다 — 다른 카드와 구분된다', () => {
     expect(card.tone).toBe('alt')
-    expect(block<BarsBlock>('jank_type').tone).toBe('alt')
-    // 색이 판정으로 읽히지 않게, 이 화면에서 tone 을 쓰는 곳은 frame 지표뿐이어야 한다.
+    // 색이 판정으로 읽히지 않게, tone 을 쓰는 곳은 frame/hwui 뿐이어야 한다.
     expect(
       MANIFEST.filter((b) => b.tone === 'alt').every((b) => b.metric === 'frame' || b.metric === 'hwui'),
     ).toBe(true)
   })
 
-  it('렌더 섹션은 읽는 법을 한 문단으로 말한다', () => {
-    const note = SECTIONS.find((x) => x.id === 'render')!.note
-    expect(note).toBeDefined()
-    // 두괄식 — 첫 문장이 무엇부터 볼지 말해야 한다.
-    expect(note!.startsWith('**')).toBe(true)
+  /**
+   * **일부러 안 그리는 것과 몰라서 안 그리는 것은 다르다.** 후자만 푸터가 경고해야 한다 —
+   * 이유가 있어 뺀 지표가 매번 뜨면 진짜 신호(아무도 안 넣은 새 지표)가 묻힌다.
+   */
+  it('일부러 안 그리는 지표는 "무시한 지표" 로 세지 않는다', () => {
+    expect(NOT_DRAWN_METRICS).toContain('frame')
+    expect(buildHeader(FULL).ignored).not.toContain('frame')
+  })
+
+  it('렌더 섹션은 프레임워크 지표만 낸다', () => {
+    for (const b of MANIFEST.filter((x) => x.section === 'render')) {
+      expect(b.metric, b.title).toBe('hwui')
+      expect(b.path ?? '', b.title).toContain('metrics.hwui')
+    }
   })
 })
 

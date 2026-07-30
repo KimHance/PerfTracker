@@ -1,5 +1,5 @@
 import { fmtValue, fmtWhen } from './format.js'
-import { KNOWN_METRICS, MANIFEST, SCHEMA_MAJOR } from './manifest.js'
+import { KNOWN_METRICS, MANIFEST, NOT_DRAWN_METRICS, SCHEMA_MAJOR } from './manifest.js'
 import { MISSING, readPath } from './read.js'
 
 /**
@@ -41,9 +41,13 @@ export function buildHeader(res: unknown): HeaderVm {
       ? []
       : Object.keys(metricsObj)
 
-  const inManifest = new Set(MANIFEST.map((b) => b.metric).filter((x) => x !== undefined))
-  // 알려진 7개여도 매니페스트가 안 그리면 무시한 것이다 — 둘은 다른 목록이다.
-  const ignored = presentKeys.filter((k) => !inManifest.has(k as (typeof KNOWN_METRICS)[number]))
+  // 매니페스트가 그리는 것 + **일부러 안 그리기로 한 것**. 후자를 빼지 않으면 이유가 있어
+  // 뺀 지표가 매번 경고로 뜨고, 그러면 진짜 신호(아무도 안 넣은 새 지표)가 묻힌다.
+  const accounted = new Set([
+    ...MANIFEST.map((b) => b.metric).filter((x) => x !== undefined),
+    ...NOT_DRAWN_METRICS,
+  ])
+  const ignored = presentKeys.filter((k) => !accounted.has(k as (typeof KNOWN_METRICS)[number]))
 
   // 스키마 메이저가 다르면 이 화면이 필드를 잘못 읽을 수 있다. 값이 아니라 **이 화면의
   // 한계**라서 데이터 블록이 아니라 푸터에 적는다.

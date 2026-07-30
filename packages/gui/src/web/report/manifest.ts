@@ -178,6 +178,18 @@ export const TABS: { id: TabId; label: string }[] = [
 export const KNOWN_METRICS: MetricId[] =
   ['frame', 'hwui', 'startup', 'cpu', 'memory', 'log', 'thermal', 'network']
 
+/**
+ * **일부러 안 그리는 지표.** 푸터의 "무시한 지표" 에서 뺀다.
+ *
+ * 그 경고는 *몰라서* 안 그린 것을 잡으려고 있다 — 새 지표가 생겼는데 아무도 매니페스트에
+ * 안 넣은 상황. 여기 적힌 것은 이유가 있어 뺀 것이라 매번 경고를 띄우면 진짜 신호가 묻힌다.
+ *
+ * `frame`: 렌더 분포를 프레임워크(`hwui`) 기준으로 정했다. 트레이스 쪽도 같은 것을 재지만
+ * 값이 달라, 한 화면에 둘을 놓으면 같은 이름이 두 번 나오고 "어느 게 진짜냐" 가 된다.
+ * 데이터는 `result.json` 에 그대로 있다.
+ */
+export const NOT_DRAWN_METRICS: MetricId[] = ['frame']
+
 /** 이 화면이 해석할 줄 아는 스키마 메이저. 다르면 헤더가 먼저 말한다. */
 export const SCHEMA_MAJOR = 1
 
@@ -232,39 +244,19 @@ export const MANIFEST: Block[] = [
     breakAfterEmptyBuckets: Infinity,
   },
   {
-    // 기기가 프레임마다 붙여 둔 것을 센 것이지 이 화면의 판정이 아니다. 그 사실은 색으로만
-    // 말한다 — 카드마다 출처를 문장으로 적으면 화면이 설명서가 된다. 근거는 스키마에 있다.
-    kind: 'pairs', section: 'render', title: '프레임 수', metric: 'frame', span: 3,
-    unit: '', tone: 'alt', path: 'metrics.frame.data.jank',
-    // **분모가 같은 행은 전부 비율을 단다.** 드랍에만 달았더니 `전체` 가 곧 100% 인데
-    // 5.2% 가 무엇에 대한 비율인지 화면에서 읽히지 않았다. `전체` 자신은 분모라 달지 않는다.
+    // 분포를 프레임워크 것으로 정했으므로 이 섹션은 **프레임워크 지표만** 낸다.
+    // 트레이스 쪽(`metrics.frame`)은 `result.json` 에 그대로 있고 화면에서만 뺐다 —
+    // 두 출처를 한 화면에 섞으면 같은 이름이 두 번 나오고 "어느 게 진짜냐" 가 된다.
+    kind: 'pairs', section: 'render', title: '프레임 수', metric: 'hwui', span: 6,
+    unit: '', tone: 'alt', path: 'metrics.hwui.data',
     keys: [
       { p: 'total_frames', l: '전체', f: 'int' },
-      { p: 'janky_frames', l: 'jank_type 붙음', f: 'int', pct: 'total_frames' },
-      { p: 'late_frames', l: '마감 넘김', f: 'int', pct: 'total_frames' },
-      { p: 'dropped_frames', l: '드랍', f: 'int', pct: 'total_frames' },
+      { p: 'janky_frames', l: 'janky', f: 'int', pct: 'total_frames' },
+      { p: 'deadline_missed', l: '마감 넘김', f: 'int', pct: 'total_frames' },
     ],
   },
   {
-    // 기기가 프레임마다 배정한 마감. 값이 여럿이면 세션 중 주사율이 바뀐 것이다 —
-    // 그 사실 없이는 지속 시간을 **무엇에 대해** 읽어야 하는지 알 수 없다.
-    kind: 'bars', section: 'render', title: '기기가 준 마감', metric: 'frame', span: 3,
-    unit: '', tone: 'alt',
-    path: 'metrics.frame.data.deadlines',
-    labelField: 'ms', labelPrefix: '', valueField: 'frames', fmt: 'int', scaleMax: null,
-    percentOfPath: 'metrics.frame.data.total_frames',
-    labelNotes: {
-      '8.33': '120Hz. 이 프레임들은 **8.33ms 안에** 끝냈어야 합니다 — 16.67ms 는 60fps 기기의 예산입니다.',
-      '16.67': '60Hz. 화면이 이 구간에서 60Hz 로 내려갔습니다 — 요구가 그만큼 느슨해집니다.',
-      '11.11': '90Hz.',
-      '33.33': '30Hz.',
-    },
-  },
-  {
-    // **트레이스에 없는 것만 낸다.** 전체·janky·마감 넘김을 여기서도 내면 위 섹션과 같은
-    // 이름이 두 번 나와서 "어느 게 진짜냐" 가 생긴다 — 실제로 그렇게 읽혔다.
-    // 그 셋은 `total_frames` 로 이미 분포 카드의 각주에 있다.
-    kind: 'pairs', section: 'render', title: '무엇이 느렸나', metric: 'hwui', span: 3,
+    kind: 'pairs', section: 'render', title: '무엇이 느렸나', metric: 'hwui', span: 6,
     unit: '', tone: 'alt', path: 'metrics.hwui.data',
     keys: [
       { p: 'slow_ui_thread', l: 'UI 스레드', f: 'int' },
@@ -272,40 +264,8 @@ export const MANIFEST: Block[] = [
       { p: 'slow_bitmap_uploads', l: '비트맵 업로드', f: 'int' },
       { p: 'missed_vsync', l: 'vsync 놓침', f: 'int' },
       { p: 'high_input_latency', l: '입력 지연', f: 'int' },
-      { p: 'janky_frames', l: 'janky (프레임워크 판정)', f: 'int', pct: 'total_frames' },
     ],
   },
-  {
-    kind: 'bars', section: 'render', title: 'jank_type', metric: 'frame', span: 3,
-    unit: '', tone: 'alt',
-    path: 'metrics.frame.data.jank.by_type',
-    labelField: 'type', labelPrefix: '', valueField: 'count', fmt: 'int', scaleMax: null,
-    percentOfPath: 'metrics.frame.data.jank.total_frames',
-    // 기기가 쓰는 이름 그대로가 키다. 번역하지 않는다 — 트레이스를 직접 열어 본 사람이
-    // 같은 단어를 찾을 수 있어야 한다.
-    labelNotes: {
-      'Dropped Frame':
-        '만들어 놓고 화면에 못 나간 프레임. **적을수록 좋습니다** — 사람이 끊김으로 보는 것이 이것입니다.',
-      'App Deadline Missed':
-        '앱이 마감 안에 프레임을 못 냈습니다. **적을수록 좋고**, 원인이 앱 쪽(그리기·메인 스레드)에 있다는 신호입니다.',
-      'Buffer Stuffing':
-        '앱이 화면보다 빨리 그려 대기열이 쌓인 상태. 프레임 자체는 제때 나가므로 **많다고 곧 끊김은 아니지만** 입력 지연이 늘어납니다.',
-      'SurfaceFlinger Stuffing':
-        '합성 쪽 대기열이 쌓인 상태. 앱 하나가 아니라 화면 전체 합성 사정입니다.',
-      'SurfaceFlinger CPU Deadline Missed':
-        '합성기가 CPU 작업 마감을 놓쳤습니다. 앱 밖 원인이라 앱 코드로 줄이기 어렵습니다.',
-      'SurfaceFlinger GPU Deadline Missed':
-        '합성기가 GPU 작업 마감을 놓쳤습니다. 앱 밖 원인입니다.',
-      'Display HAL':
-        '디스플레이 드라이버 단계에서 늦었습니다. 앱이 어쩌지 못하는 자리입니다.',
-      'Unknown Jank':
-        '기기가 원인을 특정하지 못했습니다. 늦었다는 사실만 남습니다.',
-      'Prediction Error':
-        '기기가 예측한 프레임 시간과 실제가 어긋났습니다. 그 자체가 끊김은 아닙니다.',
-    },
-  },
-
-  // ── 렌더: 프레임워크가 센 것 ─────────────────────────────────
 
   // ── CPU: 시계열은 전부 선 ────────────────────────────────────
   {
