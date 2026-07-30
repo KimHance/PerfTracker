@@ -350,9 +350,9 @@ describe('frameCollector', () => {
 describe('buildFrameTimeline', () => {
   it('같은 초의 프레임을 한 점으로 묶는다', () => {
     const t = buildFrameTimeline([
-      { second: 0, durationMs: 8 },
-      { second: 0, durationMs: 12 },
-      { second: 1, durationMs: 20 },
+      { second: 0, durationMs: 8, deadlineMs: null },
+      { second: 0, durationMs: 12, deadlineMs: null },
+      { second: 1, durationMs: 20, deadlineMs: null },
     ])
 
     expect(t).toEqual([
@@ -367,8 +367,8 @@ describe('buildFrameTimeline', () => {
    */
   it('값이 없는 초를 0 으로 채우지 않는다 — 배열에서 빠진다', () => {
     const t = buildFrameTimeline([
-      { second: 0, durationMs: 8 },
-      { second: 5, durationMs: 8 },
+      { second: 0, durationMs: 8, deadlineMs: null },
+      { second: 5, durationMs: 8, deadlineMs: null },
     ])
 
     expect(t.map((p) => p.t_s)).toEqual([0, 5])
@@ -376,9 +376,9 @@ describe('buildFrameTimeline', () => {
 
   it('초 순서대로 낸다 — 입력이 뒤섞여 있어도', () => {
     const t = buildFrameTimeline([
-      { second: 3, durationMs: 8 },
-      { second: 1, durationMs: 8 },
-      { second: 2, durationMs: 8 },
+      { second: 3, durationMs: 8, deadlineMs: null },
+      { second: 1, durationMs: 8, deadlineMs: null },
+      { second: 2, durationMs: 8, deadlineMs: null },
     ])
 
     expect(t.map((p) => p.t_s)).toEqual([1, 2, 3])
@@ -386,7 +386,7 @@ describe('buildFrameTimeline', () => {
 
   it('세션 전체와 같은 백분위 함수를 쓴다', () => {
     const durations = [1, 2, 3, 4, 5]
-    const t = buildFrameTimeline(durations.map((ms) => ({ second: 0, durationMs: ms })))
+    const t = buildFrameTimeline(durations.map((ms) => ({ second: 0, durationMs: ms, deadlineMs: null })))
 
     // 같은 입력을 percentile 에 직접 넣은 값과 일치해야 한다. 규칙이 갈리면 여기서 깨진다.
     expect(t[0]!.p50_ms).toBe(percentile(durations, 50))

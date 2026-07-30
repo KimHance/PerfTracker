@@ -252,7 +252,7 @@ describe('networkCollector.supports', () => {
   })
 
   it('--uid 를 주지 않는다 — 쓰지 않을 2시간 버킷 히스토리만 붙는다', () => {
-    const commands = networkCollector.captureSnapshots?.().map((s) => s.command) ?? []
+    const commands = networkCollector.captureSnapshots?.({} as never).map((s) => s.command) ?? []
     expect(commands).toEqual(['dumpsys netstats', 'pm list packages -U'])
     expect(commands.join(' ')).not.toContain('--uid')
   })
