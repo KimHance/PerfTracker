@@ -14,8 +14,7 @@ import type { Fmt } from './format.js'
 
 export type BlockKind = 'stat' | 'distribution' | 'series' | 'bars' | 'delta' | 'pairs'
 
-export type SectionId =
-  | 'startup' | 'render' | 'renderHwui' | 'cpu' | 'memory' | 'log' | 'context' | 'device'
+export type SectionId = 'startup' | 'render' | 'cpu' | 'memory' | 'log' | 'context' | 'device'
 export type TabId = 'summary' | 'device'
 export type MetricId =
   | 'frame' | 'hwui' | 'startup' | 'cpu' | 'memory' | 'log' | 'thermal' | 'network'
@@ -67,22 +66,6 @@ export interface DistributionBlock extends BlockBase {
   path: string
   percentilesPath: string
   totalPath: string
-  /**
-   * `path` 가 비었을 때 대신 볼 곳. **같은 것을 다른 경로로 잰 값이 있을 때만 쓴다.**
-   *
-   * 분포를 두 장 나란히 두었더니 "어느 게 진짜냐" 가 됐다. 읽는 쪽이 알고 싶은 것은
-   * "이 앱의 프레임 시간 분포" 하나이고, 그것을 어느 경로로 얻었는지는 **각주로 족하다.**
-   *
-   * 카드를 숨기는 것이 아니다 — 규칙("못 잰 것을 숨기지 않는다")은 그대로다. 둘 다 없으면
-   * 카드는 남고 `수집 안 함` 이 뜬다. 무엇으로 그렸는지는 `sourceLabel` 로 화면에 적힌다.
-   */
-  fallback?: {
-    path: string
-    percentilesPath: string
-    totalPath: string
-    /** 각주에 붙는 한 줄. 왜 이쪽으로 그렸는지까지 말한다. */
-    sourceLabel: string
-  }
   /**
    * 빈 버킷이 이만큼 이어지면 축을 끊는다.
    *
@@ -180,15 +163,6 @@ export const SECTIONS: { id: SectionId; label: string; tab: TabId; note?: string
     tab: 'summary',
     note: '**막대가 왼쪽에 몰릴수록 부드럽습니다.** 오른쪽으로 갈수록 오래 걸린 프레임입니다.',
   },
-  {
-    id: 'renderHwui',
-    label: '렌더 — 무엇이 느렸나',
-    tab: 'summary',
-    note:
-      '**프레임워크가 자기 렌더링을 직접 센 값입니다** (`dumpsys gfxinfo`). 위 숫자들과 ' +
-      '겹치지 않는 것만 있습니다 — 트레이스는 프레임이 얼마나 걸렸는지는 알아도 ' +
-      '**어느 단계에서** 걸렸는지는 모릅니다.',
-  },
   { id: 'cpu', label: 'CPU', tab: 'summary' },
   { id: 'memory', label: '메모리', tab: 'summary' },
   { id: 'log', label: '로그', tab: 'summary' },
@@ -241,22 +215,21 @@ export const MANIFEST: Block[] = [
     ],
   },
 
-  // ── 렌더: 이 화면의 유일한 막대 ──────────────────────────────
+  // ── 렌더 ─────────────────────────────────────────────────────
   {
-    kind: 'distribution', section: 'render', title: '프레임 지속 시간 분포',
-    metric: 'frame', unit: 'ms', span: 12,
-    path: 'metrics.frame.data.buckets',
-    percentilesPath: 'metrics.frame.data.percentiles',
-    totalPath: 'metrics.frame.data.total_frames',
+    // **Vitals 가 보는 그 값이다** — UI 스레드 + RenderThread 의 CPU 시간, View 계층만.
+    //
+    // 트레이스에도 분포가 있다(`metrics.frame.data.buckets`, 서피스 프레임 지속 시간).
+    // 화면에는 두지 않는다: 두 장을 나란히 놓았더니 읽는 쪽이 먼저 묻는 것이 "어느 게
+    // 진짜냐" 였다. 데이터는 `result.json` 에 그대로 있고, 화면이 답할 질문만 하나로 줄인다.
+    //
+    // 버전 하한이 없어서 sdk 30 처럼 트레이스가 없는 기기에서도 이 카드는 그려진다.
+    kind: 'distribution', section: 'render', title: '프레임 시간 분포',
+    metric: 'hwui', unit: 'ms', span: 12, tone: 'alt',
+    path: 'metrics.hwui.data.histogram',
+    percentilesPath: 'metrics.hwui.data.percentiles',
+    totalPath: 'metrics.hwui.data.total_frames',
     breakAfterEmptyBuckets: Infinity,
-    // 트레이스가 없는 기기(sdk 30 은 frametimeline 자체가 없다)에서는 프레임워크가 만든
-    // 히스토그램으로 그린다. 같은 것을 재지는 않으므로 각주가 그 사실을 말한다.
-    fallback: {
-      path: 'metrics.hwui.data.histogram',
-      percentilesPath: 'metrics.hwui.data.percentiles',
-      totalPath: 'metrics.hwui.data.total_frames',
-      sourceLabel: '프레임워크가 센 것 (dumpsys gfxinfo) · UI 스레드+RenderThread CPU 시간',
-    },
   },
   {
     // 기기가 프레임마다 붙여 둔 것을 센 것이지 이 화면의 판정이 아니다. 그 사실은 색으로만
@@ -322,7 +295,7 @@ export const MANIFEST: Block[] = [
     // **트레이스에 없는 것만 낸다.** 전체·janky·마감 넘김을 여기서도 내면 위 섹션과 같은
     // 이름이 두 번 나와서 "어느 게 진짜냐" 가 생긴다 — 실제로 그렇게 읽혔다.
     // 그 셋은 `total_frames` 로 이미 분포 카드의 각주에 있다.
-    kind: 'pairs', section: 'renderHwui', title: '무엇이 느렸나', metric: 'hwui', span: 12,
+    kind: 'pairs', section: 'render', title: '무엇이 느렸나', metric: 'hwui', span: 12,
     unit: '', tone: 'alt', path: 'metrics.hwui.data',
     keys: [
       { p: 'slow_ui_thread', l: 'UI 스레드', f: 'int' },

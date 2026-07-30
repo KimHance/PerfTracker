@@ -44,6 +44,19 @@ const LOWEND = sample('low-end')
 
 const block = <T>(title: string): T => MANIFEST.find((b) => b.title === title) as T
 
+/**
+ * 트레이스 분포는 화면에서 뺐지만(카드는 프레임워크 것 하나다) **데이터는 그대로 있고**
+ * 빌더의 규칙도 그대로다. 빌더를 보는 테스트는 매니페스트 카드가 아니라 이 블록을 쓴다.
+ */
+const TRACE_DIST: DistributionBlock = {
+  kind: 'distribution', section: 'render', title: '트레이스 분포(테스트용)',
+  metric: 'frame', span: 12,
+  path: 'metrics.frame.data.buckets',
+  percentilesPath: 'metrics.frame.data.percentiles',
+  totalPath: 'metrics.frame.data.total_frames',
+  breakAfterEmptyBuckets: Infinity,
+}
+
 describe('readPath — 세 상태를 가른다', () => {
   it('필드가 없으면 MISSING', () => {
     expect(readPath({ a: 1 }, 'b')).toBe(MISSING)
@@ -96,7 +109,7 @@ describe('표본 셋이 전부 렌더된다', () => {
 
 describe('low-end — 못 잰 것을 숨기지 않는다', () => {
   it('frame 이 통째로 없으면 분포는 "수집 안 함" 이다 — 빈 차트가 아니다', () => {
-    const vm = buildDistribution(block<DistributionBlock>('프레임 지속 시간 분포'), LOWEND, 900)
+    const vm = buildDistribution(block<DistributionBlock>('프레임 시간 분포'), LOWEND, 900)
     expect((vm as NoneVm).none).toBe(true)
     expect((vm as NoneVm).label).toContain(NONE_MISSING)
   })
@@ -306,7 +319,9 @@ describe('시간축은 하나다', () => {
 
 describe('분포', () => {
   it('전체 버킷을 접지 않고 그린다', () => {
-    const b = block<DistributionBlock>('프레임 지속 시간 분포')
+    // 빌더의 규칙을 보는 테스트라 매니페스트 카드에 매이지 않는다 — 카드가 어느 경로를
+    // 보든 "버킷을 접지 않는다" 는 규칙은 같아야 한다.
+    const b = TRACE_DIST
     const vm = buildDistribution(b, FULL, 900)
     const buckets = readPath(FULL, b.path) as unknown[]
 
@@ -316,14 +331,14 @@ describe('분포', () => {
   })
 
   it('툴팁에 누적 비율을 넣지 않는다 — 버킷은 시간축이 아니다', () => {
-    const vm = buildDistribution(block<DistributionBlock>('프레임 지속 시간 분포'), FULL, 900)
+    const vm = buildDistribution(TRACE_DIST, FULL, 900)
     const tip = (vm as { tipOf: (i: number) => { sub: string } }).tipOf(1)
     expect(tip.sub).toContain('전체의')
     expect(tip.sub).not.toContain('누적')
   })
 
   it('상한 없는 마지막 버킷은 "이상" 으로 읽힌다', () => {
-    const vm = buildDistribution(block<DistributionBlock>('프레임 지속 시간 분포'), FULL, 900)
+    const vm = buildDistribution(TRACE_DIST, FULL, 900)
     const buckets = readPath(FULL, 'metrics.frame.data.buckets') as unknown[]
     const tip = (vm as { tipOf: (i: number) => { head: string } }).tipOf(buckets.length - 1)
     expect(tip.head).toContain('이상')
@@ -500,24 +515,26 @@ describe('jank_type', () => {
 })
 
 /**
- * **같은 이름을 두 번 보여주면 "어느 게 진짜냐" 가 생긴다.** 실제로 그렇게 읽혔다 —
- * 트레이스와 프레임워크가 각각 `전체`·`마감 넘김` 을 내고 있었고, 둘은 판정 주체가 달라
- * 값이 다르다. 출처를 섹션으로 가르고 겹치는 이름을 없앴다.
+ * **분포는 한 장이다.** 두 장을 나란히 놓았더니 읽는 쪽이 먼저 묻는 것이 "어느 게 진짜냐"
+ * 였다. 화면에 남긴 것은 프레임워크 쪽 — 안드로이드 Vitals 가 보는 모집단과 값이다.
+ * 트레이스 분포는 `result.json` 에 그대로 있고 화면에서만 뺐다.
  */
-describe('렌더 섹션 — 출처가 구조로 드러난다', () => {
-  const labelsIn = (section: string): string[] =>
-    MANIFEST.filter((b) => b.section === section).flatMap((b) =>
-      b.kind === 'pairs' ? (b.keys ?? []).map((k) => k.l) : [],
+describe('렌더 섹션', () => {
+  const labels = (): string[] =>
+    MANIFEST.filter((b) => b.section === 'render' && b.kind === 'pairs').flatMap((b) =>
+      ((b as PairsBlock).keys ?? []).map((k) => k.l),
     )
 
-  /** 분포는 **한 장**이어야 한다. 두 장을 나란히 두면 "어느 게 진짜냐" 가 먼저 나온다. */
-  it('분포 카드는 하나뿐이다', () => {
-    expect(MANIFEST.filter((b) => b.kind === 'distribution')).toHaveLength(1)
+  it('분포 카드는 하나뿐이고 프레임워크 것이다', () => {
+    const dists = MANIFEST.filter((b) => b.kind === 'distribution')
+    expect(dists).toHaveLength(1)
+    expect(dists[0]!.path).toBe('metrics.hwui.data.histogram')
+    expect(dists[0]!.metric).toBe('hwui')
   })
 
-  it('트레이스가 없으면 프레임워크 히스토그램으로 그린다 — 카드가 비지 않는다', () => {
-    const card = block<DistributionBlock>('프레임 지속 시간 분포')
-    // sdk 30: frame 이 통째로 없고 hwui 만 있다.
+  /** **버전 하한이 없는 쪽을 골랐다.** sdk 30 처럼 트레이스가 없는 기기에서도 그려져야 한다. */
+  it('트레이스가 통째로 없어도 분포가 그려진다', () => {
+    const card = block<DistributionBlock>('프레임 시간 분포')
     const sdk30 = {
       metrics: {
         hwui: {
@@ -531,48 +548,23 @@ describe('렌더 섹션 — 출처가 구조로 드러난다', () => {
         },
       },
     }
-    const vm = buildDistribution(card, sdk30, 900) as { bars: unknown[]; footnote: string }
+    const vm = buildDistribution(card, sdk30, 900) as { bars: unknown[] }
     expect((vm as NoneVm).none).toBeUndefined()
     expect(vm.bars.length).toBeGreaterThan(0)
-    // 무엇으로 그렸는지 화면에 적힌다 — 숨기는 것이 아니라 밝히는 것이다.
-    expect(vm.footnote).toContain('gfxinfo')
   })
 
-  it('트레이스가 있으면 그쪽을 쓰고 각주에 대체 출처를 적지 않는다', () => {
-    const card = block<DistributionBlock>('프레임 지속 시간 분포')
-    const vm = buildDistribution(card, FULL, 900) as { footnote: string }
-    expect(vm.footnote).not.toContain('gfxinfo')
+  it('없으면 카드는 남고 "수집 안 함" 이다', () => {
+    expect((buildDistribution(block<DistributionBlock>('프레임 시간 분포'), {}, 900) as NoneVm).none).toBe(true)
   })
 
-  it('둘 다 없으면 카드는 남고 "수집 안 함" 이다', () => {
-    const card = block<DistributionBlock>('프레임 지속 시간 분포')
-    expect((buildDistribution(card, {}, 900) as NoneVm).none).toBe(true)
+  /** 같은 이름이 두 번 나오면 "어느 게 진짜냐" 가 생긴다 — 실제로 그렇게 읽혔다. */
+  it('같은 이름의 값을 두 번 내지 않는다', () => {
+    const seen = labels()
+    expect(new Set(seen).size).toBe(seen.length)
   })
 
-  it('트레이스와 프레임워크가 다른 섹션이다', () => {
-    const ids = SECTIONS.map((x) => x.id)
-    expect(ids).toContain('render')
-    expect(ids).toContain('renderHwui')
-    // 섹션마다 어디서 온 값인지 한 문단으로 말한다.
-    expect(SECTIONS.find((x) => x.id === 'renderHwui')!.note).toContain('gfxinfo')
-  })
-
-  it('두 섹션이 같은 이름의 값을 내지 않는다', () => {
-    const overlap = labelsIn('render').filter((l) => labelsIn('renderHwui').includes(l))
-    expect(overlap).toEqual([])
-  })
-
-  it('프레임워크 섹션은 트레이스에 없는 것을 낸다', () => {
-    expect(labelsIn('renderHwui')).toContain('UI 스레드')
-    expect(labelsIn('renderHwui')).toContain('입력 지연')
-  })
-
-  it('각 섹션의 블록은 자기 출처의 지표만 읽는다', () => {
-    for (const b of MANIFEST.filter((x) => x.section === 'render')) {
-      expect(b.path ?? '', b.title).toContain('metrics.frame')
-    }
-    for (const b of MANIFEST.filter((x) => x.section === 'renderHwui')) {
-      expect(b.path ?? '', b.title).toContain('metrics.hwui')
-    }
+  it('프레임워크 카드는 트레이스에 없는 것을 낸다', () => {
+    expect(labels()).toContain('UI 스레드')
+    expect(labels()).toContain('입력 지연')
   })
 })

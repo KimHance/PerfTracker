@@ -217,24 +217,7 @@ export function buildDistribution(
   res: unknown,
   width: number,
 ): DistributionVm | NoneVm {
-  // 주 경로가 비면 대체 경로를 본다. 분포는 **한 장이면 된다** — 둘을 나란히 두면 읽는 쪽이
-  // "어느 게 진짜냐" 를 먼저 묻게 되고, 그건 이 화면이 답해야 할 질문이 아니다.
-  let path = b.path
-  let percentilesPath = b.percentilesPath
-  let totalPath = b.totalPath
-  let sourceNote = ''
-
-  let raw = readPath(res, path)
-  if ((raw === MISSING || raw === null || isEmptyArray(raw)) && b.fallback !== undefined) {
-    const alt = readPath(res, b.fallback.path)
-    if (alt !== MISSING && alt !== null && !isEmptyArray(alt)) {
-      raw = alt
-      path = b.fallback.path
-      percentilesPath = b.fallback.percentilesPath
-      totalPath = b.fallback.totalPath
-      sourceNote = b.fallback.sourceLabel
-    }
-  }
+  const raw = readPath(res, b.path)
   if (raw === MISSING || raw === null || isEmptyArray(raw)) return none(raw, b.path)
 
   const buckets = raw as Bucket[]
@@ -297,7 +280,7 @@ export function buildDistribution(
   for (let v = 0; v <= maxCount + 0.001; v += yStep) yVals.push(v)
   if (yVals[yVals.length - 1]! < maxCount) yVals.push(maxCount)
 
-  const pc = readPath(res, percentilesPath)
+  const pc = readPath(res, b.percentilesPath)
   const percentiles: DistributionVm['percentiles'] = []
   const pLines: DistributionVm['pLines'] = []
   if (pc !== MISSING && pc !== null && typeof pc === 'object') {
@@ -312,11 +295,10 @@ export function buildDistribution(
   }
 
   const notes = [
-    `${fmtValue(readPath(res, totalPath), 'int')} 프레임`,
+    `${fmtValue(readPath(res, b.totalPath), 'int')} 프레임`,
     `버킷 ${buckets.length}칸 전부 · 가로축 = 버킷 순서`,
   ]
   if (collapsed > 0) notes.push(`빈 버킷 ${collapsed}칸 접음`)
-  if (sourceNote !== '') notes.push(sourceNote)
 
   return {
     width: W,
