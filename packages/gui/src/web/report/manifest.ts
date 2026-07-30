@@ -234,7 +234,7 @@ export const MANIFEST: Block[] = [
   {
     // 기기가 프레임마다 붙여 둔 것을 센 것이지 이 화면의 판정이 아니다. 그 사실은 색으로만
     // 말한다 — 카드마다 출처를 문장으로 적으면 화면이 설명서가 된다. 근거는 스키마에 있다.
-    kind: 'pairs', section: 'render', title: '프레임 수', metric: 'frame', span: 4,
+    kind: 'pairs', section: 'render', title: '프레임 수', metric: 'frame', span: 3,
     unit: '', tone: 'alt', path: 'metrics.frame.data.jank',
     // **분모가 같은 행은 전부 비율을 단다.** 드랍에만 달았더니 `전체` 가 곧 100% 인데
     // 5.2% 가 무엇에 대한 비율인지 화면에서 읽히지 않았다. `전체` 자신은 분모라 달지 않는다.
@@ -248,7 +248,7 @@ export const MANIFEST: Block[] = [
   {
     // 기기가 프레임마다 배정한 마감. 값이 여럿이면 세션 중 주사율이 바뀐 것이다 —
     // 그 사실 없이는 지속 시간을 **무엇에 대해** 읽어야 하는지 알 수 없다.
-    kind: 'bars', section: 'render', title: '기기가 준 마감', metric: 'frame', span: 4,
+    kind: 'bars', section: 'render', title: '기기가 준 마감', metric: 'frame', span: 3,
     unit: '', tone: 'alt',
     path: 'metrics.frame.data.deadlines',
     labelField: 'ms', labelPrefix: '', valueField: 'frames', fmt: 'int', scaleMax: null,
@@ -264,7 +264,7 @@ export const MANIFEST: Block[] = [
     // **트레이스에 없는 것만 낸다.** 전체·janky·마감 넘김을 여기서도 내면 위 섹션과 같은
     // 이름이 두 번 나와서 "어느 게 진짜냐" 가 생긴다 — 실제로 그렇게 읽혔다.
     // 그 셋은 `total_frames` 로 이미 분포 카드의 각주에 있다.
-    kind: 'pairs', section: 'render', title: '무엇이 느렸나', metric: 'hwui', span: 4,
+    kind: 'pairs', section: 'render', title: '무엇이 느렸나', metric: 'hwui', span: 3,
     unit: '', tone: 'alt', path: 'metrics.hwui.data',
     keys: [
       { p: 'slow_ui_thread', l: 'UI 스레드', f: 'int' },
@@ -276,7 +276,7 @@ export const MANIFEST: Block[] = [
     ],
   },
   {
-    kind: 'bars', section: 'render', title: 'jank_type', metric: 'frame', span: 12,
+    kind: 'bars', section: 'render', title: 'jank_type', metric: 'frame', span: 3,
     unit: '', tone: 'alt',
     path: 'metrics.frame.data.jank.by_type',
     labelField: 'type', labelPrefix: '', valueField: 'count', fmt: 'int', scaleMax: null,

@@ -241,24 +241,27 @@ export function emphasize(text: string): React.ReactNode[] {
 }
 
 export function BarsBody({ vm }: { vm: BarsVm }) {
-  const noted = vm.rows.some((r) => r.note !== '')
   return (
-    <div className={`rp-bars${noted ? ' rp-bars-noted' : ''}`}>
+    <div className="rp-bars">
       {vm.rows.map((r, i) => (
-        <div className="rp-bar-item" key={i}>
-          <div className="rp-bar-row">
-            <span className="rp-bar-label">{r.label}</span>
-            <span className="rp-bar-track">
-              <i style={{ width: `${r.pct}%` }} />
-            </span>
-            <span className="rp-bar-value num">{r.value}</span>
-            <span className="rp-share num">{r.share}</span>
-          </div>
-          {r.note !== '' && <p className="rp-bar-note">{emphasize(r.note)}</p>}
+        // 설명은 **툴팁이다.** 줄로 깔면 항목 다섯짜리 카드가 열 줄이 되고, 그 화면에서
+        // 읽는 사람이 먼저 보는 것(개수와 비율)이 글에 묻힌다.
+        <div className="rp-bar-row" key={i} title={r.note === '' ? undefined : stripEmphasis(r.note)}>
+          <span className="rp-bar-label">{r.label}</span>
+          <span className="rp-bar-track">
+            <i style={{ width: `${r.pct}%` }} />
+          </span>
+          <span className="rp-bar-value num">{r.value}</span>
+          <span className="rp-share num">{r.share}</span>
         </div>
       ))}
     </div>
   )
+}
+
+/** 툴팁은 평문이라 `**…**` 를 그대로 두면 별표가 보인다. */
+function stripEmphasis(text: string): string {
+  return text.replace(/\*\*/g, '')
 }
 
 export function DeltaBody({ vm }: { vm: DeltaVm }) {

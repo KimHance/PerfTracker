@@ -489,6 +489,7 @@ describe('jank_type', () => {
       },
     }
     const rows = (buildBars(bars, doc) as { rows: { label: string; value: string; note: string }[] }).rows
+    // 설명은 화면에서 툴팁으로 나가지만 뷰모델에는 그대로 있다 — 렌더러가 정할 일이다.
     expect(rows[0]!.note).toContain('많다고 곧 끊김은 아니지만')
     expect(rows[1]!.note).toContain('적을수록 좋습니다')
     // 모르는 라벨은 설명 없이 개수만 — 기기가 새 이름을 내도 화면은 그대로 돈다.
