@@ -563,6 +563,23 @@ describe('렌더 섹션', () => {
     expect(new Set(seen).size).toBe(seen.length)
   })
 
+  /**
+   * 실측에서 480 과 450 이 겹쳐 읽을 수 없었다. 꼭대기 눈금(실제 최댓값)이 규칙적인 눈금
+   * 바로 옆에 붙었기 때문이다 — 축의 최댓값이 더 쓸모 있으므로 규칙적인 쪽을 밀어낸다.
+   */
+  it('y축 눈금이 겹치지 않는다', () => {
+    const card: DistributionBlock = { ...TRACE_DIST, path: 'b', totalPath: 't', percentilesPath: 'p' }
+    const doc = { b: [{ from_ms: 0, to_ms: 5, count: 480 }, { from_ms: 5, to_ms: 6, count: 1 }] }
+    const vm = buildDistribution(card, doc, 900) as { yTicks: { label: string }[] }
+    const labels = vm.yTicks.map((t) => t.label)
+
+    expect(labels).toContain('480')
+    // 450 은 480 에 붙어 있어 빠져야 한다.
+    expect(labels).not.toContain('450')
+    // 아래쪽 눈금은 그대로 남는다 — 규칙 전체를 버린 것이 아니다.
+    expect(labels).toContain('150')
+  })
+
   it('프레임워크 카드는 트레이스에 없는 것을 낸다', () => {
     expect(labels()).toContain('UI 스레드')
     expect(labels()).toContain('입력 지연')

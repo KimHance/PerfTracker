@@ -278,7 +278,14 @@ export function buildDistribution(
   const yStep = niceMax(maxCount / 4)
   const yVals: number[] = []
   for (let v = 0; v <= maxCount + 0.001; v += yStep) yVals.push(v)
-  if (yVals[yVals.length - 1]! < maxCount) yVals.push(maxCount)
+  // 꼭대기(실제 최댓값)를 눈금으로 얹되, 바로 아래 눈금과 **너무 가까우면 그것을 밀어낸다.**
+  // 안 그러면 450 과 480 처럼 글자가 겹친다 (실측). 축의 최댓값이 더 쓸모 있으므로
+  // 규칙적인 쪽을 버린다.
+  const last = yVals[yVals.length - 1]!
+  if (last < maxCount) {
+    if (maxCount - last < yStep * 0.55) yVals.pop()
+    yVals.push(maxCount)
+  }
 
   const pc = readPath(res, b.percentilesPath)
   const percentiles: DistributionVm['percentiles'] = []
