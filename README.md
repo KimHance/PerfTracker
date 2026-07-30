@@ -48,12 +48,17 @@ adb 로 붙어서 Perfetto 트레이스를 기기에 남기고, 그것을 호스
 | --- | --- | --- |
 | `frame` | **Android 12** (sdk 31) | `android.surfaceflinger.frametimeline` 데이터소스가 그때 생겼습니다 |
 | `network` | **Android 14** (sdk 34) | `dumpsys netstats` 의 `mAppUidStatsMap` 절이 그때부터입니다 |
-| 나머지 5개 | Android 11 | thermal 만 sdk 29 하한이 따로 있습니다 |
+| 나머지 6개 | Android 11 | thermal 만 sdk 29 하한이 따로 있습니다 |
+
+**`frame` 이 안 되는 기기에서도 렌더링은 볼 수 있습니다.** `hwui` 는 `dumpsys gfxinfo` 에서
+와서 버전 하한이 없습니다 — 실측 SM-A405S(sdk 30)에서 `frame` 은 `sdk_too_low` 인데 `hwui` 는
+전체 160장·janky 66 을 냈습니다. 다만 분포·백분위·초 단위 추이는 `frame` 에만 있습니다.
 
 **기기를 꽂고 `perftracker doctor` 를 돌리면 그 기기에서 무엇을 잴 수 있는지 알려줍니다:**
 
 ```
 ✗ metric: frame     이 기기에서는 측정할 수 없습니다 — sdk_int=30 로는 수집할 수 없습니다 (최소 31, Android 12)
+✓ metric: hwui      측정 가능
 ✓ metric: startup   측정 가능
 ✓ metric: cpu       측정 가능
 ...
