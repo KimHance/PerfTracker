@@ -213,11 +213,13 @@ const FRAME_TIMELINE_DESCRIPTION =
   '접지 않고 그대로 낸 것뿐이라 측정 부하는 같다.'
 
 export const FrameJankSchema = z.object({
-  /**
-   * 꼬리표를 셀 수 있었던 프레임 수. `total_frames` 와 같아야 정상이고, 다르면 트레이스가
-   * 두 질의 사이에 다른 답을 준 것이다 — 그 사실을 감추지 않으려고 따로 싣는다.
-   */
-  total_frames: z.number().int().nonnegative(),
+  total_frames: z
+    .number().int().nonnegative()
+    .describe(
+      '꼬리표를 셀 수 있었던 프레임 수. **metrics.frame.data.total_frames 와 같아야 정상이고**, ' +
+        '다르면 트레이스가 두 질의 사이에 다른 답을 준 것이다 — 그 사실을 감추지 않으려고 ' +
+        '따로 싣는다. metrics.hwui.data.total_frames 와는 원래 다르다(세는 대상이 다르다).',
+    ),
   janky_frames: z
     .number()
     .int()
@@ -296,16 +298,42 @@ const HWUI_HISTOGRAM_DESCRIPTION =
   '[0, 5) 가 된다. ' +
   'to_ms 는 다음 칸의 from_ms 다.'
 
+/**
+ * **원인 카운터 다섯이 공유하는 한정.** 다섯 자리에 같은 문장을 손으로 복사하면 한 곳만
+ * 고쳐지는 날이 온다 — 스키마만 읽는 소비자(CI · LLM)에게는 그 한 곳이 전부다.
+ */
+const HWUI_CAUSE_DESCRIPTION =
+  '**프레임 수가 아니다.** 한 프레임이 여러 항목에 잡히고, 이 값들의 합은 janky_frames 를 한참 넘는다. `high_input_latency` 는 실측에서 **total_frames 자체를 넘었다** (2,759 대 1,682 · 8,503 대 7,514 · 33 대 26). 그러므로 total_frames 를 분모로 비율을 내지 말 것 — 100% 넘는 숫자가 나온다. 원인끼리의 상대적 크기만 읽는 값이다.'
+
+/** janky_frames 와 deadline_missed 가 함께 지는 한정. 둘 다 버전에 따라 정의가 다르다. */
+const HWUI_VERSION_CAVEAT =
+  '**버전을 넘어 비교하지 말 것.** 정의가 안드로이드 버전 사이에 바뀌었다 — 실측 sdk 36 (SM-F936N)은 janky_frames 와 deadline_missed 가 표본 여섯 개에서 전부 일치하는데 (323/323 · 289/289 · 170/170 …) sdk 30(SM-A405S)은 46 대 13, 157 대 8 로 갈린다. sdk 36 출력에는 `Janky frames (legacy)` 라는 옛 정의 줄이 따로 있고(새 정의와 다른 값) sdk 30 에는 그 줄이 없다 — 즉 새 정의에서 janky 는 곧 마감 넘김이고, sdk 30 의 것은 옛 정의다. deadline_missed 도 sdk 36 에 `(legacy)` 짝이 있어 **둘 다** 바뀌었다. 버전이 다른 두 기기를 견주려면 카운터가 아니라 histogram·percentiles(ms)를 보라 — 그쪽은 그냥 시간이라 버전이 판정을 바꿀 여지가 없다. (이 도구는 `(legacy)` 줄을 읽지 않는다.)'
+
 /** 설명은 아래 HWUI_DESCRIPTION 에 있다. */
 export const HwuiDataSchema = z.object({
-  total_frames: z.number().int().nonnegative().nullable(),
-  janky_frames: z.number().int().nonnegative().nullable(),
-  missed_vsync: z.number().int().nonnegative().nullable(),
-  high_input_latency: z.number().int().nonnegative().nullable(),
-  slow_ui_thread: z.number().int().nonnegative().nullable(),
-  slow_bitmap_uploads: z.number().int().nonnegative().nullable(),
-  slow_draw_commands: z.number().int().nonnegative().nullable(),
-  deadline_missed: z.number().int().nonnegative().nullable(),
+  total_frames: z
+    .number().int().nonnegative().nullable()
+    .describe(
+      '`Total frames rendered` 의 세션 델타. **metrics.frame.data.total_frames 와 다른 것을 ' +
+        '센다** — 이쪽은 View 계층 렌더링만이고 저쪽은 서피스 프레임이다. 다른 것이 정상이다.',
+    ),
+  janky_frames: z
+    .number().int().nonnegative().nullable()
+    .describe(
+      '`Janky frames` 의 세션 델타. **metrics.frame.data.jank.janky_frames 와 다른 값이다** — ' +
+        '실측 같은 세션에서 170 대 1,556 으로 갈렸다. 저쪽은 SurfaceFlinger 가 붙인 꼬리표가 ' +
+        '하나라도 있는 프레임 수이고, 이쪽은 프레임워크(HWUI)의 자체 판정이다. ' +
+        '안드로이드 Vitals 가 보는 모집단은 이쪽이다. ' +
+        HWUI_VERSION_CAVEAT,
+    ),
+  missed_vsync: z.number().int().nonnegative().nullable().describe(HWUI_CAUSE_DESCRIPTION),
+  high_input_latency: z.number().int().nonnegative().nullable().describe(HWUI_CAUSE_DESCRIPTION),
+  slow_ui_thread: z.number().int().nonnegative().nullable().describe(HWUI_CAUSE_DESCRIPTION),
+  slow_bitmap_uploads: z.number().int().nonnegative().nullable().describe(HWUI_CAUSE_DESCRIPTION),
+  slow_draw_commands: z.number().int().nonnegative().nullable().describe(HWUI_CAUSE_DESCRIPTION),
+  deadline_missed: z
+    .number().int().nonnegative().nullable()
+    .describe('`Number Frame deadline missed` 의 세션 델타. ' + HWUI_VERSION_CAVEAT),
   histogram: z
     .array(FrameBucketSchema)
     .nullable()
@@ -345,20 +373,48 @@ const HWUI_DESCRIPTION =
   '**0 과 다른 말이다.** 지표 전체가 없으면(reason_code: hwui_stats_unavailable) 이 앱이 HWUI 로 ' +
   '그리지 않는 것이다 — Unity·Vulkan·OpenGL 이 그렇고, 그것은 Vitals 와 같은 한계다.'
 
+const FRAME_DESCRIPTION =
+  '**트레이스가 본 서피스 프레임.** `actual_frame_timeline_slice` 를 `display_frame_token` 으로 ' +
+  '접어 프레임 하나당 한 줄로 만든 것이다 (접지 않으면 레이어마다 한 행이라 실측 2.4배가 나온다). ' +
+  'metrics.hwui 와 **대체가 아니라 짝이다** — 세는 대상이 다르다. 이쪽은 서피스 프레임의 지속 ' +
+  '시간이라 SurfaceView 와 그 배경 레이어가 섞이고, 저쪽은 View 계층 렌더링만이라 안드로이드 ' +
+  'Vitals 가 보는 모집단과 같다. 실측 같은 세션에서 p99 가 39.56 대 53 으로 갈렸다 — ' +
+  '**둘 다 맞고 다른 질문에 답한다.** 어느 쪽이 그 앱의 "진짜" 값인지 이 도구는 정하지 않는다. ' +
+  '이쪽만 있는 것: **초 단위 추이**(timeline)와 **기기가 붙인 꼬리표**(jank.by_type) ' +
+  '그리고 **기기가 배정한 마감**(deadlines). 저쪽만 있는 것: 원인별 카운터와 버전 하한 없음. ' +
+  'sdk 31 미만에서는 이 지표 전체가 없다(reason_code: sdk_too_low) — 그때도 hwui 는 나온다.'
+
 export const FrameDataSchema = z.object({
   process: z.string().describe(PROCESS_NAME_DESCRIPTION),
   /** 그 프로세스의 pid. target_app.render_process / target_app.pid 가 여기서 채워진다. */
   pid: z.number().int(),
-  total_frames: z.number().int().nonnegative(),
+  total_frames: z
+    .number().int().nonnegative()
+    .describe(
+      '`display_frame_token` 으로 접은 뒤의 프레임 수. **metrics.hwui.data.total_frames 와 ' +
+        '다른 것을 센다** — 이쪽은 서피스 프레임이고 저쪽은 View 계층 렌더링만이다. ' +
+        '다른 것이 정상이다.',
+    ),
   buckets: z.array(FrameBucketSchema).describe(BUCKETS_DESCRIPTION),
-  percentiles: z.object({
-    p50: z.number(),
-    p90: z.number(),
-    p95: z.number(),
-    p99: z.number(),
-  }),
-  mean_ms: z.number(),
-  max_ms: z.number(),
+  percentiles: z
+    .object({
+      p50: z.number(),
+      p90: z.number(),
+      p95: z.number(),
+      p99: z.number(),
+    })
+    .describe(
+      '위 buckets 와 **같은 원본(프레임마다의 실제 지속 시간)** 에서 나온다 — 버킷 경계에 ' +
+        '걸리지 않은 소수점까지 정확하다. ' +
+        '**metrics.hwui.data.percentiles 와 다른 값이다**: 실측 같은 세션에서 p99 가 ' +
+        '39.56 대 53 으로 갈렸다. 저쪽은 UI 스레드 + RenderThread 의 CPU 시간(Vitals 가 보는 ' +
+        '값)이고 이쪽은 서피스 프레임의 지속 시간이다 — 둘 다 맞고 다른 질문에 답한다. ' +
+        '**어느 쪽이 그 앱의 "진짜 p99" 인지 이 도구는 정하지 않는다.**',
+    ),
+  mean_ms: z
+    .number()
+    .describe('위 percentiles 와 같은 원본의 산술 평균. 꼬리에 끌려가므로 p50 과 함께 읽을 것.'),
+  max_ms: z.number().describe('위 percentiles 와 같은 원본의 최댓값 — 그 세션의 가장 느린 한 장.'),
   timeline: z.array(FrameTimelinePointSchema).optional().describe(FRAME_TIMELINE_DESCRIPTION),
   // `optional` 과 `nullable` 이 서로 다른 말이다 — **필드가 없다**는 이 값을 낼 줄 모르던
   // 시절의 세션이고(`timeline` 과 같은 이유로 optional 이다), **null** 은 이번에 읽지
@@ -1580,7 +1636,7 @@ export const ResultSchema = z.object({
    */
   metrics: z
     .object({
-      frame: metricResultSchema(FrameDataSchema),
+      frame: metricResultSchema(FrameDataSchema).describe(FRAME_DESCRIPTION),
       startup: metricResultSchema(StartupDataSchema).optional(),
       cpu: metricResultSchema(CpuDataSchema).optional(),
       memory: metricResultSchema(MemoryDataSchema).optional(),

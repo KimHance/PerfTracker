@@ -286,6 +286,55 @@ describe('resultJsonSchema', () => {
     expect(reasonCode).not.toBe('{"type":["string","null"]}')
   })
 
+  /**
+   * **`result.json` 하나만 받은 소비자(CI · LLM)는 두 프레임 지표를 이름으로 구분할 수 없다.**
+   * 실측 같은 세션에서 `janky_frames` 가 170 대 1,556, `p99` 가 53 대 39.56 으로 갈렸다 —
+   * 설명이 없으면 둘 중 하나를 임의로 골라 "이 앱의 p99" 라고 결론낸다.
+   *
+   * 이 저장소가 반복해서 터뜨린 결함 3번(한정이 `.describe()` 가 아니라 소스 주석에만)이
+   * 정확히 이 자리다. `z.toJSONSchema()` 는 런타임이라 소스 주석을 못 본다.
+   */
+  it('이름이 겹치는 두 프레임 지표를 스키마가 서로 가리킨다', () => {
+    const metrics = props(props(resultJsonSchema())['metrics'])
+    const frameData = props(props(metrics['frame'])['data']['anyOf'][0])
+    const hwuiData = props(props(metrics['hwui'])['data']['anyOf'][0])
+
+    // 짝을 이름으로 지목해야 한다 — "다른 것도 있다" 만으로는 찾아갈 수 없다.
+    for (const [name, node] of [
+      ['frame.total_frames', frameData['total_frames']],
+      ['frame.percentiles', frameData['percentiles']],
+      ['hwui.total_frames', hwuiData['total_frames']],
+      ['hwui.janky_frames', hwuiData['janky_frames']],
+    ] as [string, { description?: string }][]) {
+      expect(node.description, name).toBeDefined()
+      expect(node.description, name).toMatch(/metrics\.(frame|hwui)/)
+    }
+  })
+
+  /**
+   * `high_input_latency` 는 실측에서 `total_frames` 자체를 넘었다 (2,759 대 1,682).
+   * 그것을 프레임 수로 읽고 비율을 내면 164% 가 나온다.
+   */
+  it('원인 카운터가 프레임 수가 아니라고 말한다', () => {
+    const metrics = props(props(resultJsonSchema())['metrics'])
+    const hwuiData = props(props(metrics['hwui'])['data']['anyOf'][0])
+
+    for (const k of ['missed_vsync', 'high_input_latency', 'slow_ui_thread',
+      'slow_bitmap_uploads', 'slow_draw_commands']) {
+      expect((hwuiData[k] as { description?: string }).description, k).toMatch(/프레임 수가 아니다/)
+    }
+  })
+
+  /** 버전이 다른 두 기기의 카운터를 나란히 놓으면 안 된다 — 정의가 바뀌었다. */
+  it('버전 간 비교 금지를 두 카운터에 함께 적는다', () => {
+    const metrics = props(props(resultJsonSchema())['metrics'])
+    const hwuiData = props(props(metrics['hwui'])['data']['anyOf'][0])
+
+    for (const k of ['janky_frames', 'deadline_missed']) {
+      expect((hwuiData[k] as { description?: string }).description, k).toMatch(/버전을 넘어 비교하지 말 것/)
+    }
+  })
+
   it('adb_commands_during_session 의 한계를 description 으로 함께 내보낸다', () => {
     const overhead = props(resultJsonSchema())['measurement_overhead']
     const field = props(overhead)['adb_commands_during_session'] as { description?: string }
