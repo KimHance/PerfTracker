@@ -68,6 +68,22 @@ export interface DistributionBlock extends BlockBase {
   percentilesPath: string
   totalPath: string
   /**
+   * `path` 가 비었을 때 대신 볼 곳. **같은 것을 다른 경로로 잰 값이 있을 때만 쓴다.**
+   *
+   * 분포를 두 장 나란히 두었더니 "어느 게 진짜냐" 가 됐다. 읽는 쪽이 알고 싶은 것은
+   * "이 앱의 프레임 시간 분포" 하나이고, 그것을 어느 경로로 얻었는지는 **각주로 족하다.**
+   *
+   * 카드를 숨기는 것이 아니다 — 규칙("못 잰 것을 숨기지 않는다")은 그대로다. 둘 다 없으면
+   * 카드는 남고 `수집 안 함` 이 뜬다. 무엇으로 그렸는지는 `sourceLabel` 로 화면에 적힌다.
+   */
+  fallback?: {
+    path: string
+    percentilesPath: string
+    totalPath: string
+    /** 각주에 붙는 한 줄. 왜 이쪽으로 그렸는지까지 말한다. */
+    sourceLabel: string
+  }
+  /**
    * 빈 버킷이 이만큼 이어지면 축을 끊는다.
    *
    * **`Infinity` 다 — 접지 않는다.** 꼬리 버킷을 30→50→100ms 로 넓히면서 배열이 101칸에서
@@ -160,19 +176,18 @@ export const SECTIONS: { id: SectionId; label: string; tab: TabId; note?: string
   { id: 'startup', label: '앱 시작', tab: 'summary' },
   {
     id: 'render',
-    label: '렌더 — 트레이스',
+    label: '렌더',
     tab: 'summary',
     note: '**막대가 왼쪽에 몰릴수록 부드럽습니다.** 오른쪽으로 갈수록 오래 걸린 프레임입니다.',
   },
   {
     id: 'renderHwui',
-    label: '렌더 — 프레임워크',
+    label: '렌더 — 무엇이 느렸나',
     tab: 'summary',
     note:
-      '**같은 앱을 다른 눈으로 본 것입니다.** 위는 트레이스, 여기는 프레임워크가 자기 ' +
-      '렌더링을 직접 센 값(`dumpsys gfxinfo`)입니다. 재는 값이 달라서 숫자도 다릅니다 — ' +
-      '여기는 UI 스레드+RenderThread 의 CPU 시간이고, 안드로이드 Vitals 가 보는 것과 같습니다. ' +
-      '**버전 하한이 없어서 위가 통째로 비는 기기에서도 나옵니다.**',
+      '**프레임워크가 자기 렌더링을 직접 센 값입니다** (`dumpsys gfxinfo`). 위 숫자들과 ' +
+      '겹치지 않는 것만 있습니다 — 트레이스는 프레임이 얼마나 걸렸는지는 알아도 ' +
+      '**어느 단계에서** 걸렸는지는 모릅니다.',
   },
   { id: 'cpu', label: 'CPU', tab: 'summary' },
   { id: 'memory', label: '메모리', tab: 'summary' },
@@ -234,6 +249,14 @@ export const MANIFEST: Block[] = [
     percentilesPath: 'metrics.frame.data.percentiles',
     totalPath: 'metrics.frame.data.total_frames',
     breakAfterEmptyBuckets: Infinity,
+    // 트레이스가 없는 기기(sdk 30 은 frametimeline 자체가 없다)에서는 프레임워크가 만든
+    // 히스토그램으로 그린다. 같은 것을 재지는 않으므로 각주가 그 사실을 말한다.
+    fallback: {
+      path: 'metrics.hwui.data.histogram',
+      percentilesPath: 'metrics.hwui.data.percentiles',
+      totalPath: 'metrics.hwui.data.total_frames',
+      sourceLabel: '프레임워크가 센 것 (dumpsys gfxinfo) · UI 스레드+RenderThread CPU 시간',
+    },
   },
   {
     // 기기가 프레임마다 붙여 둔 것을 센 것이지 이 화면의 판정이 아니다. 그 사실은 색으로만
@@ -295,17 +318,6 @@ export const MANIFEST: Block[] = [
   },
 
   // ── 렌더: 프레임워크가 센 것 ─────────────────────────────────
-  {
-    // **버전 하한이 없는 유일한 분포다.** sdk 30 처럼 트레이스가 없는 기기에서는 이것만 남는다.
-    // 위 분포와 다른 것을 잰다(UI+RenderThread CPU 시간) — 같은 세션에서 p99 가 갈린다.
-    kind: 'distribution', section: 'renderHwui', title: '프레임 시간 분포',
-    metric: 'hwui', unit: 'ms', span: 12, tone: 'alt',
-    path: 'metrics.hwui.data.histogram',
-    // 프레임워크는 세션 델타에 대한 백분위를 주지 않는다. 지어내지 않고 비워 둔다.
-    percentilesPath: 'metrics.hwui.data.percentiles',
-    totalPath: 'metrics.hwui.data.total_frames',
-    breakAfterEmptyBuckets: Infinity,
-  },
   {
     // **트레이스에 없는 것만 낸다.** 전체·janky·마감 넘김을 여기서도 내면 위 섹션과 같은
     // 이름이 두 번 나와서 "어느 게 진짜냐" 가 생긴다 — 실제로 그렇게 읽혔다.

@@ -510,6 +510,45 @@ describe('렌더 섹션 — 출처가 구조로 드러난다', () => {
       b.kind === 'pairs' ? (b.keys ?? []).map((k) => k.l) : [],
     )
 
+  /** 분포는 **한 장**이어야 한다. 두 장을 나란히 두면 "어느 게 진짜냐" 가 먼저 나온다. */
+  it('분포 카드는 하나뿐이다', () => {
+    expect(MANIFEST.filter((b) => b.kind === 'distribution')).toHaveLength(1)
+  })
+
+  it('트레이스가 없으면 프레임워크 히스토그램으로 그린다 — 카드가 비지 않는다', () => {
+    const card = block<DistributionBlock>('프레임 지속 시간 분포')
+    // sdk 30: frame 이 통째로 없고 hwui 만 있다.
+    const sdk30 = {
+      metrics: {
+        hwui: {
+          data: {
+            total_frames: 215,
+            histogram: [
+              { from_ms: 5, to_ms: 6, count: 2 },
+              { from_ms: 6, to_ms: null, count: 213 },
+            ],
+          },
+        },
+      },
+    }
+    const vm = buildDistribution(card, sdk30, 900) as { bars: unknown[]; footnote: string }
+    expect((vm as NoneVm).none).toBeUndefined()
+    expect(vm.bars.length).toBeGreaterThan(0)
+    // 무엇으로 그렸는지 화면에 적힌다 — 숨기는 것이 아니라 밝히는 것이다.
+    expect(vm.footnote).toContain('gfxinfo')
+  })
+
+  it('트레이스가 있으면 그쪽을 쓰고 각주에 대체 출처를 적지 않는다', () => {
+    const card = block<DistributionBlock>('프레임 지속 시간 분포')
+    const vm = buildDistribution(card, FULL, 900) as { footnote: string }
+    expect(vm.footnote).not.toContain('gfxinfo')
+  })
+
+  it('둘 다 없으면 카드는 남고 "수집 안 함" 이다', () => {
+    const card = block<DistributionBlock>('프레임 지속 시간 분포')
+    expect((buildDistribution(card, {}, 900) as NoneVm).none).toBe(true)
+  })
+
   it('트레이스와 프레임워크가 다른 섹션이다', () => {
     const ids = SECTIONS.map((x) => x.id)
     expect(ids).toContain('render')
