@@ -189,9 +189,16 @@ export function buildProgram(): Command {
     .description('세션을 끝내고 트레이스를 회수해 result.json 을 만든다')
     .option('-d, --device <serial>', '대상 기기 serial')
     .option('--offline', 'trace_processor 를 내려받지 않는다', false)
-    .action(async (opts: { device?: string; offline: boolean }) => {
+    /**
+     * 기본값이 아닌 이유: 보고서는 빌드된 화면(`dist-web`)이 있어야 나온다. 항상 만들면
+     * 화면을 빌드하지 않은 자리에서 **측정은 끝났는데 마지막에 실패하는** 모양이 된다.
+     * 그래서 켜는 사람만 켜고, 안 켠 사람에게는 만드는 법을 한 줄로 알린다.
+     */
+    .option('--report', '끝나자마자 보고서(HTML)까지 만들어 연다', false)
+    .option('--no-open', '--report 로 만든 보고서를 브라우저로 열지 않는다')
+    .action(async (opts: { device?: string; offline: boolean; report: boolean; open: boolean }) => {
       const ctx = await createContext({ ...program.opts(), device: opts.device })
-      console.log(await runStop(ctx, { offline: opts.offline }))
+      console.log(await runStop(ctx, opts))
     })
 
   program

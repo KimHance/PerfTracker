@@ -37,6 +37,11 @@ describe('M1 end-to-end', () => {
     expect(existsSync(join(active!.runDir, 'result.json'))).toBe(true)
     expect(await readActiveSession(ctx.serial)).toBeNull()
 
+    // 두 번째 줄은 **그대로 쳐서 도는 명령**이어야 한다. 이 기록은 기본 `runs` 가 아니라
+    // 임시 디렉토리에 있으므로 `-o` 가 함께 나와야 한다 — 그것이 빠지면 안내한 명령이
+    // "기록을 찾지 못했습니다" 로 죽는다.
+    expect(output).toContain(`perftracker report ${active!.id} -o ${out}`)
+
     // 원본이 남아 있으므로 기기 없이 재산출된다.
     const again = await extractRun(active!.runDir, {})
     expect(again.schema_version).toBe('1.1.0')

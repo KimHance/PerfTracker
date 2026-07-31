@@ -1,7 +1,12 @@
+import { dirname, resolve } from 'node:path'
 import { extractRun, readActiveSession, SessionStateError, stopSession } from '@perftracker/core'
 import type { CliContext } from '../context.js'
+import { writeStandaloneReport } from './report.js'
 
-export async function runStop(ctx: CliContext, opts: { offline: boolean }): Promise<string> {
+export async function runStop(
+  ctx: CliContext,
+  opts: { offline: boolean; report?: boolean; open?: boolean },
+): Promise<string> {
   const session = await readActiveSession(ctx.serial)
   if (session === null) {
     throw new SessionStateError(`기기 ${ctx.serial} 에 실행 중인 세션이 없습니다.`)
@@ -22,9 +27,61 @@ export async function runStop(ctx: CliContext, opts: { offline: boolean }): Prom
     )
   }
 
-  // 값을 터미널에 요약하지 않는다 — 이 도구의 산출물은 result.json 하나이고, 무엇이 중요한지
-  // 고르는 일(어느 지표를 앞에 둘지, 어떤 기준선과 비교할지)은 그것을 읽는 쪽의 몫이다.
-  // 사람에게 남기는 것은 다음에 무엇을 열어야 하는가 하나뿐이다.
-  const header = state === 'aborted' ? '세션이 중단된 상태로 종료되었습니다.\n' : ''
-  return `${header}→ ${runDir}/result.json`
+  let reportPath: string | null = null
+  if (opts.report === true) {
+    try {
+      reportPath = await writeStandaloneReport(runDir, `${session.name} · PerfTracker`, {
+        open: opts.open !== false,
+      })
+    } catch (e) {
+      // **보고서 실패가 측정 결과를 가리지 않게 한다.** 여기까지 왔으면 재는 일도 산출도
+      // 이미 끝났고, 그 경로를 잃으면 방금 잰 것을 사람이 손으로 찾아야 한다.
+      throw new SessionStateError(
+        `result.json 은 산출됐지만 보고서 생성에 실패했습니다.\n` +
+          `  ${runDir}/result.json\n` +
+          `${reportCommand(session.id, runDir)} 로 다시 시도할 수 있습니다.\n\n` +
+          `원인: ${(e as Error).message}`,
+      )
+    }
+  }
+
+  return formatStopResult({ runDir, id: session.id, state, reportPath })
+}
+
+/**
+ * `stop` 이 마지막에 내는 문장.
+ *
+ * **값 요약은 여전히 없다** — 어느 지표를 앞에 둘지, 무엇을 굵게 쓸지 자체가 이미 판단이고
+ * 산출물은 `result.json` 하나다. 다만 *다음에 무엇을 열면 되는가* 는 판단이 아니라 안내다.
+ * 그 한 줄이 없던 동안 사람은 `report` 라는 명령이 있다는 것도, 자기 기록의 id 가 무엇인지도
+ * 스스로 찾아야 했다 — 도구가 방금 만든 것을 도구가 안 알려준 셈이다.
+ */
+export function formatStopResult(input: {
+  runDir: string
+  id: string
+  state: 'completed' | 'aborted'
+  /** `--report` 로 이미 만든 보고서. 없으면 그 자리에 **만드는 법**이 온다. */
+  reportPath: string | null
+}): string {
+  const lines = input.state === 'aborted' ? ['세션이 중단된 상태로 종료되었습니다.'] : []
+  lines.push(`→ ${input.runDir}/result.json`)
+  lines.push(
+    input.reportPath === null
+      ? `  ${reportCommand(input.id, input.runDir)} 로 보고서를 엽니다`
+      : `→ ${input.reportPath}`,
+  )
+  return lines.join('\n')
+}
+
+/**
+ * 안내할 명령 한 줄. **`-o` 를 언제 붙일지가 요점이다.**
+ *
+ * `report` 의 `-o` 기본값은 `runs` 라, `start -o <다른 곳>` 으로 잰 기록을 그냥
+ * `perftracker report <id>` 로 안내하면 그대로 쳤을 때 "기록을 찾지 못했습니다" 가 난다.
+ * **안내한 명령이 실패하는 것은 안내가 없는 것보다 나쁘다** — 사람은 도구가 아니라 자기
+ * 기록을 의심하게 된다.
+ */
+function reportCommand(id: string, runDir: string): string {
+  const out = dirname(runDir)
+  return `perftracker report ${id}${out === resolve('runs') ? '' : ` -o ${out}`}`
 }

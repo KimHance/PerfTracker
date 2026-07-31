@@ -130,6 +130,9 @@ adb 로 붙어서 Perfetto 트레이스를 기기에 남기고, 그것을 호스
 끝납니다. 어느 지표를 앞에 둘지, 무엇을 굵게 쓸지 자체가 이미 판단이고, 요약을 만들려면
 "무엇이 중요한가" 를 도구가 정해야 하기 때문입니다. 산출물은 `result.json` 하나입니다.
 
+값을 안 찍는 것과 **다음에 무엇을 열면 되는지 안 알려주는 것은 다릅니다.** `stop` 은 경로
+아래에 보고서를 만드는 명령 한 줄을 같이 냅니다 — 그 줄은 그대로 쳐서 도는 명령입니다.
+
 ---
 
 ## 설치
@@ -216,7 +219,18 @@ npx perftracker status
 
 # 3) 종료 — 트레이스를 회수하고 result.json 을 만든다
 npx perftracker stop
+npx perftracker stop --report      # 보고서(HTML)까지 만들고 브라우저로 연다
 ```
+
+`stop` 은 `result.json` 의 경로와 **보고서를 만드는 명령**을 냅니다:
+
+```
+→ /…/runs/2026-07-26T02-31-40_홈-스크롤_a3f9c1/result.json
+  perftracker report a3f9c1 로 보고서를 엽니다
+```
+
+`--report` 는 그 한 줄을 대신 쳐 주는 것입니다 — 대신 화면이 빌드돼 있어야 하므로
+(`npm run build`) 기본값이 아닙니다. 측정이 끝난 뒤 마지막에 실패하는 모양을 만들지 않습니다.
 
 `start` 는 앱을 **라벨로도 패키지명으로도** 찾습니다(`--app` 생략 시 지금 포그라운드에 있는 앱).
 설치된 앱 목록은 `perftracker apps` 로 볼 수 있습니다.
@@ -347,7 +361,7 @@ npm run gui   # 빌드 · 서버 · 브라우저까지 이 한 줄이 다 합니
 | `perftracker start` | 측정 시작 | 필요 |
 | `perftracker mark <라벨>` | 측정 중인 세션에 마킹 | **접촉 안 함** |
 | `perftracker status` | 진행 중인 세션 | **접촉 안 함** |
-| `perftracker stop` | 종료 · 트레이스 회수 · `result.json` 생성 | 필요 |
+| `perftracker stop` | 종료 · 트레이스 회수 · `result.json` 생성 (`--report` 면 HTML 까지) | 필요 |
 | `perftracker extract <run-dir>` | 원본을 다시 파싱해 `result.json` 재생성 | 불필요 |
 | `perftracker runs list` | 기록 목록 | 불필요 |
 | `perftracker runs rename <id> <이름>` | 기록 이름 변경 (디렉토리 경로는 그대로) | 불필요 |
@@ -387,6 +401,7 @@ npx perftracker runs rm --all --yes           # 전부 (--yes 없으면 거부�
 npx perftracker report bc7a6a                 # → runs/<…>/report.html (브라우저가 열립니다)
 npx perftracker report bc7a6a --file /tmp/r.html
 npx perftracker report bc7a6a --no-open       # CI
+npx perftracker stop --report                 # 측정을 끝내면서 바로 (--no-open 도 같습니다)
 ```
 
 **왜 파일 하나인가:** 측정한 사람과 읽는 사람이 다른 경우가 보통이고, 그때 "서버를 띄우고 이
