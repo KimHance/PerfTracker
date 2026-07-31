@@ -494,18 +494,20 @@ describe('세션을 믿어도 되는지 정하는 값들', () => {
       device_status_before: 0, device_status_after: 3, hal_ready_before: true, status_override_before: false,
     } } } }
     const rows = (buildPairs(block<PairsBlock>('스로틀 단계'), d) as { rows: { label: string; value: string }[] }).rows
-    expect(rows.find((r) => r.label === 'device_status_before')!.value).toBe('NONE (0)')
-    expect(rows.find((r) => r.label === 'device_status_after')!.value).toBe('SEVERE (3)')
+    expect(rows.find((r) => r.label === '시작')!.value).toBe('NONE (0)')
+    expect(rows.find((r) => r.label === '종료')!.value).toBe('SEVERE (3)')
   })
 
   /**
-   * 안드로이드 문서: "NONE 이 계속 나오는 것이 스로틀이 없다는 뜻은 아니다 — 그 기기가
-   * 지원하지 않는 것일 수 있다." `hal_ready` 와 `status_override` 가 그것을 가르는 재료다.
+   * **평소엔 아무 뜻이 없고 이상할 때만 뜻이 생기는 값은 카드에 두지 않는다.**
+   * `hal_ready` · `status_override` 가 그렇다 — 4세션 내내 `예/아니오` 로 고정이라
+   * 읽는 사람에게 할 일을 주지 않는다. 값은 `result.json` 에 그대로 있다.
    */
-  it('NONE 을 믿어도 되는지 가르는 두 값을 같이 낸다', () => {
-    const labels = (block<PairsBlock>('스로틀 단계').keys ?? []).map((k) => k.p)
-    expect(labels).toContain('hal_ready_before')
-    expect(labels).toContain('status_override_before')
+  it('평소에 뜻 없는 값을 카드에 두지 않는다', () => {
+    const keys = block<PairsBlock>('스로틀 단계').keys ?? []
+    expect(keys.map((k) => k.p)).toEqual(['device_status_before', 'device_status_after'])
+    // 같은 섹션의 다른 카드와 같은 어휘를 쓴다 — 두 줄뿐이라 경로가 없어도 모호하지 않다.
+    expect(keys.map((k) => k.l)).toEqual(['시작', '종료'])
   })
 
   it('모르는 단계는 지어내지 않고 숫자만 낸다', () => {

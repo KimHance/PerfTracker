@@ -234,7 +234,6 @@ export const MANIFEST: Block[] = [
     kind: 'pairs', section: 'startup', title: '진입점', span: 4, unit: '', path: 'target_app',
     keys: [
       { p: 'launcher_activity', l: '런처 액티비티', f: 'wrap' },
-      { p: 'launcher_activity_candidates', l: '후보', f: 'list' },
       { p: 'pid', l: 'pid', f: 'raw' },
     ],
   },
@@ -412,16 +411,18 @@ export const MANIFEST: Block[] = [
     // 실제로 깎고 있었는지다 — 2 이상이면 그 세션의 CPU·프레임 숫자를 "이 앱이 느리다" 로
     // 읽으면 안 된다. 이름은 AOSP 의 `THERMAL_STATUS_*` 그대로이고 우리가 매긴 등급이 아니다.
     //
-    // `hal_ready` 와 `status_override` 를 같이 낸다: 안드로이드 문서가 "NONE 이 계속 나오는
-    // 것이 스로틀이 없다는 뜻은 아니다 — 그 기기가 지원하지 않는 것일 수 있다" 고 말한다.
-    // 그 둘이 NONE 을 믿어도 되는지 가르는 유일한 재료다.
+    // **`hal_ready` 와 `status_override` 는 여기 두지 않는다.** 안드로이드 문서가 "NONE 이
+    // 계속 나오는 것이 스로틀이 없다는 뜻은 아니다 — 그 기기가 지원하지 않는 것일 수 있다"
+    // 고 말하고 그 둘이 그것을 가르는 재료이긴 하지만, **평소엔 아무 뜻이 없고 이상할 때만
+    // 뜻이 생기는 값**이다. 늘 `예/아니오` 로 고정된 두 줄은 읽는 사람에게 할 일을 주지
+    // 않는다 — 그런 것은 카드가 아니라 경고 자리다. 값은 `result.json` 에 그대로 있다.
     kind: 'pairs', section: 'context', title: '스로틀 단계', metric: 'thermal', span: 4,
     unit: 'dumpsys thermalservice', path: 'metrics.thermal.data',
     keys: [
-      { p: 'device_status_before', l: 'device_status_before', f: 'thermal' },
-      { p: 'device_status_after', l: 'device_status_after', f: 'thermal' },
-      { p: 'hal_ready_before', l: 'hal_ready_before', f: 'bool' },
-      { p: 'status_override_before', l: 'status_override_before', f: 'bool' },
+      // 같은 섹션의 온도·기기 상태 카드가 `전 → 후` 로 말한다. 여기만 스키마 경로를 쓰면
+      // 읽는 사람이 두 어휘를 오간다 — 두 줄뿐이라 경로가 없어도 모호하지 않다.
+      { p: 'device_status_before', l: '시작', f: 'thermal' },
+      { p: 'device_status_after', l: '종료', f: 'thermal' },
     ],
   },
   {
