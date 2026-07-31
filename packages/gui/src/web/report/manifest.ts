@@ -51,12 +51,44 @@ export interface BlockBase {
   tone?: 'alt'
 }
 
+/**
+ * 큰 숫자 아래 세우는 막대. **이 화면에서 유일하게 값을 기준선에 대는 자리다.**
+ *
+ * 규칙 2(판정하지 않는다)의 의도적 예외이고, 그래서 조건이 붙는다:
+ *
+ * 1. **경계는 우리가 정하지 않는다.** `source` 가 그 근거이고 축 라벨 툴팁으로 나간다 —
+ *    구간 색이 "이 도구의 등급" 으로 읽히면 안 된다.
+ * 2. **점수를 매기지 않는다.** 구간에 이름도 점수도 붙이지 않는다. 색과 위치뿐이다.
+ * 3. **값이 없으면 막대도 없다.** 빈 막대를 그리면 `0ms` 로 읽힌다.
+ */
+export interface GaugeSpec {
+  /** 막대의 오른쪽 끝. 이 값을 넘으면 꽉 찬다. */
+  max: number
+  /** 구간 경계(오름차순). 값이 넘긴 경계의 개수가 곧 구간 번호다. */
+  bands: number[]
+  /** 축 오른쪽에 적을 짧은 말. */
+  axisLabel: string
+  /** 경계의 출처. 툴팁으로 나간다 — 우리가 매긴 것이 아니라는 표시. */
+  source: string
+  /**
+   * **값이 없는 것 자체가 나쁜 소식인 경우.** 여기 적힌 `reason_code` 로 값이 비었으면
+   * 막대를 마지막 구간으로 꽉 채운다.
+   *
+   * 위 3번의 경계선이라 아무 결측에나 쓰지 않는다. `launch_wait_timed_out` 은
+   * ActivityManager 가 **기다리다 포기한** 것이라 "못 쟀다" 와 "오래 걸렸다" 가 같은
+   * 사건이다 — 그 자리를 비워 두면 세션 중 가장 나쁜 소식이 화면에서 가장 조용해진다.
+   * 반대로 `launch_not_requested`(`--launch` 를 안 준 세션)는 나쁜 일이 아니므로 넣지 않는다.
+   */
+  worstWhen?: { codes: string[]; label: string }
+}
+
 export interface StatBlock extends BlockBase {
   kind: 'stat'
   path: string
   fmt: Fmt
   /** 큰 숫자 아래 한 줄. `l` 라벨 · `p` 경로 · `f` 포맷. */
   sub?: { l: string; p: string; f: Fmt }[]
+  gauge?: GaugeSpec
 }
 
 export interface DistributionBlock extends BlockBase {
@@ -215,6 +247,15 @@ export const MANIFEST: Block[] = [
   {
     kind: 'stat', section: 'startup', title: '앱 시작', metric: 'startup', span: 3,
     path: 'metrics.startup.data.total_time_ms', fmt: 'int', unit: 'ms',
+    // 경계는 구글이 정한 것이고 우리는 옮겨 적기만 한다 — `references` 의
+    // `excessive cold startup time`(5,000ms)이 마지막 경계다.
+    gauge: {
+      max: 5000,
+      bands: [1000, 2000, 3000, 4000, 5000],
+      axisLabel: '기준 5,000ms',
+      source: 'Android Vitals — app startup time (콜드 5초)',
+      worstWhen: { codes: ['launch_wait_timed_out'], label: '타임아웃' },
+    },
     sub: [
       { l: '상태', p: 'metrics.startup.data.launch_state', f: 'raw' },
       { l: 'wait', p: 'metrics.startup.data.wait_time_ms', f: 'ms0' },

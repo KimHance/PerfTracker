@@ -5,6 +5,7 @@ import {
   type DistributionVm,
   DH,
   DPAD,
+  type GaugeVm,
   type PairsVm,
   type SeriesVm,
   SH,
@@ -311,8 +312,30 @@ export function StatBody({ vm, title }: { vm: StatVm; title: string }) {
           {vm.why.code}
         </div>
       )}
+      {vm.gauge !== null && <Gauge vm={vm.gauge} />}
       {vm.sub !== '' && <div className="rp-stat-sub num">{vm.sub}</div>}
     </>
+  )
+}
+
+/**
+ * 기준선 막대. **구간에 이름도 점수도 붙이지 않는다** — 색과 위치뿐이다.
+ * 경계의 출처는 축 오른쪽 라벨의 툴팁에 있다: 이 화면이 매긴 등급이 아니라는 표시다.
+ */
+function Gauge({ vm }: { vm: GaugeVm }) {
+  return (
+    <div className="rp-gauge">
+      <div className="rp-gauge-track">
+        <div
+          className={`rp-gauge-fill rp-gauge-l${vm.level}${vm.measured ? '' : ' rp-gauge-unmeasured'}`}
+          style={{ width: `${(vm.fill * 100).toFixed(2)}%` }}
+        />
+      </div>
+      <div className="rp-gauge-axis num">
+        <span>0</span>
+        <span title={vm.source}>{vm.axisLabel}</span>
+      </div>
+    </div>
   )
 }
 

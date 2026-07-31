@@ -650,6 +650,86 @@ describe('stat', () => {
   })
 })
 
+/**
+ * **이 화면에서 색이 좋고 나쁨을 말하는 유일한 자리다** (규칙 2 의 의도적 예외).
+ * 그래서 경계가 우리 것이 아니라는 조건이 코드에 박혀 있어야 한다.
+ */
+describe('기준선 막대 (gauge)', () => {
+  const startup = (totalMs: unknown): unknown => ({
+    metrics: { startup: { status: 'ok', data: { total_time_ms: totalMs } } },
+  })
+  const gauge = (totalMs: unknown) => buildStat(block<StatBlock>('앱 시작'), startup(totalMs)).gauge
+
+  /**
+   * **값이 없으면 막대도 없다.** 빈 막대를 그리면 읽는 쪽은 그것을 `0ms` 로 읽는다 —
+   * 규칙 3 이 화면에서 깨지는 자리가 정확히 여기다.
+   */
+  it('값이 없으면 막대를 그리지 않는다', () => {
+    expect(gauge(null)).toBeNull()
+    expect(buildStat(block<StatBlock>('앱 시작'), { metrics: {} }).gauge).toBeNull()
+  })
+
+  const withReason = (code: string): unknown => ({
+    metrics: {
+      startup: { status: 'partial', reason: '무언가', reason_code: code, data: { total_time_ms: null } },
+    },
+  })
+
+  /**
+   * **타임아웃은 "못 쟀다" 와 "오래 걸렸다" 가 같은 사건이다** — ActivityManager 가 실행
+   * 완료 보고를 기다리다 포기한 것이다. 그 자리를 비워 두면 세션에서 가장 나쁜 소식이
+   * 화면에서 가장 조용해진다.
+   */
+  it('타임아웃이면 막대를 마지막 구간으로 꽉 채운다', () => {
+    const g = buildStat(block<StatBlock>('앱 시작'), withReason('launch_wait_timed_out')).gauge
+    expect(g?.fill).toBe(1)
+    expect(g?.level).toBe(5)
+    expect(g?.axisLabel).toContain('타임아웃')
+  })
+
+  /** 잰 값이 아니라는 것이 뷰모델에 남아야 렌더러가 빗금으로 구분할 수 있다. */
+  it('그 막대는 잰 값이 아니라고 표시한다', () => {
+    expect(buildStat(block<StatBlock>('앱 시작'), withReason('launch_wait_timed_out')).gauge?.measured)
+      .toBe(false)
+    expect(gauge(2868)?.measured).toBe(true)
+  })
+
+  /**
+   * **아무 결측에나 칠하지 않는다.** `--launch` 를 안 준 세션은 나쁜 일이 아니라 재지 않은
+   * 것이다 — 거기에 빨간 막대를 세우면 없던 사실을 만든다.
+   */
+  it('나쁜 소식이 아닌 결측에는 막대를 세우지 않는다', () => {
+    expect(buildStat(block<StatBlock>('앱 시작'), withReason('launch_not_requested')).gauge).toBeNull()
+    expect(buildStat(block<StatBlock>('앱 시작'), withReason('launch_time_unreported')).gauge).toBeNull()
+  })
+
+  /** 경계와 같은 값은 위 구간이다 — 구글의 문장이 "5초를 넘으면" 이라 마지막도 같은 방향. */
+  it('구간은 넘긴 경계의 개수다', () => {
+    expect(gauge(999)?.level).toBe(0)
+    expect(gauge(1000)?.level).toBe(1)
+    expect(gauge(2868)?.level).toBe(2)
+    expect(gauge(4999)?.level).toBe(4)
+    expect(gauge(5000)?.level).toBe(5)
+  })
+
+  it('막대는 축 밖으로 나가지 않고, 넘긴 것은 넘겼다고 말한다', () => {
+    expect(gauge(2500)?.fill).toBeCloseTo(0.5)
+    expect(gauge(2500)?.over).toBe(false)
+    // 12초짜리 시작도 막대는 꽉 찬 데서 멈춘다. 큰 숫자는 이미 카드 위에 있다.
+    expect(gauge(12_000)?.fill).toBe(1)
+    expect(gauge(12_000)?.over).toBe(true)
+    expect(gauge(12_000)?.level).toBe(5)
+  })
+
+  /**
+   * 경계를 우리가 정했다고 읽히면 규칙 2 를 깬 것이다. 출처가 뷰모델에 실려 화면까지 간다.
+   */
+  it('경계의 출처를 함께 낸다', () => {
+    expect(gauge(2868)?.source).toContain('Android Vitals')
+    expect(gauge(2868)?.axisLabel).toContain('5,000ms')
+  })
+})
+
 describe('지표 상태', () => {
   it('status 와 reason_code 를 끌어온다', () => {
     expect(metricState(LOWEND, 'network').status).toBe('unsupported')

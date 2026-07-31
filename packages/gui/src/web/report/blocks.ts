@@ -6,6 +6,7 @@ import type {
   Block,
   DeltaBlock,
   DistributionBlock,
+  GaugeSpec,
   PairsBlock,
   SeriesBlock,
   StatBlock,
@@ -571,6 +572,64 @@ export interface StatVm {
    */
   why: { code: string; full: string | null } | null
   sub: string
+  /** 기준선 막대. 값이 없으면 `null` 이고 그때는 아무것도 그리지 않는다. */
+  gauge: GaugeVm | null
+}
+
+export interface GaugeVm {
+  /** 0~1. `max` 를 넘으면 1 이다 — 막대는 축 밖으로 나갈 수 없다. */
+  fill: number
+  /** 구간 번호. 색만 정하고 이름도 점수도 붙이지 않는다. */
+  level: number
+  /** 마지막 경계를 넘었나. */
+  over: boolean
+  /**
+   * 잰 값으로 그린 막대인가. `false` 면 `worstWhen` 이 걸린 것이고, 그때 막대는 **잰 적 없는
+   * 사실**을 그린 것이라 렌더러가 빗금으로 구분한다. 색과 길이는 그대로 최대다.
+   */
+  measured: boolean
+  axisLabel: string
+  source: string
+}
+
+/**
+ * 구간은 **넘긴 경계의 개수**다. 경계와 같은 값은 위 구간에 넣는다(1,000ms 는 1구간) —
+ * 구글의 문장이 "5초를 넘으면 느린 시작" 이라 마지막 경계도 같은 방향으로 읽는다.
+ *
+ * **값이 없으면 원칙적으로 막대도 없다.** 빈 막대를 그리면 읽는 쪽이 `0ms` 로 읽고,
+ * 그것이 규칙 3 이 화면에서 깨지는 자리다.
+ *
+ * 예외는 `worstWhen` 하나다. `am start -W` 가 timeout 을 낸 세션은 **"못 쟀다" 와 "오래
+ * 걸렸다" 가 같은 사건**이라 — ActivityManager 가 기다리다 포기한 것이다 — 빈 자리로 두면
+ * 세션에서 가장 나쁜 소식이 화면에서 가장 조용해진다. 그때만 마지막 구간을 꽉 채우고,
+ * 잰 값이 아니라는 것은 `measured: false` 와 축 라벨(`타임아웃 · …`)이 말한다.
+ */
+export function buildGauge(
+  spec: GaugeSpec,
+  raw: unknown,
+  reasonCode: string | null = null,
+): GaugeVm | null {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+    const w = spec.worstWhen
+    if (w === undefined || reasonCode === null || !w.codes.includes(reasonCode)) return null
+    return {
+      fill: 1,
+      level: spec.bands.length,
+      over: true,
+      measured: false,
+      axisLabel: `${w.label} · ${spec.axisLabel}`,
+      source: spec.source,
+    }
+  }
+  const over = raw >= spec.max
+  return {
+    fill: Math.max(0, Math.min(1, raw / spec.max)),
+    level: spec.bands.filter((b) => raw >= b).length,
+    over,
+    measured: true,
+    axisLabel: over ? `넘김 · ${spec.axisLabel}` : spec.axisLabel,
+    source: spec.source,
+  }
 }
 
 export function buildStat(b: StatBlock, res: unknown): StatVm {
@@ -588,6 +647,7 @@ export function buildStat(b: StatBlock, res: unknown): StatVm {
       ? null
       : { code: st.reasonCode, full: st.reason },
     sub: (b.sub ?? []).map((s) => `${s.l} ${fmtValue(readPath(res, s.p), s.f)}`).join(' · '),
+    gauge: b.gauge === undefined ? null : buildGauge(b.gauge, v, st?.reasonCode ?? null),
   }
 }
 

@@ -274,6 +274,35 @@
 .rp-stat-dim { font-size: 16px; color: var(--color-neutral-500); }
 .rp-stat-unit { font-size: 12px; font-weight: 400; color: var(--color-neutral-600); margin-left: 4px; }
 .rp-stat-sub { font-size: 10.5px; color: var(--color-neutral-600); margin-top: 4px; }
+/* ── 기준선 막대 ────────────────────────────────────────────
+   이 화면에서 **색이 좋고 나쁨을 말하는 유일한 자리**다 (규칙 2 의 의도적 예외).
+   경계는 구글이 정한 것을 옮겨 적었고 그 출처가 축 라벨 툴팁에 있다.
+   구간에 이름도 점수도 붙이지 않는다 — 색과 위치뿐이다. */
+.rp-gauge { margin-top: 8px; }
+.rp-gauge-track {
+  height: 6px; border-radius: 3px; overflow: hidden;
+  background: var(--color-neutral-300);
+}
+.rp-gauge-fill { height: 100%; border-radius: 3px; min-width: 2px; }
+.rp-gauge-axis {
+  display: flex; justify-content: space-between; margin-top: 4px;
+  font-size: 10px; color: var(--color-neutral-600);
+}
+/* 채도를 낮춰 화면의 나머지(청색 계열)와 같은 온도로 둔다. 신호는 색상(hue)이 준다. */
+.rp-gauge-l0 { background: #6f9e7a; }
+.rp-gauge-l1 { background: #8ba874; }
+.rp-gauge-l2 { background: #b0a56b; }
+.rp-gauge-l3 { background: #c2916a; }
+.rp-gauge-l4 { background: #c07a5f; }
+.rp-gauge-l5 { background: #b85f5f; }
+/* 잰 값이 아니라 사유로 채운 막대(타임아웃). 색과 길이는 그대로 최대이고, 빗금만으로
+   "이 길이는 측정된 숫자가 아니다" 를 말한다 — 위에 `값 없음` 이 이미 서 있다. */
+.rp-gauge-unmeasured {
+  background-image: repeating-linear-gradient(
+    -45deg, rgba(0, 0, 0, 0.28) 0 3px, transparent 3px 6px
+  );
+}
+
 /* 값이 없는 이유(reason_code). 스키마 식별자라 본문 글꼴이 아니라 등폭으로 쓴다. */
 .rp-stat-why {
   font-family: ui-monospace, Menlo, monospace; font-size: 10.5px;
