@@ -692,6 +692,38 @@ hwui   status=collected    전체 160 · janky 66 · 입력 지연 큼 156 · UI
 (사용자 요청 — 알약 모양 버튼에서 모서리 바깥의 `+` 넷이 윤곽을 흐렸습니다). 다이얼로그에는
 남아 있습니다.
 
+### ✅ 크래시·ANR·스로틀을 화면에 낸다 (2026-07-31)
+
+**재는데 어디에도 안 보이던 값 셋**입니다. `frame` 은 화면이 안 그려서 수집을 접었는데,
+이 셋은 반대로 **보여 주는 쪽**이 맞습니다 — 셋 다 "이 세션의 숫자를 믿어도 되는가" 를
+정하는 값입니다.
+
+| 카드 | 무엇 | 어디서 |
+| --- | --- | --- |
+| `크래시` | `AndroidRuntime` 의 FATAL EXCEPTION, `libc` 의 Fatal signal | 로그 섹션 |
+| `ANR` | `ActivityManager` 의 `ANR in …` | 로그 섹션 |
+| `스로틀 단계` | 기기가 열 때문에 성능을 깎고 있었는지 | 맥락 섹션 |
+
+**새 블록 종류를 만들지 않았습니다.** 기존 `pairs` 의 목록 모드를 일반화해 재활용합니다 —
+`arrayAs: 'warnings'` 가 `{code, message}` 로 굳어 있던 것을 `arrayAs: 'list'` +
+`listFields` 로 풀어, 경고 카드와 크래시/ANR 카드가 **같은 렌더러**를 씁니다.
+
+**세 상태가 세 문장이 됩니다.** 그냥 붙였으면 sdk 30 에서 "크래시 없음" 이 떴을 자리입니다:
+
+```
+sdk 36   device_crashes: []     →  "크래시 없음"                    (재 봤더니 없었다)
+sdk 30   device_crashes: null   →  "값 없음" + no_log_entries        (로그를 못 받아 모른다)
+옛 세션  필드 없음               →  "수집 안 함"
+```
+
+**스로틀 단계는 이름을 지어내지 않습니다.** [AOSP](https://source.android.com/docs/core/power/thermal-mitigation)의
+`THERMAL_STATUS_*` 를 숫자와 함께 그대로 냅니다 — `NONE (0)` · `SEVERE (3)`. 2 이상이면
+그 세션의 CPU·프레임을 "이 앱이 느리다" 로 읽으면 안 됩니다.
+
+`hal_ready` 와 `status_override` 를 같은 카드에 둡니다. [안드로이드 문서](https://developer.android.com/games/optimize/adpf/thermal)가
+**"NONE 이 계속 나오는 것이 스로틀이 없다는 뜻은 아니다 — 그 기기가 지원하지 않는 것일 수
+있다"** 고 말하고, 그 둘이 NONE 을 믿어도 되는지 가르는 유일한 재료입니다.
+
 ### ✅ 아는 것을 추측처럼 말하던 사유 둘 (2026-07-31)
 
 `sdk 30` 세션의 `cpu` 사유가 이랬습니다:

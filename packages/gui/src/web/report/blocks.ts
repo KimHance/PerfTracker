@@ -506,14 +506,17 @@ export interface PairsVm {
 export function buildPairs(b: PairsBlock, res: unknown): PairsVm | NoneVm {
   const raw = readPath(res, b.path)
 
-  if (b.arrayAs === 'warnings') {
-    if (raw === MISSING) return none(MISSING, b.path)
-    // 빈 배열은 "재 봤더니 없었다" 이므로 `수집 안 함` 이 아니다.
-    if (!Array.isArray(raw) || raw.length === 0) return { none: true, label: '경고 없음' }
+  if (b.arrayAs === 'list') {
+    // 세 상태를 가른다: 필드가 없다 / 못 읽었다(null) / 재 봤더니 없었다([]).
+    if (raw === MISSING || raw === null) return none(raw, b.path)
+    if (!Array.isArray(raw) || raw.length === 0) {
+      return { none: true, label: b.emptyLabel ?? '없음' }
+    }
+    const f = b.listFields ?? { label: 'code', value: 'message' }
     return {
-      rows: (raw as { code: string; message: string }[]).map((w) => ({
-        label: w.code,
-        value: w.message,
+      rows: (raw as Record<string, unknown>[]).map((row) => ({
+        label: String(row[f.label] ?? ''),
+        value: String(row[f.value] ?? ''),
         share: '',
         wrap: true,
       })),

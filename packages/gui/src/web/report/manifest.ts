@@ -152,7 +152,12 @@ export interface PairsBlock extends BlockBase {
    */
   keys?: { p: string; l: string; f: Fmt; pct?: string }[]
   /** 표준 key/value 로 안 떨어지는 모양. */
-  arrayAs?: 'freq' | 'warnings'
+  /** 표준 key/value 로 안 떨어지는 모양. `list` 는 배열 하나를 그대로 줄줄이 낸다. */
+  arrayAs?: 'freq' | 'list'
+  /** `arrayAs: 'list'` 에서 각 항목의 어느 필드를 왼쪽/오른쪽에 쓸지. */
+  listFields?: { label: string; value: string }
+  /** `arrayAs: 'list'` 가 **빈 배열**일 때의 문장. 빈 배열은 "재 봤더니 없었다" 다. */
+  emptyLabel?: string
 }
 
 export type Block =
@@ -377,6 +382,23 @@ export const MANIFEST: Block[] = [
       { p: 'device_by_priority.error', l: 'device_by_priority.error', f: 'int' },
     ],
   },
+  {
+    // **기기 전역이며 대상 앱으로 거르지 않는다 — 그것이 의도다.** 앱이 죽은 뒤 다른
+    // 프로세스가 남긴 줄이 사라지기 때문이고, ANR 은 애초에 system_server 가 찍는다
+    // (앱 pid 로 걸렀다면 하나도 안 남는다 — 스키마의 실측 근거 참고).
+    //
+    // `[]`(재 봤더니 없었다)와 `null`(로그를 못 받아 모른다)이 다른 문장이 되어야 한다.
+    // sdk 30 처럼 logdr 접근이 막힌 기기에서는 후자이고, 그때 "크래시 없음" 이라고 하면
+    // 없던 사실을 만드는 것이다.
+    kind: 'pairs', section: 'log', title: '크래시', metric: 'log', span: 2,
+    unit: 'logcat · 기기 전역', path: 'metrics.log.data.device_crashes', arrayAs: 'list',
+    listFields: { label: 'tag', value: 'message' }, emptyLabel: '크래시 없음',
+  },
+  {
+    kind: 'pairs', section: 'log', title: 'ANR', metric: 'log', span: 2,
+    unit: 'logcat · 기기 전역', path: 'metrics.log.data.device_anrs', arrayAs: 'list',
+    listFields: { label: 'tag', value: 'message' }, emptyLabel: 'ANR 없음',
+  },
 
   // ── 맥락 ─────────────────────────────────────────────────────
   {
@@ -384,6 +406,23 @@ export const MANIFEST: Block[] = [
     span: 4, unit: '°C',
     path: 'metrics.thermal.data.zones',
     labelField: 'name', beforeField: 'before_c', afterField: 'after_c', fmt: 'c1',
+  },
+  {
+    // **온도와 다른 축이다.** 섭씨는 센서가 몇 도인지고, 이쪽은 기기가 그 열 때문에 성능을
+    // 실제로 깎고 있었는지다 — 2 이상이면 그 세션의 CPU·프레임 숫자를 "이 앱이 느리다" 로
+    // 읽으면 안 된다. 이름은 AOSP 의 `THERMAL_STATUS_*` 그대로이고 우리가 매긴 등급이 아니다.
+    //
+    // `hal_ready` 와 `status_override` 를 같이 낸다: 안드로이드 문서가 "NONE 이 계속 나오는
+    // 것이 스로틀이 없다는 뜻은 아니다 — 그 기기가 지원하지 않는 것일 수 있다" 고 말한다.
+    // 그 둘이 NONE 을 믿어도 되는지 가르는 유일한 재료다.
+    kind: 'pairs', section: 'context', title: '스로틀 단계', metric: 'thermal', span: 4,
+    unit: 'dumpsys thermalservice', path: 'metrics.thermal.data',
+    keys: [
+      { p: 'device_status_before', l: 'device_status_before', f: 'thermal' },
+      { p: 'device_status_after', l: 'device_status_after', f: 'thermal' },
+      { p: 'hal_ready_before', l: 'hal_ready_before', f: 'bool' },
+      { p: 'status_override_before', l: 'status_override_before', f: 'bool' },
+    ],
   },
   {
     kind: 'delta', section: 'context', title: '기기 상태 (전 → 후)', span: 4, unit: '',
@@ -415,7 +454,8 @@ export const MANIFEST: Block[] = [
     // 경고는 **관측이지 평가가 아니다** (예: `charging_during_session`). 헤더에 알약으로
     // 늘어놓는 대신 다른 데이터와 같은 자리에 둔다 — 그래야 매니페스트 한 줄로 관리된다.
     kind: 'pairs', section: 'context', title: '경고', span: 4,
-    unit: '측정 조건 관측 · 평가 아님', path: 'warnings', arrayAs: 'warnings',
+    unit: '측정 조건 관측 · 평가 아님', path: 'warnings', arrayAs: 'list',
+    listFields: { label: 'code', value: 'message' }, emptyLabel: '경고 없음',
   },
   {
     kind: 'pairs', section: 'context', title: '측정 비용', span: 4, unit: '',

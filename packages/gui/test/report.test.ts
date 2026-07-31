@@ -442,6 +442,78 @@ describe('logcat 카드는 스키마 필드 이름을 그대로 쓴다', () => {
   })
 })
 
+/**
+ * **재는데 화면이 침묵하면 사람과 파일이 다른 이야기를 한다.** `frame` 이 그래서 통째로
+ * 사라졌다. 크래시·ANR·스로틀은 그 반대 방향으로 푼다 — 보여 준다.
+ */
+describe('세션을 믿어도 되는지 정하는 값들', () => {
+  const doc = (over: object): unknown => ({
+    metrics: {
+      log: { status: 'collected', data: { device_crashes: [], device_anrs: [], ...over } },
+      thermal: { status: 'collected', data: {} },
+    },
+  })
+
+  /** `[]` 는 재 봤더니 없었다 — `수집 안 함` 이 아니다. */
+  it('크래시가 없으면 "없음" 이라고 말한다', () => {
+    const vm = buildPairs(block<PairsBlock>('크래시'), doc({}))
+    expect((vm as NoneVm).label).toBe('크래시 없음')
+  })
+
+  /**
+   * **sdk 30 처럼 logdr 접근이 막힌 기기가 정확히 이 경우다.** 로그를 못 받았으니 크래시가
+   * 있었는지 없었는지 모른다 — 그때 "크래시 없음" 이라고 하면 없던 사실을 만든다.
+   */
+  it('로그를 못 받았으면 "없음" 이 아니라 "값 없음" 이다', () => {
+    const vm = buildPairs(block<PairsBlock>('크래시'), doc({ device_crashes: null }))
+    expect((vm as NoneVm).label).not.toBe('크래시 없음')
+    expect((vm as NoneVm).label).toBe(NONE_NULL)
+  })
+
+  /** 필드가 아예 없던 시절의 세션은 또 다른 사실이다 — 세 상태가 다 갈려야 한다. */
+  it('필드가 없으면 "수집 안 함" 이다', () => {
+    const vm = buildPairs(block<PairsBlock>('크래시'), { metrics: { log: { data: {} } } })
+    expect((vm as NoneVm).label).toContain(NONE_MISSING)
+  })
+
+  it('있으면 태그와 메시지를 그대로 낸다', () => {
+    const vm = buildPairs(
+      block<PairsBlock>('크래시'),
+      doc({ device_crashes: [{ tag: 'AndroidRuntime', message: 'FATAL EXCEPTION: main', pid: 1 }] }),
+    )
+    const rows = (vm as { rows: { label: string; value: string }[] }).rows
+    expect(rows[0]).toMatchObject({ label: 'AndroidRuntime', value: 'FATAL EXCEPTION: main' })
+  })
+
+  /**
+   * 이름은 AOSP 의 `THERMAL_STATUS_*` 그대로다 — 우리가 매긴 등급이 아니다(규칙 2).
+   * 숫자를 함께 적어 `dumpsys thermalservice` 와 대조된다.
+   */
+  it('스로틀 단계를 기기가 쓰는 이름으로 낸다', () => {
+    const d = { metrics: { thermal: { status: 'collected', data: {
+      device_status_before: 0, device_status_after: 3, hal_ready_before: true, status_override_before: false,
+    } } } }
+    const rows = (buildPairs(block<PairsBlock>('스로틀 단계'), d) as { rows: { label: string; value: string }[] }).rows
+    expect(rows.find((r) => r.label === 'device_status_before')!.value).toBe('NONE (0)')
+    expect(rows.find((r) => r.label === 'device_status_after')!.value).toBe('SEVERE (3)')
+  })
+
+  /**
+   * 안드로이드 문서: "NONE 이 계속 나오는 것이 스로틀이 없다는 뜻은 아니다 — 그 기기가
+   * 지원하지 않는 것일 수 있다." `hal_ready` 와 `status_override` 가 그것을 가르는 재료다.
+   */
+  it('NONE 을 믿어도 되는지 가르는 두 값을 같이 낸다', () => {
+    const labels = (block<PairsBlock>('스로틀 단계').keys ?? []).map((k) => k.p)
+    expect(labels).toContain('hal_ready_before')
+    expect(labels).toContain('status_override_before')
+  })
+
+  it('모르는 단계는 지어내지 않고 숫자만 낸다', () => {
+    expect(fmtValue(9, 'thermal')).toBe('9')
+    expect(fmtValue(null, 'thermal')).toBe(NONE_NULL)
+  })
+})
+
 describe('pairs · bars · delta', () => {
   it('freq 는 같은 주파수의 코어를 한 줄로 접는다', () => {
     const vm = buildPairs(block<PairsBlock>('클러스터 주파수'), FULL)

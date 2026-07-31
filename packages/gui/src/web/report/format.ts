@@ -10,7 +10,7 @@ import { MISSING, type Read } from './read.js'
 export type Fmt =
   | 'int' | 'ms0' | 'pct0' | 'pct2' | 'c1' | 'hz'
   | 'mb0' | 'mb1' | 'gb1' | 'ghz2' | 'bytes' | 'bool' | 'list'
-  | 'mbTriple' | 'wrap' | 'raw' | 'n0' | 'n1'
+  | 'mbTriple' | 'wrap' | 'raw' | 'n0' | 'n1' | 'thermal'
 
 export const NONE_MISSING = '수집 안 함'
 export const NONE_NULL = '값 없음'
@@ -35,9 +35,22 @@ interface Triple {
  * **`MISSING` 과 `null` 이 서로 다른 문장이 되는 곳이 여기 하나다.** 다른 데서 두 값을
  * 문자열로 바꾸면 그 구분이 그 자리에서 사라진다.
  */
+/**
+ * **기기가 보고한 throttling 단계.** 이름은 AOSP 의 `THERMAL_STATUS_*` 그대로이고 우리가
+ * 붙인 등급이 아니다 — 숫자를 함께 적어 `dumpsys thermalservice` 와 대조된다.
+ * 모르는 값은 지어내지 않고 숫자만 낸다.
+ */
+const THERMAL_STATUS = [
+  'NONE', 'LIGHT', 'MODERATE', 'SEVERE', 'CRITICAL', 'EMERGENCY', 'SHUTDOWN',
+]
+
 export function fmtValue(v: Read, f: Fmt | undefined): string {
   if (v === MISSING) return NONE_MISSING
   if (v === null || v === undefined) return NONE_NULL
+  if (f === 'thermal') {
+    const name = typeof v === 'number' ? THERMAL_STATUS[v] : undefined
+    return name === undefined ? String(v) : `${name} (${v})`
+  }
 
   if (f === 'bool') return v === true ? '예' : v === false ? '아니오' : String(v)
   if (f === 'list') {
