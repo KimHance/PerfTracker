@@ -534,7 +534,7 @@ clock_snapshot 이 없거나 기기 시계를 못 읽은 경우(`trace_start_off
   CI 매칭은 반드시 이걸로 하세요. (예: `sdk_too_low`, `render_process_not_found`,
   `trace_missing`, `data_source_not_registered`, `query_failed`)
 
-  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **34개**입니다
+  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **35개**입니다
   > (`1.0.0` 은 6개였습니다). 그중 `process_name_stale_in_trace` 는 `1.0.0` 부터 있던
   > `metrics.hwui` 에도 실립니다. 이 숫자는 테스트가 `METRIC_REASON_CODES` 와 대조해
   > 고정하므로 코드보다 낡을 수 없습니다.
@@ -768,8 +768,13 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   아는 경우" 를 보세요. 실측에서 **이름이 패키지명과 정확히 같은 프로세스는 8.63초를 쓴 본체가
   아니라 10ms 를 쓴 자식**이었습니다.
 - **`app` 이 `null` 이면 그것은 `0` 이 아니라 "내지 못했다" 입니다.** `reason_code` 가
-  갈래를 말합니다 (`process_not_in_trace` / `no_app_cpu_samples` / `counter_went_backwards` /
-  `query_failed`). 그때도 `device_*` 값은 그대로 나옵니다.
+  갈래를 말합니다 (`app_cpu_sdk_too_low` / `process_not_in_trace` / `no_app_cpu_samples` /
+  `counter_went_backwards` / `query_failed`). 그때도 `device_*` 값은 그대로 나옵니다.
+  - **`app_cpu_sdk_too_low` 는 다시 재도 같습니다.** `record_process_runtime` 이 perfetto v44
+    필드라 sdk 35 미만에는 없고, 그 필드를 넣으면 기기가 config 를 통째로 거부합니다
+    (실측 sdk 30: `No field named "record_process_runtime"`). 그래서 아예 보내지 않습니다.
+  - **`no_app_cpu_samples` 는 다시 재면 나올 수 있습니다.** sdk 하한은 넘었는데 카운터가
+    없는 경우 — 그 필드가 꺼진 채로 찍힌 옛 캡처를 `extract` 로 다시 산출하면 이렇습니다.
 - **`device_timeline` 은 기기 전체 사용률의 초당 추이입니다.** `app.timeline` 이 **시간(ms)**
   인 것과 달리 여기는 **백분율**이고, **전 코어를 합쳐 100%** 입니다 (8코어가 전부 바쁘면 100).
   같은 `cpu.times.*` 카운터를 다시 접은 것이라 **기기에 아무것도 더 묻지 않습니다.**
@@ -1305,6 +1310,11 @@ PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지명> npm run tes
   (실측: cpu0 15.74% … cpu7 1.92%).
 - **로그 수집** — 에뮬레이터 이미지는 SELinux 가 `traced_probes` 의 `logdr` 접근을 막아
   `android.log` 가 **항상 비어 있었습니다**(6세션 전부 `partial` / `no_log_entries`).
+  **실기기에서도 같은 일이 일어납니다** — SM-A405S(Android 11)는 `android.log` 만 켠 트레이스가
+  0줄이고 같은 config 가 SM-F936N(Android 16)에서는 1,021줄입니다. 데이터소스는 양쪽 다
+  등록돼 있습니다. perfetto 문서는 이 데이터소스를 *"supported only on Android userdebug
+  builds"* 라고 적지만 두 기기 다 `ro.build.type=user` 이고, 소스에는 빌드 타입 검사가 없이
+  `/dev/socket/logdr` 에 붙어 실패하면 조용히 빕니다 — 버전이 아니라 **소켓 권한**입니다.
   실기기에서는 `collected` 이고 122초 세션에 **1,422건**이 잡혔습니다
   (warn 413 / error 1,009 / fatal 0). 크래시·ANR **분류** 자체는 실제 크래시를 만들어야
   검증되므로 여전히 유닛 테스트로만 덮입니다.

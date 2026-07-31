@@ -388,8 +388,29 @@ describe('cpuCollector.extract — 대상 앱', () => {
     expect(outcome.data.app).toBeNull()
     expect(outcome.partialReason).toEqual({
       code: 'no_app_cpu_samples',
-      detail: { process: PKG, pid: 802 },
+      detail: { process: PKG, pid: 802, sdk_int: 35 },
     })
+  })
+
+  /**
+   * **sdk 하한 아래에서는 확정이다.** `blocks.ts` 가 `record_process_runtime` 을 빼고
+   * 보냈으므로 카운터가 없는 것이 당연하고, 다시 재도 같다 — 실측 sdk 30 은 그 필드가 든
+   * config 를 `No field named "record_process_runtime"` 로 **거부**한다.
+   * 하한 위에서 없는 것은 다른 사실(옛 캡처의 재산출)이고 다시 재면 나온다.
+   * 두 경우를 같은 코드로 내면 읽는 쪽이 재시도가 의미 있는지 알 수 없다.
+   */
+  it('sdk 하한 아래면 추측이 아니라 확정으로 말한다', async () => {
+    const low = { ...ctx(answers({ [appCpuSql([261])]: [] })), env: { sdkInt: 30, dataSources: ['linux.sys_stats', 'linux.ftrace', 'linux.process_stats'] } }
+    const outcome = await cpuCollector.extract(low)
+    expect(outcome.collected).toBe(true)
+    if (!outcome.collected) return
+    expect(outcome.data.app).toBeNull()
+    expect(outcome.partialReason).toEqual({
+      code: 'app_cpu_sdk_too_low',
+      detail: { sdk_int: 30, min_sdk: 35 },
+    })
+    // 기기 전역 값은 그대로 살아야 한다 — 앱 부분만 못 낸 것이다.
+    expect(outcome.data.device_total_busy_pct).not.toBeNull()
   })
 
   it('앱 쿼리가 터져도 기기 전역 값은 살리고 앱만 null 로 둔다', async () => {

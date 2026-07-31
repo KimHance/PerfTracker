@@ -692,6 +692,48 @@ hwui   status=collected    전체 160 · janky 66 · 입력 지연 큼 156 · UI
 (사용자 요청 — 알약 모양 버튼에서 모서리 바깥의 `+` 넷이 윤곽을 흐렸습니다). 다이얼로그에는
 남아 있습니다.
 
+### ✅ 아는 것을 추측처럼 말하던 사유 둘 (2026-07-31)
+
+`sdk 30` 세션의 `cpu` 사유가 이랬습니다:
+
+> "… record_process_runtime 이 꺼진 채로 찍힌 캡처**일 수 있습니다**"
+
+**확정된 사실인데 추측처럼 말했습니다.** 기기에서 직접 확인했습니다:
+
+```
+record_process_runtime: true 를 넣은 config 를 그대로 보냄
+  sdk 30  →  error: No field named "record_process_runtime" in proto ProcessStatsConfig
+  sdk 36  →  Wrote 190,518 bytes
+```
+
+perfetto 레퍼런스가 *"Introduced in: perfetto v44"* 라고 적고 있고, 그래서 `blocks.ts` 가
+sdk 35 미만에서는 그 필드를 **빼고** 보냅니다. 넣으면 세션 자체가 안 열립니다.
+
+사유를 둘로 갈랐습니다. **재시도가 의미 있는지**가 갈리기 때문입니다:
+
+| 코드 | 뜻 | 다시 재면 |
+| --- | --- | --- |
+| `app_cpu_sdk_too_low` | 이 기기 sdk 로는 낼 수 없다 | 같다 |
+| `no_app_cpu_samples` | 하한은 넘었는데 카운터가 없다 (옛 캡처 재산출) | 나올 수 있다 |
+
+**로그 사유는 한정이 틀려 있었습니다** — "SELinux 가 logdr 소켓을 막는 **에뮬레이터**
+이미지에서 관측된 적이 있습니다". 실기기에서도 그렇습니다:
+
+```
+android.log 만 켠 4초 트레이스, 같은 config
+  SM-A405S (Android 11)  →  0줄     (트레이스 617바이트)
+  SM-F936N (Android 16)  →  1,021줄
+```
+
+두 기기 다 `ro.build.type=user` 이고 `android.log` 는 **양쪽 다 등록돼 있습니다**.
+perfetto 문서는 이 데이터소스를 *"supported only on Android userdebug builds"* 라고 적지만
+[소스](https://android.googlesource.com/platform/external/perfetto/+/refs/heads/main/src/traced/probes/android_log/android_log_data_source.cc)에는
+빌드 타입 검사가 **없습니다** — `/dev/socket/logdr` 에 붙고 거절당하면 조용히 빕니다.
+버전 게이트가 아니라 **소켓 권한**이고, 어느 버전에서 열렸는지는 기기가 둘뿐이라 모릅니다.
+
+**크래시·ANR 이 sdk 30 에서 `null` 인 것도 여기서 설명됩니다** — 로그를 못 받으니 크래시가
+있었는지 없었는지 알 수 없습니다. `[]`(봤는데 없었다)가 아니라 `null`(못 봤다)이 맞습니다.
+
 ### ✅ 렌더를 재는 길을 하나로 — `metrics.frame` 제거 (2026-07-30)
 
 **보고서에 없는 데이터가 `result.json` 에만 남아 있었습니다.** 렌더 섹션을 `hwui` 로 정한 뒤

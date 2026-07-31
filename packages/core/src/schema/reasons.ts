@@ -75,6 +75,14 @@ export const METRIC_REASON_CODES = [
    */
   'no_app_cpu_samples',
   /**
+   * **이 기기의 sdk 로는 앱 단위 CPU 를 낼 수 없다.** 추측이 아니라 확정이다 —
+   * `record_process_runtime` 은 perfetto v44 에서 생긴 필드이고, 그 이전 기기는 그 필드가
+   * 든 config 를 **거부한다**(실측 sdk 30: `No field named "record_process_runtime"`).
+   * 그래서 `blocks.ts` 가 sdk 35 미만에서는 그 필드를 빼고 보낸다.
+   * detail: sdk_int, min_sdk, process, pid
+   */
+  'app_cpu_sdk_too_low',
+  /**
    * 트레이스가 그 프로세스를 아직 zygote 이름으로 알고 있어, 캡처 때 받아 둔 pid 로 대상 앱을
    * 특정했다. 값은 정상이고 보고하는 이름은 패키지명이다. detail: package, pid, trace_name
    */
@@ -293,8 +301,14 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
   no_rss_samples: (d) => `프로세스(${String(d['process'])})의 메모리 표본을 찾지 못했습니다.`,
   no_app_cpu_samples: (d) =>
     `대상 앱 프로세스(${String(d['process'])}, pid ${String(d['pid'])})의 CPU 시간 카운터가 ` +
-    `트레이스에 없습니다 — process_stats 의 record_process_runtime 이 꺼진 채로 찍힌 캡처일 수 ` +
-    `있습니다. 기기 전역 값은 그대로 실었고 앱 단위 값만 내지 못했습니다 (0 으로 채우지 않았습니다).`,
+    `트레이스에 없습니다. 이 기기의 sdk 로는 낼 수 있는 값이므로(sdk_int=${String(d['sdk_int'])}), ` +
+    `record_process_runtime 이 꺼진 채로 찍힌 옛 캡처를 다시 산출한 경우입니다. ` +
+    `기기 전역 값은 그대로 실었고 앱 단위 값만 내지 못했습니다 (0 으로 채우지 않았습니다).`,
+  app_cpu_sdk_too_low: (d) =>
+    `이 기기의 sdk_int=${String(d['sdk_int'])} 로는 앱 단위 CPU 를 낼 수 없습니다 ` +
+    `(최소 sdk_int=${String(d['min_sdk'])}). ProcessStatsConfig 의 record_process_runtime 이 ` +
+    `perfetto v44 에서 생겼고 그 이전 기기는 이 필드가 든 config 를 거부하므로, 아예 보내지 ` +
+    `않았습니다. 기기 전역 값은 그대로 실었습니다.`,
   process_name_stale_in_trace: (d) =>
     `트레이스는 이 프로세스(pid ${String(d['pid'])})를 "${String(d['trace_name'])}" 이라는 이름으로 기록했습니다 — ` +
     `zygote 가 fork 한 직후 이름이 확정되기 전에 관측된 것입니다. ` +
@@ -303,9 +317,10 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
   no_meminfo_samples: () =>
     'linux.sys_stats 의 meminfo 표본이 없어 기기 전체 메모리를 함께 내지 못했습니다.',
   no_log_entries: (d) =>
-    `트레이스에 로그 항목이 없습니다 (문턱 ${String(d['min_prio'])}). ` +
-    `실제로 아무것도 기록되지 않았거나, traced_probes 가 logd 를 읽지 못했을 수 있습니다 ` +
-    `(SELinux 가 logdr 소켓을 막는 에뮬레이터 이미지에서 관측된 적이 있습니다).`,
+    `트레이스에 로그 항목이 하나도 없습니다 (문턱 ${String(d['min_prio'])}). ` +
+    `android.log 는 등록돼 있어도 logd 의 logdr 소켓 접근이 막히면 한 줄도 내지 않습니다 — ` +
+    `실측: 같은 config 로 SM-A405S(Android 11)가 0줄, SM-F936N(Android 16)이 1,021줄이었습니다. ` +
+    `앱이 실제로 아무것도 안 찍었을 수도 있습니다. 이 둘은 트레이스만으로 구분되지 않습니다.`,
   log_events_truncated: (d) =>
     `크래시/ANR 목록이 상한 ${String(d['limit'])}건에서 잘렸습니다 — ` +
     `그 뒤에 더 있었는지는 이 결과로 알 수 없습니다. 우선순위별 개수는 잘리지 않았습니다.`,

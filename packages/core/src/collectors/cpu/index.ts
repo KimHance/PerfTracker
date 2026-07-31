@@ -8,7 +8,12 @@ import type {
 } from '../../schema/result.js'
 import { appProcessSql, resolveAppProcess, staleNameReason } from '../appProcess.js'
 import type { AppProcessCandidate } from '../appProcess.js'
-import { FTRACE_POWER_BLOCK, processStatsBlock, SYS_STATS_BLOCK } from '../blocks.js'
+import {
+  FTRACE_POWER_BLOCK,
+  PROCESS_RUNTIME_MIN_SDK,
+  processStatsBlock,
+  SYS_STATS_BLOCK,
+} from '../blocks.js'
 import { round } from '../num.js'
 import type {
   CollectorEnv,
@@ -72,12 +77,23 @@ async function extractAppCpu(ctx: ExtractContext, deviceTotalNs: number): Promis
   const picked = resolved.candidate
   const summary = summarizeAppCpu(rows, picked.upid)
   if (summary === null) {
+    // **sdk 를 알고 있으면 추측하지 않는다.** 하한 아래에서는 `blocks.ts` 가 그 필드를 빼고
+    // 보냈으므로 카운터가 없는 것이 확정이다 — 다시 재도 같다. 하한 위에서 없는 것은
+    // 다른 사실이고(옛 캡처의 재산출) 다시 재면 나온다. 둘을 같은 코드로 내면 읽는 쪽이
+    // 재시도가 의미 있는지 알 수 없다.
+    const sdkInt = ctx.env.sdkInt
     return {
       data: null,
-      reason: {
-        code: 'no_app_cpu_samples',
-        detail: { process: resolved.name, pid: picked.pid },
-      },
+      reason:
+        sdkInt < PROCESS_RUNTIME_MIN_SDK
+          ? {
+              code: 'app_cpu_sdk_too_low',
+              detail: { sdk_int: sdkInt, min_sdk: PROCESS_RUNTIME_MIN_SDK },
+            }
+          : {
+              code: 'no_app_cpu_samples',
+              detail: { process: resolved.name, pid: picked.pid, sdk_int: sdkInt },
+            },
     }
   }
   if (summary.backwards !== null) {
