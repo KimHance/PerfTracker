@@ -9,14 +9,14 @@
     "prepack": "node ../../scripts/prepack.mjs dist/server/index.js dist-web/index.html"
   },
   "dependencies": {
-    "@perftracker/core": "0.1.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "@perftracker/core": "0.1.0"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "vite": "^8.1.5"
   },
   "main": "./dist/server/index.js",
@@ -36,5 +36,8 @@
   "files": [
     "dist",
     "dist-web"
-  ]
+  ],
+  "engines": {
+    "node": ">=20.19"
+  }
 }

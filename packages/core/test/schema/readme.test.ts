@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { COLLECTORS } from '../../src/collectors/registry.js'
 import { METRIC_REASON_CODES } from '../../src/schema/reasons.js'
 import { SCHEMA_VERSION } from '../../src/schema/result.js'
 
@@ -26,6 +27,36 @@ import { SCHEMA_VERSION } from '../../src/schema/result.js'
  * 고정된 문장을 고칠 때는 이 대조가 여전히 성립하는지 사람이 한 번 봐야 한다.
  */
 const README = readFileSync(fileURLToPath(new URL('../../../../README.md', import.meta.url)), 'utf8')
+
+/**
+ * **지표 목록이 두 번 낡았다.** `metrics.frame` 을 접은 커밋이 README 를 136줄 줄였는데
+ * 머리말의 표에는 `frame` 행이 남았고, 개수는 `지표 8개` 그대로였다. 링크(`#metricsframe`)는
+ * 가리키는 절이 없어 죽어 있었는데 **아무 테스트도 그것을 몰랐다** — 이 파일은 그때
+ * `reason_code` 개수와 `schema_version` 만 보고 있었다.
+ *
+ * npm 에 내면 이 README 가 그대로 패키지 페이지가 된다. 틀린 지표 목록은 이제 밖으로 나간다.
+ */
+describe('README 의 지표 목록', () => {
+  const ids = COLLECTORS.map((c) => c.id)
+
+  it('개수를 코드와 대조한다', () => {
+    const m = /## 무엇을 재는가 — 지표 (\d+)개/.exec(README)
+    expect(m, 'README 에서 지표 개수 문장을 찾지 못했다 — 문구를 바꿨다면 이 테스트도 함께 고칠 것').not.toBeNull()
+    expect(Number(m![1])).toBe(ids.length)
+  })
+
+  it('등록된 지표가 전부 표에 있다', () => {
+    const missing = ids.filter((id) => !README.includes(`[\`${id}\`](#metrics${id})`))
+    expect(missing, 'README 표에 없는 지표').toEqual([])
+  })
+
+  /** 접은 지표가 표에 남으면 **없는 것을 있다고 말하는** 문서가 된다. */
+  it('접은 지표는 표에 없다', () => {
+    for (const gone of ['frame']) {
+      expect(README, `${gone} 는 더 이상 수집하지 않는다`).not.toContain(`[\`${gone}\`](#metrics${gone})`)
+    }
+  })
+})
 
 describe('README 가 스키마에 대해 말하는 숫자', () => {
   it('reason_code 개수가 METRIC_REASON_CODES 와 같다', () => {

@@ -14,13 +14,12 @@ adb 로 붙어서 Perfetto 트레이스를 기기에 남기고, 그것을 호스
 
 ---
 
-## 무엇을 재는가 — 지표 8개
+## 무엇을 재는가 — 지표 7개
 
-`result.json` 의 `metrics` 아래에 이 여덟 개가 들어갑니다. 키가 곧 수집기 id 입니다.
+`result.json` 의 `metrics` 아래에 이 일곱 개가 들어갑니다. 키가 곧 수집기 id 입니다.
 
 | 지표 | 귀속 범위 | 무엇인가 | 어디서 나오는가 |
 | --- | --- | --- | --- |
-| [`frame`](#metricsframe) | 앱 | 프레임별 실제 소요 시간의 분포·백분위 | perfetto `android.surfaceflinger.frametimeline` |
 | [`startup`](#metricsstartup) | 앱 | 콜드 스타트 시간 (`--launch` 세션만) | `am start -W` — **유일하게 트레이스를 안 읽는 지표** |
 | [`cpu`](#metricscpu) | **앱 + 기기 전역** | 앱 프로세스의 CPU 시간, 기기 전체 사용률·코어별·주파수 | perfetto `linux.sys_stats` + `linux.process_stats` |
 | [`memory`](#metricsmemory) | **앱 + 기기 전역** | 앱 프로세스의 RSS 통계, 기기 전체 meminfo | perfetto `linux.process_stats` + `linux.sys_stats` |
@@ -137,14 +136,29 @@ adb 로 붙어서 Perfetto 트레이스를 기기에 남기고, 그것을 호스
 
 ## 설치
 
-**Node 20.19 이상**이 필요합니다 (`package.json` 의 `engines`). npm workspaces 를 쓰는
-모노레포라 **저장소 루트에서 한 번** `npm install` 하면 `packages/core` 와 `packages/cli` 가
-함께 설치되고 서로 링크됩니다. 패키지 디렉토리 안에서 따로 설치하지 마세요.
+**Node 20.19 이상**과 **adb**(Android Platform Tools)가 필요합니다. 그 둘뿐입니다 —
+기기에 설치할 것도, 앱에 넣을 것도 없습니다.
+
+```bash
+npx perftracker doctor        # 설치 없이 바로. 이 기기에서 뭘 잴 수 있는지 알려줍니다
+```
+
+자주 쓰면 전역으로 두는 편이 낫습니다.
+
+```bash
+npm i -g perftracker
+perftracker doctor
+```
+
+### 저장소에서 직접 쓸 때
+
+npm workspaces 를 쓰는 모노레포라 **저장소 루트에서 한 번** `npm install` 하면
+`packages/*` 가 함께 설치되고 서로 링크됩니다. 패키지 디렉토리 안에서 따로 설치하지 마세요.
 
 ```bash
 git clone https://github.com/KimHance/PerfTracker.git && cd PerfTracker
 npm install
-npm run build        # tsc --build. dist/ 가 있어야 CLI 가 돕니다
+npm run build        # tsc --build + 화면 빌드. dist/ 와 dist-web/ 이 있어야 돕니다
 npx perftracker doctor
 ```
 
@@ -548,7 +562,7 @@ clock_snapshot 이 없거나 기기 시계를 못 읽은 경우(`trace_start_off
   > `status === 'collected'` 또는 `data !== null` 로 판정하세요.
 - `source` — 이 숫자를 **어떤 방법으로 쟀는지**의 기록
 - `reason_code` — 기계가 읽는 안정적인 키. 문구가 바뀌어도 이건 안 바뀝니다.
-  CI 매칭은 반드시 이걸로 하세요. (예: `sdk_too_low`, `render_process_not_found`,
+  CI 매칭은 반드시 이걸로 하세요. (예: `sdk_too_low`, `no_log_entries`,
   `trace_missing`, `data_source_not_registered`, `query_failed`)
 
   > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **35개**입니다
@@ -1115,7 +1129,7 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 
 ```json
 [
-  { "metric": "frame", "name": "60fps frame budget", "value": 16.67, "unit": "ms",
+  { "metric": "hwui", "name": "60fps frame budget", "value": 16.67, "unit": "ms",
     "source": "Android Vitals — slow rendering",
     "url": "https://developer.android.com/topic/performance/vitals/render" }
 ]
@@ -1391,13 +1405,13 @@ fork 된 상태이므로 이것은 예외 상황이 아닙니다.
 perftracker 는 `am start -W` 직후(측정 창이 열리기 **전**) `pidof` 로 앱의 pid 를 받아 두고,
 트레이스 이름이 맞지 않으면 그 pid 로 대상 앱을 특정합니다. 그때:
 
-- `frame` / `memory` / `cpu` / `log` 의 `process` 는 **패키지명**입니다 — 확인되지 않은
-  이름이 결과에 실리는 일은 없습니다. **네 메트릭이 같은 규칙(`resolveAppProcess`)을 쓰므로
+- `memory` / `cpu` / `log` 의 `process` 는 **패키지명**입니다 — 확인되지 않은
+  이름이 결과에 실리는 일은 없습니다. **셋이 같은 규칙(`resolveAppProcess`)을 쓰므로
   같은 프로세스를 가리킵니다.**
-- 네 메트릭의 `status` 는 `partial`, `reason_code` 는 `process_name_stale_in_trace` 입니다.
+- 세 메트릭의 `status` 는 `partial`, `reason_code` 는 `process_name_stale_in_trace` 입니다.
   값은 정상이고, "이름이 아니라 pid 로 확인했다" 는 사실을 그 코드가 말합니다.
 - pid 조차 없으면(= `--launch` 없이 시작했고 이름도 안 맞음) 추측하지 않습니다 —
-  `render_process_not_found` / `process_not_in_trace` 로 값을 내지 않습니다.
+  `process_not_in_trace` 로 값을 내지 않습니다.
 
 **실기기에서 두 가지 이름을 모두 봤습니다** — 같은 기기(SM-S901N / Android 16)의 같은 앱이
 한 세션에서는 `<pre-initialized>`, 다른 세션에서는 `zygote64` 로 기록됐습니다. 이름을 목록으로
@@ -1414,7 +1428,7 @@ perftracker 는 `am start -W` 직후(측정 창이 열리기 **전**) `pidof` �
 
 ## 시계열 (`timeline`)
 
-`frame` · `memory` · `cpu` · `log` 네 지표에 **1초 단위 추이**가 함께 실립니다.
+`memory` · `cpu` · `log` 세 지표에 **1초 단위 추이**가 함께 실립니다.
 집계값(평균·최대·백분위)만으로는 구분되지 않는 것을 보려는 값입니다:
 
 ```
@@ -1425,7 +1439,7 @@ perftracker 는 `am start -W` 직후(측정 창이 열리기 **전**) `pidof` �
  12 │   187  10.99 │    570 │   1440 │ 122(11)
 ```
 
-**네 지표가 같은 `t_s` 를 씁니다.** 기준점은 트레이스 전체의 시작(`trace_bounds.start_ts`)
+**세 지표가 같은 `t_s` 를 씁니다.** 기준점은 트레이스 전체의 시작(`trace_bounds.start_ts`)
 하나이고, 지표마다 "자기 첫 표본" 을 0 초로 잡으면 겹쳐 그렸을 때 축이 어긋나기 때문입니다.
 
 **기기에 더 묻지 않습니다.** 트레이스에 이미 있던 값을 집계로 접지 않고 그대로 내는 것뿐이라
