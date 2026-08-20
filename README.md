@@ -8,9 +8,12 @@ adb 로 붙어서 Perfetto 트레이스를 기기에 남기고, 그것을 호스
 
 측정 대상은 **릴리즈 빌드로 설치된 아무 앱**입니다. 내가 만든 앱이든 아니든 상관없습니다.
 
-> **이 저장소에서 작업을 이어받는다면** [`docs/STATUS.md`](docs/STATUS.md) 를 먼저 보세요 —
-> 어디까지 왔고, 무엇을 확인하지 못했고, 다음에 무엇을 할 차례인지가 거기 있습니다.
-> 이 README 는 **도구를 쓰는 법**을 말하고, 그쪽은 **프로젝트의 상태**를 말합니다.
+```bash
+npx perftracker doctor        # 설치 없이 바로 — 이 기기에서 뭘 잴 수 있는지
+```
+
+> 이 문서는 **도구를 쓰는 법**입니다. 아래 「개발」 절만 저장소에서 직접 작업하는 사람
+> 대상이고, 나머지는 npm 으로 받아 쓰는 데 필요한 것입니다. 저장소는 [https://github.com/KimHance/PerfTracker](https://github.com/KimHance/PerfTracker) 입니다.
 
 ---
 
@@ -66,7 +69,7 @@ adb 로 붙어서 Perfetto 트레이스를 기기에 남기고, 그것을 호스
 기기의 성질이지 환경 오류가 아니기 때문입니다 — `adb` 를 못 찾는 것과는 다릅니다.
 `start` 도 세션을 열면서 같은 목록을 한 번 더 보여줍니다.
 
-버전별 상세 표와 그것을 어떻게 확인했는지는 [`docs/STATUS.md`](docs/STATUS.md) 의
+버전별 상세 표와 그것을 어떻게 확인했는지는 저장소의 [`docs/STATUS.md`](https://github.com/KimHance/PerfTracker/blob/main/docs/STATUS.md) 의
 "어느 안드로이드 버전에서 무엇이 되는가" 에 있습니다.
 
 ---
@@ -243,8 +246,9 @@ npx perftracker stop --report      # 보고서(HTML)까지 만들고 브라우�
   perftracker report a3f9c1 로 보고서를 엽니다
 ```
 
-`--report` 는 그 한 줄을 대신 쳐 주는 것입니다 — 대신 화면이 빌드돼 있어야 하므로
-(`npm run build`) 기본값이 아닙니다. 측정이 끝난 뒤 마지막에 실패하는 모양을 만들지 않습니다.
+`--report` 는 그 한 줄을 대신 쳐 주는 것입니다. 기본값이 아닌 이유는 보고서가 화면 자산을
+필요로 하기 때문입니다 — npm 으로 받았으면 이미 들어 있고, 저장소에서 직접 쓸 때만
+`npm run build` 가 한 번 돌아 있어야 합니다.
 
 `start` 는 앱을 **라벨로도 패키지명으로도** 찾습니다(`--app` 생략 시 지금 포그라운드에 있는 앱).
 설치된 앱 목록은 `perftracker apps` 로 볼 수 있습니다.
@@ -322,11 +326,13 @@ t_s = (offset_ms − session.trace_start_offset_ms) / 1000
 같은 흐름을 브라우저에서 할 수 있습니다.
 
 ```bash
-npm run open   # 빌드 · 서버 · 브라우저까지 이 한 줄이 다 합니다
+npx perftracker open           # 서버가 뜨고 브라우저가 열립니다
+npx perftracker open -p 7333   # 포트를 고정하고 싶으면
 ```
 
-옵션을 주려면 `npx perftracker open -p 7333` 처럼 CLI 를 직접 부릅니다 (`npm run build` 가
-한 번은 돌아 있어야 합니다). **이 명령은 끝나지 않습니다** — Ctrl-C 까지 서버를 붙잡습니다.
+**이 명령은 끝나지 않습니다** — Ctrl-C 까지 서버를 붙잡습니다.
+
+> 저장소에서 직접 쓸 때는 `npm run open` 이 빌드까지 함께 합니다.
 
 > 예전 이름 `gui` 도 그대로 받습니다. 별칭으로 남겨 뒀습니다.
 
@@ -1152,9 +1158,14 @@ ADPF 의 headroom 휴리스틱(0.85 / 0.95 / 1.0)은 출처가 있지만 **이 �
 
 ## 개발
 
+**여기서부터는 저장소에서 직접 작업하는 사람용입니다.** npm 으로 받아 쓰는 데는
+필요 없습니다 — 소스는 [https://github.com/KimHance/PerfTracker](https://github.com/KimHance/PerfTracker) 에 있습니다.
+
 ```bash
+git clone https://github.com/KimHance/PerfTracker.git && cd PerfTracker
+npm install
 npm run build     # 먼저 한 번 — 아래 테스트가 core 의 dist/ 를 씁니다
-npm test          # 유닛 테스트 (기기 불필요) — 현재 723개, 1초 미만
+npm test          # 유닛 테스트 (기기 불필요). 1초 남짓
 npm run typecheck # src + test 전체 타입체크
 npm run test:device   # 온-디바이스 스펙 (기기가 꽂혀 있어야 함) — 현재 11개
 ```
@@ -1241,7 +1252,8 @@ PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지명> npm run tes
 것이고, 늘어난 스펙 하나는 "세션 스펙의 대상 앱이 이 기기에 설치되어 있다"(`m0`)입니다.
 대상 앱을 바꾼 이유는 아래 "온-디바이스 테스트를 다른 기기에서 돌리기" 에 있습니다.
 
-유닛 테스트는 `npm test` **723/723**, `npm run typecheck` · `npm run build` 클린입니다.
+유닛 테스트는 그 시점에 `npm test` **723/723**, `npm run typecheck` · `npm run build`
+클린이었습니다 (M3 당시의 수치입니다 — 지금은 더 늘었습니다).
 
 ### M3 에서 에뮬레이터가 **실제로 검증한** 것
 
