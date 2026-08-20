@@ -10,5 +10,17 @@
     "@perftracker/core": "0.1.0",
     "commander": "^15.0.0",
     "@perftracker/gui": "0.1.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KimHance/PerfTracker.git",
+    "directory": "packages/cli"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "prepack": "node ../../scripts/prepack.mjs dist/index.js"
   }
 }

@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build:web": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prepack": "node ../../scripts/prepack.mjs dist/server/index.js dist-web/index.html"
   },
   "dependencies": {
     "@perftracker/core": "0.1.0",
@@ -25,5 +26,15 @@
       "types": "./dist/server/index.d.ts",
       "default": "./dist/server/index.js"
     }
-  }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KimHance/PerfTracker.git",
+    "directory": "packages/gui"
+  },
+  "files": [
+    "dist",
+    "dist-web"
+  ]
 }
