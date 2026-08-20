@@ -27,7 +27,7 @@
   다만 기기에 따라 못 재는 지표가 있고, 그것을 `doctor` 와 `start` 가 미리 말합니다 (§7).
 - **2026-07-28 에 GUI 가 실제로 돕니다** (§3): 클로드 디자인 핸드오프(`docs/design/gui/`)를
   받아 `packages/gui` 에 화면과 HTTP 서버를 만들고 **실기기로 세션 전체를 검증**했습니다.
-  `npx perftracker gui` 하나로 서버가 뜨고 브라우저가 열립니다.
+  `npx perftracker open` 하나로 서버가 뜨고 브라우저가 열립니다.
 - **2026-07-29 에 세션 보고서가 붙었습니다** (§3): 기록을 누르면 새 창에 `result.json` 전부가
   그려집니다. 지표가 늘면 `manifest.ts` 에 한 줄이면 됩니다.
 - **마킹이 생겼습니다** — `perftracker mark "스크롤 시작"` 과 GUI 가 **같은 자리**에 쌓고,
@@ -198,7 +198,7 @@ grep 하세요.**)
 | 화면 전체 (설정 4절 · 측정 중 · 마킹 · 기록 드로어 · 확인 다이얼로그 · 로딩 오버레이 · CLI 로그 · doctor) | ✅ |
 | 빈 상태 3종 (기기 0대 · 기기 미선택 · 검색 결과 없음) | ✅ |
 | 목업 클라이언트 (`?mock`) 로 기기 없이 화면 전체 확인 | ✅ |
-| **`perftracker gui` HTTP 서버 (`src/server/`)** | ✅ |
+| **`perftracker open` HTTP 서버 (`src/server/`)** | ✅ |
 | `perftracker mark` — 세션 고유값 기반 마킹 | ✅ |
 | `result.json` 의 `session.marks[]` | ✅ |
 | 세션 보고서 | ✅ 2026-07-29 (아래) |

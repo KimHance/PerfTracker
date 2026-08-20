@@ -16,14 +16,14 @@ import { runReport } from '../../src/commands/report.js'
 describe('runReport — 없는 id', () => {
   it('스택트레이스가 아니라 한 문장으로 답한다', async () => {
     const empty = mkdtempSync(join(tmpdir(), 'pt-report-'))
-    await expect(runReport('zzzzzz', { out: empty, open: false })).rejects.toBeInstanceOf(
+    await expect(runReport('zzzzzz', { out: empty, browser: false })).rejects.toBeInstanceOf(
       PerfTrackerError,
     )
   })
 
   it('무엇을 쳐야 하는지도 함께 말한다', async () => {
     const empty = mkdtempSync(join(tmpdir(), 'pt-report-'))
-    await expect(runReport('zzzzzz', { out: empty, open: false })).rejects.toThrow(
+    await expect(runReport('zzzzzz', { out: empty, browser: false })).rejects.toThrow(
       /perftracker runs list/,
     )
   })

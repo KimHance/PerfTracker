@@ -14,7 +14,7 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
 `tsc --build` 가 파일을 다시 쓰면서 떨어뜨리고, 그러면 `npx perftracker` 가 `Permission denied`
 로 죽는다. 루트 `build` 스크립트가 빌드 뒤에 다시 `chmod` 한다 — 잊고 지우면 조용히 재발한다.
 | `src/context.ts` | `--adb` / `--device` 를 core 의 컨텍스트로 |
-| `src/commands/` | 명령 하나당 파일 하나 (`open.ts` 만 예외 — `gui` 와 `report` 가 나눠 쓴다) |
+| `src/commands/` | 명령 하나당 파일 하나 (`browser.ts` 만 예외 — 브라우저 여는 헬퍼를 `open`·`report` 가 나눠 쓴다) |
 | `test/readme.test.ts` | 등록된 명령이 전부 README 에 있는지 대조 |
 | `test/on-device/` | **실기기가 있어야 도는 스펙.** `npm run test:device` 로만 실행 |
 
@@ -23,7 +23,7 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
 따로 두면 테스트가 **commander 가 실제로 등록한 트리**를 읽는다.
 
 명령: `doctor` `devices` `apps` `schema` · `start` `mark` `status` `stop` `extract` ·
-`runs`(`list`/`rename`/`rm`) · `report` · `gui`.
+`runs`(`list`/`rename`/`rm`) · `report` · `open`(옛 이름 `gui` 는 별칭).
 실제 측정은 `start` / `stop` 둘뿐이고 나머지는 점검·조회·마킹·기록 관리·보고서다.
 
 **기기에 접촉하지 않는 명령**은 `createContext` 를 부르지 않는다 — `mark` 와 `runs` 가 그렇다.
@@ -81,8 +81,15 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
   따라 다른 보고서" 가 된다.
   **`-o` 의 뜻을 명령마다 바꾸지 않는다** — 여기서도 `-o` 는 *기록이 있는 디렉토리*이고,
   쓸 자리는 `--file` 이다. 한 글자가 명령마다 다른 뜻이면 가장 비싼 종류의 함정이 된다.
-- **`gui` 는 끝나지 않는 명령이다.** 문자열을 돌려주지 않고 Ctrl-C 까지 서버를 붙잡는다.
+- **`open` 은 끝나지 않는 명령이다.** 문자열을 돌려주지 않고 Ctrl-C 까지 서버를 붙잡는다.
   서버 구현은 `@perftracker/gui` 에 있고 CLI 는 그것을 부르기만 한다.
+- **이름을 바꿔도 옛 이름을 끊지 않는다.** `gui` 는 `.alias('gui')` 로 계속 받는다.
+  도움말에는 commander 가 `open|gui` 로 함께 내지만 **README 의 「명령 전체」에는 `open`
+  하나만 싣는다** — 표에 둘을 나란히 두면 정본이 둘로 보인다. 별칭은 눈에 잘 안 띄어서
+  **누가 지워도 아무도 모르므로** `test/readme.test.ts` 가 그것을 고정한다.
+- **플래그 이름은 명령 이름과 싸우지 않는다.** 브라우저를 안 여는 옵션이 `--no-open` 이던
+  시절이 있었는데, 명령이 `open` 이 되면서 `open --no-open`("열어라, 근데 열지 마라")이
+  됐다. 지금은 `--no-browser` 하나이고 `open`·`report`·`stop --report` 가 같은 이름을 쓴다.
 - **core 의 판정을 다시 구현하지 않는다.** `doctor` 의 지표 지원 여부도 collector 의
   `supports()` 를 그대로 부른다. 출처가 둘이면 "된다" 고 한 것이 실제로는 안 되는 상태가 생긴다.
 

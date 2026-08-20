@@ -5,7 +5,7 @@ import { writeStandaloneReport } from './report.js'
 
 export async function runStop(
   ctx: CliContext,
-  opts: { offline: boolean; report?: boolean; open?: boolean },
+  opts: { offline: boolean; report?: boolean; browser?: boolean },
 ): Promise<string> {
   const session = await readActiveSession(ctx.serial)
   if (session === null) {
@@ -31,7 +31,7 @@ export async function runStop(
   if (opts.report === true) {
     try {
       reportPath = await writeStandaloneReport(runDir, `${session.name} · PerfTracker`, {
-        open: opts.open !== false,
+        browser: opts.browser !== false,
       })
     } catch (e) {
       // **보고서 실패가 측정 결과를 가리지 않게 한다.** 여기까지 왔으면 재는 일도 산출도

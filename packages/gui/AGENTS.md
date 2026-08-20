@@ -1,7 +1,9 @@
 # packages/gui
 
 CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를 수 없으므로 서버 계층이 필수다:
-`perftracker gui` 가 로컬 HTTP 서버를 띄우고, 그 서버가 core 를 부르고, 화면은 서버의 JSON 만 본다.
+`perftracker open` 이 로컬 HTTP 서버를 띄우고, 그 서버가 core 를 부르고, 화면은 서버의 JSON 만 본다.
+**패키지 이름은 `gui` 로 둔다** — 명령 이름은 사용자가 보지만 패키지 이름은 안 본다. 둘을
+같이 바꾸면 import 경로가 전부 흔들리는데 얻는 것이 없다.
 
 디자인 정본은 화면마다 하나씩 있다 — 색·간격·카피가 픽셀 단위로 적혀 있고, 이 모듈은 그것을
 코드로 옮긴 것이다.
@@ -17,7 +19,7 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
 | --- | --- |
 | 화면 전체 (설정·측정 중·기록·다이얼로그·오버레이) | **있음** |
 | 계약(`src/contract/api.ts`)과 그것을 만족하는 목업 클라이언트 | **있음** |
-| `perftracker gui` 서버 (`src/server/`) — 실기기로 세션 전체 검증 완료 | **있음** |
+| `perftracker open` 서버 (`src/server/`) — 실기기로 세션 전체 검증 완료 | **있음** |
 | 세션 보고서 (`src/web/report/`) | **있음.** 기록을 누르면 `?report=<id>` 로 새 창이 열린다 |
 | 서버 없이 보는 보고서 (`src/report/`) | **있음.** `perftracker report <id>` 가 파일 하나로 만다 |
 
@@ -263,8 +265,8 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
 
 ```bash
 # 실제로 쓰는 방법 — 이 한 줄이 빌드까지 한다. 서버가 화면과 API 를 함께 서빙한다
-npm run gui                             # 127.0.0.1 의 빈 포트, 브라우저 자동 실행
-npx perftracker gui -p 7333             # 옵션이 필요할 때만 CLI 를 직접 부른다
+npm run open                            # 127.0.0.1 의 빈 포트, 브라우저 자동 실행
+npx perftracker open -p 7333            # 옵션이 필요할 때만 CLI 를 직접 부른다
 
 # 화면만 손볼 때 — vite 개발 서버(5173)가 /api 를 7333 으로 프록시한다
 npm run gui:dev

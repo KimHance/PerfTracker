@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { findRun, PerfTrackerError, SessionStateError } from '@perftracker/core'
 import { buildStandaloneReport, webRoot } from '@perftracker/gui'
-import { openInBrowser } from './open.js'
+import { openInBrowser } from './browser.js'
 
 /**
  * 기록 하나를 **파일 하나짜리 HTML** 로 낸다.
@@ -18,7 +18,7 @@ import { openInBrowser } from './open.js'
  */
 export async function runReport(
   id: string,
-  opts: { out: string; file?: string; open: boolean },
+  opts: { out: string; file?: string; browser: boolean },
 ): Promise<string> {
   const run = await findRun(opts.out, id)
   if (run === null) {
@@ -44,7 +44,7 @@ export async function runReport(
 export async function writeStandaloneReport(
   runDir: string,
   title: string,
-  opts: { file?: string; open: boolean },
+  opts: { file?: string; browser: boolean },
 ): Promise<string> {
   if (!existsSync(webRoot())) {
     // `gui` 와 같은 문장이다 — 원인도 해법도 같다.
@@ -73,6 +73,6 @@ export async function writeStandaloneReport(
 
   const target = opts.file ?? join(runDir, 'report.html')
   await writeFile(target, html, 'utf8')
-  if (opts.open) openInBrowser(pathToFileURL(target).href)
+  if (opts.browser) openInBrowser(pathToFileURL(target).href)
   return target
 }

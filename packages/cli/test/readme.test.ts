@@ -39,3 +39,23 @@ describe('README 가 명령을 빠뜨리지 않는다', () => {
     expect(commandPaths().length).toBeGreaterThan(10)
   })
 })
+
+/**
+ * **이름을 바꾼다고 남의 스크립트를 깨지 않는다.**
+ *
+ * `gui` 는 `open` 으로 바뀌었지만 별칭으로 계속 받는다. 별칭은 도움말에도 문서에도 안 나오고
+ * (정본은 `open` 하나다) 조용히 동작만 한다 — 그래서 **테스트가 없으면 누가 지워도 아무도
+ * 모른다.** 지우려면 이 테스트를 먼저 지워야 하고, 그것이 의사 표시가 된다.
+ */
+describe('옛 이름 호환', () => {
+  it('gui 로 불러도 open 명령을 찾는다', () => {
+    const open = buildProgram().commands.find((c) => c.name() === 'open')
+    expect(open, 'open 명령이 없다 — 이름을 또 바꿨다면 이 테스트도 함께 고칠 것').toBeDefined()
+    expect(open!.aliases()).toContain('gui')
+  })
+
+  /** 별칭은 README 의 「명령 전체」에 넣지 않는다 — 정본이 둘로 보이면 그것이 혼란이다. */
+  it('별칭은 문서에 싣지 않는다', () => {
+    expect(README).not.toContain('perftracker gui')
+  })
+})

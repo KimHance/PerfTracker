@@ -303,27 +303,29 @@ t_s = (offset_ms − session.trace_start_offset_ms) / 1000
 진행 중인 세션이 하나뿐이면 아무것도 지정하지 않아도 되고, 둘 이상인데 지정하지 않으면
 **아무 데도 붙이지 않고 어느 세션인지 묻습니다.**
 
-### 화면으로 하고 싶다면 (GUI)
+### 화면으로 하고 싶다면
 
 같은 흐름을 브라우저에서 할 수 있습니다.
 
 ```bash
-npm run gui   # 빌드 · 서버 · 브라우저까지 이 한 줄이 다 합니다
+npm run open   # 빌드 · 서버 · 브라우저까지 이 한 줄이 다 합니다
 ```
 
-옵션을 주려면 `npx perftracker gui -p 7333` 처럼 CLI 를 직접 부릅니다 (`npm run build` 가
-한 번은 돌아 있어야 합니다).
+옵션을 주려면 `npx perftracker open -p 7333` 처럼 CLI 를 직접 부릅니다 (`npm run build` 가
+한 번은 돌아 있어야 합니다). **이 명령은 끝나지 않습니다** — Ctrl-C 까지 서버를 붙잡습니다.
+
+> 예전 이름 `gui` 도 그대로 받습니다. 별칭으로 남겨 뒀습니다.
 
 세션을 **동시에 여러 개** 돌릴 수 있게 브라우저 탭처럼 상단 탭바로 나뉘고, 기기를 고르면 그
 기기에서 못 재는 지표를 **시작 전에** 알려 줍니다. 측정 중 화면에는 경과 시간과 정지 버튼,
-그리고 마킹 입력만 있습니다 — GUI 에서 남긴 마킹과 터미널에서 `perftracker mark` 로 남긴
+그리고 마킹 입력만 있습니다 — 화면에서 남긴 마킹과 터미널에서 `perftracker mark` 로 남긴
 마킹은 **같은 자리에 쌓입니다.**
 
 | 옵션 | |
 | --- | --- |
 | `-p, --port <포트>` | 고정 포트 (생략하면 빈 포트를 고릅니다) |
 | `-o, --out <dir>` | 결과를 저장할 디렉토리 (기본 `runs`) |
-| `--no-open` | 브라우저를 자동으로 열지 않습니다 |
+| `--no-browser` | 브라우저를 자동으로 열지 않습니다 |
 
 서버는 **127.0.0.1 에만 붙습니다.** 이 서버는 연결된 기기에 adb 를 보내고 run 디렉토리를 지울
 수 있어서, 같은 네트워크의 다른 사람에게 열어 줄 이유가 없습니다.
@@ -367,7 +369,7 @@ npm run gui   # 빌드 · 서버 · 브라우저까지 이 한 줄이 다 합니
 | `perftracker runs rename <id> <이름>` | 기록 이름 변경 (디렉토리 경로는 그대로) | 불필요 |
 | `perftracker runs rm <id>` | 기록 삭제 (run 디렉토리째) | 불필요 |
 | `perftracker report <id>` | 기록을 **파일 하나짜리 HTML** 로 (서버 불필요) | 불필요 |
-| `perftracker gui` | 로컬 웹 GUI (Ctrl-C 까지 붙잡습니다) | 필요 |
+| `perftracker open` | 화면을 띄웁니다 — 로컬 서버 (Ctrl-C 까지 붙잡습니다) | 필요 |
 
 「접촉 안 함」은 기기가 연결돼 있어도 adb 를 **보내지 않는다**는 뜻입니다. 그래서 이 셋은
 측정 중에 불러도 안전합니다 — 마킹이 측정 결과를 바꾸지 않는 이유가 이것입니다.
@@ -400,8 +402,8 @@ npx perftracker runs rm --all --yes           # 전부 (--yes 없으면 거부�
 ```bash
 npx perftracker report bc7a6a                 # → runs/<…>/report.html (브라우저가 열립니다)
 npx perftracker report bc7a6a --file /tmp/r.html
-npx perftracker report bc7a6a --no-open       # CI
-npx perftracker stop --report                 # 측정을 끝내면서 바로 (--no-open 도 같습니다)
+npx perftracker report bc7a6a --no-browser    # CI
+npx perftracker stop --report                 # 측정을 끝내면서 바로 (--no-browser 도 같습니다)
 ```
 
 **왜 파일 하나인가:** 측정한 사람과 읽는 사람이 다른 경우가 보통이고, 그때 "서버를 띄우고 이

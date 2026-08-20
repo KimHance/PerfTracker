@@ -7,7 +7,7 @@ import {
   runDoctor,
 } from '@perftracker/core'
 import { formatApps } from './commands/apps.js'
-import { runGui } from './commands/gui.js'
+import { runOpen } from './commands/open.js'
 import { runMark } from './commands/mark.js'
 import { runReport } from './commands/report.js'
 import { runRunsList, runRunsRemove, runRunsRename } from './commands/runs.js'
@@ -149,7 +149,7 @@ export function buildProgram(): Command {
     })
 
   /**
-   * 기록 하나를 파일 하나짜리 HTML 로. **`gui` 와 같은 화면인데 서버가 없다** —
+   * 기록 하나를 파일 하나짜리 HTML 로. **`open` 과 같은 화면인데 서버가 없다** —
    * 읽는 사람이 측정한 사람과 다를 때 포트를 열어 달라고 할 수는 없다.
    *
    * `-o` 는 다른 명령과 **같은 뜻**(기록이 있는 디렉토리)이고, 쓸 자리는 `--file` 이다.
@@ -161,19 +161,28 @@ export function buildProgram(): Command {
     .argument('<id>', '기록 id')
     .option('-o, --out <dir>', '기록이 있는 디렉토리', 'runs')
     .option('--file <경로>', '쓸 자리 (기본: <run 디렉토리>/report.html)')
-    .option('--no-open', '브라우저를 자동으로 열지 않는다')
-    .action(async (id: string, opts: { out: string; file?: string; open: boolean }) => {
+    .option('--no-browser', '브라우저를 자동으로 열지 않는다')
+    .action(async (id: string, opts: { out: string; file?: string; browser: boolean }) => {
       console.log(await runReport(id, opts))
     })
 
+  /**
+   * 화면을 띄운다. **`gui` 는 별칭으로 남긴다** — 이름을 바꾼다고 남의 스크립트를 깨지
+   * 않는다. 도움말에는 `open|gui` 로 함께 나오고, README 의 명령표에는 `open` 하나만 싣는다.
+   *
+   * 플래그가 `--no-browser` 인 이유: 이 명령의 이름이 `open` 이라 `--no-open` 이면
+   * **"열어라, 근데 열지 마라"** 가 된다. `report` 와 `stop --report` 도 같은 이름을 쓴다 —
+   * 한 저장소 안에서 같은 뜻의 플래그가 두 이름을 갖지 않는다.
+   */
   program
-    .command('gui')
-    .description('로컬 웹 GUI 를 띄운다 (화면 + JSON API)')
+    .command('open')
+    .alias('gui')
+    .description('화면을 띄운다 (로컬 서버 + JSON API, Ctrl-C 까지 실행)')
     .option('-p, --port <포트>', '고정 포트 (생략 시 빈 포트를 고른다)')
     .option('-o, --out <dir>', '결과를 저장할 디렉토리', 'runs')
-    .option('--no-open', '브라우저를 자동으로 열지 않는다')
-    .action(async (opts: { port?: string; out: string; open: boolean }) => {
-      await runGui({ ...opts, ...program.opts() })
+    .option('--no-browser', '브라우저를 자동으로 열지 않는다')
+    .action(async (opts: { port?: string; out: string; browser: boolean }) => {
+      await runOpen({ ...opts, ...program.opts() })
     })
 
   program
@@ -195,8 +204,8 @@ export function buildProgram(): Command {
      * 그래서 켜는 사람만 켜고, 안 켠 사람에게는 만드는 법을 한 줄로 알린다.
      */
     .option('--report', '끝나자마자 보고서(HTML)까지 만들어 연다', false)
-    .option('--no-open', '--report 로 만든 보고서를 브라우저로 열지 않는다')
-    .action(async (opts: { device?: string; offline: boolean; report: boolean; open: boolean }) => {
+    .option('--no-browser', '--report 로 만든 보고서를 브라우저로 열지 않는다')
+    .action(async (opts: { device?: string; offline: boolean; report: boolean; browser: boolean }) => {
       const ctx = await createContext({ ...program.opts(), device: opts.device })
       console.log(await runStop(ctx, opts))
     })
