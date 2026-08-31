@@ -22,6 +22,11 @@ describe('frameSamplesSql', () => {
     expect(frameSamplesSql(42)).toContain('d.dur')
   })
 
+  /** 앱 프레임과 같은 가드. --stop 이 끊은 표시 프레임은 dur = -1 로 온다. */
+  it('끝나지 않은 표시 프레임도 버린다', () => {
+    expect(frameSamplesSql(42)).toContain('d.dur >= 0')
+  })
+
   it('upid 를 그대로 박는다', () => {
     expect(frameSamplesSql(7)).toContain('a.upid = 7')
   })
@@ -39,6 +44,11 @@ describe('parseFrameSamples', () => {
   /** 마감이 없는 프레임이 있다. 0 으로 채우면 "마감이 0" 이라는 없던 사실이 된다. */
   it('마감이 없으면 null 로 남긴다', () => {
     expect(parseFrameSamples('[[0,6.3,7.97,null]]')[0]!.deadlineMs).toBeNull()
+  })
+
+  /** 표시 프레임 짝이 없는 것과 "0ms 만에 합성됐다" 는 다른 사실이다. */
+  it('표시 시간이 없으면 null 로 남긴다 — 0 으로 채우지 않는다', () => {
+    expect(parseFrameSamples('[[0,6.3,null,8.33]]')[0]!.presentMs).toBeNull()
   })
 
   it('빈 배열은 빈 배열이다', () => {

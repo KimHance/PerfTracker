@@ -41,13 +41,18 @@ export const FRAME_PROCESS_SQL =
  * 쓴다. **레이어 이름으로 거르지 않는다** — 이름 목록 방어가 성립하지 않는 것은 이 저장소가
  * 이미 겪었다 (`collectors/appProcess.ts`).
  *
- * `dur >= 0` 이 필수다. trace_processor 는 종료 이벤트를 못 받은 slice 에 `dur = -1` 을
+ * `a.dur >= 0` 이 필수다. trace_processor 는 종료 이벤트를 못 받은 slice 에 `dur = -1` 을
  * 내는데, `--stop` 이 트레이스를 끊는 순간 진행 중이던 프레임이 정확히 그 모양이다. 거르지
  * 않으면 그 유령 프레임이 **가장 빠른 쪽에 앉는다.**
  *
  * 표시 프레임(`layer_name is null`)은 같은 `display_frame_token` 으로 붙인다. 실측상 앱
  * 프레임이 끝난 뒤에 시작하므로(SM-F936N: 앱 0.00~6.30ms, 표시 7.11~15.08ms) 두 칸이 겹치지
- * 않고 화면에서 그대로 쌓인다.
+ * 않고 화면에서 그대로 쌓인다. **`d.dur >= 0` 도 같은 이유로 건다** — `a.dur >= 0` 이 막는
+ * 것과 같은 유령이 표시 프레임 쪽에도 생길 수 있다(`--stop` 이 앱은 다 그렸지만 그 프레임이
+ * 화면에 나가기 전에 트레이스를 끊는 경우). 이 가드가 없으면 `dur = -1` 인 표시 프레임이
+ * `present_ms ≈ -0.000001` 이라는 있을 수 없는 값으로 샌다. 가드를 걸면 그런 행은 조인에서
+ * 아예 빠져 `d.dur` 가 `null` 이 되고, `present_ms` 도 (0 으로 채우지 않고) `null` 로 남는다
+ * — 표시 프레임 짝이 없는 것과 "0ms 만에 합성됐다" 는 다른 사실이기 때문이다.
  *
  * **0ms 기준점은 이 데이터소스의 첫 프레임이 아니라 `TRACE_START_SUBQUERY`
  * (`trace_bounds.start_ts`)다** — cpu · memory · log 등 다른 모든 시계열이 쓰는 것과
@@ -66,20 +71,20 @@ export function frameSamplesSql(upid: number): string {
     'select json_group_array(json_array(t_ms, app_ms, present_ms, deadline_ms)) as j from (' +
     `select cast((a.ts - ${TRACE_START_SUBQUERY}) / 1000000.0 as int) as t_ms, ` +
     'a.dur / 1000000.0 as app_ms, ' +
-    'coalesce(d.dur, 0) / 1000000.0 as present_ms, ' +
+    'd.dur / 1000000.0 as present_ms, ' +
     'e.dur / 1000000.0 as deadline_ms, ' +
     'row_number() over (partition by a.display_frame_token order by a.dur desc) as rn ' +
     'from actual_frame_timeline_slice a ' +
     'left join expected_frame_timeline_slice e ' +
     'on e.surface_frame_token = a.surface_frame_token and e.upid = a.upid ' +
     'left join actual_frame_timeline_slice d ' +
-    'on d.display_frame_token = a.display_frame_token and d.layer_name is null ' +
+    'on d.display_frame_token = a.display_frame_token and d.layer_name is null and d.dur >= 0 ' +
     `where a.upid = ${upid} and a.layer_name is not null and a.dur >= 0) ` +
     'where rn = 1 order by t_ms'
   )
 }
 
-type FrameSampleRow = [number, number, number, number | null]
+type FrameSampleRow = [number, number, number | null, number | null]
 
 /** `json_array` 네 칸(위치는 SQL 이 정한 순서 그대로)을 `FrameSample` 로 옮긴다. */
 function rowsToSamples(rows: FrameSampleRow[]): FrameSample[] {
