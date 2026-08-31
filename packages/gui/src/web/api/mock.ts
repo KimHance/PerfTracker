@@ -31,6 +31,9 @@ import type { ApiClient } from './client.js'
 const MOCK_METRIC_MIN_SDK: Record<(typeof METRIC_ORDER)[number], { min: number; label: string | null }> = {
   // 하한이 없다 — `dumpsys gfxinfo` 라서 sdk 30 에서 frame 이 미지원일 때도 나온다.
   hwui: { min: 0, label: null },
+  // FRAMETIMELINE_MIN_SDK(core) 와 같다 — sdk 31 미만이거나 perfetto 데이터소스가
+  // 없는 기기에서 미지원이다.
+  frame: { min: 31, label: 'Android 12' },
   startup: { min: 0, label: null },
   cpu: { min: 30, label: 'Android 11' },
   memory: { min: 30, label: 'Android 11' },

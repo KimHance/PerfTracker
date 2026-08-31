@@ -16,7 +16,7 @@ export type BlockKind = 'stat' | 'distribution' | 'series' | 'bars' | 'delta' | 
 
 export type SectionId = 'startup' | 'render' | 'cpu' | 'memory' | 'log' | 'context' | 'device'
 export type TabId = 'summary' | 'device'
-export type MetricId = 'hwui' | 'startup' | 'cpu' | 'memory' | 'log' | 'thermal' | 'network'
+export type MetricId = 'hwui' | 'frame' | 'startup' | 'cpu' | 'memory' | 'log' | 'thermal' | 'network'
 
 export interface BlockBase {
   kind: BlockKind
