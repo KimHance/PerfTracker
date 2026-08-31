@@ -1,3 +1,4 @@
+import type { FrameTimelineDto } from '../../contract/api.js'
 import type { Mark } from './axis.js'
 import type { Fmt } from './format.js'
 import { clock, fmtAxis, fmtValue, niceMax, nf, NONE_MISSING, NONE_NULL } from './format.js'
@@ -6,6 +7,7 @@ import type {
   Block,
   DeltaBlock,
   DistributionBlock,
+  FrameTimelineBlock,
   GaugeSpec,
   PairsBlock,
   SeriesBlock,
@@ -380,6 +382,221 @@ export function buildDistribution(
         head: bk.to_ms === null ? `${bk.from_ms}ms 이상` : `${bk.from_ms}–${bk.to_ms}ms`,
         value: `${nf(bk.count, 0)} 프레임`,
         sub: `전체의 ${nf(total === 0 ? 0 : (bk.count / total) * 100, 2)}%`,
+      }
+    },
+  }
+}
+
+/* ══════════════════ 프레임 시간축 ══════════════════ */
+
+export const FH = 178
+export const FPAD = { l: 42, r: 12, t: 18, b: 28 }
+
+/**
+ * **Android Vitals 의 느린 프레임 임계값.** 우리가 정한 값이 아니다 —
+ * Play Console 「과도하게 느린 프레임」의 정의에 나오는 16ms 다.
+ *
+ * **이 값으로 프레임을 분류하지 않는다** (규칙 2). 가로선 하나를 긋고 출처를 툴팁에 다는
+ * 것이 전부다. 앱 시작 게이지(`GaugeSpec.source`)와 같은 선례 안에 있다.
+ *
+ * 같은 문서가 정의에서는 "기기의 드로잉 기한"(주사율 의존), 설명에서는 "16ms 초과" 라고 써서
+ * 고주사율 기기에서 8ms 인지 16ms 고정인지 확정할 수 없다. 그래서 **그 프레임의 실제 마감은
+ * 툴팁에 따로 적는다** — 실측 기기의 마감은 8.33ms 였고 같은 세션에서 41.67ms 로 바뀌었다.
+ */
+export const VITALS_SLOW_FRAME_MS = 16
+
+export const VITALS_SLOW_FRAME_SOURCE =
+  'Android Vitals — 느린 프레임 기준 16ms (Play Console 「과도하게 느린 프레임」)'
+
+/**
+ * **`0.00ms` 가 아니라 이 말이 나가야 한다.** 표시 시간이 `null` 인 것은 짝을 못 찾았다는
+ * 뜻이고(`--stop` 이 앱이 그린 뒤 화면에 나가기 전에 트레이스를 끊은 경우), 0 으로 적으면
+ * "0ms 만에 합성됐다" 는 없던 사실이 된다 (규칙 3).
+ */
+const UNKNOWN = '모름'
+
+/**
+ * 세로축 상한의 바닥. 조용한 세션에서 4ms 프레임이 화면 꼭대기까지 차 보이는 것을 막는다 —
+ * 축이 데이터에만 맞으면 **모든 세션이 똑같이 꽉 찬 그림**이 되어 눈이 크기를 못 읽는다.
+ */
+const FLOOR_MS = 24
+
+export interface FrameBarVm {
+  /** 트레이스 시작부터 흐른 시각(ms). 가로 위치가 이 값이다. */
+  tMs: number
+  /** 같은 순간의 초. 화면 전체가 공유하는 `hoverT` 가 초 단위라 여기서 맞춰 둔다. */
+  tSec: number
+  appMs: number
+  /** **`null` 은 0 이 아니다** — 짝을 못 찾은 프레임이다. 위 칸을 아예 그리지 않는다. */
+  presentMs: number | null
+  /** 그린 칸의 합. 표시 시간을 모르면 앱 시간뿐이다 — 모르는 값을 0 으로 더하지 않는다. */
+  totalMs: number
+  /** **그 프레임의** 마감. 세션 중에도 바뀐다 — 고정 예산이 아니다. */
+  deadlineMs: number | null
+  /** 마감에서 나온 주사율. 마감이 없으면 `null` 이다 — 60 으로 추측하지 않는다. */
+  hz: number | null
+  x: number
+  w: number
+  /** 아래 칸(앱이 그린 시간). */
+  app: { y: number; h: number }
+  /** 위 칸(화면에 나가기까지). `presentMs` 가 `null` 이면 `null` 이다. */
+  present: { y: number; h: number } | null
+}
+
+export interface FrameTimelineVm {
+  none?: false
+  /** SVG 폭. 카드보다 넓으면 컨테이너 안에서 가로로 스크롤된다. */
+  width: number
+  bars: FrameBarVm[]
+  /**
+   * 화면 x(0~1) → 막대 번호. **막대마다 히트 영역을 두지 않는다** — 프레임이 5,000장이면
+   * 투명 사각형이 5,000개 붙고 마우스를 움직일 때마다 그만큼이 다시 그려진다. 대신 덮개
+   * 하나를 깔고 여기서 가장 가까운 막대를 찾는다. 막대에서 멀면 `null` 이다.
+   */
+  idxAt: (ratio: number) => number | null
+  /** **참고선 하나.** 이 선으로 막대를 분류하지 않는다 (규칙 2). */
+  guide: { ms: number; y: number; source: string }
+  yTicks: { y: number; gy: number; label: string }[]
+  xTicks: { x: number; anchor: 'start' | 'middle' | 'end'; label: string }[]
+  markLines: { x: number; hot: boolean; label: string }[]
+  /** 표본을 뽑았다는 사실. 전부 실었으면 `null` 이고 그때는 각주가 없다. */
+  note: string | null
+  tipOf: (idx: number) => { head: string; value: string; lines: string[] } | null
+}
+
+/**
+ * **막대 하나가 프레임 한 장이고, 가로는 경과 시각이다.**
+ *
+ * 두 칸으로 쌓는 것은 두 시간이 겹치지 않기 때문이다 — 실측 SM-F936N 에서 앱 0.00~6.30ms,
+ * 표시 7.11~15.08ms 로 앱이 그린 뒤에 화면에 나간다. 겹치는 값이었다면 쌓는 순간 합이
+ * 거짓말이 된다.
+ *
+ * **가로축은 ms 다.** `marks` 의 `t` 는 초라서 1000 을 곱해 옮긴다 — 안 그러면 모든 마크가
+ * 왼쪽 끝에 쌓여 "세션 시작 직후에 다 찍혔다" 로 읽힌다. 두 값이 같은 0초(트레이스 시작)를
+ * 쓰는 것은 core 의 SQL 이 `trace_bounds.start_ts` 를 원점으로 맞춰 둔 덕이다.
+ */
+export function buildFrameTimeline(
+  b: FrameTimelineBlock,
+  res: unknown,
+  maxT: number,
+  marks: Mark[],
+  hoverT: number | null,
+): FrameTimelineVm | NoneVm {
+  const raw = readPath(res, b.path)
+  if (raw === MISSING || raw === null || typeof raw !== 'object') return none(raw, b.path)
+
+  const d = raw as Partial<FrameTimelineDto>
+  const rows = Array.isArray(d.samples) ? d.samples : []
+  // 표본이 비면 그릴 막대가 없다. **`수집 안 함` 과는 다른 문장이다** — 지표는 돌았고
+  // 프레임이 안 잡혔거나 다 걸러진 것이다.
+  if (rows.length === 0) return none(null, b.path)
+
+  const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+
+  interface Row { tMs: number; appMs: number; presentMs: number | null; deadlineMs: number | null }
+  const parsed: Row[] = []
+  for (const row of rows) {
+    if (!Array.isArray(row)) continue
+    const tMs = num(row[0])
+    const appMs = num(row[1])
+    if (tMs === null || appMs === null) continue
+    parsed.push({ tMs, appMs, presentMs: num(row[2]), deadlineMs: num(row[3]) })
+  }
+  if (parsed.length === 0) return none(null, b.path)
+
+  const totalOf = (r: Row): number => r.appMs + (r.presentMs ?? 0)
+
+  // 축 상한은 **데이터 최댓값까지** 간다. 상한을 우리가 고르면 그 순간 무엇이 튄 것인지
+  // 우리가 정하게 되고(규칙 2), 잘린 막대는 실제 값을 화면에서 지운다.
+  const yMax = Math.max(FLOOR_MS, ...parsed.map(totalOf))
+
+  const W = Math.max(360, parsed.length * 3)
+  const plot = W - FPAD.l - FPAD.r
+  const spanMs = maxT > 0 ? maxT * 1000 : 1
+  const px = (ms: number): number => FPAD.l + (ms / spanMs) * plot
+  const py = (v: number): number => FH - FPAD.b - (v / yMax) * (FH - FPAD.t - FPAD.b)
+
+  const slot = plot / parsed.length
+  const bw = Math.max(2, Math.min(6, slot * 0.7))
+
+  const bars: FrameBarVm[] = parsed.map((r) => {
+    const total = totalOf(r)
+    const x = px(r.tMs) - bw / 2
+    return {
+      tMs: r.tMs,
+      tSec: Math.round(r.tMs / 1000),
+      appMs: r.appMs,
+      presentMs: r.presentMs,
+      totalMs: total,
+      deadlineMs: r.deadlineMs,
+      // 마감이 0 이하면 나눗셈이 무한대를 낸다. 모르는 것으로 둔다 — 지어내지 않는다.
+      hz: r.deadlineMs === null || r.deadlineMs <= 0 ? null : Math.round(1000 / r.deadlineMs),
+      x,
+      w: bw,
+      app: { y: py(r.appMs), h: py(0) - py(r.appMs) },
+      present: r.presentMs === null ? null : { y: py(total), h: py(r.appMs) - py(total) },
+    }
+  })
+
+  const yStep = niceMax(yMax / 4)
+  const yVals: number[] = []
+  for (let v = 0; v <= yMax + 0.001; v += yStep) yVals.push(v)
+  const last = yVals[yVals.length - 1]!
+  if (last < yMax) {
+    // 꼭대기(축의 실제 상한)가 더 쓸모 있다 — 붙어 버리는 쪽은 규칙적인 눈금이라도 버린다.
+    if (yMax - last < yStep * 0.55) yVals.pop()
+    yVals.push(yMax)
+  }
+
+  const xs = timeTicks(maxT)
+  const seen = typeof d.frames_seen === 'number' ? `${nf(d.frames_seen, 0)}장 중 ` : ''
+  const bucket = typeof d.bucket_ms === 'number' ? `${nf(d.bucket_ms, 0)}ms ` : ''
+
+  return {
+    width: W,
+    bars,
+    idxAt: (ratio) => {
+      const x = ratio * W
+      const cx = (i: number): number => bars[i]!.x + bw / 2
+      let lo = 0
+      let hi = bars.length - 1
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1
+        if (cx(mid) < x) lo = mid + 1
+        else hi = mid
+      }
+      const i = lo > 0 && Math.abs(cx(lo - 1) - x) < Math.abs(cx(lo) - x) ? lo - 1 : lo
+      // 막대에서 멀면 아무것도 안 짚는다 — 빈 자리에서 엉뚱한 프레임의 툴팁이 뜨면
+      // 그 시각에 프레임이 있었다는 없던 사실이 된다.
+      return Math.abs(cx(i) - x) > Math.max(6, slot) ? null : i
+    },
+    guide: { ms: VITALS_SLOW_FRAME_MS, y: py(VITALS_SLOW_FRAME_MS), source: VITALS_SLOW_FRAME_SOURCE },
+    yTicks: yVals.map((v) => ({ y: py(v) + 3.5, gy: py(v), label: fmtAxis(v) })),
+    xTicks: xs.map((t, i) => ({
+      x: px(t * 1000),
+      anchor: i === 0 ? 'start' : i === xs.length - 1 ? 'end' : 'middle',
+      label: `${t}s`,
+    })),
+    // **초를 ms 로 옮긴다.** 이 축만 ms 이고 나머지 차트는 전부 초다.
+    markLines: marks.map((mk) => ({ x: px(mk.t * 1000), hot: hoverT === mk.t, label: mk.label })),
+    // **조용히 자르지 않는다.** 표본을 뽑았으면 몇 장 중 몇 장인지 화면에 남는다.
+    note:
+      d.sampling !== 'max_per_bucket'
+        ? null
+        : `${seen}${nf(bars.length, 0)}장 표본 (${bucket}구간마다 가장 오래 걸린 한 장)`,
+    tipOf: (idx) => {
+      const bar = bars[idx]
+      if (bar === undefined) return null
+      return {
+        head: `경과 ${nf(bar.tMs / 1000, 3)}초`,
+        value: `${nf(bar.totalMs, 2)}ms`,
+        lines: [
+          `앱 ${nf(bar.appMs, 2)}ms · 표시 ` +
+            (bar.presentMs === null ? UNKNOWN : `${nf(bar.presentMs, 2)}ms`),
+          bar.deadlineMs === null
+            ? `마감 ${UNKNOWN}`
+            : `마감 ${nf(bar.deadlineMs, 2)}ms` + (bar.hz === null ? '' : ` · ${nf(bar.hz, 0)}Hz`),
+        ],
       }
     },
   }

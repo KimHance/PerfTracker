@@ -218,6 +218,30 @@
 .rp-slot-hot { fill: var(--color-accent); opacity: 0.14; }
 .rp-pline { stroke: var(--color-neutral-600); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.75; }
 
+/* ── 프레임 시간축 ──────────────────────────────────────────
+   **두 칸은 명도로만 가른다.** 같은 색상(hue)의 밝기 차이라 "다른 종류" 가 아니라
+   "이어 붙은 두 구간" 으로 읽힌다. 게이지의 6색 구간은 뒤로 갈수록 나쁘다는 뜻이라
+   여기로 끌고 오면 이 차트가 판정을 하게 된다 (규칙 2). */
+.rp-ftl { display: block; }
+/* 넓은 것은 자기 안에서 스크롤한다 — 페이지 본문이 옆으로 밀리면 안 된다. */
+.rp-ftl-scroll { overflow-x: auto; overflow-y: hidden; max-width: 100%; }
+.rp-ftl-app { fill: var(--color-accent-500); }
+.rp-ftl-present { fill: var(--color-accent-300); }
+/* 참고선. **판정이 아니다** — 점선 하나이고 색으로 아무 말도 하지 않는다.
+   출처는 범례 칩과 선 자체의 툴팁에 있다. */
+.rp-guide { stroke: var(--color-neutral-500); stroke-width: 1; stroke-dasharray: 5 4; }
+
+.rp-ftl-legend {
+  display: flex; flex-wrap: wrap; gap: var(--space-3);
+  margin-bottom: var(--space-2); font-size: 11px; color: var(--color-neutral-700);
+}
+.rp-ftl-key { display: inline-flex; align-items: center; gap: 5px; }
+.rp-ftl-sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.rp-ftl-sw-app { background: var(--color-accent-500); }
+.rp-ftl-sw-present { background: var(--color-accent-300); }
+.rp-ftl-sw-guide { height: 0; border-radius: 0; border-top: 1px dashed var(--color-neutral-500); }
+.rp-ftl-key-guide { color: var(--color-neutral-600); cursor: help; }
+
 .rp-pcts { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-bottom: var(--space-2); }
 .rp-pct-k {
   display: block; font-family: ui-monospace, Menlo, monospace; font-size: 10px;

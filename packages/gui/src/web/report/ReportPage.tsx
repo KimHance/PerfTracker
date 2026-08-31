@@ -5,6 +5,7 @@ import {
   buildBars,
   buildDelta,
   buildDistribution,
+  buildFrameTimeline,
   buildPairs,
   buildSeries,
   buildStat,
@@ -16,6 +17,7 @@ import {
   BarsBody,
   DeltaBody,
   DistributionChart,
+  FrameTimelineChart,
   PairsBody,
   Percentiles,
   emphasize,
@@ -226,9 +228,14 @@ export function ReportPage({ runId }: { runId: string }) {
                         : undefined
                     }
                     footnote={
-                      !isNone && (block.kind === 'series' || block.kind === 'distribution')
-                        ? (vm as { footnote: string }).footnote
-                        : undefined
+                      isNone
+                        ? undefined
+                        : block.kind === 'series' || block.kind === 'distribution'
+                          ? (vm as { footnote: string }).footnote
+                          : // 표본을 뽑았다는 사실. 전부 실었으면 `null` 이고 각주가 없다.
+                            block.kind === 'frametimeline'
+                            ? ((vm as { note: string | null }).note ?? undefined)
+                            : undefined
                     }
                   >
                     {block.note !== undefined && (
@@ -265,7 +272,12 @@ export function ReportPage({ runId }: { runId: string }) {
         <div className="rp-tip" style={{ left: tip.x + 14, top: tip.y + 14 }}>
           <div className="rp-tip-head">{tip.head}</div>
           <div className="rp-tip-value num">{tip.value}</div>
-          <div className="rp-tip-sub num">{tip.sub}</div>
+          {tip.sub !== undefined && <div className="rp-tip-sub num">{tip.sub}</div>}
+          {tip.lines?.map((l, i) => (
+            <div className="rp-tip-sub num" key={i}>
+              {l}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -317,6 +329,7 @@ function buildOne(
   switch (b.kind) {
     case 'series': return buildSeries(b, doc, maxT, marks, hoverT)
     case 'distribution': return buildDistribution(b, doc, distW)
+    case 'frametimeline': return buildFrameTimeline(b, doc, maxT, marks, hoverT)
     case 'bars': return buildBars(b, doc)
     case 'delta': return buildDelta(b, doc)
     case 'pairs': return buildPairs(b, doc)
@@ -367,6 +380,17 @@ function Body({
         </>
       )
     }
+    case 'frametimeline':
+      return (
+        <FrameTimelineChart
+          vm={vm as Parameters<typeof FrameTimelineChart>[0]['vm']}
+          hot={hotBucket}
+          onHot={setHotBucket}
+          onTip={setTip}
+          onHover={setHoverT}
+          onLeave={() => setHoverT(null)}
+        />
+      )
     case 'bars': return <BarsBody vm={vm as Parameters<typeof BarsBody>[0]['vm']} />
     case 'delta': return <DeltaBody vm={vm as Parameters<typeof DeltaBody>[0]['vm']} />
     case 'pairs': return <PairsBody vm={vm as Parameters<typeof PairsBody>[0]['vm']} />

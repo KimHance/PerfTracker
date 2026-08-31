@@ -1,19 +1,22 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { computeMaxT, readMarks } from '../src/web/report/axis.js'
+import { computeMaxT, type Mark, readMarks } from '../src/web/report/axis.js'
 import {
   buildBars,
   buildDelta,
   buildDistribution,
+  buildFrameTimeline,
   buildPairs,
   buildSeries,
   buildStat,
+  type FrameTimelineVm,
   metricState,
   timeTicks,
   NO_DELTA,
   type NoneVm,
   type SeriesVm,
+  VITALS_SLOW_FRAME_MS,
 } from '../src/web/report/blocks.js'
 import { fmtValue, NONE_MISSING, NONE_NULL } from '../src/web/report/format.js'
 import { buildHeader } from '../src/web/report/header.js'
@@ -23,6 +26,7 @@ import type {
   BarsBlock,
   DeltaBlock,
   DistributionBlock,
+  FrameTimelineBlock,
   PairsBlock,
   SeriesBlock,
   StatBlock,
@@ -92,6 +96,7 @@ describe('표본 셋이 전부 렌더된다', () => {
         expect(() => {
           if (b.kind === 'series') buildSeries(b, doc, maxT, marks, null)
           else if (b.kind === 'distribution') buildDistribution(b, doc, 900)
+          else if (b.kind === 'frametimeline') buildFrameTimeline(b, doc, maxT, marks, null)
           else if (b.kind === 'bars') buildBars(b, doc)
           else if (b.kind === 'delta') buildDelta(b, doc)
           else if (b.kind === 'pairs') buildPairs(b, doc)
@@ -785,6 +790,10 @@ describe('README 가 말하는 숫자', () => {
  * `jank_type`·`기기가 준 마감`·트레이스 `프레임 수` 카드는 화면에서 뺐다 — 렌더를
  * 프레임워크(`hwui`) 기준으로 정했고, 두 출처를 한 화면에 놓으면 같은 이름이 두 번 나온다.
  * **데이터는 `result.json` 에 그대로 있다.** 아래는 남은 카드들이 지켜야 할 것.
+ *
+ * `frame` 이 렌더 섹션으로 돌아온 것은 그 판단을 뒤집은 것이 아니다 — **범위가 달라졌다.**
+ * 개수도 백분위도 내지 않고 시간축만 내므로 같은 이름의 숫자가 두 벌이 되는 조건 자체가
+ * 없다. 아래 세 테스트가 그 조건을 지킨다.
  */
 describe('프레임워크 지표 카드', () => {
   const card = block<PairsBlock>('프레임 수')
@@ -830,23 +839,28 @@ describe('프레임워크 지표 카드', () => {
     expect(buildHeader(FULL).footerIgnored).toBe('')
   })
 
-  it('렌더 섹션은 프레임워크 지표만 낸다', () => {
+  it('렌더 섹션의 지표는 hwui 와 frame 둘뿐이다', () => {
     for (const b of MANIFEST.filter((x) => x.section === 'render')) {
-      expect(b.metric, b.title).toBe('hwui')
-      expect(b.path ?? '', b.title).toContain('metrics.hwui')
+      expect(['hwui', 'frame'], b.title).toContain(b.metric)
     }
+  })
+
+  /** 트레이스 쪽은 **시간축 카드 하나**여야 한다. 개수나 백분위 카드가 붙으면 그때부터 두 벌이다. */
+  it('frame 은 시간축 카드 하나뿐이다', () => {
+    expect(MANIFEST.filter((b) => b.metric === 'frame').map((b) => b.kind)).toEqual(['frametimeline'])
   })
 
   /**
    * `path` 만 보면 `share` 처럼 중첩된 경로를 놓친다 — 렌더 섹션이 참조하는 **모든** 문자열
-   * 경로를 훑는다. 트레이스 값이 하나라도 끼면 같은 화면에 두 모집단이 서게 된다.
+   * 경로를 훑는다. 트레이스에서 오는 경로는 `metrics.frame.data`(시간축) 하나뿐이고,
+   * `metrics.frame.data.percentiles` 같은 것이 하나라도 끼면 같은 화면에 두 모집단이 선다.
    */
-  it('렌더 섹션의 어느 경로도 트레이스를 가리키지 않는다', () => {
+  it('렌더 섹션의 트레이스 경로는 시간축 하나뿐이다', () => {
     const paths = MANIFEST.filter((x) => x.section === 'render').flatMap((b) =>
       JSON.stringify(b).match(/metrics\.[a-z_.]+/g) ?? [],
     )
     expect(paths.length).toBeGreaterThan(0)
-    for (const p of paths) expect(p).toMatch(/^metrics\.hwui\./)
+    for (const p of paths) expect(p).toMatch(/^(metrics\.hwui\.|metrics\.frame\.data$)/)
   })
 })
 
@@ -970,5 +984,186 @@ describe('렌더 섹션 서브탭', () => {
       const ids = SECTIONS.find((s) => s.id === b.section)?.subTabs?.map((t) => t.id) ?? []
       expect(ids, `${b.title} 의 sub=${b.sub}`).toContain(b.sub)
     }
+  })
+})
+
+/**
+ * **시간별 프레임.** 이 카드가 답하는 질문은 `hwui` 의 분포와 다르다 — "몇 장이 얼마나
+ * 걸렸나" 가 아니라 **"언제 그랬나"** 다. 그래서 규칙도 다르다: 짝을 못 찾은 프레임은
+ * 0 이 아니고, 마감은 프레임마다 다르며, 표본을 뽑았으면 그 사실이 화면에 남아야 한다.
+ */
+describe('buildFrameTimeline', () => {
+  const card = block<FrameTimelineBlock>('시간별 프레임')
+
+  const ftl = (
+    data: unknown,
+    marks: Mark[] = [],
+    hoverT: number | null = null,
+    maxT = 20000,
+  ): FrameTimelineVm =>
+    buildFrameTimeline(
+      card,
+      { metrics: { frame: { status: 'collected', data } } },
+      maxT,
+      marks,
+      hoverT,
+    ) as FrameTimelineVm
+
+  const one = (
+    appMs: number,
+    presentMs: number | null,
+    deadlineMs: number | null,
+  ): unknown => ({
+    samples: [[0, appMs, presentMs, deadlineMs]],
+    sampling: 'all',
+    bucket_ms: null,
+    frames_seen: 1,
+  })
+
+  it('막대를 앱/표시 두 칸으로 쌓는다', () => {
+    const vm = ftl(one(6, 8, 8.33))
+    expect(vm.bars).toHaveLength(1)
+    expect(vm.bars[0]!.appMs).toBe(6)
+    expect(vm.bars[0]!.presentMs).toBe(8)
+    expect(vm.bars[0]!.totalMs).toBe(14)
+    // 두 칸은 겹치지 않고 이어 붙는다 — 위 칸의 바닥이 아래 칸의 천장이다.
+    expect(vm.bars[0]!.present!.y + vm.bars[0]!.present!.h).toBeCloseTo(vm.bars[0]!.app.y, 5)
+  })
+
+  /** 짝을 못 찾은 프레임. 0 으로 그리면 "0ms 만에 합성됐다" 가 된다. */
+  it('표시 시간이 null 이면 아래 칸만 그리고 합도 앱 시간뿐이다', () => {
+    const vm = ftl(one(6, null, 8.33))
+    expect(vm.bars[0]!.presentMs).toBeNull()
+    expect(vm.bars[0]!.totalMs).toBe(6)
+    expect(vm.bars[0]!.present).toBeNull()
+  })
+
+  /** 0 높이 칸과 그림은 같아 보이지만 **툴팁이 달라야 한다** — `0.00ms` 가 아니라 `모름`. */
+  it('표시 시간이 null 이면 툴팁이 "모름" 이라고 말한다', () => {
+    const lines = ftl(one(6, null, 8.33)).tipOf(0)!.lines.join(' / ')
+    expect(lines).toContain('모름')
+    expect(lines).not.toContain('0.00')
+  })
+
+  /** D5 — 우리가 판정하지 않는다. 선은 Vitals 값 하나뿐이고 막대를 분류하지 않는다. */
+  it('보조선은 Vitals 16ms 하나다', () => {
+    const vm = ftl(one(6, 8, 8.33))
+    expect(VITALS_SLOW_FRAME_MS).toBe(16)
+    expect(vm.guide.ms).toBe(16)
+    expect(vm.guide.source).toContain('Android Vitals')
+    expect(vm.bars[0]).not.toHaveProperty('late')
+  })
+
+  it('마감에서 주사율을 낸다', () => {
+    const vm = ftl({
+      samples: [[0, 6, 8, 8.33], [8, 6, 8, 41.67]],
+      sampling: 'all', bucket_ms: null, frames_seen: 2,
+    })
+    expect(vm.bars[0]!.hz).toBe(120)
+    expect(vm.bars[1]!.hz).toBe(24)
+  })
+
+  /** 마감이 없으면 주사율도 없다. 60 으로 추측하지 않는다. */
+  it('마감이 null 이면 주사율도 null 이다', () => {
+    const vm = ftl(one(6, 8, null))
+    expect(vm.bars[0]!.hz).toBeNull()
+    expect(vm.tipOf(0)!.lines.join(' / ')).not.toContain('Hz')
+  })
+
+  /** 조용히 자르지 않는다 — 표본이라는 사실이 화면에 있어야 한다. */
+  it('표본을 뽑았으면 각주를 낸다', () => {
+    const vm = ftl({
+      samples: [[0, 6, 8, 8.33]], sampling: 'max_per_bucket', bucket_ms: 40, frames_seen: 12400,
+    })
+    expect(vm.note).toContain('12,400')
+  })
+
+  it('전부 실었으면 각주가 없다', () => {
+    expect(ftl(one(6, 8, 8.33)).note).toBeNull()
+  })
+
+  it('마크를 세로선으로 넘긴다', () => {
+    const vm = ftl(one(6, 8, 8.33), [{ t: 5, label: '스크롤 시작' }])
+    expect(vm.markLines).toHaveLength(1)
+  })
+
+  /**
+   * **마킹은 초, 이 축은 ms 다.** 1000 을 안 곱하면 모든 마크가 왼쪽 끝에 쌓여
+   * "세션 시작 직후에 다 찍혔다" 로 읽힌다 — 틀린 줄 모르는 쪽이 더 나쁘다.
+   */
+  it('마크를 ms 축으로 옮긴다 — 초를 그대로 쓰지 않는다', () => {
+    const data = { samples: [[10000, 6, 8, 8.33]], sampling: 'all', bucket_ms: null, frames_seen: 1 }
+    const vm = ftl(data, [{ t: 10, label: '10초' }])
+    // 10초 마크와 10,000ms 프레임은 같은 순간이므로 같은 x 에 선다.
+    expect(vm.markLines[0]!.x).toBeCloseTo(vm.bars[0]!.x + vm.bars[0]!.w / 2, 5)
+  })
+
+  /**
+   * 막대가 2px 라 마우스로 못 짚는다. 덮개 하나를 깔고 가장 가까운 막대를 찾되,
+   * **프레임이 없던 시간에서는 아무것도 짚지 않는다** — 짚으면 그 시각에 프레임이
+   * 있었다는 없던 사실이 된다.
+   */
+  it('가까운 막대를 짚되 프레임이 없던 자리는 비운다', () => {
+    const samples: unknown[] = []
+    for (let i = 0; i < 10; i++) samples.push([i * 8, 6, 8, 8.33])
+    samples.push([20000, 6, 8, 8.33])
+    const vm = ftl({ samples, sampling: 'all', bucket_ms: null, frames_seen: 11 }, [], null, 20)
+
+    expect(vm.idxAt(vm.bars[10]!.x / vm.width)).toBe(10)
+    // 앞쪽 열 장과 마지막 한 장 사이는 20초 가까이 비어 있다.
+    expect(vm.idxAt(0.5)).toBeNull()
+  })
+
+  it('없으면 카드는 남고 "수집 안 함" 이다', () => {
+    expect((buildFrameTimeline(card, {}, 20, [], null) as NoneVm).none).toBe(true)
+  })
+
+  /** 재 봤더니 프레임이 0장인 것도 사실이지만, 그릴 막대는 없다. */
+  it('표본이 비면 값 없음이다', () => {
+    const vm = buildFrameTimeline(
+      card,
+      { metrics: { frame: { data: { samples: [], sampling: 'all', bucket_ms: null, frames_seen: 0 } } } },
+      20, [], null,
+    )
+    expect((vm as NoneVm).none).toBe(true)
+  })
+})
+
+/**
+ * 매니페스트는 렌더 섹션의 타임라인 서브탭에 이 카드를 놓는다. `sub` 가 없으면 어느 탭에도
+ * 안 그려져 조용히 사라지고, `frame` 은 다시 "파일에만 있는 지표" 가 된다.
+ */
+describe('시간별 프레임 카드', () => {
+  const card = block<FrameTimelineBlock>('시간별 프레임')
+
+  it('렌더 섹션의 타임라인 탭에 있다', () => {
+    expect(card.section).toBe('render')
+    expect(card.sub).toBe('timeline')
+    expect(card.metric).toBe('frame')
+    expect(card.path).toBe('metrics.frame.data')
+  })
+
+  /** 그려지므로 푸터의 "무시한 지표" 가 이 지표를 부를 일이 없다. */
+  it('frame 은 일부러 안 그리는 지표가 아니다', () => {
+    expect(NOT_DRAWN_METRICS).not.toContain('frame')
+    expect(MANIFEST.some((b) => b.metric === 'frame')).toBe(true)
+  })
+})
+
+/**
+ * `packages/gui/AGENTS.md` 는 이 화면의 모양 목록을 **개수와 이름으로** 말한다. 새 `kind` 를
+ * 늘리고 문서를 안 고치면 여기서 깨진다 — 통과하는 테스트는 문서가 맞다는 증거가 아니지만,
+ * 이 테스트는 목록이 갈리는 순간을 잡는다.
+ */
+describe('AGENTS.md 가 말하는 모양 목록', () => {
+  it('매니페스트가 쓰는 kind 가 전부 적혀 있다', () => {
+    const doc = readFileSync(
+      fileURLToPath(new URL('../AGENTS.md', import.meta.url)),
+      'utf8',
+    )
+    const KO = ['영', '하나', '둘', '셋', '넷', '다섯', '여섯', '일곱', '여덟', '아홉', '열']
+    const kinds = [...new Set(MANIFEST.map((b) => b.kind))]
+    expect(doc).toContain(`데이터 모양이 ${KO[kinds.length]} 가지`)
+    for (const k of kinds) expect(doc, k).toContain(`\`${k}\``)
   })
 })

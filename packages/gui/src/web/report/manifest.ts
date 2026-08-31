@@ -3,7 +3,7 @@ import type { Fmt } from './format.js'
 /**
  * **보고서의 유일한 확장 지점.**
  *
- * 지표마다 컴포넌트를 만들지 않는다. `result.json` 안의 데이터 모양은 실제로 여섯 가지뿐이고,
+ * 지표마다 컴포넌트를 만들지 않는다. `result.json` 안의 데이터 모양은 실제로 일곱 가지뿐이고,
  * 각 지표가 여기서 **자기 모양(`kind`)과 데이터 위치(`path`)** 를 선언하면 렌더러는 모양만
  * 안다. 지표가 늘면 이 배열에 한 줄, 새 *모양*이 나올 때만 `kind` 를 하나 늘린다.
  *
@@ -12,7 +12,8 @@ import type { Fmt } from './format.js'
  * 이 배열 말고는 고칠 것이 없어야 한다.
  */
 
-export type BlockKind = 'stat' | 'distribution' | 'series' | 'bars' | 'delta' | 'pairs'
+export type BlockKind =
+  'stat' | 'distribution' | 'series' | 'bars' | 'delta' | 'pairs' | 'frametimeline'
 
 export type SectionId = 'startup' | 'render' | 'cpu' | 'memory' | 'log' | 'context' | 'device'
 export type TabId = 'summary' | 'device'
@@ -210,8 +211,22 @@ export interface PairsBlock extends BlockBase {
   emptyLabel?: string
 }
 
+/**
+ * **프레임 하나가 막대 하나인 시간축.** 분포(`distribution`)와 축이 다르다 — 가로가 지속
+ * 시간이 아니라 **경과 시각**이고, 그래서 마킹 세로선이 얹힌다.
+ *
+ * 이 모양은 데이터가 `[경과 ms, 앱 ms, 표시 ms, 마감 ms]` 배열의 배열이라 다른 여섯 중
+ * 어느 것으로도 안 그려진다: `series` 는 초마다 값 하나를 가정하고(한 초에 프레임이 120장
+ * 온다), `distribution` 은 가로가 시간이 아니다.
+ */
+export interface FrameTimelineBlock extends BlockBase {
+  kind: 'frametimeline'
+  path: string
+}
+
 export type Block =
   | StatBlock | DistributionBlock | SeriesBlock | BarsBlock | DeltaBlock | PairsBlock
+  | FrameTimelineBlock
 
 /**
  * `note` 는 **이 지표를 무엇으로 읽으면 되는지**를 한 문장으로 말한다. 값에 대한 평가가
@@ -353,6 +368,20 @@ export const MANIFEST: Block[] = [
       { p: 'missed_vsync', l: 'Missed Vsync', f: 'int' },
       { p: 'high_input_latency', l: 'High input latency', f: 'int' },
     ],
+  },
+
+  {
+    // **`hwui` 와 같은 것을 두 번 말하지 않는다.** 이쪽은 개수도 백분위도 없고 "언제" 만
+    // 답한다 — 그래서 같은 이름의 숫자가 두 벌이 되지 않는다.
+    //
+    // sdk 31 하한이 있는 유일한 렌더 카드다. 그 미만 기기에서는 카드가 남고 배지가
+    // `기기 미지원` · `sdk_too_low` 를 말한다 — 사라지면 "원래 안 재는 것" 으로 읽힌다.
+    kind: 'frametimeline', section: 'render', title: '시간별 프레임', metric: 'frame',
+    span: 12, unit: 'ms · perfetto frametimeline', sub: 'timeline',
+    note:
+      '**막대 하나가 프레임 한 장입니다.** 아래 칸은 앱이 그린 시간, 위 칸은 그 뒤 화면에 ' +
+      '나가기까지 걸린 시간입니다. 가로는 트레이스가 시작된 뒤 흐른 시각입니다.',
+    path: 'metrics.frame.data',
   },
 
   // ── CPU: 시계열은 전부 선 ────────────────────────────────────

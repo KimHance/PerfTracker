@@ -41,9 +41,9 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
 
 ## 보고서는 팩토리다
 
-`src/web/report/` 는 지표마다 컴포넌트를 만들지 않는다. 데이터 모양이 여섯 가지뿐이고
-(`stat` `distribution` `series` `bars` `delta` `pairs`), **각 지표가 `manifest.ts` 에서 자기
-모양과 데이터 위치를 선언**하면 렌더러는 모양만 안다.
+`src/web/report/` 는 지표마다 컴포넌트를 만들지 않는다. 데이터 모양이 일곱 가지뿐이고
+(`stat` `distribution` `series` `bars` `delta` `pairs` `frametimeline`), **각 지표가
+`manifest.ts` 에서 자기 모양과 데이터 위치를 선언**하면 렌더러는 모양만 안다.
 
     지표가 늘어난다  →  manifest.ts 에 한 줄
     새 모양이 나온다 →  그때만 kind 를 하나 늘린다
