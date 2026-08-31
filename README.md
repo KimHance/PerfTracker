@@ -17,9 +17,9 @@ npx perftracker doctor        # 설치 없이 바로 — 이 기기에서 뭘 �
 
 ---
 
-## 무엇을 재는가 — 지표 7개
+## 무엇을 재는가 — 지표 8개
 
-`result.json` 의 `metrics` 아래에 이 일곱 개가 들어갑니다. 키가 곧 수집기 id 입니다.
+`result.json` 의 `metrics` 아래에 이 여덟 개가 들어갑니다. 키가 곧 수집기 id 입니다.
 
 | 지표 | 귀속 범위 | 무엇인가 | 어디서 나오는가 |
 | --- | --- | --- | --- |
@@ -30,6 +30,7 @@ npx perftracker doctor        # 설치 없이 바로 — 이 기기에서 뭘 �
 | [`thermal`](#metricsthermal) | 기기 전역 | 센서별 온도의 세션 전/후 차이 | `dumpsys thermalservice` 전/후 스냅샷 |
 | [`network`](#metricsnetwork) | **uid** | 세션 동안 오간 바이트·패킷 | `dumpsys netstats` 전/후 스냅샷 |
 | [`hwui`](#metricshwui) | 앱 | 프레임워크가 직접 센 렌더링 집계와 **원인별 개수** | `dumpsys gfxinfo` 전/후 스냅샷 |
+| [`frame`](#metricsframe) | 앱 | 화면에 나간 프레임의 **시간축** (개수·백분위는 없음) | perfetto `android.surfaceflinger.frametimeline` — **sdk 31 이상** |
 
 범위 열을 그냥 넘기지 마세요. 이 도구가 가장 자주 오해받은 자리입니다:
 
@@ -39,20 +40,27 @@ npx perftracker doctor        # 설치 없이 바로 — 이 기기에서 뭘 �
 - **`thermal` 은 기기 전역뿐입니다.** 앱별 온도는 물리적으로 존재하지 않습니다.
 - **`network` 은 패키지가 아니라 uid 단위입니다.** 실기기에서 uid 하나를 86개 패키지가
   공유하는 것을 봤습니다. 귀속 범위의 정본은 `shared_uid_packages` 배열입니다.
+- **`hwui` 와 `frame` 은 같은 렌더링을 서로 다른 축으로 잽니다.** `hwui` 는 개수·백분위·
+  원인을, `frame` 은 시간축(`samples`)만 냅니다 — 겹치는 숫자가 없습니다. `frame.frames_seen`
+  을 `hwui.total_frames` 와 비교하지 마세요. 세는 대상이 다릅니다 (자세한 것은
+  [`metrics.frame`](#metricsframe) 절 참고).
 
 ---
 
 ## 어느 안드로이드에서 되는가
 
-**Android 11(sdk 30)부터 동작합니다.** 한 지표에만 더 높은 하한이 있습니다:
+**Android 11(sdk 30)부터 동작합니다.** 두 지표에만 더 높은 하한이 있습니다:
 
 | 지표 | 최소 | 왜 |
 | --- | --- | --- |
 | `network` | **Android 14** (sdk 34) | `dumpsys netstats` 의 `mAppUidStatsMap` 절이 그때부터입니다 |
+| `frame` | **Android 12** (sdk 31) | `android.surfaceflinger.frametimeline` 데이터소스가 그때부터입니다 |
 | 나머지 6개 | Android 11 | thermal 만 sdk 29 하한이 따로 있습니다 |
 
-**렌더링은 어느 기기에서나 볼 수 있습니다.** `hwui` 는 `dumpsys gfxinfo` 에서 와서 버전
+**렌더링 집계(`hwui`)는 어느 기기에서나 볼 수 있습니다.** `dumpsys gfxinfo` 에서 와서 버전
 하한이 없습니다 — 실측 SM-A405S(sdk 30)에서도 전체 799장·분포 70칸이 나왔습니다.
+**렌더링의 시간축(`frame`)은 다릅니다** — sdk 31 미만에서는 `metrics.frame` 이
+`sdk_too_low` 로 나옵니다 (`hwui` 는 그 기기에서도 그대로 나옵니다).
 
 **기기를 꽂고 `perftracker doctor` 를 돌리면 그 기기에서 무엇을 잴 수 있는지 알려줍니다:**
 
@@ -571,7 +579,7 @@ clock_snapshot 이 없거나 기기 시계를 못 읽은 경우(`trace_start_off
   CI 매칭은 반드시 이걸로 하세요. (예: `sdk_too_low`, `no_log_entries`,
   `trace_missing`, `data_source_not_registered`, `query_failed`)
 
-  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **35개**입니다
+  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **36개**입니다
   > (`1.0.0` 은 6개였습니다). 그중 `process_name_stale_in_trace` 는 `1.0.0` 부터 있던
   > `metrics.hwui` 에도 실립니다. 이 숫자는 테스트가 `METRIC_REASON_CODES` 와 대조해
   > 고정하므로 코드보다 낡을 수 없습니다.
@@ -630,11 +638,16 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 }
 ```
 
-**렌더링을 재는 길은 이것 하나입니다.** 한동안 트레이스(`android.surfaceflinger.frametimeline`)
-로도 같은 것을 재서 `metrics.frame` 을 함께 냈는데, **보고서가 `hwui` 만 그리게 되자 화면에
-없는 데이터가 `result.json` 에만 남았습니다.** 사람은 보고서를 보고 LLM 은 파일을 보는데
-둘이 다른 숫자를 들게 됩니다 — 같은 세션에서 `janky_frames` 가 170 대 1,556, `p99` 가
-53 대 39.56 으로 갈렸습니다. 그래서 수집을 접었습니다.
+**개수·백분위·원인별 카운터를 재는 길은 이것 하나입니다.** 한동안 트레이스
+(`android.surfaceflinger.frametimeline`)로도 같은 종류의 숫자(개수·백분위)를 재서
+`metrics.frame` 을 함께 냈는데, **보고서가 `hwui` 만 그리게 되자 화면에 없는 데이터가
+`result.json` 에만 남았습니다.** 사람은 보고서를 보고 LLM 은 파일을 보는데 둘이 다른 숫자를
+들게 됐습니다 — 같은 세션에서 `janky_frames` 가 170 대 1,556, `p99` 가 53 대 39.56 으로
+갈렸습니다. 그때는 그래서 트레이스 쪽 수집을 접었습니다.
+
+[`metrics.frame`](#metricsframe) 은 이후 **범위를 바꿔 돌아왔습니다** — 개수도 백분위도
+내지 않고 시간축(`samples`)만 냅니다. 같은 이름의 숫자가 두 벌이 되는 조건 자체가 없으므로
+위 문제가 재발하지 않습니다.
 
 | | `hwui` |
 | --- | --- |
@@ -689,6 +702,58 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 **개발자 옵션을 켤 필요는 없습니다.** 「HWUI 렌더링 프로파일」이 꺼진 상태에서도 이 집계는
 나옵니다 (실측 sdk 36). 그 옵션이 켜는 `framestats`(프레임별 단계 분해)는 마지막 120장만
 남아 세션을 담을 수 없어 쓰지 않습니다 — 담으려면 측정 중 폴링이고 규칙 1 위반입니다.
+
+### `metrics.frame`
+
+**프레임의 시간축입니다.** `hwui` 와 다른 것을 답합니다 — `hwui` 는 "몇 장이 얼마나
+걸렸나", 이쪽은 "언제 그랬나" 입니다. perfetto `android.surfaceflinger.frametimeline`
+(`actual_frame_timeline_slice` + `expected_frame_timeline_slice`)에서 옵니다.
+
+**sdk 31(Android 12) 이상이 필요합니다.** 그 미만에서는 `status` 가 `unsupported`,
+`reason_code` 가 `sdk_too_low` 입니다 — `hwui` 는 그 기기에서도 그대로 나옵니다
+(위 [「어느 안드로이드에서 되는가」](#어느-안드로이드에서-되는가) 참고).
+
+```json
+{
+  "samples": [
+    [0, 3.12, 8.01, 8.33],
+    [8, 6.30, 15.08, 8.33],
+    [16, 2.87, null, 8.33]
+  ],
+  "sampling": "all",
+  "bucket_ms": null,
+  "frames_seen": 3
+}
+```
+
+- `samples` — 프레임 한 장이 한 칸이고, 순서는
+  `[경과 ms, 앱이 그린 ms, 화면에 나가기까지 ms, 그 프레임의 마감 ms]` 입니다. 앞의 둘은
+  겹치지 않습니다(실측 SM-F936N: 앱 0.00~6.30ms, 표시 7.11~15.08ms) — 앱이 그리는 시간과
+  화면에 나가는 시간이 이어 붙어 쌓입니다.
+  - **뒤의 둘은 `null` 일 수 있습니다** — 짝을 못 찾았다는 뜻이고 `0` 이 아닙니다. 표시
+    시간이 없는 경우는 보통 `--stop` 이 트레이스를 끊는 순간 그 프레임이 아직 화면에
+    나가기 전이었다는 뜻입니다.
+  - **마감(4번째 값)은 고정값이 아닙니다.** 기기가 프레임마다 배정하고 주사율을 따라
+    세션 중에도 바뀝니다(실측 한 세션: 8.23ms 672장 · 8.33ms 668장 · 41.67ms 4장 —
+    6초 만에 120Hz 에서 24Hz 로 떨어졌습니다). 60fps·120Hz 같은 고정 예산이 아니라
+    **그 프레임에서 기기가 실제로 쓴 값**입니다.
+  - 시간 원점은 다른 모든 시계열과 같습니다 — 트레이스 시작(`trace_bounds.start_ts`).
+    `mark` 로 남긴 표시와 같은 축 위에서 나란히 읽을 수 있습니다.
+- `sampling` / `bucket_ms` — 프레임이 5,000장을 넘으면 `sampling` 이 `max_per_bucket`
+  으로 바뀌고 `bucket_ms` 폭의 버킷마다 **가장 오래 걸린 프레임 하나만** 남습니다. 이
+  지표의 목적이 스파이크를 보는 것이라 매 N번째를 고르는 균등 추출은 쓰지 않습니다.
+  `all` 이면 전부 실렸고 그때 `bucket_ms` 는 `null` 입니다.
+- `frames_seen` — 추리기 전에 본 프레임 수입니다. **`hwui.total_frames` 와 비교하지
+  마세요** — 세는 대상이 다릅니다. 이쪽은 화면에 나간 프레임이고 `hwui` 는 View 계층이
+  그린 프레임입니다. 지표가 아니라 표본을 뽑았다는 사실을 말하는 각주용 숫자입니다.
+- **개수도 백분위도 여기 없습니다. 의도한 것입니다.** 예전에 이 지표를 접은 이유가 같은
+  이름의 숫자가 두 벌이었다는 것입니다 — 자세한 사정은 위 [`metrics.hwui`](#metricshwui)
+  절에 있습니다. 두 지표가 같은 종류의 숫자를 갖지 않으면 "이 앱의 p99" 라는 질문에 둘이
+  답할 일이 없습니다.
+- `actual_frame_timeline_slice` 는 **레이어마다** 한 행을 냅니다 — SurfaceView 를 쓰는
+  앱은 배경 레이어까지 붙어 화면 한 번 갱신에 여러 행이 달립니다(실측 33초 세션: 행
+  6,932 · 실제 프레임 2,875, 2.4배). `frame` 은 프레임 토큰으로 접어 **가장 오래 걸린
+  레이어**를 그 프레임의 앱 시간으로 씁니다 — 레이어 이름으로 거르지 않습니다.
 
 ### `metrics.startup`
 

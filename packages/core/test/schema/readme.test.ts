@@ -49,13 +49,6 @@ describe('README 의 지표 목록', () => {
     const missing = ids.filter((id) => !README.includes(`[\`${id}\`](#metrics${id})`))
     expect(missing, 'README 표에 없는 지표').toEqual([])
   })
-
-  /** 접은 지표가 표에 남으면 **없는 것을 있다고 말하는** 문서가 된다. */
-  it('접은 지표는 표에 없다', () => {
-    for (const gone of ['frame']) {
-      expect(README, `${gone} 는 더 이상 수집하지 않는다`).not.toContain(`[\`${gone}\`](#metrics${gone})`)
-    }
-  })
 })
 
 describe('README 가 스키마에 대해 말하는 숫자', () => {

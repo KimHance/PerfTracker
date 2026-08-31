@@ -116,6 +116,7 @@ describe('metricSupportChecks — 기기가 못 재는 지표를 미리 말한�
       'linux.process_stats',
       'linux.sys_stats',
       'android.log',
+      'android.surfaceflinger.frametimeline',
     ],
   }
 

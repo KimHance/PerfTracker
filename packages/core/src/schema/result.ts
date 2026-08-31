@@ -292,6 +292,46 @@ export interface FrameData {
   frames_seen: number
 }
 
+const FRAME_DESCRIPTION =
+  '**프레임의 시간축.** `hwui` 와 다른 것을 답한다 — `hwui` 는 "몇 장이 얼마나 걸렸나", ' +
+  '이쪽은 "언제 그랬나" 다. **개수도 백분위도 여기 없다. 의도한 것이다** — 예전에 이 지표를 ' +
+  '접은 이유가 같은 이름의 숫자가 두 벌이었다는 것이다(`janky_frames` 1,556 대 170, `p99` ' +
+  '39.56 대 53). 두 지표가 같은 종류의 숫자를 갖지 않으면 "이 앱의 p99" 라는 질문에 둘이 ' +
+  '답할 일이 없다. **`frames_seen` 을 `hwui.total_frames` 와 비교하지 말 것** — 세는 대상이 ' +
+  '다르다(이쪽은 화면에 나간 프레임, 그쪽은 앱이 그린 프레임). **sdk 31(Android 12) 이상에서만 ' +
+  '나온다** — `hwui` 는 버전 하한이 없다.'
+
+/**
+ * `FrameData` 의 zod 짝. **`FrameData` 를 이것으로 다시 정의하지 않는다** — 인터페이스의
+ * 필드별 doc-comment 는 소스에만 남고(`z.toJSONSchema()` 는 소스 주석을 못 읽는다),
+ * 이 스키마의 `.describe()` 가 그 내용을 산출물에 실어 낸다. `satisfies` 로 두 선언이
+ * 갈라지면 컴파일이 막는다.
+ */
+export const FrameDataSchema = z
+  .object({
+    samples: z
+      .array(z.tuple([z.number(), z.number(), z.number().nullable(), z.number().nullable()]))
+      .describe(
+        '프레임 한 장이 한 칸. `[경과 ms, 앱이 그린 ms, 화면에 나가기까지 ms, 그 프레임의 마감 ms]`. ' +
+          '앞의 둘은 겹치지 않는다(실측: 앱 0.00~6.30ms, 표시 7.11~15.08ms). ' +
+          '뒤의 둘은 짝을 못 찾으면 `null` 이고 `0` 으로 채우지 않는다 — 마감은 고정값이 아니라 ' +
+          '주사율을 따르고 세션 중에도 바뀐다.',
+      ),
+    sampling: z
+      .enum(['all', 'max_per_bucket'])
+      .describe('`all` 이면 전부 실었다. `max_per_bucket` 이면 버킷마다 가장 오래 걸린 것만 남겼다.'),
+    bucket_ms: z.number().nullable().describe('버킷 폭. `sampling` 이 `all` 이면 null.'),
+    frames_seen: z
+      .number()
+      .int()
+      .nonnegative()
+      .describe(
+        '추리기 전에 본 프레임 수. **`hwui.total_frames` 와 비교하지 말 것** — 세는 대상이 다르다 ' +
+          '(이쪽은 화면에 나간 프레임, 그쪽은 앱이 그린 프레임). 지표가 아니라 표본을 뽑았다는 ' +
+          '사실을 말하는 수이고, 화면에서도 각주로만 쓰인다.',
+      ),
+  }) satisfies z.ZodType<FrameData>
+
 export const StartupDataSchema = z.object({
   /**
    * `am start -W` 의 TotalTime — 프로세스 시작부터 첫 프레임까지.
@@ -1526,6 +1566,7 @@ export const ResultSchema = z.object({
       thermal: metricResultSchema(ThermalDataSchema).optional(),
       network: metricResultSchema(NetworkDataSchema).optional(),
       hwui: metricResultSchema(HwuiDataSchema).describe(HWUI_DESCRIPTION).optional(),
+      frame: metricResultSchema(FrameDataSchema).describe(FRAME_DESCRIPTION).optional(),
     })
     .catchall(metricResultSchema(z.unknown())),
   measurement_overhead: MeasurementOverheadSchema,
