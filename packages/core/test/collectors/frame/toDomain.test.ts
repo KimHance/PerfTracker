@@ -49,6 +49,29 @@ describe('toFrameData', () => {
     expect(picked![2], 'null 은 null 로 실린다').toBeNull()
   })
 
+  /**
+   * **입력이 `tMs` 오름차순이라는 것은 계약이고, 그 계약은 SQL 의 `order by t_ms` 가 지킨다**
+   * (`frametimeline.test.ts` 의 같은 이름 테스트). 여기서 다시 정렬하지 않는 이유는
+   * 5,000장 넘는 배열을 두 번 정렬할 이유가 없어서이지, 순서를 안 타서가 아니다.
+   *
+   * 이 테스트가 적는 것은 "이렇게 동작해야 한다" 가 아니라 **계약이 깨지면 무슨 일이
+   * 나는가**다: `first` 가 마지막 프레임이 되어 폭이 음수가 되고 `Math.max(1, …)` 이
+   * 그것을 1ms 로 만든다 → 버킷 키가 프레임마다 달라 아무것도 접히지 않고, 표본 상한이
+   * 무너져 `result.json` 이 지표가 아니라 **원본 덤프**가 된다. 상한 하나 때문에 이 지표를
+   * 파일에 실을 수 있는 것이므로, 그 상한이 입력 순서에 달렸다는 사실은 적혀 있어야 한다.
+   */
+  it('내림차순 입력은 버킷을 무너뜨린다 — 정렬은 SQL 이 지키는 계약이다', () => {
+    const asc: FrameSample[] = []
+    for (let i = 0; i < MAX_SAMPLES * 2; i++) asc.push(s(i, 1))
+
+    expect(toFrameData(asc).samples.length, '계약을 지킨 입력은 상한 안에 든다')
+      .toBeLessThanOrEqual(MAX_SAMPLES)
+
+    const out = toFrameData([...asc].reverse())
+    expect(out.bucket_ms, '버킷 폭이 1ms 로 주저앉는다').toBe(1)
+    expect(out.samples.length, '아무것도 접히지 않아 상한을 넘는다').toBeGreaterThan(MAX_SAMPLES)
+  })
+
   it('프레임이 하나도 없으면 빈 표본이다', () => {
     const out = toFrameData([])
     expect(out.samples).toEqual([])

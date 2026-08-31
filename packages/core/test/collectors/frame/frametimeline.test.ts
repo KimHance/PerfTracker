@@ -30,6 +30,33 @@ describe('frameSamplesSql', () => {
   it('upid 를 그대로 박는다', () => {
     expect(frameSamplesSql(7)).toContain('a.upid = 7')
   })
+
+  /**
+   * **0초 기준점은 `trace_bounds.start_ts` 다 — 이 데이터소스의 첫 프레임이 아니다.**
+   *
+   * 이 화면의 존재 이유가 사용자 마크를 프레임 위에 겹쳐 보는 것이고, 마크는 이미 그 공통
+   * 기준점으로 옮겨져 있다 (`gui/src/web/report/axis.ts` 의 `readMarks`). 여기만
+   * `(select min(ts) from actual_frame_timeline_slice)` 같은 자기 기준으로 바꾸면, 앱이
+   * 세션 초반 몇 초를 그리지 않은 만큼 **프레임 축만 통째로 밀리고 마크는 안 밀린다** —
+   * 타입도 빌드도 테스트도 전부 초록인 채로 "이 마킹을 남긴 순간의 프레임" 이 몇 초씩
+   * 어긋난 그림이 나온다. 실행 중 판정이 계획을 바꿔 가며 이 기준점을 못 박은 이유다.
+   */
+  it('0초를 trace_bounds 로 잡는다 — 마크와 같은 기준점이어야 한다', () => {
+    expect(frameSamplesSql(42)).toContain('select start_ts from trace_bounds')
+  })
+
+  /**
+   * **오름차순은 아래 두 소비자의 전제다.**
+   *
+   * `toDomain.ts` 는 `samples[0].tMs` 와 마지막 원소의 `tMs` 를 시간 범위의 양 끝으로 읽어
+   * 버킷 폭을 정하고, 화면의 `idxAt` 은 막대 중심을 **이진 탐색**한다. 이 줄이 빠지면
+   * 버킷 폭이 1ms 로 주저앉아 아무것도 접히지 않고 표본 상한(`MAX_SAMPLES`)이 무너지며
+   * (`toDomain.test.ts` 의 내림차순 테스트가 그 결과를 적어 뒀다), 호버는 엉뚱한 프레임을
+   * 짚는다. **정렬을 호스트에서 다시 하지 않는 대신 여기가 계약이다.**
+   */
+  it('t_ms 오름차순으로 낸다', () => {
+    expect(frameSamplesSql(42)).toContain('order by t_ms')
+  })
 })
 
 describe('parseFrameSamples', () => {

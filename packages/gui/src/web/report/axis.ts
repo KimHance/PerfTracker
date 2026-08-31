@@ -39,6 +39,11 @@ export function computeMaxT(res: unknown, marks: { t: number }[]): number {
   // 8초 칸은 4분의 1만 측정된 구간이라 표본이 없는 것이 정상이고, 거기까지 축을 그리면
   // 잰 적 없는 시간이 "값이 빠진 시간" 으로 보인다. 그래서 마지막 **온전한** 초까지만 간다.
   // 표본이 그보다 멀리 있으면 위에서 이미 축을 늘렸다 — 잰 것을 자르는 일은 없다.
+  //
+  // **이 규칙은 초 단위로 접힌 데이터에만 맞는다.** 프레임 타임라인은 초로 접히지 않아
+  // `t_ms` 가 `trace_span_ms` 끝까지 가므로, 여기서 나온 `maxT` 를 그대로 폭으로 쓰면
+  // 마지막 1초 남짓이 그림 밖으로 밀린다. 그 차트는 자기 데이터 끝까지 축을 늘리고
+  // `maxT` 는 마크를 겹치는 데만 쓴다 (`blocks.ts` 의 `buildFrameTimeline`).
   const span = readPath(res, 'session.trace_span_ms')
   const dur = readPath(res, 'session.duration_ms')
   const end =

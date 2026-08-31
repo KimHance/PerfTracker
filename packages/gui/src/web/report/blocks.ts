@@ -506,18 +506,32 @@ export function buildFrameTimeline(
 
   const totalOf = (r: Row): number => r.appMs + (r.presentMs ?? 0)
 
-  // 축 상한은 **데이터 최댓값까지** 간다. 상한을 우리가 고르면 그 순간 무엇이 튄 것인지
+  // **세로축** 상한은 데이터 최댓값까지 간다. 상한을 우리가 고르면 그 순간 무엇이 튄 것인지
   // 우리가 정하게 되고(규칙 2), 잘린 막대는 실제 값을 화면에서 지운다.
   //
-  // 이 공식이라 어떤 막대도 축을 넘을 수 없어서 "잘렸다" 는 표시가 따로 필요 없다.
-  // **이 줄을 고정 상한(예: `Math.min(60, ...)`)으로 바꾸는 순간 조용한 클리핑이 생기고,
-  // 그것을 잡는 테스트가 지금 없다.** 상한을 건드리려는 사람은 클리핑 표시나 그것을 막는
-  // 테스트를 함께 넣을 것.
+  // 이 공식이라 어떤 막대도 **세로로는** 축을 넘을 수 없다 — 가로는 다른 이야기이고
+  // 바로 아래 `spanMs` 가 그 자리다. **이 줄을 고정 상한(예: `Math.min(60, ...)`)으로
+  // 바꾸는 순간 조용한 클리핑이 생긴다.** 상한을 건드리려는 사람은 클리핑 표시나 그것을
+  // 막는 테스트를 함께 넣을 것.
   const yMax = Math.max(FLOOR_MS, ...parsed.map(totalOf))
 
   const W = Math.max(360, parsed.length * 3)
   const plot = W - FPAD.l - FPAD.r
-  const spanMs = maxT > 0 ? maxT * 1000 : 1
+
+  // **가로축은 `maxT` 를 그대로 쓸 수 없다.** `axis.ts` 의 `maxT` 는 **마지막 온전한 초**에서
+  // 멈춘다(`floor(trace_span_ms / 1000) - 1`). 초 단위 집계는 온전히 덮인 초에서만 값이
+  // 나오므로 시계열에는 그 규칙이 맞다. **프레임은 초로 접히지 않는다** — `t_ms` 는
+  // `trace_span_ms` 끝까지 간다. 20.4초 트레이스면 `maxT = 19` 라 19초 뒤의 마지막 1.4초
+  // (120Hz 면 170장 남짓)가 `viewBox` 밖으로 밀려 **말없이 잘린다.** 게다가 `yMax` 는 그
+  // 안 보이는 막대까지 세므로, 잘린 꼬리에 스파이크가 있으면 **아무 막대도 닿지 않는
+  // 높이로 축이 선다** — 축이 데이터를 설명하지 않게 된다. `frame` 이 한 번 접힌 이유가
+  // 정확히 "파일에 있는 것과 화면에 있는 것이 다르다" 였다.
+  //
+  // 그래서 이 차트만 자기 데이터 끝까지 축을 늘린다. `maxT` 는 **마크를 겹쳐 얹는 데만**
+  // 쓴다 — 마크도 프레임도 0초가 같으므로(트레이스 시작) 같은 `px` 하나로 옮겨지면
+  // 두 축의 폭이 달라도 이 차트 안에서는 정확히 같은 자리에 선다.
+  const dataEndMs = Math.max(...parsed.map((r) => r.tMs))
+  const spanMs = Math.max(maxT > 0 ? maxT * 1000 : 1, dataEndMs, 1)
   const px = (ms: number): number => FPAD.l + (ms / spanMs) * plot
   const py = (v: number): number => FH - FPAD.b - (v / yMax) * (FH - FPAD.t - FPAD.b)
 
@@ -553,7 +567,10 @@ export function buildFrameTimeline(
     yVals.push(yMax)
   }
 
-  const xs = timeTicks(maxT)
+  // 눈금도 이 차트의 축(`spanMs`)에서 뽑는다 — `maxT` 로 뽑으면 마지막 눈금이 축의 끝이
+  // 아닌 자리에 서서 "그래프의 오른쪽 끝이 몇 초인가" 에 답하지 못한다. **내림**이라
+  // 어떤 눈금도 축 밖으로 나가지 않는다.
+  const xs = timeTicks(Math.max(1, Math.floor(spanMs / 1000)))
   const seen = typeof d.frames_seen === 'number' ? `${nf(d.frames_seen, 0)}장 중 ` : ''
   const bucket = typeof d.bucket_ms === 'number' ? `${nf(d.bucket_ms, 0)}ms ` : ''
 
@@ -585,10 +602,18 @@ export function buildFrameTimeline(
     // **초를 ms 로 옮긴다.** 이 축만 ms 이고 나머지 차트는 전부 초다.
     markLines: marks.map((mk) => ({ x: px(mk.t * 1000), hot: hoverT === mk.t, label: mk.label })),
     // **조용히 자르지 않는다.** 표본을 뽑았으면 몇 장 중 몇 장인지 화면에 남는다.
+    //
+    // **세는 대상을 이름에 붙인다.** 같은 「렌더」 섹션의 한 탭 옆에서 `hwui` 가
+    // 「프레임 수」로 `total_frames` 를 내는데, 두 수는 **다른 모집단**이다 — 이쪽은
+    // 화면에 나간 프레임이고 그쪽은 앱이 그린 프레임이다. 그냥 `12,400장` 이라고 적으면
+    // 한 세션에 프레임 수가 두 개 있는 것으로 읽히고, 그 구분은 README 와 스키마에만 있어
+    // 화면을 보는 사람에게 닿지 않는다. 읽는 법을 해설하는 것이 아니라 **명사를 정확히
+    // 부르는 것**이라 「카드에 읽는 법을 설명하지 않는다」와 부딪히지 않는다.
     note:
       d.sampling !== 'max_per_bucket'
         ? null
-        : `${seen}${nf(bars.length, 0)}장 표본 (${bucket}구간마다 가장 오래 걸린 한 장)`,
+        : `화면에 나간 프레임 ${seen}${nf(bars.length, 0)}장 표본 ` +
+          `(${bucket}구간마다 가장 오래 걸린 한 장)`,
     tipOf: (idx) => {
       const bar = bars[idx]
       if (bar === undefined) return null

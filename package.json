@@ -9,7 +9,7 @@
     "node": ">=20.19"
   },
   "scripts": {
-    "build": "tsc --build && node -e \"require('fs').chmodSync('packages/cli/dist/index.js', 0o755)\" && npm run build:web -w @perftracker/gui",
+    "build": "tsc --build && tsc -p packages/gui/tsconfig.web.json && node -e \"require('fs').chmodSync('packages/cli/dist/index.js', 0o755)\" && npm run build:web -w @perftracker/gui",
     "open": "npm run build && node packages/cli/dist/index.js open",
     "gui": "npm run open",
     "gui:dev": "npm run dev -w @perftracker/gui",

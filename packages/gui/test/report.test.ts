@@ -10,6 +10,7 @@ import {
   buildPairs,
   buildSeries,
   buildStat,
+  FPAD,
   type FrameTimelineVm,
   metricState,
   timeTicks,
@@ -995,11 +996,17 @@ describe('렌더 섹션 서브탭', () => {
 describe('buildFrameTimeline', () => {
   const card = block<FrameTimelineBlock>('시간별 프레임')
 
+  /**
+   * **`maxT` 는 초다.** 기본값이 한동안 `20000` 이었는데 그것은 20초가 아니라 **20,000초**라
+   * 축이 실제보다 1000배 길었다 — 어떤 표본을 넣어도 막대가 왼쪽 1% 안에 뭉쳐서, x 좌표
+   * 계산이 사실상 한 번도 시험되지 않았다. 아래 「마지막 온전한 초를 넘는 프레임」 테스트가
+   * 그 기본값으로는 통과해 버린다.
+   */
   const ftl = (
     data: unknown,
     marks: Mark[] = [],
     hoverT: number | null = null,
-    maxT = 20000,
+    maxT = 20,
   ): FrameTimelineVm =>
     buildFrameTimeline(
       card,
@@ -1078,6 +1085,23 @@ describe('buildFrameTimeline', () => {
     expect(vm.note).toContain('12,400')
   })
 
+  /**
+   * **각주의 숫자는 무엇을 센 것인지 자기 문장 안에서 말해야 한다.**
+   *
+   * 같은 「렌더」 섹션의 한 탭 옆에서 `hwui` 가 「프레임 수」로 `total_frames` 를 낸다.
+   * 두 수는 **다른 모집단**이고(이쪽은 화면에 나간 프레임, 그쪽은 앱이 그린 프레임)
+   * 실측에서 값도 다르다. 각주가 그냥 `12,400장` 이라고 적으면 한 세션에 프레임 수가
+   * 두 개 있는 것으로 읽히는데, 그 구분은 README 와 스키마에만 있어 화면을 보는 사람에게
+   * 닿지 않는다. **아래 키 허용 목록 테스트는 이것을 잡지 못한다** — `frames_seen` 은
+   * 뷰모델의 키가 아니라 `note` **문자열 안**으로 나가기 때문이다.
+   */
+  it('각주가 무엇을 센 프레임인지 말한다 — hwui 의 프레임 수와 섞이지 않게', () => {
+    const vm = ftl({
+      samples: [[0, 6, 8, 8.33]], sampling: 'max_per_bucket', bucket_ms: 3, frames_seen: 12400,
+    })
+    expect(vm.note).toContain('화면에 나간 프레임')
+  })
+
   it('전부 실었으면 각주가 없다', () => {
     expect(ftl(one(6, 8, 8.33)).note).toBeNull()
   })
@@ -1096,6 +1120,51 @@ describe('buildFrameTimeline', () => {
     const vm = ftl(data, [{ t: 10, label: '10초' }])
     // 10초 마크와 10,000ms 프레임은 같은 순간이므로 같은 x 에 선다.
     expect(vm.markLines[0]!.x).toBeCloseTo(vm.bars[0]!.x + vm.bars[0]!.w / 2, 5)
+    // **둘이 같기만 하면 통과하는 비교는 축이 1000배 틀려도 통과한다** — 둘 다 같은 `px` 를
+    // 지나기 때문이다. 20초 축의 10초는 그림의 한가운데여야 한다.
+    expect(vm.markLines[0]!.x).toBeCloseTo(FPAD.l + (vm.width - FPAD.l - FPAD.r) / 2, 5)
+  })
+
+  /**
+   * **오른쪽 끝을 말없이 자르지 않는다.**
+   *
+   * `axis.ts` 의 `maxT` 는 **마지막 온전한 초**에서 멈춘다(`floor(trace_span_ms/1000) - 1`).
+   * 초당 집계는 온전히 덮인 초에서만 값이 나오므로 시계열에는 맞는 규칙이다. 그러나
+   * **프레임은 초로 접히지 않아** `t_ms` 가 `trace_span_ms` 끝까지 간다 — 20.4초 트레이스면
+   * `maxT = 19` 이고, 그것을 그대로 폭으로 쓰면 19초 뒤의 1.4초(120Hz 면 170장 남짓)가
+   * `viewBox` 밖으로 밀려 **화면에서 사라진다.** 게다가 `yMax` 는 그 안 보이는 막대까지
+   * 세므로, 잘린 꼬리에 스파이크가 있으면 **아무 막대도 닿지 않는 높이로 세로축이 선다.**
+   *
+   * `frame` 이 한 번 접힌 이유가 정확히 이것이다 — 파일에 있는 숫자와 화면에 있는 그림이
+   * 다른 말을 하는 것. 되살리며 그 사고를 그대로 들여올 수는 없다.
+   */
+  it('마지막 온전한 초를 넘는 프레임도 그림 안에 있다', () => {
+    // trace_span_ms = 20,400 → 마지막 온전한 초는 19 → `maxT = 19`.
+    // 프레임은 20,400ms 까지 이어지고, 가장 튄 프레임(90ms)이 하필 그 꼬리에 있다.
+    const samples: unknown[] = []
+    for (let t = 0; t <= 20400; t += 102) samples.push([t, 6, 8, 8.33])
+    samples[samples.length - 1] = [20400, 90, 8, 8.33]
+    const vm = ftl(
+      { samples, sampling: 'all', bucket_ms: null, frames_seen: samples.length },
+      [], null, 19,
+    )
+
+    const tallest = vm.bars.reduce((a, b) => (b.totalMs > a.totalMs ? b : a))
+    expect(tallest.tMs, '가장 튄 프레임은 마지막 온전한 초보다 뒤에 있다').toBeGreaterThan(19000)
+
+    // 그 막대의 중심이 그림 영역(왼쪽 여백 ~ 오른쪽 여백) 안에 있어야 한다.
+    const cx = tallest.x + tallest.w / 2
+    expect(cx).toBeGreaterThanOrEqual(FPAD.l)
+    expect(cx).toBeLessThanOrEqual(vm.width - FPAD.r)
+    // 막대 전체도 viewBox 를 벗어나지 않는다.
+    expect(tallest.x + tallest.w).toBeLessThanOrEqual(vm.width)
+
+    // 세로축 꼭대기는 **보이는** 막대가 만든 것이어야 한다 — 잘린 막대가 축을 늘려 놓으면
+    // 그 높이에 닿는 막대가 화면에 하나도 없다.
+    expect(Math.min(...vm.bars.map((b) => b.present?.y ?? b.app.y))).toBeCloseTo(FPAD.t, 5)
+
+    // 눈금도 축 밖으로 나가지 않는다 — 나가면 오른쪽 끝이 몇 초인지 읽을 수 없다.
+    for (const t of vm.xTicks) expect(t.x).toBeLessThanOrEqual(vm.width - FPAD.r)
   })
 
   /**
@@ -1142,9 +1211,13 @@ describe('buildFrameTimeline', () => {
    *
    * 그래서 뷰모델과 막대 하나의 키를 **명시적 허용 목록**과 통째로 대조한다. 여기 없는 키가
    * 하나라도 늘면 이 테스트가 먼저 깨진다 — 카운트든 백분위든, 화면에 닿기 전에 리뷰어가
-   * 이 목록에 손을 대야 한다. (`frames_seen` 은 예외가 아니라 이미 여기 걸려 있다: `note`
-   * 로만 나가고, 그것도 계획이 요구한 "표본을 뽑았다" 는 **고지**이지 지표가 아니다 —
-   * `AGENTS.md` 의 프레임 타임라인 절이 그 구분을 남겨 뒀다.)
+   * 이 목록에 손을 대야 한다.
+   *
+   * **이 목록이 못 보는 자리가 하나 있다: `note` 문자열.** `frames_seen` 은 뷰모델의 키가
+   * 아니라 그 문장 **안**에 섞여 화면에 닿으므로 여기 걸리지 않는다 — 앞으로 어떤 수를 그
+   * 문장에 더해도 이 테스트는 통과한다. 그 자리는 위 「각주가 무엇을 센 프레임인지 말한다」가
+   * 지키고, 각주에 실리는 수는 지표가 아니라 "표본을 뽑았다" 는 **고지**여야 한다
+   * (`AGENTS.md` 의 프레임 타임라인 절).
    */
   it('뷰모델·막대의 키가 허용 목록과 정확히 같다 — 새 필드는 반드시 리뷰에서 보인다', () => {
     const vm = ftl(one(6, 8, 8.33))
