@@ -19,8 +19,11 @@
   백분위도 내지 않고 `samples`(시간축)뿐이라 `hwui` 와 같은 종류의 숫자를 갖지 않습니다.
   sdk 31(Android 12) 하한이 다시 생겼습니다. 자세한 것은 README `metrics.frame` 절과
   아래 §7 을 보세요.
-- **기준선:** `npm test` **1,066/1,066** (66 파일, 1초 남짓) · `npm run typecheck` · `npm run build`
+- **기준선:** `npm test` **1,072/1,072** (66 파일, 1초 남짓) · `npm run typecheck` · `npm run build`
   클린 · 온-디바이스 `npm run test:device` **11 스펙**.
+  **`npm run build` 가 이제 `packages/gui/tsconfig.web.json` 도 타입체크합니다** — vite 는
+  타입을 안 보고 `tsc --build` 는 그 프로젝트를 포함하지 않아, 보고서 화면의 코드가
+  `npm run typecheck` 를 따로 돌리는 사람에게만 보였습니다.
   **`npm test` 전에 `npm run build` 가 필요합니다** — `packages/cli` 테스트가
   `@perftracker/core` 를 `dist/` 로 해석하므로, 갓 클론한 저장소에서 곧바로 `npm test` 를
   돌리면 스위트 하나가 "Failed to resolve entry for package" 로 실패합니다.
