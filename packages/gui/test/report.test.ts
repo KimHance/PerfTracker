@@ -1127,6 +1127,38 @@ describe('buildFrameTimeline', () => {
     )
     expect((vm as NoneVm).none).toBe(true)
   })
+
+  /**
+   * **경로 가드가 못 보는 자리.** 위(「렌더 섹션의 트레이스 경로는 시간축 하나뿐이다」) 테스트는
+   * 매니페스트의 `path` 문자열만 본다 — `metrics.frame.data` 하나뿐인지는 확인하지만, 그
+   * 객체를 통째로 받은 `buildFrameTimeline` 이 그 안에서 **무엇을 뽑아 화면에 얹는지**는
+   * 안 본다. `frame` 이 한 번 지워졌던 이유가 정확히 그 자리였다 — `hwui` 와 `frame` 이
+   * `janky_frames` 1,556 대 170, `p99` 39.56 대 53 처럼 같은 이름 아래 다른 숫자를 냈고,
+   * "이 앱의 p99" 에 답이 두 개가 됐다. 되살리며 건 조건은 `frame` 이 **시간축만** 낸다는
+   * 것 하나이고, 그 조건은 매니페스트의 `path` 가 아니라 **이 함수가 뷰모델에 담는 키**로
+   * 지켜진다 — `metrics.frame.data.p99` 처럼 새 하위 경로가 생기면 위 경로 테스트가 잡지만,
+   * 이미 받은 `data` 에서 `p99` 나 `janky` 필드를 읽어 툴팁·눈금·각주에 얹는 것은 경로가
+   * 그대로라 그 테스트를 통과한다.
+   *
+   * 그래서 뷰모델과 막대 하나의 키를 **명시적 허용 목록**과 통째로 대조한다. 여기 없는 키가
+   * 하나라도 늘면 이 테스트가 먼저 깨진다 — 카운트든 백분위든, 화면에 닿기 전에 리뷰어가
+   * 이 목록에 손을 대야 한다. (`frames_seen` 은 예외가 아니라 이미 여기 걸려 있다: `note`
+   * 로만 나가고, 그것도 계획이 요구한 "표본을 뽑았다" 는 **고지**이지 지표가 아니다 —
+   * `AGENTS.md` 의 프레임 타임라인 절이 그 구분을 남겨 뒀다.)
+   */
+  it('뷰모델·막대의 키가 허용 목록과 정확히 같다 — 새 필드는 반드시 리뷰에서 보인다', () => {
+    const vm = ftl(one(6, 8, 8.33))
+
+    const VM_KEYS = [
+      'width', 'bars', 'idxAt', 'guide', 'yTicks', 'xTicks', 'markLines', 'note', 'tipOf',
+    ]
+    const BAR_KEYS = [
+      'tMs', 'tSec', 'appMs', 'presentMs', 'totalMs', 'deadlineMs', 'hz', 'x', 'w', 'app', 'present',
+    ]
+
+    expect(Object.keys(vm).sort()).toEqual([...VM_KEYS].sort())
+    expect(Object.keys(vm.bars[0]!).sort()).toEqual([...BAR_KEYS].sort())
+  })
 })
 
 /**

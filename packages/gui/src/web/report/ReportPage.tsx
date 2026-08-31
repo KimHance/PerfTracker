@@ -334,6 +334,13 @@ function buildOne(
     case 'delta': return buildDelta(b, doc)
     case 'pairs': return buildPairs(b, doc)
     case 'stat': return buildStat(b, doc)
+    default: {
+      // **exhaustiveness 체크.** `Block` 에 새 `kind` 가 늘거나 여기서 하나가 빠지면
+      // `b` 가 `never` 로 좁혀지지 않아 컴파일이 깨진다 — case 를 빠뜨려도 테스트를
+      // 전부 통과하며 카드가 조용히 사라지는 사고(2번 지적 사항)를 빌드 시점에 잡는다.
+      const _exhaustive: never = b
+      return _exhaustive
+    }
   }
 }
 
@@ -395,5 +402,12 @@ function Body({
     case 'delta': return <DeltaBody vm={vm as Parameters<typeof DeltaBody>[0]['vm']} />
     case 'pairs': return <PairsBody vm={vm as Parameters<typeof PairsBody>[0]['vm']} />
     case 'stat': return <StatBody vm={vm as Parameters<typeof StatBody>[0]['vm']} title={block.title} />
+    default: {
+      // **exhaustiveness 체크.** `case` 하나가 빠지면(예: `frametimeline` 삭제) `block` 이
+      // `never` 로 안 좁혀져 컴파일이 깨진다 — 안 그러면 그 카드는 테스트를 다 통과한 채
+      // 조용히 빈 화면으로 그려진다. 서브탭이 `sub` 누락을 잡는 것과 같은 종류의 사고다.
+      const _exhaustive: never = block
+      return _exhaustive
+    }
   }
 }
