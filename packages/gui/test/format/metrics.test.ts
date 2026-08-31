@@ -6,7 +6,16 @@ const v = (id: string, ok: boolean, reason = ''): never => ({ id, ok, reason }) 
 describe('metricChips — 칩은 지표가 아니라 "무엇을 잴 수 있나"', () => {
   it('자리는 서버 응답과 무관하게 늘 같다 — 응답이 정하는 것은 ✓/✗ 와 사유뿐이다', () => {
     const chips = metricChips([v('hwui', true), v('cpu', true)])
-    expect(chips.map((c) => c.label)).toEqual(['hwui', 'startup', 'cpu', 'memory', 'log', 'thermal', 'network'])
+    expect(chips.map((c) => c.label)).toEqual([
+      'hwui',
+      'frame',
+      'startup',
+      'cpu',
+      'memory',
+      'log',
+      'thermal',
+      'network',
+    ])
   })
 
   it('판정을 받은 것만 ✓ 다', () => {

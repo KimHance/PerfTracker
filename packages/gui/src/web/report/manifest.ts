@@ -221,7 +221,7 @@ export const TABS: { id: TabId; label: string }[] = [
 ]
 
 export const KNOWN_METRICS: MetricId[] =
-  ['hwui', 'startup', 'cpu', 'memory', 'log', 'thermal', 'network']
+  ['hwui', 'frame', 'startup', 'cpu', 'memory', 'log', 'thermal', 'network']
 
 /**
  * **일부러 안 그리는 지표.** 푸터의 "무시한 지표" 에서 뺀다.
