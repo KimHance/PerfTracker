@@ -262,6 +262,36 @@ const HWUI_DESCRIPTION =
   '그리지 않는 것이다 — Unity·Vulkan·OpenGL 이 그렇고, 그것은 Vitals 와 같은 한계다.'
 
 
+/**
+ * **프레임의 시간축.** `hwui` 와 **다른 것을 답한다** — `hwui` 는 "몇 장이 얼마나 걸렸나",
+ * 이쪽은 "언제 그랬나" 다.
+ *
+ * **개수도 백분위도 여기 없다. 의도한 것이다.** 예전에 이 지표를 접은 이유가 같은 이름의
+ * 숫자가 두 벌이었다는 것이다 (`janky_frames` 1,556 대 170, `p99` 39.56 대 53). 두 지표가
+ * 같은 종류의 숫자를 갖지 않으면 "이 앱의 p99" 라는 질문에 둘이 답할 일이 없다.
+ */
+export interface FrameData {
+  /**
+   * 프레임 한 장이 한 칸. `[경과 ms, 앱이 그린 ms, 화면에 나가기까지 ms, 그 프레임의 마감 ms]`.
+   *
+   * 앞의 둘은 **겹치지 않는다** (실측: 앱 0.00~6.30ms, 표시 7.11~15.08ms). 마감은 고정값이
+   * 아니라 주사율을 따르고 세션 중에도 바뀐다 — 없으면 `null` 이고 `0` 으로 채우지 않는다.
+   */
+  samples: [number, number, number | null, number | null][]
+  /** `all` 이면 전부 실었다. `max_per_bucket` 이면 버킷마다 가장 오래 걸린 것만 남겼다. */
+  sampling: 'all' | 'max_per_bucket'
+  /** 버킷 폭. `sampling` 이 `all` 이면 null. */
+  bucket_ms: number | null
+  /**
+   * 추리기 전에 본 프레임 수.
+   *
+   * **`hwui.total_frames` 와 비교하지 말 것.** 세는 대상이 다르다 — 이쪽은 화면에 나간
+   * 프레임이고 그쪽은 앱이 그린 프레임이다. 이 값은 지표가 아니라 **표본을 뽑았다는 사실**을
+   * 말하는 수이고, 화면에서도 각주로만 쓰인다.
+   */
+  frames_seen: number
+}
+
 export const StartupDataSchema = z.object({
   /**
    * `am start -W` 의 TotalTime — 프로세스 시작부터 첫 프레임까지.
