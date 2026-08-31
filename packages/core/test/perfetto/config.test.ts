@@ -6,6 +6,7 @@ import {
   mergeTraceConfigBlocks,
 } from '../../src/perfetto/config.js'
 import { PerfettoSessionError } from '../../src/errors.js'
+import { FRAMETIMELINE_BLOCK } from '../../src/collectors/blocks.js'
 
 const BLOCK = 'data_sources { config { name: "android.surfaceflinger.frametimeline" } }'
 
@@ -167,5 +168,17 @@ describe('mergeTraceConfigBlocks', () => {
     expect(mergeTraceConfigBlocks(['buffers { size_kb: 1 }', 'buffers { size_kb: 1 }'])).toEqual([
       'buffers { size_kb: 1 }',
     ])
+  })
+})
+
+describe('frametimeline 블록', () => {
+  it('저부하 검사를 통과한다 — ftrace 이벤트를 하나도 켜지 않는다', () => {
+    const cfg = buildTraceConfig({ dataSourceBlocks: [FRAMETIMELINE_BLOCK] })
+    expect(cfg).toContain('android.surfaceflinger.frametimeline')
+    expect(() => assertLowOverheadConfig(cfg)).not.toThrow()
+  })
+
+  it('주기 설정을 갖지 않는다 — 폴링이 아니라 SurfaceFlinger 가 미는 데이터다', () => {
+    expect(FRAMETIMELINE_BLOCK).not.toMatch(/(poll|period)_ms/)
   })
 })
