@@ -1,6 +1,7 @@
 import { mergeTraceConfigBlocks } from '../perfetto/config.js'
 import { renderReason } from '../schema/reasons.js'
 import { cpuCollector } from './cpu/index.js'
+import { frameCollector } from './frame/index.js'
 import { hwuiCollector } from './hwui/index.js'
 import { logCollector } from './log/index.js'
 import { memoryCollector } from './memory/index.js'
@@ -16,10 +17,13 @@ import type { Collector, CollectorEnv } from './types.js'
  * 나중에 power 가 여기 한 줄로 붙는다.
  */
 export const COLLECTORS: Collector<unknown>[] = [
-  // 렌더는 하나다. 예전에는 트레이스(`frame`)로도 같은 것을 재서 두 벌을 냈는데,
-  // 보고서가 hwui 만 그리게 되자 **화면에 없는 데이터가 result.json 에만 남았다** —
-  // 사람은 보고서를, LLM 은 파일을 보는데 둘이 다른 숫자를 들고 있게 된다.
+  // hwui 가 개수·백분위·원인별 카운터를, frame 이 시간축(samples)을 낸다 — 종류가 다른
+  // 숫자라 겹치지 않는다. 예전에는 frame 도 개수·백분위를 함께 내서 같은 이름의 숫자가
+  // 두 벌이었고(`janky_frames` 1,556 대 170, `p99` 39.56 대 53), 보고서가 hwui 만 그리게
+  // 되자 화면에 없는 데이터가 result.json 에만 남아 그때는 frame 수집을 접었다. 이번에는
+  // frame 이 개수도 백분위도 내지 않으므로 그 재발 조건 자체가 없다.
   hwuiCollector,
+  frameCollector,
   startupCollector,
   cpuCollector,
   memoryCollector,

@@ -22,7 +22,13 @@ export const METRIC_REASON_CODES = [
   'data_source_not_registered',
   /** 회수된 트레이스 원본이 run 디렉토리에 없다. */
   'trace_missing',
-  /** 트레이스 안에서 대상 앱의 렌더 프로세스를 특정하지 못했다. detail: package */
+  /**
+   * 렌더 프로세스는 특정했지만 `actual_frame_timeline_slice` 에 그 프로세스의 프레임이
+   * 하나도 없었다 — 세션 동안 화면이 갱신되지 않았거나(백그라운드), 앱이 HWUI 를 쓰지
+   * 않을 수 있다. 프로세스 자체를 특정하지 못한 경우는 `process_not_in_trace` 다.
+   * detail: process
+   */
+  'no_frames',
   /**
    * 프레임 duration 이 버킷에 넣을 수 없는 값이었다 (음수 또는 유한하지 않음).
    * SQL 이 `dur >= 0` 으로 거르므로 정상 트레이스에서는 나오지 않는다.
@@ -262,6 +268,9 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
   data_source_not_registered: (d) =>
     `이 기기에 perfetto 데이터소스가 등록되어 있지 않습니다: ${String(d['data_source'])}`,
   trace_missing: () => '트레이스 원본이 없습니다.',
+  no_frames: (d) =>
+    `렌더 프로세스(${String(d['process'])})에서 프레임을 하나도 찾지 못했습니다 — ` +
+    '세션 동안 화면이 갱신되지 않았거나(백그라운드), 앱이 HWUI 를 쓰지 않을 수 있습니다.',
   frame_duration_out_of_range: (d) =>
     `렌더 프로세스(${String(d['process'])})의 프레임 duration 에 버킷 범위 밖의 값이 ` +
     `있습니다 (${String(d['duration_ms'])}ms) — 트레이스 쿼리는 성공했고 값 자체가 집계할 수 ` +

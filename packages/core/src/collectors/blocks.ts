@@ -130,3 +130,15 @@ export const ANDROID_LOG_BLOCK =
   'data_sources { config { name: "android.log" android_log_config { ' +
   'log_ids: LID_DEFAULT log_ids: LID_SYSTEM log_ids: LID_CRASH ' +
   `min_prio: ${ANDROID_LOG_MIN_PRIO} } } }`
+
+/**
+ * **SurfaceFlinger 가 프레임마다 한 건씩 민다.** 폴링도 ftrace 도 아니라 주기 설정이 없다.
+ *
+ * 부하가 없다는 것을 실기기에서 재고 넣는다 (SM-F936N, 20초 세션 A/B 7쌍):
+ * 대상 앱 CPU -0.08초 · SurfaceFlinger CPU -0.11초 — **켠 쪽이 오히려 낮았고**
+ * 세션 간 편차(±0.2초)보다 작다. 생산자가 `/system/bin/surfaceflinger` 라서
+ * ftrace 처럼 인터럽트당한 프로세스(= 대상 앱)에 비용이 청구되지 않는다.
+ * 대가는 트레이스 부피 +43%(20초에 +317KB) 하나뿐이다.
+ */
+export const FRAMETIMELINE_BLOCK =
+  'data_sources { config { name: "android.surfaceflinger.frametimeline" } }'

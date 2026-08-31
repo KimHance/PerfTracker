@@ -5,6 +5,9 @@ import {
   type DistributionVm,
   DH,
   DPAD,
+  FH,
+  FPAD,
+  type FrameTimelineVm,
   type GaugeVm,
   type PairsVm,
   type SeriesVm,
@@ -109,7 +112,9 @@ export interface Tip {
   y: number
   head: string
   value: string
-  sub: string
+  sub?: string
+  /** 여러 줄. 프레임 한 장에 대해 말할 것이 넷이라(앱·표시·마감·주사율) 한 줄로는 안 된다. */
+  lines?: string[]
 }
 
 export function DistributionChart({
@@ -203,6 +208,143 @@ export function DistributionChart({
         </text>
       ))}
     </svg>
+  )
+}
+
+/* ── 프레임 시간축 ──────────────────────────────────────────── */
+
+/**
+ * **막대 하나가 프레임 한 장.** 아래 칸이 앱이 그린 시간, 위 칸이 그 뒤 화면에 나가기까지
+ * 걸린 시간이다.
+ *
+ * **표시 시간이 `null` 이면 위 칸을 아예 안 그린다.** 높이 0 으로 그린 것과 화면은 같지만
+ * 툴팁이 달라야 한다 — `0.00ms` 가 아니라 `모름` 이다.
+ *
+ * 16ms 선은 **참고선이고 판정이 아니다.** 넘은 막대를 다른 색으로 칠하거나 이름을 붙이지
+ * 않는다 (규칙 2). 그 프레임의 진짜 마감은 툴팁에 따로 있다 — 실측 기기는 8.33ms 였고
+ * 같은 세션 안에서 41.67ms 로 바뀌었다.
+ */
+export function FrameTimelineChart({
+  vm,
+  hot,
+  onHot,
+  onTip,
+  onHover,
+  onLeave,
+}: {
+  vm: FrameTimelineVm
+  hot: number | null
+  onHot: (idx: number | null) => void
+  onTip: (tip: Tip | null) => void
+  onHover: (t: number) => void
+  onLeave: () => void
+}) {
+  const plotH = FH - FPAD.t - FPAD.b
+  const hotBar = hot === null ? undefined : vm.bars[hot]
+
+  return (
+    <>
+      <div className="rp-ftl-legend">
+        <span className="rp-ftl-key">
+          <i className="rp-ftl-sw rp-ftl-sw-app" />앱이 그린 시간
+        </span>
+        <span className="rp-ftl-key">
+          <i className="rp-ftl-sw rp-ftl-sw-present" />화면에 나가기까지
+        </span>
+        {/* 출처가 툴팁에 있다 — 이 선이 우리가 정한 기준이 아니라는 표시다. */}
+        <span className="rp-ftl-key rp-ftl-key-guide" title={vm.guide.source}>
+          <i className="rp-ftl-sw rp-ftl-sw-guide" />
+          {vm.guide.ms}ms 참고선
+        </span>
+      </div>
+
+      {/* 넓은 것은 **자기 안에서** 스크롤한다. 페이지가 옆으로 밀리면 안 된다. */}
+      <div className="rp-ftl-scroll">
+        <svg
+          viewBox={`0 0 ${vm.width} ${FH}`}
+          width={vm.width}
+          height={FH}
+          className="rp-ftl"
+          role="img"
+          onMouseMove={(e) => {
+            const r = e.currentTarget.getBoundingClientRect()
+            const idx = vm.idxAt((e.clientX - r.left) / r.width)
+            const tip = idx === null ? null : vm.tipOf(idx)
+            onHot(idx)
+            onTip(tip === null ? null : { x: e.clientX, y: e.clientY, ...tip })
+            if (idx !== null) onHover(vm.bars[idx]!.tSec)
+          }}
+          onMouseLeave={() => {
+            onHot(null)
+            onTip(null)
+            onLeave()
+          }}
+        >
+          {vm.yTicks.map((t, i) => (
+            <line key={`g${i}`} className="rp-gridline" x1={FPAD.l} y1={t.gy} x2={vm.width - FPAD.r} y2={t.gy} />
+          ))}
+
+          {vm.markLines.map((m, i) => (
+            <line
+              key={`m${i}`}
+              className="rp-markline"
+              x1={m.x}
+              y1={FPAD.t}
+              x2={m.x}
+              y2={FH - FPAD.b}
+              opacity={m.hot ? 0.95 : 0.4}
+            >
+              <title>{m.label}</title>
+            </line>
+          ))}
+
+          {hotBar !== undefined && (
+            <rect
+              className="rp-slot-hot"
+              x={hotBar.x - 1.5}
+              y={FPAD.t}
+              width={hotBar.w + 3}
+              height={plotH}
+            />
+          )}
+
+          {/* 아래 칸 · 위 칸. 두 칸은 명도만 다르다 — 색으로 좋고 나쁨을 말하지 않는다. */}
+          {vm.bars.map((b, i) =>
+            b.present === null ? null : (
+              <rect
+                key={`p${i}`}
+                className="rp-ftl-present"
+                x={b.x}
+                y={b.present.y}
+                width={b.w}
+                height={b.present.h}
+              />
+            ),
+          )}
+          {vm.bars.map((b, i) => (
+            <rect key={`a${i}`} className="rp-ftl-app" x={b.x} y={b.app.y} width={b.w} height={b.app.h} />
+          ))}
+
+          <line className="rp-guide" x1={FPAD.l} y1={vm.guide.y} x2={vm.width - FPAD.r} y2={vm.guide.y}>
+            <title>{vm.guide.source}</title>
+          </line>
+
+          <line className="rp-axis" x1={FPAD.l} y1={FPAD.t} x2={FPAD.l} y2={FH - FPAD.b} />
+          <line className="rp-axis" x1={FPAD.l} y1={FH - FPAD.b} x2={vm.width - FPAD.r} y2={FH - FPAD.b} />
+
+          {vm.yTicks.map((t, i) => (
+            <text key={`yt${i}`} className="rp-tick" x={FPAD.l - 6} y={t.y} textAnchor="end">
+              {t.label}
+            </text>
+          ))}
+          {vm.xTicks.map((t, i) => (
+            <text key={`xt${i}`} className="rp-tick" x={t.x} y={FH - 10} textAnchor={t.anchor}>
+              {t.label}
+            </text>
+          ))}
+        </svg>
+      </div>
+    </>
   )
 }
 

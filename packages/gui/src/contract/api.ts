@@ -77,14 +77,17 @@ export interface DeviceView {
 // ─── 지표 지원 여부 ────────────────────────────────────────────────────────
 
 /** 지표 id 는 result.json 의 `metrics` 키와 같다. */
-export type MetricId = 'hwui' | 'startup' | 'cpu' | 'memory' | 'log' | 'thermal' | 'network'
+export type MetricId = 'hwui' | 'frame' | 'startup' | 'cpu' | 'memory' | 'log' | 'thermal' | 'network'
 
 /** 화면에 그리는 순서. 서버 응답이 비어 있어도 이 순서로 자리를 잡는다. */
 export const METRIC_ORDER: readonly MetricId[] = [
   // **이 배열에 없는 지표는 화면에서 통째로 사라진다**: `server/view.ts` 가 doctor 결과를
   // 이 집합으로 거른다. 한동안 `hwui` 가 빠져 있어서 sdk 30 에서 "5/7 측정 가능" 이라고만
   // 말하고 정작 그 기기에서 되는 렌더 지표를 안 알려 줬다.
+  // hwui 와 frame 이 붙어 있는 것은 우연이 아니다 — 둘 다 렌더 관련이고 core 의
+  // `COLLECTORS` 도 같은 순서로 짝지어 둔다.
   'hwui',
+  'frame',
   'startup',
   'cpu',
   'memory',
@@ -98,6 +101,18 @@ export interface MetricSupportView {
   ok: boolean
   /** 왜 되는지/안 되는지. 툴팁에 그대로 쓴다. 서버가 doctor 의 문장을 넘긴다. */
   reason: string
+}
+
+// ─── 프레임 타임라인 ───────────────────────────────────────────────────────
+
+/** 프레임 한 장 = `[경과 ms, 앱 ms, 표시 ms, 마감 ms]`. 뒤의 둘은 `null` 일 수 있다. */
+export type FrameSampleDto = [number, number, number | null, number | null]
+
+export interface FrameTimelineDto {
+  samples: FrameSampleDto[]
+  sampling: 'all' | 'max_per_bucket'
+  bucket_ms: number | null
+  frames_seen: number
 }
 
 // ─── 앱 ────────────────────────────────────────────────────────────────────

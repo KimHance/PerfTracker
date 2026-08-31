@@ -262,6 +262,85 @@ const HWUI_DESCRIPTION =
   '그리지 않는 것이다 — Unity·Vulkan·OpenGL 이 그렇고, 그것은 Vitals 와 같은 한계다.'
 
 
+/**
+ * **프레임의 시간축.** `hwui` 와 **다른 것을 답한다** — `hwui` 는 "몇 장이 얼마나 걸렸나",
+ * 이쪽은 "언제 그랬나" 다.
+ *
+ * **개수도 백분위도 여기 없다. 의도한 것이다.** 예전에 이 지표를 접은 이유가 같은 이름의
+ * 숫자가 두 벌이었다는 것이다 (`janky_frames` 1,556 대 170, `p99` 39.56 대 53). 두 지표가
+ * 같은 종류의 숫자를 갖지 않으면 "이 앱의 p99" 라는 질문에 둘이 답할 일이 없다.
+ */
+export interface FrameData {
+  /**
+   * 프레임 한 장이 한 칸. `[경과 ms, 앱이 그린 ms, 화면에 나가기까지 ms, 그 프레임의 마감 ms]`.
+   *
+   * 앞의 둘은 **겹치지 않는다** (실측: 앱 0.00~6.30ms, 표시 7.11~15.08ms). 마감은 고정값이
+   * 아니라 주사율을 따르고 세션 중에도 바뀐다 — 없으면 `null` 이고 `0` 으로 채우지 않는다.
+   */
+  samples: [number, number, number | null, number | null][]
+  /** `all` 이면 전부 실었다. `max_per_bucket` 이면 버킷마다 가장 오래 걸린 것만 남겼다. */
+  sampling: 'all' | 'max_per_bucket'
+  /** 버킷 폭. `sampling` 이 `all` 이면 null. */
+  bucket_ms: number | null
+  /**
+   * 추리기 전에 본 프레임 수.
+   *
+   * **`hwui.total_frames` 와 비교하지 말 것.** 세는 대상이 다르다 — 이쪽은 화면에 나간
+   * 프레임이고 그쪽은 앱이 그린 프레임이다. 이 값은 지표가 아니라 **표본을 뽑았다는 사실**을
+   * 말하는 수이고, 화면에서도 각주로만 쓰인다.
+   */
+  frames_seen: number
+}
+
+const FRAME_DESCRIPTION =
+  '**프레임의 시간축.** `hwui` 와 다른 것을 답한다 — `hwui` 는 "몇 장이 얼마나 걸렸나", ' +
+  '이쪽은 "언제 그랬나" 다. **개수도 백분위도 여기 없다. 의도한 것이다** — 예전에 이 지표를 ' +
+  '접은 이유가 같은 이름의 숫자가 두 벌이었다는 것이다(`janky_frames` 1,556 대 170, `p99` ' +
+  '39.56 대 53). 두 지표가 같은 종류의 숫자를 갖지 않으면 "이 앱의 p99" 라는 질문에 둘이 ' +
+  '답할 일이 없다. **`frames_seen` 을 `hwui.total_frames` 와 비교하지 말 것** — 세는 대상이 ' +
+  '다르다(이쪽은 화면에 나간 프레임, 그쪽은 앱이 그린 프레임). **sdk 31(Android 12) 이상에서만 ' +
+  '나온다** — `hwui` 는 버전 하한이 없다.'
+
+/**
+ * `FrameData` 의 zod 짝. **`FrameData` 를 이것으로 다시 정의하지 않는다** — 인터페이스의
+ * 필드별 doc-comment 는 소스에만 남고(`z.toJSONSchema()` 는 소스 주석을 못 읽는다),
+ * 이 스키마의 `.describe()` 가 그 내용을 산출물에 실어 낸다.
+ *
+ * **`satisfies z.ZodType<FrameData>` 는 한쪽 방향만 잡는다.** 이 스키마가 `FrameData` 보다
+ * **느슨해지면**(필드를 빼먹거나 타입을 더 넓히면) 컴파일이 막는다. 하지만 이 스키마에
+ * `FrameData` 에 없는 필드를 더하거나, `FrameData` 쪽에서만 필드를 빼는 것은 구조적 타이핑이
+ * 초과 필드를 허용하므로 **조용히 통과한다.** "갈라지면 컴파일이 막는다" 는 틀린 말이다 —
+ * 한쪽이 인터페이스보다 좁아질 때만 참이다. 인터페이스를 고쳤으면 스키마도 손으로 맞춰 볼 것.
+ */
+export const FrameDataSchema = z
+  .object({
+    samples: z
+      .array(z.tuple([z.number(), z.number(), z.number().nullable(), z.number().nullable()]))
+      .describe(
+        '프레임 한 장이 한 칸. `[경과 ms, 앱이 그린 ms, 화면에 나가기까지 ms, 그 프레임의 마감 ms]`. ' +
+          '앞의 둘은 겹치지 않는다(실측: 앱 0.00~6.30ms, 표시 7.11~15.08ms). ' +
+          '**세 번째 값은 SurfaceFlinger 의 표시 프레임(display frame) 길이이며 대상 앱만의 ' +
+          '비용이 아니다** — 그 vsync 에 함께 합성된 모든 레이어가 공유하는 시간이라, 다른 앱이나 ' +
+          '시스템 UI 가 같은 화면에 얹혀 있으면 대상 앱이 아무것도 안 해도 늘어난다. 앱에 귀속되는 ' +
+          '것은 두 번째 값뿐이다. ' +
+          '뒤의 둘은 짝을 못 찾으면 `null` 이고 `0` 으로 채우지 않는다 — 마감은 고정값이 아니라 ' +
+          '주사율을 따르고 세션 중에도 바뀐다.',
+      ),
+    sampling: z
+      .enum(['all', 'max_per_bucket'])
+      .describe('`all` 이면 전부 실었다. `max_per_bucket` 이면 버킷마다 가장 오래 걸린 것만 남겼다.'),
+    bucket_ms: z.number().nullable().describe('버킷 폭. `sampling` 이 `all` 이면 null.'),
+    frames_seen: z
+      .number()
+      .int()
+      .nonnegative()
+      .describe(
+        '추리기 전에 본 프레임 수. **`hwui.total_frames` 와 비교하지 말 것** — 세는 대상이 다르다 ' +
+          '(이쪽은 화면에 나간 프레임, 그쪽은 앱이 그린 프레임). 지표가 아니라 표본을 뽑았다는 ' +
+          '사실을 말하는 수이고, 화면에서도 각주로만 쓰인다.',
+      ),
+  }) satisfies z.ZodType<FrameData>
+
 export const StartupDataSchema = z.object({
   /**
    * `am start -W` 의 TotalTime — 프로세스 시작부터 첫 프레임까지.
@@ -1496,6 +1575,7 @@ export const ResultSchema = z.object({
       thermal: metricResultSchema(ThermalDataSchema).optional(),
       network: metricResultSchema(NetworkDataSchema).optional(),
       hwui: metricResultSchema(HwuiDataSchema).describe(HWUI_DESCRIPTION).optional(),
+      frame: metricResultSchema(FrameDataSchema).describe(FRAME_DESCRIPTION).optional(),
     })
     .catchall(metricResultSchema(z.unknown())),
   measurement_overhead: MeasurementOverheadSchema,

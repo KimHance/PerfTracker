@@ -5,6 +5,7 @@ import {
   buildBars,
   buildDelta,
   buildDistribution,
+  buildFrameTimeline,
   buildPairs,
   buildSeries,
   buildStat,
@@ -16,6 +17,7 @@ import {
   BarsBody,
   DeltaBody,
   DistributionChart,
+  FrameTimelineChart,
   PairsBody,
   Percentiles,
   emphasize,
@@ -52,6 +54,7 @@ export function ReportPage({ runId }: { runId: string }) {
   const [doc, setDoc] = useState<ReportDocument | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<TabId>('summary')
+  const [sub, setSub] = useState<Record<string, string>>({})
   const [hoverT, setHoverT] = useState<number | null>(null)
   const [hotBucket, setHotBucket] = useState<number | null>(null)
   const [tip, setTip] = useState<Tip | null>(null)
@@ -123,8 +126,23 @@ export function ReportPage({ runId }: { runId: string }) {
     ).length
 
   const sections = SECTIONS.filter((s) => s.tab === tab)
-    .map((s) => ({ ...s, items: built.filter((x) => x.block.section === s.id) }))
-    .filter((s) => s.items.length > 0)
+    .map((s) => {
+      // 서브탭이 없는 섹션은 `active` 가 없다 — 그때는 모든 블록을 그린다. 서브탭이 있는
+      // 섹션은 처음엔 첫 서브탭이 켜져 있고, `sub` 상태가 이 섹션에 대해 아무것도 안
+      // 골랐으면 그 첫 탭을 기본으로 쓴다.
+      const active = s.subTabs === undefined ? undefined : (sub[s.id] ?? s.subTabs[0]!.id)
+      const all = built.filter((x) => x.block.section === s.id)
+      return {
+        ...s,
+        active,
+        // 섹션 자체를 접을지는 **어느 서브탭에도 블록이 없을 때**만 정한다 — 지금 켜진
+        // 서브탭이 마침 비어 있다고(`timeline` 처럼) 섹션째로 접으면 서브탭 버튼까지
+        // 같이 사라져서 되돌아갈 길이 없어진다.
+        hasAny: all.length > 0,
+        items: active === undefined ? all : all.filter((x) => x.block.sub === active),
+      }
+    })
+    .filter((s) => s.hasAny)
 
   return (
     <div className="rp-shell">
@@ -170,6 +188,21 @@ export function ReportPage({ runId }: { runId: string }) {
               <span>{s.label}</span>
               <i />
             </h2>
+            {s.subTabs !== undefined && (
+              <div className="rp-subtabs">
+                {s.subTabs.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className={`rp-subtab${s.active === t.id ? ' rp-subtab-on' : ''}`}
+                    aria-current={s.active === t.id}
+                    onClick={() => setSub((prev) => ({ ...prev, [s.id]: t.id }))}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {s.note !== undefined && <p className="rp-section-note">{emphasize(s.note)}</p>}
             <div className="rp-grid">
               {s.items.map(({ key, block, metric, vm }) => {
@@ -195,11 +228,19 @@ export function ReportPage({ runId }: { runId: string }) {
                         : undefined
                     }
                     footnote={
-                      !isNone && (block.kind === 'series' || block.kind === 'distribution')
-                        ? (vm as { footnote: string }).footnote
-                        : undefined
+                      isNone
+                        ? undefined
+                        : block.kind === 'series' || block.kind === 'distribution'
+                          ? (vm as { footnote: string }).footnote
+                          : // 표본을 뽑았다는 사실. 전부 실었으면 `null` 이고 각주가 없다.
+                            block.kind === 'frametimeline'
+                            ? ((vm as { note: string | null }).note ?? undefined)
+                            : undefined
                     }
                   >
+                    {block.note !== undefined && (
+                      <p className="rp-section-note">{emphasize(block.note)}</p>
+                    )}
                     <Body
                       block={block}
                       vm={vm}
@@ -231,7 +272,12 @@ export function ReportPage({ runId }: { runId: string }) {
         <div className="rp-tip" style={{ left: tip.x + 14, top: tip.y + 14 }}>
           <div className="rp-tip-head">{tip.head}</div>
           <div className="rp-tip-value num">{tip.value}</div>
-          <div className="rp-tip-sub num">{tip.sub}</div>
+          {tip.sub !== undefined && <div className="rp-tip-sub num">{tip.sub}</div>}
+          {tip.lines?.map((l, i) => (
+            <div className="rp-tip-sub num" key={i}>
+              {l}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -283,10 +329,18 @@ function buildOne(
   switch (b.kind) {
     case 'series': return buildSeries(b, doc, maxT, marks, hoverT)
     case 'distribution': return buildDistribution(b, doc, distW)
+    case 'frametimeline': return buildFrameTimeline(b, doc, maxT, marks, hoverT)
     case 'bars': return buildBars(b, doc)
     case 'delta': return buildDelta(b, doc)
     case 'pairs': return buildPairs(b, doc)
     case 'stat': return buildStat(b, doc)
+    default: {
+      // **exhaustiveness 체크.** `Block` 에 새 `kind` 가 늘거나 여기서 하나가 빠지면
+      // `b` 가 `never` 로 좁혀지지 않아 컴파일이 깨진다 — case 를 빠뜨려도 테스트를
+      // 전부 통과하며 카드가 조용히 사라지는 사고(2번 지적 사항)를 빌드 시점에 잡는다.
+      const _exhaustive: never = b
+      return _exhaustive
+    }
   }
 }
 
@@ -333,9 +387,27 @@ function Body({
         </>
       )
     }
+    case 'frametimeline':
+      return (
+        <FrameTimelineChart
+          vm={vm as Parameters<typeof FrameTimelineChart>[0]['vm']}
+          hot={hotBucket}
+          onHot={setHotBucket}
+          onTip={setTip}
+          onHover={setHoverT}
+          onLeave={() => setHoverT(null)}
+        />
+      )
     case 'bars': return <BarsBody vm={vm as Parameters<typeof BarsBody>[0]['vm']} />
     case 'delta': return <DeltaBody vm={vm as Parameters<typeof DeltaBody>[0]['vm']} />
     case 'pairs': return <PairsBody vm={vm as Parameters<typeof PairsBody>[0]['vm']} />
     case 'stat': return <StatBody vm={vm as Parameters<typeof StatBody>[0]['vm']} title={block.title} />
+    default: {
+      // **exhaustiveness 체크.** `case` 하나가 빠지면(예: `frametimeline` 삭제) `block` 이
+      // `never` 로 안 좁혀져 컴파일이 깨진다 — 안 그러면 그 카드는 테스트를 다 통과한 채
+      // 조용히 빈 화면으로 그려진다. 서브탭이 `sub` 누락을 잡는 것과 같은 종류의 사고다.
+      const _exhaustive: never = block
+      return _exhaustive
+    }
   }
 }

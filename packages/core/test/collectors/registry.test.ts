@@ -20,6 +20,7 @@ const OK = {
     'linux.sys_stats',
     'linux.ftrace',
     'android.log',
+    'android.surfaceflinger.frametimeline',
   ],
 }
 const OLD = { sdkInt: 30, dataSources: [] }
@@ -74,8 +75,11 @@ describe('collectTraceConfigBlocks', () => {
    * 누가 새 데이터소스를 켰다는 뜻이고, 그때 "그것을 읽는 collector 가 어디 있나" 라는
    * 질문이 반드시 따라와야 한다. 개수가 아니라 **이름 집합**으로 고정하는 이유는,
    * 개수만 세면 하나가 늘고 하나가 사라진 경우를 못 잡기 때문이다.
+   *
+   * M4 가 `android.surfaceflinger.frametimeline` 하나를 늘렸다 — 읽는 collector 는
+   * `frame` 이다(`collectors/frame/index.ts`). 알고 늘린 것이라 집합에 그대로 반영한다.
    */
-  it('M3 collector 들이 TraceConfig 를 한 블록도 늘리지 않는다', () => {
+  it('M3 collector 들 + frame(M4) 이 늘린 데이터소스가 이 다섯 개뿐이다', () => {
     const names = collectTraceConfigBlocks(OK).map((b) => /name:\s*"([^"]+)"/.exec(b)?.[1])
     expect(new Set(names)).toEqual(
       new Set([
@@ -83,6 +87,7 @@ describe('collectTraceConfigBlocks', () => {
         'linux.sys_stats',
         'linux.ftrace',
         'android.log',
+        'android.surfaceflinger.frametimeline',
       ]),
     )
     expect(() =>
