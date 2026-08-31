@@ -19,7 +19,7 @@
   백분위도 내지 않고 `samples`(시간축)뿐이라 `hwui` 와 같은 종류의 숫자를 갖지 않습니다.
   sdk 31(Android 12) 하한이 다시 생겼습니다. 자세한 것은 README `metrics.frame` 절과
   아래 §7 을 보세요.
-- **기준선:** `npm test` **1,004/1,004** (58 파일, 1초 남짓) · `npm run typecheck` · `npm run build`
+- **기준선:** `npm test` **1,066/1,066** (66 파일, 1초 남짓) · `npm run typecheck` · `npm run build`
   클린 · 온-디바이스 `npm run test:device` **11 스펙**.
   **`npm test` 전에 `npm run build` 가 필요합니다** — `packages/cli` 테스트가
   `@perftracker/core` 를 `dist/` 로 해석하므로, 갓 클론한 저장소에서 곧바로 `npm test` 를
@@ -139,6 +139,13 @@ serial `R5CT0000001`.
   **전부 완전히 일치**해서, 그 기기의 실데이터에서 이 규칙이 바꾼 값은 하나도 없습니다.
 - **현재 스펙 구성(11개)으로 온-디바이스를 5회 연속 돌린 적이 없습니다.** 1회 11/11 입니다.
   5회 연속 10/10 은 그 앞 구성(10개, 대상 앱이 설정 앱)의 근거입니다.
+- **프레임 타임라인 차트를 실기기 데이터로 본 적이 없습니다.** 되살린 `metrics.frame`
+  수집기 자체는 실기기(SM-F936N)로 검증됐지만(§ 위 「프레임의 시간축을 되살렸다」), 그
+  데이터를 그리는 GUI 차트는 **합성 `result.json` 으로만** 헤드리스 렌더했습니다
+  (Task 8 Step 2). sdk 31+ 기기에서 `frame`·`hwui` 가 함께 나오는 실제 세션(Step 1)과
+  sdk 30 기기에서 `frame` 만 `sdk_too_low` 로 빠지는 경로(Step 3)는 이 저장소가 실행된
+  환경에 기기가 연결돼 있지 않아 **돌리지 못했습니다.** 마크와 프레임이 실제 트레이스에서
+  같은 축 위에 정렬되는지도 미검증입니다.
 
 ---
 
@@ -1061,6 +1068,40 @@ registry 순서는 `hwuiCollector` 바로 뒤에 `frameCollector` 다 — 지표
 `packages/core/test/schema/readme.test.ts` 의 `'접은 지표는 표에 없다'` 단언은 지워졌다
 (frame 이 다시 등록됐으므로 그 단언은 이제 거짓이다). README 「무엇을 재는가」 표와
 `metrics.frame` 절, §7 의 버전 표를 함께 갱신했다(sdk 31 하한이 다시 생겼다).
+
+### ✅ 타임라인 서브탭과 시간별 프레임 차트 (GUI, 2026-08-31)
+
+**렌더 섹션이 「분포」·「타임라인」 두 서브탭으로 갈라졌다.** `metrics.frame.samples` 를
+프레임 한 장당 2칸(앱이 그린 시간·화면에 나가기까지)짜리 누적 막대로 그리고(`buildFrameTimeline`,
+`packages/gui/src/web/report/blocks.ts`), 가로축은 다른 시계열과 같은 트레이스 0초를 쓰고
+`marks` 는 세로선으로 같은 축 위에 얹힌다. 세로축 상한은 `max(24, 데이터 최댓값)` 이라 막대가
+축 밖으로 잘리지 않는다 — 잘린 막대 표시가 필요 없는 이유이자, 고정 상한으로 바꾸면 안 되는
+이유다(`blocks.ts` 의 `yMax` 주석 참고).
+
+**Android Vitals 16ms 참고선이 규칙 2 의 두 번째 예외가 됐다.** 앱 시작 게이지와 같은 조건
+셋을 그대로 만족한다 — 경계는 구글(`VITALS_SLOW_FRAME_MS`, Play Console 「과도하게 느린
+프레임」)이 정했고, 점수도 이름도 붙지 않으며, 이 선으로 막대를 분류하지 않는다. 프레임마다
+마감이 다르고 세션 중에도 바뀌므로(실측 8.33ms → 41.67ms) 그 프레임의 실제 마감은 툴팁에
+따로 낸다.
+
+**보고서의 데이터 모양이 여섯 → 일곱 가지가 됐다** (`frametimeline` 추가). 낡은 채 남아 있던
+문장 셋을 함께 고쳤다 — README 의 「임계선도 없습니다」(16ms 참고선이 생겨 거짓이 됐다),
+`docs/design/report/HANDOFF.md` 의 「데이터 모양은 6가지」, `docs/design/gui/HANDOFF.md` 의
+「지표 7개」(측정 화면 칩이 이미 8개를 그리고 있었다).
+
+### 🟡 Task 8 — 실기기 검증 (2026-08-31, 기기 미연결로 부분 미검증)
+
+**이 세션에서 `adb devices` 가 빈 목록을 냈다.** sdk 31+ 실기기(Step 1)와 sdk 30 실기기
+(Step 3)의 세션 검증은 **돌리지 못했다** — 가짜 결과로 채우지 않고 미검증으로 남긴다:
+
+- **Step 1 (sdk 31+, `frame`+`hwui` 동시 수집) — 미검증.**
+- **Step 3 (sdk 30, `frame` 이 `sdk_too_low` 로 빠지고 `hwui` 는 정상) — 미검증.**
+- **Step 2 는 합성 `result.json` 으로 대신했다.** `presentMs: null` · `deadlineMs: null` 프레임,
+  8.33ms/41.67ms 두 마감, 16ms 를 넘는 막대, `sampling: 'max_per_bucket'` 을 섞은 픽스처를
+  `perftracker report` 로 단독 HTML 로 만들고 헤드리스 크롬(`--headless=new --dump-dom`)으로
+  열어 SVG 렌더 · 서브탭 전환 · 범례/툴팁 마크업 · 가로 스크롤 컨테이너 · 콘솔 오류 0 을
+  확인했다. **실제 기기 데이터의 모양도, `sdk_too_low` 경로도, 마크와 프레임의 실제 정렬도
+  이 방법으로는 확인되지 않는다** — 다음에 기기를 연결하면 Step 1·3 을 먼저 돌릴 것.
 
 ### 그 밖의 후보 (우선순위 낮음)
 

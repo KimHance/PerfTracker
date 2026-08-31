@@ -304,8 +304,13 @@ const FRAME_DESCRIPTION =
 /**
  * `FrameData` 의 zod 짝. **`FrameData` 를 이것으로 다시 정의하지 않는다** — 인터페이스의
  * 필드별 doc-comment 는 소스에만 남고(`z.toJSONSchema()` 는 소스 주석을 못 읽는다),
- * 이 스키마의 `.describe()` 가 그 내용을 산출물에 실어 낸다. `satisfies` 로 두 선언이
- * 갈라지면 컴파일이 막는다.
+ * 이 스키마의 `.describe()` 가 그 내용을 산출물에 실어 낸다.
+ *
+ * **`satisfies z.ZodType<FrameData>` 는 한쪽 방향만 잡는다.** 이 스키마가 `FrameData` 보다
+ * **느슨해지면**(필드를 빼먹거나 타입을 더 넓히면) 컴파일이 막는다. 하지만 이 스키마에
+ * `FrameData` 에 없는 필드를 더하거나, `FrameData` 쪽에서만 필드를 빼는 것은 구조적 타이핑이
+ * 초과 필드를 허용하므로 **조용히 통과한다.** "갈라지면 컴파일이 막는다" 는 틀린 말이다 —
+ * 한쪽이 인터페이스보다 좁아질 때만 참이다. 인터페이스를 고쳤으면 스키마도 손으로 맞춰 볼 것.
  */
 export const FrameDataSchema = z
   .object({
