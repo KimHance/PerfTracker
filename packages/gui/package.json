@@ -1,6 +1,6 @@
 {
   "name": "@perftracker/gui",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,7 @@
     "prepack": "node ../../scripts/prepack.mjs dist/server/index.js dist-web/index.html"
   },
   "dependencies": {
-    "@perftracker/core": "0.2.0"
+    "@perftracker/core": "0.2.1"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",

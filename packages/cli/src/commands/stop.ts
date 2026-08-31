@@ -1,3 +1,4 @@
+import { CLI_VERSION } from '../version.js'
 import { dirname, resolve } from 'node:path'
 import { extractRun, readActiveSession, SessionStateError, stopSession } from '@perftracker/core'
 import type { CliContext } from '../context.js'
@@ -17,7 +18,7 @@ export async function runStop(
   // 여기까지 왔으면 원본은 이미 안전하다. extract 가 실패해도(trace_processor 미확보 등)
   // 사용자가 나중에 다시 돌릴 수 있도록 run 디렉토리를 반드시 알려준다.
   try {
-    await extractRun(runDir, { offline: opts.offline })
+    await extractRun(runDir, { offline: opts.offline, toolVersion: CLI_VERSION })
   } catch (e) {
     throw new SessionStateError(
       `원본은 회수했지만 result.json 산출에 실패했습니다.\n` +

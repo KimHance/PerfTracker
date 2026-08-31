@@ -1,3 +1,4 @@
+import { CLI_VERSION } from './version.js'
 import { Command } from 'commander'
 import {
   hasBlockingFailure,
@@ -41,7 +42,7 @@ export function buildProgram(): Command {
   program
     .name('perftracker')
     .description('안드로이드 앱 성능 데이터를 코드 수정 없이 수집한다')
-    .version('0.1.0')
+    .version(CLI_VERSION)
     .option('--adb <path>', 'adb 실행 파일 경로')
     /**
      * 조회 명령의 출력을 JSON 으로. **사람이 읽는 문장이 기본이고 이것은 추가 모드다** —

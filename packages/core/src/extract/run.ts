@@ -1,3 +1,4 @@
+import { TOOL_VERSION } from '../version.js'
 import { access, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ProcessRunner } from '../adb/process.js'
@@ -327,7 +328,7 @@ export async function extractRun(
     schema_help: SCHEMA_HELP,
     tool: {
       name: 'perftracker',
-      version: opts.toolVersion ?? '0.1.0',
+      version: opts.toolVersion ?? TOOL_VERSION,
       // extract 는 기기 없이도 돌 수 있고(`perftracker extract`), 호스트는 그때도 있다.
       host: collectHostInfo(),
     },
