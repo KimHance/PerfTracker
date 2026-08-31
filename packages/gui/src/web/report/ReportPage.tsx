@@ -52,6 +52,7 @@ export function ReportPage({ runId }: { runId: string }) {
   const [doc, setDoc] = useState<ReportDocument | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<TabId>('summary')
+  const [sub, setSub] = useState<Record<string, string>>({})
   const [hoverT, setHoverT] = useState<number | null>(null)
   const [hotBucket, setHotBucket] = useState<number | null>(null)
   const [tip, setTip] = useState<Tip | null>(null)
@@ -123,8 +124,23 @@ export function ReportPage({ runId }: { runId: string }) {
     ).length
 
   const sections = SECTIONS.filter((s) => s.tab === tab)
-    .map((s) => ({ ...s, items: built.filter((x) => x.block.section === s.id) }))
-    .filter((s) => s.items.length > 0)
+    .map((s) => {
+      // 서브탭이 없는 섹션은 `active` 가 없다 — 그때는 모든 블록을 그린다. 서브탭이 있는
+      // 섹션은 처음엔 첫 서브탭이 켜져 있고, `sub` 상태가 이 섹션에 대해 아무것도 안
+      // 골랐으면 그 첫 탭을 기본으로 쓴다.
+      const active = s.subTabs === undefined ? undefined : (sub[s.id] ?? s.subTabs[0]!.id)
+      const all = built.filter((x) => x.block.section === s.id)
+      return {
+        ...s,
+        active,
+        // 섹션 자체를 접을지는 **어느 서브탭에도 블록이 없을 때**만 정한다 — 지금 켜진
+        // 서브탭이 마침 비어 있다고(`timeline` 처럼) 섹션째로 접으면 서브탭 버튼까지
+        // 같이 사라져서 되돌아갈 길이 없어진다.
+        hasAny: all.length > 0,
+        items: active === undefined ? all : all.filter((x) => x.block.sub === active),
+      }
+    })
+    .filter((s) => s.hasAny)
 
   return (
     <div className="rp-shell">
@@ -170,6 +186,21 @@ export function ReportPage({ runId }: { runId: string }) {
               <span>{s.label}</span>
               <i />
             </h2>
+            {s.subTabs !== undefined && (
+              <div className="rp-subtabs">
+                {s.subTabs.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className={`rp-subtab${s.active === t.id ? ' rp-subtab-on' : ''}`}
+                    aria-current={s.active === t.id}
+                    onClick={() => setSub((prev) => ({ ...prev, [s.id]: t.id }))}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {s.note !== undefined && <p className="rp-section-note">{emphasize(s.note)}</p>}
             <div className="rp-grid">
               {s.items.map(({ key, block, metric, vm }) => {
@@ -200,6 +231,9 @@ export function ReportPage({ runId }: { runId: string }) {
                         : undefined
                     }
                   >
+                    {block.note !== undefined && (
+                      <p className="rp-section-note">{emphasize(block.note)}</p>
+                    )}
                     <Body
                       block={block}
                       vm={vm}

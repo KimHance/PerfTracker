@@ -646,7 +646,7 @@ export function buildStat(b: StatBlock, res: unknown): StatVm {
     why: st?.reasonCode === undefined || st?.reasonCode === null
       ? null
       : { code: st.reasonCode, full: st.reason },
-    sub: (b.sub ?? []).map((s) => `${s.l} ${fmtValue(readPath(res, s.p), s.f)}`).join(' · '),
+    sub: (b.subline ?? []).map((s) => `${s.l} ${fmtValue(readPath(res, s.p), s.f)}`).join(' · '),
     gauge: b.gauge === undefined ? null : buildGauge(b.gauge, v, st?.reasonCode ?? null),
   }
 }

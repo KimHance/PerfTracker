@@ -49,6 +49,18 @@ export interface BlockBase {
    * 색으로 좋고 나쁨을 말하지 않는다 (규칙 2). 값의 출처가 다르다는 표시일 뿐이다.
    */
   tone?: 'alt'
+  /**
+   * 섹션이 `subTabs` 를 가질 때 이 블록이 속한 서브탭.
+   *
+   * **섹션에 서브탭이 있으면 필수다.** 없으면 어느 탭에도 안 그려져 조용히 사라진다 —
+   * 그것을 매니페스트 테스트가 막는다.
+   */
+  sub?: string
+  /**
+   * 이 블록 하나에 대한 읽는 법 한 문장. 섹션 전체가 아니라 **이 블록에만** 해당할 때 쓴다 —
+   * 섹션 안에 다른 모양의 블록이 섞이면 섹션 레벨 note 는 엉뚱한 카드까지 가리킨다.
+   */
+  note?: string
 }
 
 /**
@@ -86,8 +98,14 @@ export interface StatBlock extends BlockBase {
   kind: 'stat'
   path: string
   fmt: Fmt
-  /** 큰 숫자 아래 한 줄. `l` 라벨 · `p` 경로 · `f` 포맷. */
-  sub?: { l: string; p: string; f: Fmt }[]
+  /**
+   * 큰 숫자 아래 한 줄. `l` 라벨 · `p` 경로 · `f` 포맷.
+   *
+   * 이름이 `subline` 인 것은 `BlockBase.sub`(서브탭 소속)와 겹치지 않기 위해서다 — 둘 다
+   * `sub` 였다면 이 값(객체 배열)이 서브탭 검사에 걸려 "값이 있으니 sub 를 가졌다" 로
+   * 잘못 읽힌다.
+   */
+  subline?: { l: string; p: string; f: Fmt }[]
   gauge?: GaugeSpec
 }
 
@@ -200,13 +218,23 @@ export type Block =
  * 아니라 읽는 법이라 규칙 2 를 깨지 않는다 — "이 앱이 느리다" 가 아니라 "이 숫자는 이런
  * 질문에 답한다" 다.
  */
-export const SECTIONS: { id: SectionId; label: string; tab: TabId; note?: string }[] = [
+export const SECTIONS: {
+  id: SectionId
+  label: string
+  tab: TabId
+  note?: string
+  /** 이 섹션이 서브탭으로 나뉘어 있으면 여기 적는다. 없으면 섹션은 서브탭 없이 하나다. */
+  subTabs?: { id: string; label: string }[]
+}[] = [
   { id: 'startup', label: '앱 시작', tab: 'summary' },
   {
     id: 'render',
     label: '렌더',
     tab: 'summary',
-    note: '**막대가 왼쪽에 몰릴수록 부드럽습니다.** 오른쪽으로 갈수록 오래 걸린 프레임입니다.',
+    subTabs: [
+      { id: 'distribution', label: '분포' },
+      { id: 'timeline', label: '타임라인' },
+    ],
   },
   { id: 'cpu', label: 'CPU', tab: 'summary' },
   { id: 'memory', label: '메모리', tab: 'summary' },
@@ -256,7 +284,7 @@ export const MANIFEST: Block[] = [
       source: 'Android Vitals — app startup time (콜드 5초)',
       worstWhen: { codes: ['launch_wait_timed_out'], label: '타임아웃' },
     },
-    sub: [
+    subline: [
       { l: '상태', p: 'metrics.startup.data.launch_state', f: 'raw' },
       { l: 'wait', p: 'metrics.startup.data.wait_time_ms', f: 'ms0' },
     ],
@@ -287,7 +315,10 @@ export const MANIFEST: Block[] = [
     // 하나만 그리게 되자 나머지가 `result.json` 에만 남아 사람과 LLM 이 다른 숫자를 봤다.
     // 버전 하한이 없어서 sdk 30 처럼 트레이스가 없는 기기에서도 이 카드는 그려진다.
     kind: 'distribution', section: 'render', title: '프레임 시간 분포',
-    metric: 'hwui', unit: 'ms', span: 12, tone: 'alt',
+    metric: 'hwui', unit: 'ms', span: 12, tone: 'alt', sub: 'distribution',
+    // 섹션 note 였던 것을 여기로 옮겼다 — 이 문장은 히스토그램 막대를 어떻게 읽는지를
+    // 말하는 것이라, 섹션이 분포/타임라인 둘을 담게 된 지금은 이 블록에만 붙어야 맞다.
+    note: '**막대가 왼쪽에 몰릴수록 부드럽습니다.** 오른쪽으로 갈수록 오래 걸린 프레임입니다.',
     path: 'metrics.hwui.data.histogram',
     percentilesPath: 'metrics.hwui.data.percentiles',
     share: {
@@ -302,7 +333,7 @@ export const MANIFEST: Block[] = [
     // 원문과 대조할 수 없고("그리기 명령" 을 gfxinfo 에서 grep 할 수 없다), 옮긴 말이
     // 원문보다 정확할 수도 없다. 기기가 영어로 준 것은 영어로 싣는다.
     kind: 'pairs', section: 'render', title: '프레임 수', metric: 'hwui', span: 6,
-    unit: 'dumpsys gfxinfo', tone: 'alt', path: 'metrics.hwui.data',
+    unit: 'dumpsys gfxinfo', tone: 'alt', sub: 'distribution', path: 'metrics.hwui.data',
     keys: [
       { p: 'total_frames', l: 'Total frames rendered', f: 'int' },
       { p: 'janky_frames', l: 'Janky frames', f: 'int', pct: 'total_frames' },
@@ -314,7 +345,7 @@ export const MANIFEST: Block[] = [
     // 전체 프레임 수를 넘었다 (2,759 대 1,682 · 8,503 대 7,514 · 33 대 26). 그래서 이 카드에는
     // `pct` 를 달지 않는다 — 분모가 없는 값에 비율을 붙이면 100% 넘는 숫자가 나온다.
     kind: 'pairs', section: 'render', title: '원인별 횟수', metric: 'hwui', span: 6,
-    unit: 'dumpsys gfxinfo', tone: 'alt', path: 'metrics.hwui.data',
+    unit: 'dumpsys gfxinfo', tone: 'alt', sub: 'distribution', path: 'metrics.hwui.data',
     keys: [
       { p: 'slow_ui_thread', l: 'Slow UI thread', f: 'int' },
       { p: 'slow_draw_commands', l: 'Slow issue draw commands', f: 'int' },

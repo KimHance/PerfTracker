@@ -950,3 +950,25 @@ describe('렌더 섹션', () => {
     expect(ps).toContain('deadline_missed')
   })
 })
+
+describe('렌더 섹션 서브탭', () => {
+  it('분포와 타임라인 둘을 갖는다', () => {
+    const render = SECTIONS.find((s) => s.id === 'render')!
+    expect(render.subTabs?.map((t) => t.id)).toEqual(['distribution', 'timeline'])
+  })
+
+  /** 서브탭이 있는 섹션의 블록은 어느 탭 소속인지 반드시 말해야 한다 — 안 그러면 사라진다. */
+  it('서브탭이 있는 섹션의 블록은 전부 sub 를 갖는다', () => {
+    const withSubs = new Set(SECTIONS.filter((s) => s.subTabs !== undefined).map((s) => s.id))
+    const orphan = MANIFEST.filter((b) => withSubs.has(b.section) && b.sub === undefined)
+    expect(orphan.map((b) => b.title), 'sub 가 없는 블록').toEqual([])
+  })
+
+  it('선언한 sub 는 그 섹션의 subTabs 안에 있다', () => {
+    for (const b of MANIFEST) {
+      if (b.sub === undefined) continue
+      const ids = SECTIONS.find((s) => s.id === b.section)?.subTabs?.map((t) => t.id) ?? []
+      expect(ids, `${b.title} 의 sub=${b.sub}`).toContain(b.sub)
+    }
+  })
+})
