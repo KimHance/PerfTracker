@@ -1,5 +1,6 @@
 import type { AppProcessCandidate } from '../../appProcess.js'
 import { resolveAppProcess, type ResolvedAppProcess } from '../../appProcess.js'
+import { TRACE_START_SUBQUERY } from '../../timeline.js'
 import type { ExtractContext } from '../../types.js'
 import type { FrameSample } from '../model.js'
 
@@ -28,8 +29,6 @@ export const FRAME_PROCESS_SQL =
   'from (select p.upid as upid, p.pid as pid, p.name as name, count(*) as frames ' +
   'from actual_frame_timeline_slice f join process p using(upid) group by p.upid order by frames desc)'
 
-const TRACE_START = '(select min(ts) from actual_frame_timeline_slice)'
-
 /**
  * **한 행이 화면에 나간 프레임 하나다.**
  *
@@ -50,6 +49,14 @@ const TRACE_START = '(select min(ts) from actual_frame_timeline_slice)'
  * 프레임이 끝난 뒤에 시작하므로(SM-F936N: 앱 0.00~6.30ms, 표시 7.11~15.08ms) 두 칸이 겹치지
  * 않고 화면에서 그대로 쌓인다.
  *
+ * **0ms 기준점은 이 데이터소스의 첫 프레임이 아니라 `TRACE_START_SUBQUERY`
+ * (`trace_bounds.start_ts`)다** — cpu · memory · log 등 다른 모든 시계열이 쓰는 것과
+ * **같은 기준점**이다. 이 화면의 목적 자체가 사용자 마크(`readMarks`,
+ * `gui/src/web/report/axis.ts`)를 프레임 축 위에 겹쳐 그리는 것인데, 마크는 이미 그 공통
+ * 기준점으로 옮겨져 있다. 여기만 "이 프로세스의 첫 프레임"을 0 으로 잡으면, 앱이 세션 초반
+ * 몇 초를 그리지 않았을 때 프레임 축 전체가 그만큼 밀리는데 마크 선은 밀리지 않아 — 정확히
+ * 겹쳐 보이라고 만드는 화면이 어긋나 버린다.
+ *
  * **접기 전 코드와 다른 점 둘.** 초 단위 버킷이 아니라 **밀리초 단위 개별 프레임**을 낸다 —
  * 이것은 시계열 집계가 아니라 프레임 하나하나의 타임라인이다. 그리고 앱 시간뿐 아니라
  * **표시 프레임의 시간도 함께** 낸다 — `presentMs` 가 그것이다.
@@ -57,7 +64,7 @@ const TRACE_START = '(select min(ts) from actual_frame_timeline_slice)'
 export function frameSamplesSql(upid: number): string {
   return (
     'select json_group_array(json_array(t_ms, app_ms, present_ms, deadline_ms)) as j from (' +
-    `select cast((a.ts - ${TRACE_START}) / 1000000.0 as int) as t_ms, ` +
+    `select cast((a.ts - ${TRACE_START_SUBQUERY}) / 1000000.0 as int) as t_ms, ` +
     'a.dur / 1000000.0 as app_ms, ' +
     'coalesce(d.dur, 0) / 1000000.0 as present_ms, ' +
     'e.dur / 1000000.0 as deadline_ms, ' +
