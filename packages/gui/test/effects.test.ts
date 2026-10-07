@@ -221,6 +221,20 @@ describe('시작', () => {
     expect(Object.keys(off.sent[0]!)).not.toContain('diagnose')
   })
 
+  it('DM-2 진단 토글 → 시작 요청 — 로딩 오버레이 줄은 진단이면 start 바로 뒤에 --diagnose, 평소면 글자 그대로', async () => {
+    // 오버레이는 "무엇을 기다리는지" 다 — 진단 세션을 기다리면서 평소 줄을 보이면 사실과 다르다.
+    const tab = { ...newTab('t1'), serial: 'S1', packageName: 'com.x' }
+    const overlay = async (diagnose: boolean): Promise<string | undefined> => {
+      const { dispatch, actions } = collector()
+      await startSession({ api: startSpy(diagnose ? { notice: null } : undefined).api, dispatch }, { ...tab, diagnose }, 'runs')
+      const began = actions.find((a) => a.type === 'loading/began')
+      return began?.type === 'loading/began' ? began.loading.command : undefined
+    }
+
+    expect(await overlay(true)).toBe('perftracker start --diagnose --app "com.x" -d S1 -o runs')
+    expect(await overlay(false)).toBe('perftracker start --app "com.x" -d S1 -o runs')
+  })
+
   it('DM-10 running 고지 — start 응답의 진단 칸이 탭의 진단 표시 · 고지로 간다', async () => {
     const notice = '앱 slice 열림 모름 — sdk 30 · debuggable 아님'
     const { api } = startSpy({ notice })
