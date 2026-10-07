@@ -1,4 +1,5 @@
 import { stopSession } from '../../effects/effects.js'
+import { runningDiagnoseLines, runningKicker } from '../../format/session.js'
 import { formatClock, formatElapsed } from '../../format/time.js'
 import { elapsedMs, selectedApp, selectedDevice } from '../../state/derive.js'
 import { appVersionKey } from '../../state/reducer.js'
@@ -19,12 +20,13 @@ export function RunningScreen({ tab }: { tab: Tab }) {
     tab.serial !== null && tab.packageName !== null
       ? state.appVersions[appVersionKey(tab.serial, tab.packageName)]
       : undefined
+  const diagnose = runningDiagnoseLines(tab)
 
   return (
     <div className="running">
       <div className="running-kicker">
         <span className="dot dot-live" aria-hidden />
-        측정 중
+        {runningKicker(tab)}
       </div>
 
       <div className="timer" aria-live="off">
@@ -53,6 +55,13 @@ export function RunningScreen({ tab }: { tab: Tab }) {
             {tab.unsupported.map((u) => u.id).join(' · ')} (나머지는 정상 수집)
           </div>
         )}
+        {/*
+          앱 slice 를 못 여는지 모르는 진단 세션의 고지 (DM-10). 문장은 core 가 쓴 그대로다 —
+          `start --diagnose` 가 터미널에 찍는 줄과 같은 글자. 세션을 막지 않는 측정 조건이라 못 재는
+          지표 줄과 같은 모양(클래스)으로, 기호 없이 적는다. 설정 화면은 앱의 debuggable 을 모르므로
+          여기에만 나온다.
+        */}
+        {diagnose.notice !== null && <div className="running-unsupported">{diagnose.notice}</div>}
       </div>
 
       {/*
@@ -73,6 +82,13 @@ export function RunningScreen({ tab }: { tab: Tab }) {
 
       <p className="running-note">
         측정 중에는 기기에 어떤 adb 명령도 보내지 않습니다. 다른 탭의 세션은 이 탭과 독립적으로 흘러갑니다.
+        {/*
+          진단 세션의 둘째 줄 (DM-12) — slice 비용이 앱 프로세스 몫이라 평소 세션과 나란히 놓을 수 없다.
+          첫 줄과 같은 각주라 같은 문단 안에 블록으로 둔다 (래퍼의 큰 gap 이 끼면 다른 블록처럼 읽힌다).
+        */}
+        {diagnose.footnote !== null && (
+          <span style={{ display: 'block', marginTop: 'var(--space-2)' }}>{diagnose.footnote}</span>
+        )}
       </p>
     </div>
   )

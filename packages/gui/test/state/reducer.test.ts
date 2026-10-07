@@ -102,6 +102,26 @@ describe('세션 정지', () => {
     expect(next.runs).toHaveLength(0)
     expect(next.tabs[0]!.phase).toBe('setup')
   })
+
+  it('DM-12 정지 뒤 진단은 남지 않는다 — 토글 · 고지 둘 다 비고 --launch/--force 는 남는다', () => {
+    // 진단은 수치의 성질을 바꾸는 옵션이다. 다음 세션이 말없이 진단으로 열리면 평소 기록인 줄 알고
+    // 나란히 놓게 된다 — CLI 도 start 마다 --diagnose 를 줘야 진단이다.
+    let state = started()
+    const key = state.tabs[0]!.key
+    state = apply(state, {
+      type: 'tab/patched',
+      key,
+      patch: { diagnose: true, diagnoseNotice: '앱 slice 열림 모름 — sdk 30 · debuggable 아님' },
+    })
+
+    for (const result of [run('r1', '2026-07-27T10:00:00'), null]) {
+      const tab = apply(state, { type: 'session/stopped', tabKey: key, run: result }).tabs[0]!
+      expect(tab.diagnose).toBe(false)
+      expect(tab.diagnoseNotice).toBeNull()
+      expect(tab.launch).toBe(false)
+      expect(tab.force).toBe(true)
+    }
+  })
 })
 
 describe('마킹', () => {
@@ -172,6 +192,9 @@ describe('기록', () => {
     expect(tab.launch).toBe(true)
     expect(tab.force).toBe(true)
     expect(tab.offline).toBe(false)
+    // 진단은 켤 때만 — 평소 세션이 기본이다 (`start` 도 `--diagnose` 를 줘야 진단이다).
+    expect(tab.diagnose).toBe(false)
+    expect(tab.diagnoseNotice).toBeNull()
     // 저장 위치는 탭이 들고 있지 않다 — 서버가 정하고 화면은 env 로 받아 표시만 한다.
   })
 })

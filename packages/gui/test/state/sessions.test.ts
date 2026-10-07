@@ -121,3 +121,69 @@ describe('마킹 동기화', () => {
     expect(state.tabs[0]!.unsupported).toEqual([{ id: 'frame', reason: 'sdk_int=30' }])
   })
 })
+
+/**
+ * **진단 세션도 서버가 정본이다** (DM-12 · DM-10). 새로고침 · CLI 로 연 진단 세션이 화면에 되살아날 때
+ * 진단 표시(배지 · 킥커 · 각주)와 고지 줄을 잃으면, 그 세션의 수치를 평소 세션인 줄 알고 읽게 된다.
+ */
+describe('진단 세션 동기화', () => {
+  const NOTICE = '앱 slice 열림 모름 — sdk 30 · debuggable 아님'
+
+  it('DM-12 새로고침 · CLI 로 연 진단 세션은 진단 표시와 고지를 되찾는다', () => {
+    const state = apply(initialState(), {
+      type: 'sessions/loaded',
+      sessions: [session({ diagnose: { notice: NOTICE } }), session({ id: 'bbb222', serial: 'S2', diagnose: { notice: null } })],
+    })
+
+    expect(state.tabs.map((t) => [t.serial, t.diagnose, t.diagnoseNotice])).toEqual([
+      ['S1', true, NOTICE],
+      ['S2', true, null],
+    ])
+  })
+
+  it('DM-12 평소 세션을 되살린 탭엔 진단 표시가 없다', () => {
+    const state = apply(initialState(), { type: 'sessions/loaded', sessions: [session()] })
+
+    expect(state.tabs[0]!.diagnose).toBe(false)
+    expect(state.tabs[0]!.diagnoseNotice).toBeNull()
+  })
+
+  it('DM-12 설정 화면에서 진단 토글을 켠 탭이 평소 세션을 되찾으면 토글이 아니라 서버를 따른다', () => {
+    // 같은 기기에서 CLI 가 평소 세션을 열었다 — 화면의 토글이 켜져 있어도 그 세션은 진단이 아니다.
+    let state = apply(initialState(), {
+      type: 'tab/patched',
+      key: 't1',
+      patch: { serial: 'S1', packageName: 'com.x', diagnose: true },
+    })
+
+    state = apply(state, { type: 'sessions/loaded', sessions: [session()] })
+
+    expect(state.tabs[0]!.phase).toBe('running')
+    expect(state.tabs[0]!.diagnose).toBe(false)
+  })
+
+  it('DM-12 측정 중 동기화가 진단 칸을 서버 값으로 맞추고, 여러 번 불려도 같다', () => {
+    let state = apply(initialState(), { type: 'sessions/loaded', sessions: [session({ diagnose: { notice: null } })] })
+    // 화면 쪽 값이 어긋나 있어도(예: 늦게 온 응답) 다음 동기화가 서버 값으로 되돌린다.
+    state = apply(state, { type: 'tab/patched', key: state.tabs[0]!.key, patch: { diagnose: false, diagnoseNotice: 'x' } })
+
+    for (let i = 0; i < 3; i++) {
+      state = apply(state, { type: 'sessions/loaded', sessions: [session({ diagnose: { notice: NOTICE } })] })
+    }
+
+    expect(state.tabs).toHaveLength(1)
+    expect(state.tabs[0]!.diagnose).toBe(true)
+    expect(state.tabs[0]!.diagnoseNotice).toBe(NOTICE)
+  })
+
+  it('DM-12 밖에서 끝난 진단 세션의 탭은 진단을 물려주지 않는다', () => {
+    // 정지 뒤(`resetAfterStop`)와 같은 이유 — 다음 세션이 말없이 진단으로 열리면 안 된다.
+    let state = apply(initialState(), { type: 'sessions/loaded', sessions: [session({ diagnose: { notice: NOTICE } })] })
+
+    state = apply(state, { type: 'sessions/loaded', sessions: [] })
+
+    expect(state.tabs[0]!.phase).toBe('setup')
+    expect(state.tabs[0]!.diagnose).toBe(false)
+    expect(state.tabs[0]!.diagnoseNotice).toBeNull()
+  })
+})

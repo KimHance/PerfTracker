@@ -83,6 +83,8 @@
 
 `환경 점검` → 로딩 오버레이 1100ms, 명령 `npx perftracker doctor`.
 
+결과 패널(다이얼로그 `환경 점검`)은 두 묶음 — `환경`(requirement · 막힌 것) · `이 기기가 잴 수 있는 것`(capability · 기기의 성질). 행 = `✓`/`✗` + 검사 이름(monospace 11.5px) + 상세(11.5px `--color-neutral-700`). capability 맨 끝에 진단 세션 줄 `diagnose: app slice` — sdk ≥31 `✓ sdk {sdk} · 열림` · sdk ≤30 `✗ sdk {sdk} · debuggable 앱만 열림`. 판정과 글자는 core 그대로(`doctor` 와 같은 줄)이고 화면은 그리기만 한다.
+
 ## 2. 탭 스트립
 
 높이 38px, `background:var(--color-neutral-100)`, 하단 divider, `padding-left:var(--space-2)`, `overflow-x:auto; overflow-y:hidden`.
@@ -93,7 +95,7 @@
 - **비활성**: 배경 투명, `color:var(--color-neutral-700)`
 - 상태 도트: 6px 원. 측정 중 = `--color-accent` + `pulse` 애니메이션(1.4s ease-in-out infinite, opacity 1→.35→1); 그 외 = `--color-neutral-400`
 - 라벨: 12.5px, `max-width:150px`, ellipsis. 이름이 비면 `새 세션`
-- 배지: monospace 10px `--color-neutral-600`. 측정 중 = 경과시간 `mm:ss` (500ms 틱), 설정 중 = `준비`
+- 배지: monospace 10px `--color-neutral-600`. 측정 중 = 경과시간 `mm:ss` (500ms 틱) — **진단 세션이면 `진단 mm:ss`**, 설정 중 = `준비` (진단 토글과 무관). 좁으면 라벨만 ellipsis 로 줄고 배지는 그대로
 - 닫기 `×`: 14px, `--color-neutral-600`. 탭이 1개면 `opacity:.25; pointer-events:none` (최소 1개 보장). 클릭은 `stopPropagation` 필수
 - `+` 버튼: `.btn .btn-ghost`, 26×26, 15px, 새 탭 추가 후 즉시 활성화
 - 우측 요약: monospace 10px, `N개 탭 · 측정 중 M`
@@ -175,7 +177,7 @@
 ### 04 세션
 
 - 세션 이름: `.field` + `label`(`세션 이름`) + `.input` placeholder `예: 홈 스크롤`. 비워두면 시작 시 `세션-N` 으로 자동 부여
-- 옵션 3개, 각각 클릭 가능한 행 (`display:flex; align-items:flex-start; gap:10.2px; padding:6.8px 10.2px; border-radius:var(--radius-md); border:1px solid`):
+- 옵션 4개, 각각 클릭 가능한 행 (`display:flex; align-items:flex-start; gap:10.2px; padding:6.8px 10.2px; border-radius:var(--radius-md); border:1px solid`):
   - 체크박스: 16×16, `border-radius:5px`. ON = `border:1px solid var(--color-accent-700); background:var(--color-accent); color:#fff` + `✓`(11px). OFF = `border:1px solid var(--color-neutral-500)`
   - ON 행: border `--color-accent-400`, background `--color-accent-100`
   - 플래그명 monospace 11.5px + 설명 11.5px `--color-neutral-700`
@@ -185,16 +187,19 @@
 | `--launch` | 앱을 콜드로 띄우고 시작 시간을 측정 (기본 켬) | ON |
 | `--force` | 이 기기에 남은 기존 세션을 버리고 시작 (기본 켬) | ON |
 | `--offline` | trace_processor 를 내려받지 않음 (캐시만 사용) | OFF |
+| `--diagnose` | atrace slice 기록 (am · wm · view + 대상 앱) · 최대 10분 | OFF — 정지하면 다시 꺼진다 (`--launch`/`--force` 와 달리 남기지 않음) |
 
-출력 디렉토리는 `runs` 고정(`-o runs`).
+`--diagnose` 는 진단 세션(atrace slice 기록 — 평소 세션과 수치를 나란히 놓을 수 없다)이라 평소 옵션 셋 뒤 끝 행이다. 설명 문구의 정본은 `docs/design/diagnostic-mode.md` `## 문구`.
+
+출력 디렉토리는 서버가 준 `EnvView.outDir` (섹션 머리 우측 `-o {outDir}`) — 화면이 정하지 않는다.
 
 ### 하단 시작 바 (`position:sticky; bottom:0`)
 
 `display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-3); padding:var(--space-3) clamp(14px,3vw,30px); border-top:1px solid var(--color-divider); background:var(--color-neutral-100)`
 
-- 좌: 실행될 명령 미리보기 monospace 11.5px `--color-neutral-700`, `flex:1; min-width:180px`, ellipsis. 형식:
-  `$ npx perftracker start --app "<pkg|<미선택>>" --name "<이름>" -d <serial|<미선택>> [--launch] [--force] -o runs`
-  (이름이 비면 `--name` 생략)
+- 좌: 실행될 명령 미리보기 monospace 11.5px `--color-neutral-700`, `flex:1; min-width:180px`, 한 줄 끝 ellipsis. 형식:
+  `$ perftracker start [--diagnose] --app "<pkg|<미선택>>" [--name "<이름>"] -d <serial|<미선택>> [--launch] [--force] -o <outDir>`
+  (이름이 비면 `--name` 생략). **`--diagnose` 는 `start` 바로 뒤** — 924 폭에서 끝이 잘려도 진단 세션이라는 사실이 남는다 (서버가 적는 실행 줄도 같은 자리)
 - 우: `측정 시작` — `.btn .btn-primary .blueprint`, height 40px, `min-width:150px`, 14px. **기기 또는 앱 미선택이면 disabled**(디자인 시스템의 45% opacity)
 
 `측정 시작` → 로딩 오버레이 1400ms(`세션을 시작하고 트레이스를 켜고 있습니다`) → 탭 state `running`, `startedAt = now`.
@@ -206,23 +211,25 @@
 
 위에서 아래로:
 
-1. 킥커: 7px 원형 `--color-accent` 도트(pulse) + `측정 중` — monospace 11px, `letter-spacing:.16em`, uppercase, `--color-accent-700`
+1. 킥커: 7px 원형 `--color-accent` 도트(pulse) + `측정 중` — monospace 11px, `letter-spacing:.16em`, uppercase, `--color-accent-700`. 진단 세션이면 `측정 중 · 진단`
 2. 타이머: `--font-heading` 600, `font-size:min(108px,max(52px,14vw,12vh))`, `line-height:.9`, `font-variant-numeric:tabular-nums`, 형식 `mm:ss`(1시간 넘으면 `h:mm:ss`), 500ms 틱
-3. 세션 정보(중앙 정렬, `line-height:1.7`): 이름(`--font-heading` 19px) / `{앱 라벨} · {패키지}`(13px `--color-neutral-700`) / `{모델} ({serial}) · 시작 HH:MM:SS`(monospace 11.5px)
-4. **마킹 블록** — `width:min(520px,92%)`, `display:flex; flex-direction:column; gap:var(--space-2)`:
+3. 세션 정보(중앙 정렬, `line-height:1.7`): 이름(`--font-heading` 19px) / `{앱 라벨} · {패키지}`(13px `--color-neutral-700`) / `{모델} ({serial}) · 시작 HH:MM:SS`(monospace 11.5px). 그 아래 사실 줄(11.5px `--color-neutral-600`, `margin-top:var(--space-2)`, `word-break:keep-all`) — 있을 때만:
+   - 못 재는 지표: `✗ 이 기기에서 못 재는 지표 N개 — {id · id} (나머지는 정상 수집)`
+   - 진단 세션 고지(앱 slice 열림이 "모름" 칸일 때만): core 의 문장 그대로 — `앱 slice 열림 모름 — sdk {sdk} · debuggable 아님|모름`. 기호 없음 · 설정 화면에는 없다 (앱의 debuggable 을 모름)
+4. 정지 버튼: `.btn .btn-primary .blueprint`, height 52px, `min-width:190px`, 15px — `정지 · 기록 생성`. **마킹 블록 위**다 (아래 알려진 이슈를 이렇게 풀었다)
+5. **마킹 블록** — `width:min(520px,92%)`, `display:flex; flex-direction:column; gap:var(--space-2)`:
    - 헤더: `마킹`(monospace 10.5px, uppercase, `letter-spacing:.14em`, `--color-neutral-600`) + `이벤트가 일어난 순간에 이름을 남기면 경과 시간과 함께 기록됩니다`(11.5px `--color-neutral-600`)
    - 입력 행: `.input`(`flex:1; min-width:0`, placeholder `예: 홈 진입, 스크롤 시작, 광고 재생`) + 버튼 `.btn .btn-secondary`(height 40px, `min-width:96px`, 12.5px) 라벨 `마킹 @ mm:ss` — **경과 시간이 실시간으로 갱신됨**. 입력이 비면 disabled. **Enter 로도 등록**
    - 빠른 마킹 칩(wrap): ghost 28px 11.5px — `+ 앱 진입`, `+ 스크롤 시작`, `+ 영상 재생`, `+ 화면 전환`. 클릭 즉시 그 라벨로 마킹
    - 마킹 목록(1개 이상일 때만): `border:1px solid var(--color-divider); border-radius:var(--radius-lg); max-height:150px; overflow:auto`. 행 = `padding:6px 12px; border-bottom:1px solid var(--color-divider)`; 경과시간(monospace 11.5px `--color-accent-700`, `min-width:46px`) + 라벨(12.5px, ellipsis) + `×` 삭제(14px `--color-neutral-600`). **최신순(내림차순)**
    - 목록 아래 우측 정렬: `{N}개 · result.json 의 marks[] 로 저장됩니다`(monospace 10.5px `--color-neutral-600`)
-5. 정지 버튼: `.btn .btn-primary .blueprint`, height 52px, `min-width:190px`, 15px — `정지 · 기록 생성`
-6. 각주(`max-width:46ch`, 중앙, 11.5px `--color-neutral-600`): `측정 중에는 기기에 어떤 adb 명령도 보내지 않습니다. 다른 탭의 세션은 이 탭과 독립적으로 흘러갑니다.`
+6. 각주(`max-width:46ch`, 중앙, 11.5px `--color-neutral-600`): `측정 중에는 기기에 어떤 adb 명령도 보내지 않습니다. 다른 탭의 세션은 이 탭과 독립적으로 흘러갑니다.` — 진단 세션이면 같은 문단 안 둘째 줄(블록, `margin-top:var(--space-2)`): `진단 · slice 비용 앱 프로세스 몫 · 평소 세션과 비교 불가 · 최대 10분`
 
-> **알려진 이슈**: 마킹이 3개 이상 쌓이고 뷰포트 높이가 낮으면(≈540px) 정지 버튼이 스크롤 아래로 밀린다. 구현 시 정지 버튼을 마킹 블록 위로 올리거나 목록 `max-height` 를 더 낮추는 것을 검토할 것.
+> **알려진 이슈 (해결)**: 마킹이 3개 이상 쌓이고 뷰포트 높이가 낮으면(≈540px) 정지 버튼이 스크롤 아래로 밀렸다. 구현은 정지 버튼을 마킹 블록 위로 올리고 목록에 `max-height` 를 걸었다 (위 4).
 
 마킹 데이터: `{ id, label, offsetMs }` — `offsetMs = now - startedAt`. 탭별로 독립 저장, 정지 후 새 세션에서는 초기화.
 
-정지 → 로딩 오버레이 1800ms(`트레이스를 회수하고 result.json 을 만들고 있습니다`, 명령 `npx perftracker stop -d {serial}`) → 기록 레코드 생성 후 드로어를 열고, 그 탭은 설정 화면으로 되돌린다(기기·`--launch`·`--force` 는 유지, 앱/이름/마킹은 초기화).
+정지 → 로딩 오버레이 1800ms(`트레이스를 회수하고 result.json 을 만들고 있습니다`, 명령 `npx perftracker stop -d {serial}`) → 기록 레코드 생성 후 드로어를 열고, 그 탭은 설정 화면으로 되돌린다(기기·`--launch`·`--force` 는 유지, 앱/이름/마킹·`--diagnose` 는 초기화).
 
 ## 5. 기록 드로어 (우측, 조건부)
 
@@ -239,7 +246,7 @@
 - 2행 좌(11.5px `--color-neutral-700`, `line-height:1.55`, `flex:1; min-width:0`, 클릭 시 대시보드):
   - `{모델} · {serial}`
   - `{앱 라벨} v{버전}`
-  - monospace 10.5px `--color-neutral-600`: `MM/DD HH:MM · mm:ss · {launch|attach} · 경고 N[ · 미지원 N][ · 마킹 N]`
+  - monospace 10.5px `--color-neutral-600`: `MM/DD HH:MM · mm:ss · {launch|attach} · 경고 N[ · 미지원 N][ · 마킹 N][ · 진단]` — `진단` 은 진단 세션 기록에만, 맨 끝. 드로어가 좁으면(924 에서 295px) 잘리지 않고 줄바꿈
 - 2행 우(`flex:none`): `이름 변경`, `삭제` — ghost 24px 10.5px, `white-space:nowrap`
 
 **빈 상태**: `기록이 없습니다. 세션을 정지하면 여기에 쌓입니다.` — 점선 카드, `padding:var(--space-8) var(--space-4)`, 12px `--color-neutral-600`.
