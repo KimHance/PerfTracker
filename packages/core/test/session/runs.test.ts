@@ -111,21 +111,28 @@ describe('진단 태그', () => {
     expect(Object.keys(normal!)).not.toContain('diagnose')
   })
 
+  /**
+   * 갈래가 둘이라 경우도 둘이다 (코드 검수 #3). 예전 시험은 session.json 갈래만 있어서
+   * result.json 쪽 읽기를 지워도 그린이었다 — 이름이 말하는 "result.json 이 정본" 을 못 지켰다.
+   */
   it('runs 진단 태그 — result.json 이 있으면 그것이 정본이고, 진단 키가 없으면 session.json 을 본다', async () => {
-    await write('d', {
-      id: 'ddd',
-      name: 'ddd',
-      startedAt: '2026-10-08T10:00:00',
-      endedAt: '2026-10-08T10:00:30',
-      options: { launch: true, diagnose: true },
-    })
-    await writeFile(
-      join(out, 'd', 'result.json'),
-      JSON.stringify({ session: { id: 'ddd', started_at: '2026-10-08T10:00:00', ended_at: '2026-10-08T10:00:30', options: { launch: true } } }),
-      'utf8',
-    )
+    const result = (id: string, options: Record<string, unknown>) =>
+      JSON.stringify({ session: { id, started_at: '2026-10-08T10:00:00', ended_at: '2026-10-08T10:00:30', options } })
 
-    expect((await listRuns(out))[0]!.diagnose).toBe(true)
+    // result.json 에만 진단 키 — session.json 은 모른다 (산출이 그 키를 더한 뒤의 run).
+    await write('r', { id: 'rrr', name: 'rrr', startedAt: '2026-10-08T10:00:00', endedAt: '2026-10-08T10:00:30', options: { launch: true } })
+    await writeFile(join(out, 'r', 'result.json'), result('rrr', { launch: true, diagnose: true }), 'utf8')
+    // result.json 에 진단 키가 없음 — session.json 이 말한다.
+    await write('s', { id: 'sss', name: 'sss', startedAt: '2026-10-08T09:00:00', endedAt: '2026-10-08T09:00:30', options: { launch: true, diagnose: true } })
+    await writeFile(join(out, 's', 'result.json'), result('sss', { launch: true }), 'utf8')
+    // 둘 다 없음 — 평소 기록.
+    await write('n', { id: 'nnn', name: 'nnn', startedAt: '2026-10-08T08:00:00', endedAt: '2026-10-08T08:00:30', options: { launch: true } })
+    await writeFile(join(out, 'n', 'result.json'), result('nnn', { launch: true }), 'utf8')
+
+    const byId = new Map((await listRuns(out)).map((r) => [r.id, r]))
+    expect(byId.get('rrr')!.diagnose).toBe(true)
+    expect(byId.get('sss')!.diagnose).toBe(true)
+    expect(Object.keys(byId.get('nnn')!)).not.toContain('diagnose')
   })
 })
 

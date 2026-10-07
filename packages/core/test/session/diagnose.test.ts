@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { DIAGNOSE_COPY, fillCopy } from '../../src/copy/diagnose.js'
 import { diagnoseDoctorCheck, hasBlockingFailure, runDoctor } from '../../src/diagnostics/doctor.js'
-import { appSliceOpen, diagnoseNotice, diagnoseScope } from '../../src/session/diagnose.js'
+import { appSliceOpen, ATRACE_READY_WAIT, diagnoseNotice, diagnoseScope } from '../../src/session/diagnose.js'
 import { computeStatus } from '../../src/session/status.js'
 import type { ActiveSession } from '../../src/session/state.js'
 import { SERIAL, tempDirs } from '../support/fakeDevice.js'
@@ -154,5 +154,33 @@ describe('DM-17 — status 의 최대 시간 넘음은 세션의 상한을 따�
     expect(computeStatus(session(600_000), at).durationExceeded).toBe(true)
     expect(computeStatus(session(1_800_000), at).durationExceeded).toBe(false)
     expect(computeStatus(session(600_000), new Date('2026-10-08T00:09:59.000Z')).durationExceeded).toBe(false)
+  })
+})
+
+/**
+ * README 「1. 측정이 측정 대상을 바꾸지 않는다」 는 트레이스 시작 ~ 래치 사이에 나가는 것을 다 적는다.
+ * 진단 `--launch` 의 atrace 대기(plan D29)도 거기 있어야 하고, 그 문장이 **숫자로** 말하는 상한은
+ * 코드와 같아야 한다 (루트 AGENTS.md 「문서가 숫자로 말하면 대조하는 시험」).
+ */
+describe('README 1절 — 진단 --launch 의 atrace 대기 (D29)', () => {
+  const README = readFileSync(join(import.meta.dirname, '../../../../README.md'), 'utf8')
+  const start = README.indexOf('### 1. 측정이 측정 대상을 바꾸지 않는다')
+  const section = README.slice(start, README.indexOf('### 2. ', start))
+
+  it('D29 README 1절이 대기를 적고, 그 상한(초)이 ATRACE_READY_WAIT 의 횟수 × 간격과 같다', () => {
+    expect(start, 'README 1절 머리를 찾지 못했다').toBeGreaterThanOrEqual(0)
+    const m = /atrace 켜짐 대기[\s\S]*?최대 (\d+)초/.exec(section)
+    expect(m, 'README 1절에서 atrace 켜짐 대기 문장을 찾지 못했다 — 문구를 바꿨다면 이 시험도 함께 고칠 것').not.toBeNull()
+
+    const tries = Number(/\$i -lt (\d+)/.exec(ATRACE_READY_WAIT)![1])
+    const step = Number(/sleep ([\d.]+)/.exec(ATRACE_READY_WAIT)![1])
+    expect(Number(m![1])).toBe(Math.round(tries * step * 10) / 10)
+  })
+
+  it('D29 README 1절이 읽는 속성 둘을 코드와 같은 이름으로 적는다', () => {
+    for (const prop of ['debug.atrace.tags.enableflags', 'debug.atrace.app_number']) {
+      expect(ATRACE_READY_WAIT).toContain(`getprop ${prop}`)
+      expect(section).toContain(`\`${prop}\``)
+    }
   })
 })

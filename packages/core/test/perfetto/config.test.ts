@@ -250,6 +250,31 @@ describe('assertLowOverheadConfig — atrace (DM-4)', () => {
     expect(() => assertLowOverheadConfig(ftrace(`atrace_apps: "${PKG}"`), DIAG)).not.toThrow()
   })
 
+  /**
+   * 코드 검수 #2. perfetto 파서는 `#` 를 줄 끝까지 주석으로 읽는데, 예전 검증기는 주석 안의 `"` 를
+   * 문자열의 시작으로 읽어 그 뒤 진짜 키를 문자열 안으로 착각했다 — 아래 입력이 평소 · 진단
+   * 둘 다 통과했다. 이 도구의 config 에는 주석이 없으므로 따옴표 밖 `#` 자체를 거부한다.
+   */
+  it('DM-4 주석(#) 안의 따옴표에 속지 않는다 — 따옴표 밖 # 는 평소 · 진단 모두 거부', () => {
+    const review = ftrace('# it"s\n atrace_categories: "gfx" # "')
+    expect(review).toContain('ftrace_config { # it"s\n atrace_categories: "gfx" # " }')
+    expect(() => assertLowOverheadConfig(review)).toThrow(/주석/)
+    expect(() => assertLowOverheadConfig(review, DIAG)).toThrow(/주석/)
+
+    const otherApp = ftrace('# it"s\n atrace_categories: "gfx" atrace_apps: "com.android.chrome" # "')
+    expect(() => assertLowOverheadConfig(otherApp, DIAG)).toThrow(/주석/)
+    // atrace 만의 구멍이 아니다 — 값을 주석 너머 다음 줄로 넘기는 ftrace 이벤트도 같은 문에서 막힌다.
+    expect(() => assertLowOverheadConfig(ftrace('ftrace_events: # x\n "sched/sched_switch"'))).toThrow(/주석/)
+  })
+
+  it('DM-4 따옴표 안의 # · 이스케이프된 따옴표는 문자열 안이다 · 닫히지 않은 따옴표는 거부', () => {
+    expect(() => assertLowOverheadConfig(`data_sources { config { name: "vendor.a#b" } }\n${tail}`)).not.toThrow()
+    expect(() =>
+      assertLowOverheadConfig(`data_sources { config { name: "a\\" atrace_categories: \\"gfx" } }\n${tail}`),
+    ).not.toThrow()
+    expect(() => assertLowOverheadConfig(`data_sources { config { name: "vendor.ab } }\n${tail}`)).toThrow(/닫히지/)
+  })
+
   it('DM-4 진단 세션이어도 ftrace 이벤트 허용 목록은 그대로다', () => {
     expect(() => assertLowOverheadConfig(ftrace(`${IN_SCOPE} ftrace_events: "sched/sched_switch"`), DIAG)).toThrow(
       /sched\/sched_switch/,

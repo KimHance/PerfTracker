@@ -98,6 +98,12 @@ npx perftracker doctor        # 설치 없이 바로 — 이 기기에서 뭘 �
 한 번의 adb 호출로 보냅니다. 앱을 콜드로 띄우는 것이 그 세션의 목적이므로 의도된 동작이지만,
 "트레이스 구간 안의 adb 호출이 0" 이라는 뜻은 아닙니다. 그 뒤로는 0 입니다.
 
+진단 세션(`--diagnose`)에서 `--launch` 를 주면 그 같은 호출의 맨 앞에 **atrace 켜짐 대기**가
+붙습니다 — `getprop` 으로 `debug.atrace.tags.enableflags` 와 `debug.atrace.app_number` 를 **읽기만**
+하며 둘 다 켜질 때까지 최대 5초 기다린 뒤 앱을 띄웁니다. 트레이스는 atrace 가 켜지기 전에
+시작하므로, 기다리지 않으면 그 사이에 뜬 앱의 `bindApplication` slice 가 빠집니다 (실기기에서
+기다리지 않은 회 0개 · 기다린 회 1개). adb 호출은 그대로 한 번이고, 평소 세션에는 붙지 않습니다.
+
 이건 "그러려고 노력한다" 가 아니라 구조입니다. 세션이 살아 있는 동안 모든 adb 접근 경로에
 래치(`MeasurementWindow`)가 걸리고, 기기를 만지려는 명령은 예외로 막힙니다.
 세션 중에 `perftracker apps` 를 실행하면 이렇게 됩니다:

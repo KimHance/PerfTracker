@@ -104,6 +104,8 @@ export function buildTraceConfig(opts: TraceConfigOptions): string {
  * 있으면 진단 세션이고 그 키를 `assertAtraceKeys` 의 범위 안에서만 허용한다.
  */
 export function assertLowOverheadConfig(text: string, diagnose: DiagnoseConfigCheck | null = null): void {
+  const scanned = scanConfigText(text)
+
   for (const m of text.matchAll(/ftrace_events:\s*"([^"]+)"/g)) {
     const event = m[1]!
     if (ALLOWED_FTRACE_EVENTS.includes(event)) continue
@@ -160,19 +162,73 @@ export function assertLowOverheadConfig(text: string, diagnose: DiagnoseConfigCh
     )
   }
 
-  assertAtraceKeys(text, diagnose)
+  assertAtraceKeys(scanned, diagnose)
+}
+
+/** `scanConfigText` 의 결과. */
+interface ScannedConfig {
+  /** 문자열 리터럴마다 `"<번호>"` 로 바꾼 텍스트 — 따옴표 밖(키 · 구두점 · 숫자)만 남는다. */
+  bare: string
+  /** 번호 자리의 따옴표 안 원문. 이스케이프는 풀지 않는다 — 비교는 원문 그대로 한다. */
+  strings: string[]
+}
+
+/**
+ * config 를 perfetto 텍스트 파서와 **같은 경계로** 앞에서부터 한 번 훑는다 — `"…"` 가 문자열이고
+ * 그 안의 `\` 는 다음 글자를 묶는다.
+ *
+ * **따옴표 밖의 `#` 는 거부한다.** perfetto 는 `#` 를 줄 끝까지 주석으로 읽는데, 주석 안의 따옴표를
+ * 문자열로 읽는 검증기는 그 뒤의 진짜 키를 문자열 안으로 착각한다 — 예전 검증기는
+ * `# it"s` 다음 줄의 `atrace_categories: "gfx"` 를 통과시켰다 (코드 검수 #2). 주석의 뜻을 흉내 내는
+ * 대신 막는다: 이 도구가 만드는 config 에는 주석이 없으므로, 있다면 그것 자체가 손으로 고친 흔적이다.
+ * 앞에서부터 훑으므로 처음 만나는 따옴표 밖 `#` 까지는 perfetto 와 경계가 같다.
+ * 닫히지 않은 따옴표도 같은 이유로 거부한다.
+ */
+function scanConfigText(text: string): ScannedConfig {
+  let bare = ''
+  const strings: string[] = []
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text[i]!
+    if (c === '#') {
+      throw new PerfettoSessionError(
+        `config 의 ${i}번째 글자에 따옴표 밖 '#'(주석)이 있습니다 — 이 도구가 만드는 config 에는 주석이 없습니다.\n` +
+          `주석 안의 따옴표가 검사의 문자열 경계를 흐리므로 주석이 있는 config 는 내보내지 않습니다.`,
+      )
+    }
+    if (c !== '"') {
+      bare += c
+      continue
+    }
+    let raw = ''
+    let j = i + 1
+    while (j < text.length && text[j] !== '"') {
+      if (text[j] === '\\' && j + 1 < text.length) {
+        raw += text[j]! + text[j + 1]!
+        j += 2
+        continue
+      }
+      raw += text[j]!
+      j += 1
+    }
+    if (j >= text.length) {
+      throw new PerfettoSessionError(`config 의 ${i}번째 글자에서 연 따옴표가 닫히지 않았습니다.`)
+    }
+    bare += `"${strings.length}"`
+    strings.push(raw)
+    i = j
+  }
+  return { bare, strings }
 }
 
 /**
  * atrace 의 문. 예전에는 이 검증기가 `ftrace_events` 만 봐서 atrace 카테고리 · 앱은 검사 없이
  * 통과했다 (기능 문서 「왜」). 그 구멍을 키 단위로 막는다.
  *
- * **키는 따옴표 밖에서 센다.** 따옴표 안(데이터소스 이름 · 패키지 이름)은 키가 아니다.
+ * **키는 따옴표 밖에서 센다** (`scanConfigText`). 따옴표 안(데이터소스 이름 · 패키지 이름)은 키가 아니다.
  * 그다음 키마다 `key: "값"` 한 쌍이어야 한다 — textproto 의 리스트 문법
  * (`atrace_categories: ["am", "gfx"]`)은 값 검사를 건너뛰는 길이라 꼴 자체를 거부한다.
  */
-function assertAtraceKeys(text: string, diagnose: DiagnoseConfigCheck | null): void {
-  const bare = text.replace(/"(?:[^"\\]|\\.)*"/g, '""')
+function assertAtraceKeys({ bare, strings }: ScannedConfig, diagnose: DiagnoseConfigCheck | null): void {
   const keys = [...bare.matchAll(/\batrace_\w*/g)].map((m) => m[0])
   if (keys.length === 0) return
 
@@ -190,7 +246,10 @@ function assertAtraceKeys(text: string, diagnose: DiagnoseConfigCheck | null): v
     )
   }
 
-  const pairs = [...text.matchAll(/\b(atrace_\w*)\s*:\s*"([^"\\]*)"/g)].map((m) => ({ key: m[1]!, value: m[2]! }))
+  const pairs = [...bare.matchAll(/\b(atrace_\w*)\s*:\s*"(\d+)"/g)].map((m) => ({
+    key: m[1]!,
+    value: strings[Number(m[2])]!,
+  }))
   if (pairs.length !== keys.length) {
     throw new PerfettoSessionError(
       `진단 config 의 atrace 키는 \`키: "값"\` 꼴이어야 합니다 — 키 ${keys.length}개 중 ${pairs.length}개만 그 꼴입니다.`,
