@@ -65,14 +65,19 @@ function guiRows(): { place: string; copy: string }[] {
 }
 
 /**
- * 자리 칸으로 화면을 가른다. 측정 화면 = 04 세션 · 탭 스트립 · 측정 중 화면 · 기록 드로어 (디자인 문서
- * `## 화면` 의 `측정 ·` 행들). 새 gui 줄이 둘 중 어디에도 안 맞으면 아래 시험이 깨져 자리를 정하게 한다.
+ * **`자리` 칸으로 화면을 가른다** — gui 줄은 두 화면이 나눠 갖고, 이 시험은 측정 화면 줄만 코드와
+ * 대조한다. 측정 화면 = 04 세션 · 탭 스트립 · 측정 중 화면 · 기록 드로어 (디자인 문서 `## 화면` 의
+ * `측정 ·` 행들). 보고서 줄은 보고서 모음과 그 시험(`test/report-copy.test.ts`)이 맡는다.
+ *
+ * `REPORT_PLACE` 는 그 보고서 시험의 것과 **글자까지 같다** — 두 시험이 같은 말로 갈라야, 합친 뒤
+ * 측정 줄 + 보고서 줄 = gui 줄 전부가 각자 한 번씩 대조된다. 한쪽을 고치면 다른 쪽도 고친다.
+ * 새 gui 줄이 둘 중 어디에도 안 맞으면 아래 시험이 깨져 자리를 정하게 한다.
  */
-const MEASURE_PLACES = ['04 ', '탭 배지', 'running ', '기록 드로어']
-const REPORT_PLACES = ['보고서 ', '진단 탭', '카드 제목', 'slice 표', '측정 비용']
+const MEASURE_PLACE = /^(04 |탭 배지 |running |기록 드로어 )/
+const REPORT_PLACE = /^(보고서 |진단 탭 |카드 제목|slice 표 |측정 비용 카드 )/
 
-const isMeasure = (place: string): boolean => MEASURE_PLACES.some((p) => place.startsWith(p))
-const isReport = (place: string): boolean => REPORT_PLACES.some((p) => place.startsWith(p))
+const isMeasure = (place: string): boolean => MEASURE_PLACE.test(place)
+const isReport = (place: string): boolean => REPORT_PLACE.test(place)
 
 const CODE_COPIES: string[] = Object.values(DIAGNOSE_MEASURE_COPY)
 

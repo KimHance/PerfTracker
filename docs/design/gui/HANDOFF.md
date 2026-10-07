@@ -221,7 +221,7 @@
    - 헤더: `마킹`(monospace 10.5px, uppercase, `letter-spacing:.14em`, `--color-neutral-600`) + `이벤트가 일어난 순간에 이름을 남기면 경과 시간과 함께 기록됩니다`(11.5px `--color-neutral-600`)
    - 입력 행: `.input`(`flex:1; min-width:0`, placeholder `예: 홈 진입, 스크롤 시작, 광고 재생`) + 버튼 `.btn .btn-secondary`(height 40px, `min-width:96px`, 12.5px) 라벨 `마킹 @ mm:ss` — **경과 시간이 실시간으로 갱신됨**. 입력이 비면 disabled. **Enter 로도 등록**
    - 빠른 마킹 칩(wrap): ghost 28px 11.5px — `+ 앱 진입`, `+ 스크롤 시작`, `+ 영상 재생`, `+ 화면 전환`. 클릭 즉시 그 라벨로 마킹
-   - 마킹 목록(1개 이상일 때만): `border:1px solid var(--color-divider); border-radius:var(--radius-lg); max-height:150px; overflow:auto`. 행 = `padding:6px 12px; border-bottom:1px solid var(--color-divider)`; 경과시간(monospace 11.5px `--color-accent-700`, `min-width:46px`) + 라벨(12.5px, ellipsis) + `×` 삭제(14px `--color-neutral-600`). **최신순(내림차순)**
+   - 마킹 목록(1개 이상일 때만): `border:1px solid var(--color-divider); border-radius:var(--radius-lg); max-height:118px; overflow:auto`. 행 = `padding:6px 12px; border-bottom:1px solid var(--color-divider)`; 경과시간(monospace 11.5px `--color-accent-700`, `min-width:46px`) + 라벨(12.5px, ellipsis) + `×` 삭제(14px `--color-neutral-600`). **최신순(내림차순)**
    - 목록 아래 우측 정렬: `{N}개 · result.json 의 marks[] 로 저장됩니다`(monospace 10.5px `--color-neutral-600`)
 6. 각주(`max-width:46ch`, 중앙, 11.5px `--color-neutral-600`): `측정 중에는 기기에 어떤 adb 명령도 보내지 않습니다. 다른 탭의 세션은 이 탭과 독립적으로 흘러갑니다.` — 진단 세션이면 같은 문단 안 둘째 줄(블록, `margin-top:var(--space-2)`): `진단 · slice 비용 앱 프로세스 몫 · 평소 세션과 비교 불가 · 최대 10분`
 

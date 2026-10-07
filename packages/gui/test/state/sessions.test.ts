@@ -176,6 +176,20 @@ describe('진단 세션 동기화', () => {
     expect(state.tabs[0]!.diagnoseNotice).toBe(NOTICE)
   })
 
+  it('DM-12 측정 중 동기화는 진단 → 평소로도 내려간다 — 같은 기기에 평소 세션이 열리면 진단 표시가 꺼진다', () => {
+    // GUI 의 진단 세션 탭이 측정 중일 때 CLI 가 `start --force -d <같은 기기>` 로 평소 세션을 열었다.
+    // 진단 칸이 있을 때만 맞추면 평소 세션에 진단 배지 · 킥커 · 각주 · 고지가 남는다.
+    let state = apply(initialState(), { type: 'sessions/loaded', sessions: [session({ diagnose: { notice: NOTICE } })] })
+    expect(state.tabs[0]!.diagnose).toBe(true)
+
+    state = apply(state, { type: 'sessions/loaded', sessions: [session({ id: 'ccc333' })] })
+
+    expect(state.tabs).toHaveLength(1)
+    expect(state.tabs[0]!.phase).toBe('running')
+    expect(state.tabs[0]!.diagnose).toBe(false)
+    expect(state.tabs[0]!.diagnoseNotice).toBeNull()
+  })
+
   it('DM-12 밖에서 끝난 진단 세션의 탭은 진단을 물려주지 않는다', () => {
     // 정지 뒤(`resetAfterStop`)와 같은 이유 — 다음 세션이 말없이 진단으로 열리면 안 된다.
     let state = apply(initialState(), { type: 'sessions/loaded', sessions: [session({ diagnose: { notice: NOTICE } })] })
