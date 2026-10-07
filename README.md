@@ -597,11 +597,11 @@ clock_snapshot 이 없거나 기기 시계를 못 읽은 경우(`trace_start_off
   CI 매칭은 반드시 이걸로 하세요. (예: `sdk_too_low`, `no_log_entries`,
   `trace_missing`, `data_source_not_registered`, `query_failed`)
 
-  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **38개**입니다
+  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **39개**입니다
   > (`1.0.0` 은 6개, `1.1.0` 의 마지막 판인 npm 0.2.1 은 36개였습니다). 그중 `process_name_stale_in_trace` 는 `1.0.0` 부터 있던
-  > `metrics.hwui` 에도 실립니다. `1.2.0` 에 더한 둘은 메트릭에는 실리지 않고 [`diagnose`](#diagnose)
+  > `metrics.hwui` 에도 실립니다. `1.2.0` 에 더한 셋은 메트릭에는 실리지 않고 [`diagnose`](#diagnose)
   > 블록에만 옵니다 — `app_slices_open_unknown` 은 `app_slices_open_reason_code` 에,
-  > `ftrace_not_recorded` 는 블록 `reason_code` 에. 이 숫자는 테스트가
+  > `ftrace_not_recorded` · `ftrace_setup_errors` 는 블록 `reason_code` 에. 이 숫자는 테스트가
   > `METRIC_REASON_CODES` 와 대조해 고정하므로 코드보다 낡을 수 없습니다.
 - `reason` — 사람이 읽는 한국어 문장. 다듬힐 수 있으니 매칭에 쓰지 마세요.
 - `data` — 메트릭별 본문. 수집되지 않았으면 `null`
@@ -1280,17 +1280,17 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 | `collected` | `null` | 없음 |
 | `partial` | `process_not_in_trace` | `target_process_slices` · `target_process_slices_unfinished` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
 | `partial` | `process_name_stale_in_trace` | 없음 |
-| `partial` | `ftrace_not_recorded` · `cause: no_ftrace_stats` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
-| `partial` | `ftrace_not_recorded` · `cause: ftrace_setup_errors` | 없음 |
+| `partial` | `ftrace_not_recorded` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
+| `partial` | `ftrace_setup_errors` | 없음 |
 | `unsupported` | `data_source_not_registered` · `data_source: linux.ftrace` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
 | `failed` | `trace_missing` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `trace_bytes` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
 | `failed` | `query_failed` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
 
-**`ftrace_not_recorded`** 는 ftrace 기록을 다 믿을 수 없는 경우이고 두 갈래입니다 (`detail.cause`).
+ftrace 기록을 다 믿을 수 없는 경우는 코드 둘로 갈립니다 — 값이 있고 없음이 정반대라 `reason_code` 로 가르세요.
 
-- `no_ftrace_stats` — 원본에 CPU 별 ftrace 통계(`ftrace_cpu_*`)가 한 행도 없습니다. ftrace 가 안 돌았으므로
-  slice 0개가 "없었다" 인지 "못 쟀다" 인지 모릅니다 — slice 칸과 잃은 이벤트 수가 `null` 입니다.
-- `ftrace_setup_errors` — ftrace 는 돌았는데 traced_probes 가 켜다 오류를 냈습니다. 오류가 atrace 의 것인지
+- **`ftrace_not_recorded`** — 원본에 CPU 별 ftrace 통계(`ftrace_cpu_*`)가 한 행도 없습니다. ftrace 가
+  안 돌았으므로 slice 0개가 "없었다" 인지 "못 쟀다" 인지 모릅니다 — slice 칸과 잃은 이벤트 수가 `null` 입니다.
+- **`ftrace_setup_errors`** — ftrace 는 돌았는데 traced_probes 가 켜다 오류를 냈습니다. 오류가 atrace 의 것인지
   다른 이벤트의 것인지 원본이 말하지 않아 일부가 빠졌을 수 있지만, **잰 수 · 표는 그대로 싣습니다** —
   gfx · input 카테고리를 켠 실측 원본은 오류 28 에 slice 33만–38만이 실렸습니다.
   대상 앱 프로세스를 못 찾았으면 그쪽(`process_not_in_trace`)이, 이름이 낡았을 뿐이면 이쪽이 블록의 코드입니다.

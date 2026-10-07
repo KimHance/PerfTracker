@@ -265,10 +265,7 @@ async function readTraceCells(
     if (totals.ftrace_cpu_stats === 0) {
       return {
         status: 'partial',
-        reason: {
-          code: 'ftrace_not_recorded',
-          detail: { cause: 'no_ftrace_stats', ftrace_cpu_stats: 0, setup_errors: setupErrors },
-        },
+        reason: { code: 'ftrace_not_recorded', detail: { ftrace_cpu_stats: 0, setup_errors: setupErrors } },
         cells: { ...NO_TRACE_CELLS, ftrace_overrun_events: ftraceOverrun },
       }
     }
@@ -276,12 +273,14 @@ async function readTraceCells(
     // 켜기 오류는 있는데 ftrace 는 돌았다 — **잰 값을 지우지 않는다** (plan D37). `ftrace_setup_errors` 는
     // atrace 실패만 세지 않는다: gfx · input 카테고리를 켠 실측 원본(research B2 · B3)은 오류 28 에
     // slice 33만–38만이 실렸다. 어느 이벤트 · 카테고리의 오류인지 원본이 말하지 않으므로 일부가 빠졌을
-    // 수 있다는 사실만 status 로 남긴다 (process_name_stale_in_trace 처럼 값 있는 partial).
+    // 수 있다는 사실만 status 로 남긴다 (process_name_stale_in_trace 처럼 값 있는 partial). 코드는
+    // 통계 0행(`ftrace_not_recorded` · 값 null)과 따로다 (plan D38) — result.json 에는 detail 이 없어
+    // 소비자가 가를 수 있는 것은 reason_code 뿐이다.
     const setupReason: MetricReason | null =
       setupErrors !== null && setupErrors > 0
         ? {
-            code: 'ftrace_not_recorded',
-            detail: { cause: 'ftrace_setup_errors', ftrace_cpu_stats: totals.ftrace_cpu_stats, setup_errors: setupErrors },
+            code: 'ftrace_setup_errors',
+            detail: { setup_errors: setupErrors, ftrace_cpu_stats: totals.ftrace_cpu_stats },
           }
         : null
 

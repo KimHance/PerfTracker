@@ -90,9 +90,11 @@ describe('DM-7 한정 describe', () => {
     const d = descriptionOf(diagnoseProps['status']!)
     expect(d).toContain('ftrace_not_recorded')
     expect(d).toContain('trace_slices 와 target_process_* 네 칸이 null')
-    // D37 — 켜기 오류 갈래는 값을 지우지 않는다.
-    expect(d).toContain('cause ftrace_setup_errors 면')
+    // D37 · D38 — 켜기 오류는 따로 코드이고 값을 지우지 않는다. result.json 에 detail 이 없으니
+    // 갈래를 detail(cause) 로 말하지 않는다.
+    expect(d).toContain('ftrace_setup_errors 면')
     expect(d).toContain('잰 수 · 표는 그대로 싣는다')
+    expect(d).not.toContain('cause')
   })
 
   it('D18 손실 칸 설명이 더하는 통계 셋을 다 말한다', () => {

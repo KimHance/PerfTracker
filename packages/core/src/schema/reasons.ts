@@ -249,15 +249,24 @@ export const METRIC_REASON_CODES = [
   /**
    * **진단 블록 전용** — 블록 `reason_code` 에만 온다 (plan D35).
    *
-   * 두 갈래다 (detail `cause`):
-   *   - `no_ftrace_stats` — 원본에 CPU 별 `ftrace_cpu_*` 통계가 0행이다(ftrace 가 안 돌았다). slice 0개는
-   *     "재 봤더니 없었다" 가 아니므로 slice 수 · 표가 null 이다 (plan D35).
-   *   - `ftrace_setup_errors` — ftrace 는 돌았는데 traced_probes 가 켜다 오류를 냈다(> 0). 오류가 atrace 의
-   *     것인지 다른 이벤트의 것인지 원본이 말하지 않아 일부가 빠졌을 수 있다. **잰 수 · 표는 그대로다**
-   *     (plan D37 — 실측 gfx · input 원본이 오류 28 에 slice 33만–38만).
-   * detail: cause('no_ftrace_stats' | 'ftrace_setup_errors'), ftrace_cpu_stats, setup_errors
+   * 원본에 CPU 별 `ftrace_cpu_*` 통계가 0행이다 — ftrace 가 안 돌았다. slice 0개는 "재 봤더니
+   * 없었다" 가 아니므로 블록은 `partial` 이고 slice 수 · 표 · 잃은 이벤트 수가 null 이다.
+   * 켜기 오류만 있고 ftrace 는 돈 경우는 이 코드가 아니라 `ftrace_setup_errors` 다 (plan D38 — 값이
+   * 있음 · 없음이 정반대인 둘을 한 코드로 두면 기계가 가를 수 없다).
+   * detail: ftrace_cpu_stats(0), setup_errors
    */
   'ftrace_not_recorded',
+  /**
+   * **진단 블록 전용** — 블록 `reason_code` 에만 온다 (plan D37 · D38).
+   *
+   * ftrace 는 돌았는데(CPU 별 통계가 있다) traced_probes 가 켜다 오류를 냈다(`ftrace_setup_errors` > 0).
+   * 오류가 atrace 의 것인지 다른 이벤트의 것인지 원본이 말하지 않아 일부가 빠졌을 수 있다.
+   * **잰 수 · 표는 그대로다** — `process_name_stale_in_trace` 처럼 값 있는 `partial`. 실측: gfx · input
+   * 카테고리를 켠 원본은 벤더 gfx 이벤트(`mdss` · `dpu` · `sde` …) 28개가 이 기기에 없어 오류 28 인데
+   * slice 33만–38만이 실렸다.
+   * detail: setup_errors, ftrace_cpu_stats
+   */
+  'ftrace_setup_errors',
 ] as const
 
 export type MetricReasonCode = (typeof METRIC_REASON_CODES)[number]
@@ -459,13 +468,9 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
       d['debuggable'] === false ? DIAGNOSE_COPY.reasonNotDebuggable : DIAGNOSE_COPY.reasonDebuggableUnknown,
       d['sdk_int'] !== undefined ? { sdk: String(d['sdk_int']) } : {},
     ),
-  ftrace_not_recorded: (d) =>
-    d['cause'] === 'ftrace_setup_errors'
-      ? fillCopy(
-          DIAGNOSE_COPY.reasonFtraceSetupErrors,
-          d['setup_errors'] != null ? { count: String(d['setup_errors']) } : {},
-        )
-      : DIAGNOSE_COPY.reasonFtraceNoStats,
+  ftrace_not_recorded: () => DIAGNOSE_COPY.reasonFtraceNoStats,
+  ftrace_setup_errors: (d) =>
+    fillCopy(DIAGNOSE_COPY.reasonFtraceSetupErrors, d['setup_errors'] != null ? { count: String(d['setup_errors']) } : {}),
 }
 
 /** 코드 → 한국어 문장. 모르는 코드는 조용히 비우지 않고 코드 자체를 남긴다. */

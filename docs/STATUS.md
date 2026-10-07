@@ -1116,9 +1116,9 @@ registry 순서는 `hwuiCollector` 바로 뒤에 `frameCollector` 다 — 지표
 자리와 읽는 법은 README `diagnose` 절이 정본입니다.
 
 - **`schema_version` 1.2.0.** 출시된 1.1.0 계약을 넓히므로 minor 를 올렸습니다 (0.2.0 의 frame 확장은
-  1.1.0 그대로 나갔습니다 — 위 「`within_16_67ms_ratio` 제거」 절). reason_code 는 둘이 늘어 38개입니다 —
-  `app_slices_open_unknown`(블록의 열림 칸) · `ftrace_not_recorded`(원본에 ftrace 가 안 남으면 slice 칸이
-  0 이 아니라 `null` · 켜다 오류만 났으면 잰 값 그대로 `partial`). 둘 다 메트릭에는 안 실립니다.
+  1.1.0 그대로 나갔습니다 — 위 「`within_16_67ms_ratio` 제거」 절). reason_code 는 셋이 늘어 39개입니다 —
+  `app_slices_open_unknown`(블록의 열림 칸) · `ftrace_not_recorded`(원본에 ftrace 가 안 남음 — slice 칸이
+  0 이 아니라 `null`) · `ftrace_setup_errors`(켜다 오류만 남 — 잰 값 그대로 `partial`). 셋 다 메트릭에는 안 실립니다.
 - **frametimeline 은 어디에도 세지 않습니다** — 대상 앱의 Actual · Expected Timeline 이 비동기 갈래를
   덮던 것(15초에 이름 448–881개)을 실현성 재검토에서 잡았습니다.
 - 쿼리는 실측 원본 둘(SM-S901N · YouTube 15초, 2026-10-07 조사)에 직접 돌려 조사 수치와 맞췄습니다 —

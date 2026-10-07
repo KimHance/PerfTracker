@@ -292,14 +292,14 @@ describe('D35 ftrace 가 원본에 안 남음', () => {
    * D37 — `ftrace_setup_errors` 는 atrace 실패만 세지 않는다 (실측 gfx · input 원본 B2 · B3: 오류 28 ·
    * slice 33만–38만). ftrace 가 돌았으면 잰 수 · 표를 지우지 않고, 일부가 빠졌을 수 있다는 사실만 status 로.
    */
-  it('D37 ftrace 설정 오류 — partial · ftrace_not_recorded(ftrace_setup_errors) 이되 잰 수 · 표는 그대로', async () => {
+  it('D37 · D38 ftrace 설정 오류 — partial · ftrace_setup_errors 이되 잰 수 · 표는 그대로', async () => {
     const happy = await extractDiagnose(input())
     const block = await extractDiagnose(
       input({ tp: tpWith([totals({ ftrace_setup_errors: 28, ftrace_overrun_events: 5 }), ...HAPPY.slice(1)]) }),
     )
 
     expect(block.status).toBe('partial')
-    expect(block.reason_code).toBe('ftrace_not_recorded')
+    expect(block.reason_code).toBe('ftrace_setup_errors')
     expect(block.reason).toBe(fillCopy(DIAGNOSE_COPY.reasonFtraceSetupErrors, { count: 28 }))
     expect(block.reason).toBe('ftrace 설정 오류 28건 · slice 수 잰 그대로 · 빠진 이벤트 모름')
     for (const key of SLICE_CELLS) expect(block[key], key).toEqual(happy[key])
@@ -326,16 +326,17 @@ describe('D35 ftrace 가 원본에 안 남음', () => {
       }),
     )
     expect(stale.status).toBe('partial')
-    expect(stale.reason_code).toBe('ftrace_not_recorded')
+    expect(stale.reason_code).toBe('ftrace_setup_errors')
     expect(stale.target_process_slices).toBe(6)
   })
 
-  it('D35 통계 0행이면 켜기 오류가 있어도 cause 는 no_ftrace_stats — slice 칸 null', async () => {
+  it('D38 통계 0행이면 켜기 오류가 있어도 ftrace_not_recorded — slice 칸 null', async () => {
     const block = await extractDiagnose(
       input({
         tp: tpWith([totals({ trace_slices: 0, ftrace_overrun_events: null, ftrace_cpu_stats: 0, ftrace_setup_errors: 4 })]),
       }),
     )
+    expect(block.reason_code).toBe('ftrace_not_recorded')
     expect(block.reason).toBe(DIAGNOSE_COPY.reasonFtraceNoStats)
     for (const key of SLICE_CELLS) expect(block[key], key).toBeNull()
   })

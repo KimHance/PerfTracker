@@ -252,30 +252,30 @@ describe('DM-9 README 진단 절 ↔ 코드', () => {
     }
   }
 
-  /** README 상태 표의 줄마다 그 상태를 내는 입력. 키 = `status|reason_code|cause`. */
+  /** README 상태 표의 줄마다 그 상태를 내는 입력. 키 = `status|reason_code`. */
   const SCENARIOS: Record<string, DiagnoseExtractInput> = {
-    'collected|null|': input({}),
-    'partial|process_not_in_trace|': input({ tp: tp([[DIAGNOSE_TOTALS_SQL, OK_TOTALS], [appProcessSql(PKG, PID), []]]) }),
-    'partial|process_name_stale_in_trace|': input({
+    'collected|null': input({}),
+    'partial|process_not_in_trace': input({ tp: tp([[DIAGNOSE_TOTALS_SQL, OK_TOTALS], [appProcessSql(PKG, PID), []]]) }),
+    'partial|process_name_stale_in_trace': input({
       tp: tp([
         [DIAGNOSE_TOTALS_SQL, OK_TOTALS],
         [appProcessSql(PKG, PID), [{ upid: UPID, pid: PID, name: '<pre-initialized>' }]],
         [diagnoseSlicesSql(UPID, PID), GROUPS],
       ]),
     }),
-    'partial|ftrace_not_recorded|no_ftrace_stats': input({
+    'partial|ftrace_not_recorded': input({
       tp: tp([[DIAGNOSE_TOTALS_SQL, { ...OK_TOTALS, trace_slices: 0, ftrace_overrun_events: null, ftrace_cpu_stats: 0 }]]),
     }),
-    'partial|ftrace_not_recorded|ftrace_setup_errors': input({
+    'partial|ftrace_setup_errors': input({
       tp: tp([
         [DIAGNOSE_TOTALS_SQL, { ...OK_TOTALS, ftrace_setup_errors: 2 }],
         [appProcessSql(PKG, PID), PROC],
         [diagnoseSlicesSql(UPID, PID), GROUPS],
       ]),
     }),
-    'unsupported|data_source_not_registered|': input({ env: { sdkInt: 36, dataSources: ['linux.sys_stats'] } }),
-    'failed|trace_missing|': input({ tp: null, tracePath: null }),
-    'failed|query_failed|': input({ tp: tp([[DIAGNOSE_TOTALS_SQL, OK_TOTALS]]) }),
+    'unsupported|data_source_not_registered': input({ env: { sdkInt: 36, dataSources: ['linux.sys_stats'] } }),
+    'failed|trace_missing': input({ tp: null, tracePath: null }),
+    'failed|query_failed': input({ tp: tp([[DIAGNOSE_TOTALS_SQL, OK_TOTALS]]) }),
   }
   const CELLS = [
     'trace_slices',
@@ -310,7 +310,7 @@ describe('DM-9 README 진단 절 ↔ 코드', () => {
       const status = ticks(statusCell!)[0]!
       const [code, ...rest] = ticks(codeCell!)
       const detail = Object.fromEntries(rest.map((t) => t.split(': ') as [string, string]))
-      const key = `${status}|${code}|${detail['cause'] ?? ''}`
+      const key = `${status}|${code}`
       listed.push(key)
       const scenario = SCENARIOS[key]
       expect(scenario, `README 상태 표의 줄 ${key} 에 맞는 경우가 코드에 없다`).toBeDefined()
@@ -318,10 +318,8 @@ describe('DM-9 README 진단 절 ↔ 코드', () => {
       const block = await extractDiagnose(scenario!)
       expect(block.status, key).toBe(status)
       expect(block.reason_code, key).toBe(code === 'null' ? null : code)
-      if (detail['cause'] !== undefined) {
-        expect(block.reason, key).toBe(
-          renderReason({ code: 'ftrace_not_recorded', detail: { cause: detail['cause'], setup_errors: 2 } }),
-        )
+      if (code === 'ftrace_not_recorded' || code === 'ftrace_setup_errors') {
+        expect(block.reason, key).toBe(renderReason({ code, detail: { setup_errors: 2 } }))
       }
       if (detail['data_source'] !== undefined) expect(block.reason, key).toContain(detail['data_source'])
       const nulls = CELLS.filter((c) => block[c] === null)
@@ -329,6 +327,15 @@ describe('DM-9 README 진단 절 ↔ 코드', () => {
       expect([...claimed].sort(), `${key} 의 null 이 되는 칸`).toEqual([...nulls].sort())
     }
     expect(Object.keys(SCENARIOS).filter((k) => !listed.includes(k)), 'README 상태 표에 없는 경우').toEqual([])
+  })
+
+  /**
+   * D38 · 2차 검수 #1 — 블록은 `reason_code` · `reason` 만 내고 detail 을 싣지 않는다. README 가 갈래를
+   * `detail.cause` 로 가르라고 하면 result.json 에 없는 필드를 말하는 것이다.
+   */
+  it('D38 README 진단 절이 result.json 에 없는 detail · cause 로 가르라고 하지 않는다', () => {
+    expect(DIAG).not.toMatch(/\bcause\b|detail\./)
+    expect(Object.keys(DiagnoseBlockSchema.shape)).not.toContain('detail')
   })
 
   it('DM-9 README 열림 조건 표 ↔ appSliceOpen — 경계 sdk 와 debuggable 마다 같은 값', () => {
