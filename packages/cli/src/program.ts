@@ -16,10 +16,11 @@ import { formatDoctor } from './commands/doctor.js'
 import { formatDevices } from './commands/devices.js'
 import { runExtract } from './commands/extract.js'
 import { runSchema } from './commands/schema.js'
-import { runStart } from './commands/start.js'
+import { runStart, type StartCliOptions } from './commands/start.js'
 import { runStatus, statusData } from './commands/status.js'
 import { runStop } from './commands/stop.js'
 import { createContext } from './context.js'
+import { DIAGNOSE_CLI_COPY } from './copy/diagnose.js'
 
 /**
  * 명령 등록. **실행(`parseAsync`)은 하지 않는다** — 그것은 `index.ts` 의 몫이다.
@@ -98,7 +99,13 @@ export function buildProgram(): Command {
     .option('--launch', '앱을 콜드 상태로 실행하고 시작 시간을 측정한다', false)
     .option('-o, --out <dir>', '결과를 저장할 디렉토리', 'runs')
     .option('--force', '이 기기의 기존 세션을 버리고 시작한다', false)
-    .action(async (opts: { app?: string; name?: string; launch: boolean; out: string; force: boolean; device?: string }) => {
+    /**
+     * 진단 세션 — atrace slice 를 평소 측정과 갈라 기록한다 (기능 문서 diagnostic-mode · DM-1).
+     * **기본값을 주지 않는다** — `false` 를 주면 도움말에 `(default: false)` 가 붙어 문구 정본
+     * (`docs/design/diagnostic-mode.md` `## 문구`)과 달라진다. 안 주면 `undefined` 이고 평소 세션이다.
+     */
+    .option('--diagnose', DIAGNOSE_CLI_COPY.helpDiagnose)
+    .action(async (opts: StartCliOptions & { device?: string }) => {
       const ctx = await createContext({ ...program.opts(), device: opts.device })
       console.log(await runStart(ctx, opts))
     })
