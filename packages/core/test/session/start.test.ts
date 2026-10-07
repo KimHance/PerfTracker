@@ -1,7 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { MeasurementWindowViolationError, SessionStateError } from '../../src/errors.js'
+import { MeasurementWindowViolationError, PerfettoSessionError, SessionStateError } from '../../src/errors.js'
 import type { CaptureManifest } from '../../src/session/manifest.js'
 import {
   AM_START_PIDOF_MARKER,
@@ -11,6 +11,7 @@ import {
   splitAmStartPidof,
   startSession,
 } from '../../src/session/start.js'
+import { ATRACE_READY_WAIT } from '../../src/session/diagnose.js'
 import { readActiveSession, writeActiveSession } from '../../src/session/state.js'
 import {
   clientFor,
@@ -532,5 +533,211 @@ describe('startSession — --force 는 기기 쪽 세션도 정리한다 (I3)', 
 
     await expect(h.result).rejects.toBeInstanceOf(SessionStateError)
     expect(runner.commands).toEqual([])
+  })
+})
+
+/**
+ * 진단 세션 (기능 문서 diagnostic-mode). atrace slice 의 비용은 앱 프로세스 자신에게 청구되고
+ * `measurement_overhead` 에 잡히지 않으므로, 평소 세션과 **갈라서** 연다. 평소 세션은 이
+ * 옵션이 생기기 전과 기기로 나가는 것이 글자 하나 달라지면 안 된다.
+ */
+describe('startSession — 진단 세션', () => {
+  /**
+   * 이 옵션이 생기기 **전** 코드(HEAD a61dab8)가 fake 기기(sdk 36)에 보낸 config 원문.
+   * 지금 코드에서 다시 만들어 비교하면 같은 코드끼리 비교하는 셈이라 아무것도 지키지 못한다.
+   */
+  const NORMAL_CONFIG_BEFORE =
+    'buffers { size_kb: 65536 fill_policy: RING_BUFFER }\n' +
+    'data_sources { config { name: "android.surfaceflinger.frametimeline" } }\n' +
+    'data_sources { config { name: "linux.process_stats" process_stats_config { proc_stats_poll_ms: 1000 scan_all_processes_on_start: true record_process_runtime: true } } }\n' +
+    'data_sources { config { name: "linux.sys_stats" sys_stats_config { stat_period_ms: 1000 stat_counters: STAT_CPU_TIMES meminfo_period_ms: 1000 meminfo_counters: MEMINFO_MEM_TOTAL meminfo_counters: MEMINFO_MEM_FREE meminfo_counters: MEMINFO_MEM_AVAILABLE meminfo_counters: MEMINFO_BUFFERS meminfo_counters: MEMINFO_CACHED meminfo_counters: MEMINFO_SWAP_CACHED meminfo_counters: MEMINFO_SWAP_TOTAL meminfo_counters: MEMINFO_SWAP_FREE } } }\n' +
+    'data_sources { config { name: "linux.ftrace" ftrace_config { ftrace_events: "power/cpu_frequency" } } }\n' +
+    'write_into_file: true\nfile_write_period_ms: 30000\nflush_period_ms: 30000\nduration_ms: 1800000\n'
+
+  function diagStart(opts: { diagnose?: boolean; launch?: boolean; runner?: ReturnType<typeof startableDevice>; app?: Parameters<typeof targetApp>[0] } = {}) {
+    const dirs = tempDirs()
+    const runner = opts.runner ?? startableDevice()
+    const adb = clientFor(runner)
+    const result = startSession({ adb, serial: SERIAL }, targetApp(opts.app ?? {}), {
+      launch: opts.launch ?? true,
+      outDir: dirs.out,
+      force: false,
+      now: NOW,
+      home: dirs.home,
+      ...(opts.diagnose !== undefined ? { diagnose: opts.diagnose } : {}),
+    })
+    return { adb, runner, dirs, result }
+  }
+
+  const sentConfig = (runner: ReturnType<typeof startableDevice>): string =>
+    runner.calls.find((c) => c.args.join(' ').includes('--detach=perftracker_'))?.input ?? ''
+
+  it('DM-1 core — 안 주면 평소 세션이고 기기로 나가는 config 가 지금과 글자 하나 다르지 않다', async () => {
+    for (const diagnose of [undefined, false]) {
+      const h = diagStart(diagnose === undefined ? {} : { diagnose })
+      const session = await h.result
+
+      expect(sentConfig(h.runner)).toBe(NORMAL_CONFIG_BEFORE)
+      expect(session.options).toEqual({ launch: true })
+      expect(Object.keys(session)).not.toContain('diagnose')
+      const stored = JSON.parse(readFileSync(join(session.runDir, 'session.json'), 'utf8')) as Record<string, unknown>
+      expect(Object.keys(stored)).not.toContain('diagnose')
+      expect(stored['options']).toEqual({ launch: true })
+    }
+  })
+
+  it('DM-1 core — diagnose 를 주면 진단 세션으로 열리고 session.json 에 범위가 남는다', async () => {
+    const h = diagStart({ diagnose: true })
+    const session = await h.result
+
+    expect(session.options).toEqual({ launch: true, diagnose: true })
+    expect(session.diagnose).toEqual({
+      atraceCategories: ['am', 'wm', 'view'],
+      atraceApps: ['com.nhn.android.webtoon'],
+      notice: null,
+    })
+    const stored = JSON.parse(readFileSync(join(session.runDir, 'session.json'), 'utf8')) as typeof session
+    expect(stored.options).toEqual({ launch: true, diagnose: true })
+    expect(stored.diagnose).toEqual(session.diagnose)
+  })
+
+  it('DM-3 진단 config 범위 — start 가 보낸 config 의 atrace 는 am · wm · view + 대상 앱 하나다', async () => {
+    const h = diagStart({ diagnose: true })
+    await h.result
+    const text = sentConfig(h.runner)
+    const values = (key: string): string[] =>
+      [...text.matchAll(new RegExp(`${key}:\\s*"([^"]+)"`, 'g'))].map((m) => m[1]!)
+
+    expect(new Set(values('atrace_categories'))).toEqual(new Set(['am', 'wm', 'view']))
+    expect(values('atrace_categories')).toHaveLength(3)
+    expect(values('atrace_apps')).toEqual(['com.nhn.android.webtoon'])
+    expect(values('ftrace_events')).toEqual(['power/cpu_frequency'])
+    // atrace 를 빼면 평소 config 와 duration 말고는 같다 — 다른 데이터소스는 늘지도 줄지도 않는다.
+    expect(text.replace(/atrace_\w+: "[^"]*" /g, '').replace('duration_ms: 600000', 'duration_ms: 1800000')).toBe(
+      NORMAL_CONFIG_BEFORE,
+    )
+  })
+
+  it('DM-17 진단 최대 10분 · 평소 30분 — config 의 duration_ms 와 세션의 상한이 같은 값이다', async () => {
+    const diag = diagStart({ diagnose: true })
+    const diagSession = await diag.result
+    expect(sentConfig(diag.runner)).toContain('duration_ms: 600000\n')
+    expect(diagSession.configuredDurationMs).toBe(600_000)
+
+    const normal = diagStart()
+    const normalSession = await normal.result
+    expect(sentConfig(normal.runner)).toContain('duration_ms: 1800000\n')
+    expect(normalSession.configuredDurationMs).toBe(1_800_000)
+  })
+
+  /**
+   * 안 바뀔 것 「측정 창 안 기기 접촉 0 — 진단 세션도」. 진단 세션은 기기 명령을 하나도 더하지
+   * 않는다 — atrace 는 config 안의 키이고, 켜고 끄는 일은 perfetto(traced_probes)가 한다 (plan D15).
+   */
+  it('DM 진단 세션 창 안 명령 0 — 명령 목록 · 순서가 평소와 같고 창이 열린 뒤엔 하나도 못 나간다', async () => {
+    const normal = diagStart()
+    const normalSession = await normal.result
+    const diag = diagStart({ diagnose: true })
+    const diagSession = await diag.result
+
+    // 다른 것은 앱 실행 호출 앞의 atrace 대기 조각 하나뿐이다 (D14) — 호출 수 · 순서는 같다.
+    const strip = (cmds: string[], id: string): string[] =>
+      cmds.map((c) => c.replaceAll(id, '<id>').replace(ATRACE_READY_WAIT, ''))
+    expect(strip(diag.runner.commands, diagSession.id)).toEqual(strip(normal.runner.commands, normalSession.id))
+
+    const detach = diag.runner.commands.findIndex((c) => c.includes('--detach=perftracker_'))
+    expect(diag.runner.commands.slice(detach + 1)).toHaveLength(1)
+    expect(diag.adb.window.isOpen).toBe(true)
+    await expect(diag.adb.shell('getprop debug.atrace.tags.enableflags')).rejects.toBeInstanceOf(
+      MeasurementWindowViolationError,
+    )
+  })
+
+  /**
+   * 설정 검증이 거부할 config 라면 **기기에 아무 일도 시키기 전에** 거부한다. 예전에는 config 를
+   * force-stop 뒤에 만들어서 거부되면 앱만 죽은 채로 남았다 (실현성 검토 개발 #5).
+   * 실제 패키지 이름에는 `*` 가 올 수 없으니, 와일드카드 검사가 start 경로에서 걸리는지로 본다.
+   */
+  it('DM-4 거부는 perfetto · force-stop · 스냅샷 전 — 그때까지 나간 것은 probe 뿐이다', async () => {
+    const h = diagStart({ diagnose: true, app: { package: 'com.nhn.android.*' } })
+
+    await expect(h.result).rejects.toBeInstanceOf(PerfettoSessionError)
+    expect(h.runner.commands).toEqual([
+      `-s ${SERIAL} shell which perfetto`,
+      `-s ${SERIAL} shell perfetto --query`,
+      `-s ${SERIAL} shell getprop ro.build.version.sdk`,
+    ])
+    // run 디렉토리도 만들지 않는다 — 거부된 세션의 빈 폴더가 기록 목록 정리 대상으로 남지 않게.
+    expect(readdirSync(h.dirs.out)).toEqual([])
+    expect(await readActiveSession(SERIAL, h.dirs.home)).toBeNull()
+  })
+
+  /**
+   * plan D14 — 실기기(SM-S901N · YouTube)로 정했다. `--detach` 는 세션을 연 즉시 돌아오고 atrace 는
+   * 그 뒤에 켜진다. 기다리지 않은 1회는 앱 slice 12,042개 가운데 `bindApplication` 이 0개였고,
+   * 기다린 1회는 1개(68.2 ms)였다. 기다림은 앱 실행과 **같은 셸 호출** 안이라 트레이스 시작과
+   * 래치 무장 사이의 왕복은 그대로 1회다 (위 「adb 호출이 정확히 하나다」 와 같은 계약).
+   */
+  it('D14 진단 --launch 는 같은 호출 안에서 atrace 가 켜지길 기다린 뒤 앱을 띄운다', async () => {
+    const h = diagStart({ diagnose: true })
+    await h.result
+
+    const detach = h.runner.commands.findIndex((c) => c.includes('--detach=perftracker_'))
+    const inWindow = h.runner.commands.slice(detach + 1)
+    expect(inWindow).toHaveLength(1)
+    const call = inWindow[0]!
+    expect(call.startsWith(`-s ${SERIAL} shell ${ATRACE_READY_WAIT}am start -W -n `)).toBe(true)
+    // 읽기만 한다 — setprop 은 없다 (plan D15). 상한이 있어 기기가 답하지 않아도 세션이 서지 않는다.
+    expect(ATRACE_READY_WAIT).toContain('getprop debug.atrace.tags.enableflags')
+    expect(ATRACE_READY_WAIT).toContain('getprop debug.atrace.app_number')
+    expect(ATRACE_READY_WAIT).toMatch(/while \[ \$i -lt 50 \]/)
+    expect(ATRACE_READY_WAIT).not.toMatch(/setprop/)
+  })
+
+  it('D14 대기 조각이 붙어도 앱 실행 결과(TotalTime · pid)는 평소처럼 읽힌다', async () => {
+    const session = await diagStart({ diagnose: true }).result
+
+    expect(session.startup?.totalTimeMs).toBe(1842)
+    expect(session.appPid).toBe(24193)
+  })
+
+  it('D14 평소 세션 · --launch 없는 진단 세션은 atrace 속성을 읽지 않는다', async () => {
+    const normal = diagStart()
+    await normal.result
+    const noLaunch = diagStart({ diagnose: true, launch: false })
+    await noLaunch.result
+
+    for (const runner of [normal.runner, noLaunch.runner]) {
+      expect(runner.commands.some((c) => c.includes('debug.atrace'))).toBe(false)
+    }
+  })
+
+  describe('DM-10 start 고지 — 조건 표의 "모름" 칸이면 세션은 열고 고지 줄을 싣는다', () => {
+    const sdk = (n: number) =>
+      startableDevice((r) => {
+        r.on(`-s ${SERIAL} shell getprop ro.build.version.sdk`, { stdout: `${n}\n` })
+      })
+
+    it('DM-10 start 고지 — sdk ≤30 · debuggable 아님', async () => {
+      const session = await diagStart({ diagnose: true, runner: sdk(30), app: { debuggable: false } }).result
+      expect(session.diagnose?.notice).toBe('앱 slice 열림 모름 — sdk 30 · debuggable 아님')
+    })
+
+    it('DM-10 start 고지 — sdk ≤30 · debuggable 모름 (null · 필드 없음)', async () => {
+      for (const app of [{ debuggable: null }, {}]) {
+        const session = await diagStart({ diagnose: true, runner: sdk(30), app }).result
+        expect(session.diagnose?.notice).toBe('앱 slice 열림 모름 — sdk 30 · debuggable 모름')
+      }
+    })
+
+    it('DM-10 start 고지 — 열리는 칸이면 고지가 없다 (sdk ≥31 · sdk ≤30 + debuggable)', async () => {
+      expect((await diagStart({ diagnose: true, runner: sdk(31), app: { debuggable: false } }).result).diagnose?.notice).toBeNull()
+      expect((await diagStart({ diagnose: true, runner: sdk(30), app: { debuggable: true } }).result).diagnose?.notice).toBeNull()
+    })
+
+    it('DM-10 start 고지 — 평소 세션엔 고지 자리도 없다', async () => {
+      const session = await diagStart({ runner: sdk(30), app: { debuggable: false } }).result
+      expect(session.diagnose).toBeUndefined()
+    })
   })
 })

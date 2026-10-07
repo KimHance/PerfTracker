@@ -14,7 +14,7 @@ import { probeDevice } from '../device/probe.js'
 import { collectDeviceStatic } from '../device/spec.js'
 import { collectDeviceState, runSnapshots } from '../device/state.js'
 import { SessionStateError } from '../errors.js'
-import { buildTraceConfig, DEFAULT_MAX_DURATION_MS } from '../perfetto/config.js'
+import { buildTraceConfig, DEFAULT_MAX_DURATION_MS, DIAGNOSE_MAX_DURATION_MS } from '../perfetto/config.js'
 import {
   isSessionDetached,
   remoteTracePath,
@@ -24,6 +24,7 @@ import {
 } from '../perfetto/session.js'
 import { renderReason } from '../schema/reasons.js'
 import type { DeviceState, TargetApp, Warning } from '../schema/result.js'
+import { ATRACE_READY_WAIT, diagnoseNotice, diagnoseScope } from './diagnose.js'
 import { CAPTURE_MANIFEST_VERSION, writeCaptureManifest } from './manifest.js'
 import { runDirName } from './paths.js'
 import {
@@ -200,6 +201,12 @@ export interface StartOptions {
   force: boolean
   now: Date
   home?: string
+  /**
+   * 진단 세션으로 연다 (`--diagnose`) — atrace am · wm · view + 대상 앱 slice 를 기록하고
+   * 최대 10분이다. 없거나 false 면 평소 세션이고 기기로 나가는 config 가 이 옵션이 없던 때와
+   * 글자 하나 다르지 않다 (DM-1).
+   */
+  diagnose?: boolean
 }
 
 export async function startSession(
@@ -220,6 +227,35 @@ export async function startSession(
         `--launch 없이 실행한 뒤 앱을 직접 띄우세요.`,
     )
   }
+
+  // 0) config 를 먼저 만든다 — **설정 검증이 거부할 config 라면 기기에 아무 일도 시키기 전에**
+  //    거부해야 한다 (DM-4). 예전에는 force-stop 뒤에 만들어서, 거부되면 앱만 죽은 채로 남았다.
+  //    config 는 probe(sdk · 데이터소스)와 패키지만 쓰므로 여기서 만들 수 있다. 기기 명령은
+  //    하나도 늘거나 순서가 바뀌지 않는다 — 문자열을 만드는 일이다.
+  const diagnose = opts.diagnose === true
+  const atrace = diagnose ? diagnoseScope(app.package) : null
+  const maxDurationMs = diagnose ? DIAGNOSE_MAX_DURATION_MS : DEFAULT_MAX_DURATION_MS
+  const blocks = collectTraceConfigBlocks(env, atrace)
+  if (blocks.length === 0) {
+    // "수집 가능한 항목이 없습니다" 는 사실이 아니다 — startup 은 트레이스 없이도 수집된다.
+    // 거부 자체는 맞다(start 는 트레이스 세션을 여는 명령이다). 이유를 정확히 말한다.
+    const traceFree = supportedCollectors(env)
+      .filter((c) => !c.needsTrace)
+      .map((c) => c.id)
+    throw new SessionStateError(
+      `이 기기에서는 트레이스로 수집 가능한 항목이 없어 세션을 시작할 수 없습니다.\n  ` +
+        unsupportedReasons(env).join('\n  ') +
+        (traceFree.length > 0
+          ? `\n트레이스 없이도 수집되는 항목(${traceFree.join(', ')})은 있지만, ` +
+            `start 는 트레이스 세션을 여는 명령이라 그것만으로는 시작하지 않습니다.`
+          : ''),
+    )
+  }
+  const configText = buildTraceConfig({
+    dataSourceBlocks: blocks,
+    durationMs: maxDurationMs,
+    ...(diagnose ? { diagnose: { packageName: app.package } } : {}),
+  })
 
   const name = opts.name ?? app.label
   const id = newSessionId()
@@ -248,27 +284,7 @@ export async function startSession(
   // 3) 측정을 먼저 켠다 — 그래야 콜드 스타트 구간이 프레임 트레이스에 포함된다.
   const perfettoKey = `perftracker_${id}`
   const remotePath = remoteTracePath(perfettoKey)
-  const blocks = collectTraceConfigBlocks(env)
-  if (blocks.length === 0) {
-    // "수집 가능한 항목이 없습니다" 는 사실이 아니다 — startup 은 트레이스 없이도 수집된다.
-    // 거부 자체는 맞다(start 는 트레이스 세션을 여는 명령이다). 이유를 정확히 말한다.
-    const traceFree = supportedCollectors(env)
-      .filter((c) => !c.needsTrace)
-      .map((c) => c.id)
-    throw new SessionStateError(
-      `이 기기에서는 트레이스로 수집 가능한 항목이 없어 세션을 시작할 수 없습니다.\n  ` +
-        unsupportedReasons(env).join('\n  ') +
-        (traceFree.length > 0
-          ? `\n트레이스 없이도 수집되는 항목(${traceFree.join(', ')})은 있지만, ` +
-            `start 는 트레이스 세션을 여는 명령이라 그것만으로는 시작하지 않습니다.`
-          : ''),
-    )
-  }
-  await startDetachedSession(ctx.adb, {
-    key: perfettoKey,
-    remotePath,
-    configText: buildTraceConfig({ dataSourceBlocks: blocks, durationMs: DEFAULT_MAX_DURATION_MS }),
-  })
+  await startDetachedSession(ctx.adb, { key: perfettoKey, remotePath, configText })
 
   // 4) 런처 액티비티를 콜드 실행하고, 같은 호출에서 그 프로세스의 pid 까지 받아 온다.
   //
@@ -287,9 +303,12 @@ export async function startSession(
   let appPid: number | null = null
   if (opts.launch && app.launcher_activity !== null) {
     const component = shellQuote(`${app.package}/${app.launcher_activity}`)
+    // 진단 세션은 atrace 가 켜진 뒤에 띄운다 — 같은 호출 안에서 기다리므로 왕복은 그대로 1회다.
+    // 이유와 실측은 `ATRACE_READY_WAIT` 에 있다.
+    const wait = diagnose ? ATRACE_READY_WAIT : ''
     const r = await ctx.adb.raw([
       'shell',
-      `am start -W -n ${component}; echo ${AM_START_PIDOF_MARKER}; pidof ${shellQuote(app.package)}`,
+      `${wait}am start -W -n ${component}; echo ${AM_START_PIDOF_MARKER}; pidof ${shellQuote(app.package)}`,
     ])
     const parts = splitAmStartPidof(r.stdout)
     startup = parseAmStart(parts.amStart)
@@ -306,8 +325,19 @@ export async function startSession(
     perfettoKey,
     remoteTracePath: remotePath,
     startedAt: opts.now.toISOString(),
-    configuredDurationMs: DEFAULT_MAX_DURATION_MS,
-    options: { launch: opts.launch },
+    configuredDurationMs: maxDurationMs,
+    // 진단 키는 진단 세션에만 싣는다 (plan D12) — 평소 세션의 session.json · `status --json` 은
+    // 이 옵션이 없던 때와 키가 같다.
+    options: diagnose ? { launch: opts.launch, diagnose: true } : { launch: opts.launch },
+    ...(atrace !== null
+      ? {
+          diagnose: {
+            atraceCategories: [...atrace.categories],
+            atraceApps: [...atrace.apps],
+            notice: diagnoseNotice(probe.sdkInt, app.debuggable),
+          },
+        }
+      : {}),
     startup,
     appPid,
   }

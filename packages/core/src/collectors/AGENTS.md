@@ -3,6 +3,9 @@
 지표 8개: `hwui` · `frame` · `startup` · `cpu` · `memory` · `log` · `thermal` · `network`.
 `registry.ts` 의 `COLLECTORS` 배열이 실제로 소비된다 — `start` 가 TraceConfig 블록을 모으고
 `extract` 가 순회해 `metrics` 를 채운다.
+**진단 세션은 예외 하나를 더한다** — atrace 는 collector 가 읽는 것이 아니라 세션 종류의 것이라,
+`collectTraceConfigBlocks(env, atrace)` 가 모은 블록의 `linux.ftrace`(`FTRACE_POWER_BLOCK`)를 같은 자리에서
+진단 블록(`blocks.ts` 의 `diagnoseFtraceBlock`)으로 바꾼다. 평소 세션(`atrace` 없음)의 블록은 그대로다.
 
 ## 지표 하나의 네 계층
 
@@ -26,7 +29,7 @@
 
 | 파일 | 무엇 |
 | --- | --- |
-| `blocks.ts` | 데이터소스 블록의 **유일한 소유자**. 같은 소스를 다른 텍스트로 두 번 요청하면 merge 가 던진다 |
+| `blocks.ts` | 데이터소스 블록의 **유일한 소유자**. 같은 소스를 다른 텍스트로 두 번 요청하면 merge 가 던진다. 진단 세션의 `linux.ftrace`(atrace 포함)도 여기서 만든다 |
 | `timeline.ts` | 모든 시계열의 공통 0초(`trace_bounds.start_ts`) |
 | `appProcess.ts` | "트레이스 안에서 대상 앱" 을 정하는 **단 하나의 규칙** |
 | `snapshots.ts` | 캡처 전/후 dumpsys 명세 |

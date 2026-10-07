@@ -182,3 +182,103 @@ describe('frametimeline 블록', () => {
     expect(FRAMETIMELINE_BLOCK).not.toMatch(/(poll|period)_ms/)
   })
 })
+
+/**
+ * DM-4. 이 검증기는 예전에 `ftrace_events` 만 봐서 atrace 카테고리 · 앱은 검사 없이 통과했다.
+ * atrace slice 의 비용은 커널 ftrace 와 달리 **slice 를 남기는 프로세스 자신**에게 청구되므로,
+ * 평소 세션에는 하나도 들어가면 안 되고 진단 세션에도 정한 범위 밖은 들어가면 안 된다.
+ */
+describe('assertLowOverheadConfig — atrace (DM-4)', () => {
+  const PKG = 'com.google.android.youtube'
+  const DIAG = { packageName: PKG }
+  const tail = 'write_into_file: true\nflush_period_ms: 30000\nfile_write_period_ms: 30000\n'
+  const ftrace = (body: string): string =>
+    `data_sources { config { name: "linux.ftrace" ftrace_config { ${body} } } }\n${tail}`
+  const IN_SCOPE =
+    'ftrace_events: "power/cpu_frequency" atrace_categories: "am" atrace_categories: "wm" ' +
+    `atrace_categories: "view" atrace_apps: "${PKG}"`
+
+  it('DM-4 평소 config atrace 거부 — atrace_ 로 시작하는 키가 하나라도 있으면', () => {
+    for (const body of [
+      'atrace_categories: "am"',
+      `atrace_apps: "${PKG}"`,
+      'atrace_categories_prefer_sdk: "am"',
+      'atrace_userspace_only: true',
+      `ftrace_events: "power/cpu_frequency" ${IN_SCOPE}`,
+    ]) {
+      expect(() => assertLowOverheadConfig(ftrace(body)), body).toThrow(PerfettoSessionError)
+      expect(() => assertLowOverheadConfig(ftrace(body), null), body).toThrow(/진단 세션/)
+    }
+  })
+
+  it('DM-4 평소 config atrace 거부 — buildTraceConfig 도 diagnose 없이는 막는다', () => {
+    const block = `data_sources { config { name: "linux.ftrace" ftrace_config { atrace_categories: "am" } } }`
+    expect(() => buildTraceConfig({ dataSourceBlocks: [block] })).toThrow(PerfettoSessionError)
+    expect(() => buildTraceConfig({ dataSourceBlocks: [block], diagnose: DIAG })).not.toThrow()
+  })
+
+  it('DM-4 따옴표 안의 atrace_ 는 키가 아니다', () => {
+    expect(() =>
+      assertLowOverheadConfig(`data_sources { config { name: "vendor.atrace_like" } }\n${tail}`),
+    ).not.toThrow()
+  })
+
+  it('DM-4 진단 config 허용 밖 거부 — 키 · 카테고리 · 앱 · 와일드카드 · 둘 이상 · 리스트 꼴', () => {
+    const outside: [string, RegExp][] = [
+      [`${IN_SCOPE} atrace_categories_prefer_sdk: "am"`, /허용한 키가 아닙니다/],
+      [`${IN_SCOPE} atrace_userspace_only: true`, /허용한 키가 아닙니다/],
+      [`${IN_SCOPE} atrace_categories: "gfx"`, /"gfx"/],
+      [`${IN_SCOPE} atrace_categories: "input"`, /"input"/],
+      [`${IN_SCOPE} atrace_categories: "sched"`, /"sched"/],
+      ['atrace_categories: "am" atrace_apps: "com.android.chrome"', /대상 앱/],
+      ['atrace_categories: "am" atrace_apps: "*"', /와일드카드/],
+      ['atrace_categories: "am" atrace_apps: "com.google.*"', /와일드카드/],
+      [`atrace_categories: "am" atrace_apps: "${PKG}" atrace_apps: "${PKG}"`, /2개/],
+      [`atrace_categories: "am" atrace_apps: "${PKG}" atrace_apps: "com.android.chrome"`, /2개/],
+      [`atrace_categories: ["am", "gfx"] atrace_apps: "${PKG}"`, /꼴/],
+      [`atrace_categories: ["am"] atrace_apps: "${PKG}"`, /꼴/],
+      [`atrace_categories: "am" atrace_apps: ["${PKG}"]`, /꼴/],
+    ]
+    for (const [body, why] of outside) {
+      expect(() => assertLowOverheadConfig(ftrace(body), DIAG), body).toThrow(why)
+    }
+  })
+
+  it('DM-4 진단 config 허용 범위는 통과한다 — 카테고리 셋의 부분집합 · 대상 앱 하나', () => {
+    expect(() => assertLowOverheadConfig(ftrace(IN_SCOPE), DIAG)).not.toThrow()
+    expect(() => assertLowOverheadConfig(ftrace('atrace_categories: "am"'), DIAG)).not.toThrow()
+    expect(() => assertLowOverheadConfig(ftrace(`atrace_apps: "${PKG}"`), DIAG)).not.toThrow()
+  })
+
+  /**
+   * 코드 검수 #2. perfetto 파서는 `#` 를 줄 끝까지 주석으로 읽는데, 예전 검증기는 주석 안의 `"` 를
+   * 문자열의 시작으로 읽어 그 뒤 진짜 키를 문자열 안으로 착각했다 — 아래 입력이 평소 · 진단
+   * 둘 다 통과했다. 이 도구의 config 에는 주석이 없으므로 따옴표 밖 `#` 자체를 거부한다.
+   */
+  it('DM-4 주석(#) 안의 따옴표에 속지 않는다 — 따옴표 밖 # 는 평소 · 진단 모두 거부', () => {
+    const review = ftrace('# it"s\n atrace_categories: "gfx" # "')
+    expect(review).toContain('ftrace_config { # it"s\n atrace_categories: "gfx" # " }')
+    expect(() => assertLowOverheadConfig(review)).toThrow(/주석/)
+    expect(() => assertLowOverheadConfig(review, DIAG)).toThrow(/주석/)
+
+    const otherApp = ftrace('# it"s\n atrace_categories: "gfx" atrace_apps: "com.android.chrome" # "')
+    expect(() => assertLowOverheadConfig(otherApp, DIAG)).toThrow(/주석/)
+    // atrace 만의 구멍이 아니다 — 값을 주석 너머 다음 줄로 넘기는 ftrace 이벤트도 같은 문에서 막힌다.
+    expect(() => assertLowOverheadConfig(ftrace('ftrace_events: # x\n "sched/sched_switch"'))).toThrow(/주석/)
+  })
+
+  it('DM-4 따옴표 안의 # · 이스케이프된 따옴표는 문자열 안이다 · 닫히지 않은 따옴표는 거부', () => {
+    expect(() => assertLowOverheadConfig(`data_sources { config { name: "vendor.a#b" } }\n${tail}`)).not.toThrow()
+    expect(() =>
+      assertLowOverheadConfig(`data_sources { config { name: "a\\" atrace_categories: \\"gfx" } }\n${tail}`),
+    ).not.toThrow()
+    expect(() => assertLowOverheadConfig(`data_sources { config { name: "vendor.ab } }\n${tail}`)).toThrow(/닫히지/)
+  })
+
+  it('DM-4 진단 세션이어도 ftrace 이벤트 허용 목록은 그대로다', () => {
+    expect(() => assertLowOverheadConfig(ftrace(`${IN_SCOPE} ftrace_events: "sched/sched_switch"`), DIAG)).toThrow(
+      /sched\/sched_switch/,
+    )
+    expect(ALLOWED_FTRACE_EVENTS).toEqual(['power/cpu_frequency'])
+  })
+})
