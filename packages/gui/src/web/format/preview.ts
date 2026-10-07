@@ -14,9 +14,16 @@ import type { Tab } from '../state/model.js'
  * 예고가 틀리는 것과 기록이 틀리는 것은 무게가 다르다.
  *
  * `outDir` 은 여기서도 **서버가 준 값**을 받는다 (`EnvView.outDir`). 화면이 정하지 않는다.
+ *
+ * **플래그 철자는 `packages/cli` 에 등록된 `start` 옵션과 같아야 한다.** gui 는 cli 를 import 하지
+ * 않으므로(의존 방향 cli → gui → core) 컴파일러가 지켜 주지 못한다 — cli 쪽 시험
+ * (`packages/cli/test/preview-flag.test.ts`)이 이 함수를 불러 등록된 옵션과 대조한다.
  */
 export function startPreview(tab: Tab, outDir: string): string {
   const parts = ['perftracker start']
+  // `--diagnose` 는 `start` **바로 뒤**다. 시작 바 예고는 한 줄이고 넘치면 끝이 잘리는데(924 폭에서
+  // 실제로 잘린다), 진단 세션이라는 사실이 그 잘린 꼬리에 묻히면 안 된다 — 서버의 실행 줄과 같은 자리.
+  if (tab.diagnose) parts.push('--diagnose')
   parts.push(`--app "${tab.packageName ?? '<미선택>'}"`)
   if (tab.name.trim() !== '') parts.push(`--name "${tab.name.trim()}"`)
   parts.push(`-d ${tab.serial ?? '<미선택>'}`)

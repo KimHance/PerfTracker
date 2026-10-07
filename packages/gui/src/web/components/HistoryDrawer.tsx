@@ -1,6 +1,7 @@
 import type { RunView } from '../../contract/api.js'
 import { renameRun } from '../effects/effects.js'
-import { formatClock, formatElapsed, formatRunAt } from '../format/time.js'
+import { runMetaLine } from '../format/session.js'
+import { formatClock } from '../format/time.js'
 import { useStore } from '../state/StoreContext.jsx'
 
 /**
@@ -117,12 +118,7 @@ function RunRow({ run }: { run: RunView }) {
             {run.appLabel}
             {run.appVersion !== null ? ` v${run.appVersion}` : ''}
           </div>
-          <div className="run-meta-mono">
-            {formatRunAt(run.at)} · {formatElapsed(run.durationMs)} · {run.launch ? 'launch' : 'attach'} · 경고{' '}
-            {run.warningCount}
-            {run.unsupportedCount > 0 ? ` · 미지원 ${run.unsupportedCount}` : ''}
-            {run.markCount > 0 ? ` · 마킹 ${run.markCount}` : ''}
-          </div>
+          <div className="run-meta-mono">{runMetaLine(run)}</div>
         </button>
 
         <div className="run-actions">

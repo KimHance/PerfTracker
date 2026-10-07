@@ -69,6 +69,20 @@ describe('시작 예고', () => {
     expect(command).not.toContain('--force')
   })
 
+  it('DM-2 명령 예고 — 진단 토글을 켜면 --diagnose 가 start 바로 뒤에 붙는다', () => {
+    // 예고는 한 줄이고 924 폭에서 끝이 잘린다 — 진단이라는 사실이 잘린 꼬리에 묻히지 않게 앞에 둔다.
+    // 서버가 적는 실행 줄(`server/command.ts`)과 같은 자리다.
+    const tab = { ...newTab('t'), serial: 'S1', packageName: 'com.x', name: '진단', diagnose: true }
+    expect(startPreview(tab, 'runs')).toBe(
+      'perftracker start --diagnose --app "com.x" --name "진단" -d S1 --launch --force -o runs',
+    )
+  })
+
+  it('DM-2 명령 예고 — 끄면 --diagnose 가 없고 형식이 그대로다', () => {
+    const tab = { ...newTab('t'), serial: 'S1', packageName: 'com.x', name: '홈', diagnose: false }
+    expect(startPreview(tab, 'runs')).toBe('perftracker start --app "com.x" --name "홈" -d S1 --launch --force -o runs')
+  })
+
 
 })
 

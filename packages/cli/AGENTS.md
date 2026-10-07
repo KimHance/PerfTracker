@@ -18,7 +18,10 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
 | `src/copy/diagnose.ts` | 진단 모드가 새로 내는 cli 문구 모음 — 정본은 `docs/design/diagnostic-mode.md` `## 문구` 표 |
 | `test/readme.test.ts` | 등록된 명령이 전부 README 에 있는지 · `start` 옵션이 전부 README 에 있는지 대조 |
 | `test/copy/diagnose.test.ts` | cli 진단 문구 ↔ 디자인 문서 `## 문구` 표 양방향 대조 · 단어형 규칙 (DM-15) |
+| `test/preview-flag.test.ts` | GUI 가 적는 `start` 줄(시작 바 예고 · 서버 실행 줄)의 플래그가 commander 에 등록된 `start` 옵션과 같은지 대조 (DM-2) |
 | `test/on-device/` | **실기기가 있어야 도는 스펙.** `npm run test:device` 로만 실행 |
+
+**gui 소스를 상대 경로(`../../gui/src/…`)로 import 하는 cli 시험은 지금 `test/preview-flag.test.ts` 하나뿐인 예외다** — gui exports 는 서버 진입점(`.`) 하나라 예고 함수를 패키지로 못 읽고, 방향이 cli → gui 라 규칙 4 안이다 (gui 는 cli 를 모르므로 이 대조는 cli 쪽에만 둘 수 있다). `src/` 는 이 길을 쓰지 않는다.
 
 **등록과 실행을 가른 이유는 테스트다.** 진입점이 곧 실행이면 import 하는 순간 `process.argv`
 를 파싱해 버려서, 명령 목록을 확인하려면 소스를 정규식으로 긁는 수밖에 없다. `program.ts` 를

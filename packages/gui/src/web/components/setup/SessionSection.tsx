@@ -1,12 +1,15 @@
+import { DIAGNOSE_MEASURE_COPY } from '../../format/diagnose.js'
 import type { Tab } from '../../state/model.js'
 import { useStore } from '../../state/StoreContext.jsx'
 import { SectionHead } from '../ui/SectionHead.jsx'
 
 /** CLI 플래그를 그대로 노출한다 — GUI 가 무엇을 대신 치고 있는지 숨기지 않는다. */
-const OPTIONS: { key: 'launch' | 'force' | 'offline'; flag: string; desc: string }[] = [
+const OPTIONS: { key: 'launch' | 'force' | 'offline' | 'diagnose'; flag: string; desc: string }[] = [
   { key: 'launch', flag: '--launch', desc: '앱을 콜드로 띄우고 시작 시간을 측정' },
   { key: 'force', flag: '--force', desc: '이 기기에 남은 기존 세션을 버리고 시작' },
   { key: 'offline', flag: '--offline', desc: 'trace_processor 를 내려받지 않음 (캐시만 사용)' },
+  // 진단 세션 (DM-2). 끝 행 — 평소 측정의 옵션 셋과 섞이지 않게. 켜면 예고에 `--diagnose` 가 붙는다.
+  { key: 'diagnose', flag: '--diagnose', desc: DIAGNOSE_MEASURE_COPY.optionDesc },
 ]
 
 export function SessionSection({ tab }: { tab: Tab }) {
