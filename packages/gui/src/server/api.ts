@@ -27,6 +27,7 @@ import {
   startSession,
   stopSession,
   beginStart,
+  type StartOptions,
 } from '@perftracker/core'
 import type {
   ActiveSessionView,
@@ -46,7 +47,15 @@ import type {
   StopResult,
 } from '../contract/api.js'
 import { abortCommandLine, startCommandLine, stopCommandLine } from './command.js'
-import { toAppView, toDeviceView, toDoctorView, toMetricViews, toRunView } from './view.js'
+import {
+  toActiveSessionView,
+  toAppView,
+  toDeviceView,
+  toDoctorView,
+  toMetricViews,
+  toRunView,
+  toStartedSessionView,
+} from './view.js'
 
 /**
  * GUI 서버가 하는 일 전부. **CLI 의 로직을 다시 쓰지 않고 core 를 그대로 부른다** —
@@ -85,17 +94,7 @@ export class GuiApi {
    * GUI 가 연 세션과 CLI 가 연 세션을 구분하지 않는다. 같은 파일이 정본이기 때문이다.
    */
   async sessions(): Promise<ActiveSessionView[]> {
-    return (await listActiveSessions()).map((s) => ({
-      id: s.id,
-      name: s.name,
-      serial: s.serial,
-      packageName: s.packageName,
-      runDir: s.runDir,
-      startedAt: s.startedAt,
-      launch: s.options.launch,
-      marks: sortedMarks(s).map((m) => ({ offsetMs: m.offsetMs, label: m.label })),
-      unsupported: s.unsupported ?? [],
-    }))
+    return (await listActiveSessions()).map(toActiveSessionView)
   }
 
   async doctor(serial: string | null): Promise<DoctorCheckView[]> {
@@ -152,25 +151,8 @@ export class GuiApi {
     await beginStart(ctx, { force: req.force })
 
     const app = await resolveTargetApp(ctx, req.packageName)
-    const now = new Date()
-    const session = await startSession(ctx, app, {
-      ...(req.name !== null ? { name: req.name } : {}),
-      launch: req.launch,
-      // 저장 위치는 서버만 정한다 — 브라우저가 보내던 값을 없앤 이유는 계약의 주석에 있다.
-      outDir: this.opts.outDir,
-      force: req.force,
-      now,
-    })
-
-    return {
-      id: session.id,
-      name: session.name,
-      serial: req.serial,
-      runDir: session.runDir,
-      startedAt: session.startedAt,
-      unsupported: session.unsupported ?? [],
-      command: startCommandLine(req, this.opts.outDir),
-    }
+    const session = await startSession(ctx, app, startOptions(req, this.opts.outDir, new Date()))
+    return toStartedSessionView(session, req.serial, startCommandLine(req, this.opts.outDir))
   }
 
   /** 측정 중 마킹 하나. **기기에 나가는 명령이 없다** — 포인터 파일만 고친다. */
@@ -302,6 +284,26 @@ export class GuiApi {
   async clearRuns(): Promise<ClearRunsResult> {
     const r = await clearRuns(this.opts.outDir)
     return { records: r.records, incomplete: r.incomplete, skippedActive: r.skippedActive }
+  }
+}
+
+/**
+ * 시작 요청 → core 의 시작 옵션. **CLI 의 `start` 가 core 에 넘기는 것과 같은 모양이어야 한다** —
+ * 같은 세션을 두 입구가 다르게 열면 안 된다.
+ *
+ * 진단은 켤 때만 키를 싣는다 (`diagnose: true`). 평소 세션이면 core 로 가는 옵션 객체가 이 칸이
+ * 없던 때와 키까지 같다 — core 는 없음과 `false` 를 같게 보지만, 입구에서부터 평소 세션의 모양을
+ * 바꾸지 않는다 (DM-2 · DM-1 과 같은 원칙). 요청 본문은 브라우저가 보낸 JSON 이라 `true` 만 믿는다.
+ */
+export function startOptions(req: StartRequest, outDir: string, now: Date): StartOptions {
+  return {
+    ...(req.name !== null ? { name: req.name } : {}),
+    launch: req.launch,
+    // 저장 위치는 서버만 정한다 — 브라우저가 보내던 값을 없앤 이유는 계약의 주석에 있다.
+    outDir,
+    force: req.force,
+    now,
+    ...(req.diagnose === true ? { diagnose: true } : {}),
   }
 }
 

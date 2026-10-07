@@ -19,6 +19,16 @@ export interface Tab {
   launch: boolean
   force: boolean
   offline: boolean
+  /**
+   * 설정 화면: 진단 세션으로 열지 (`--diagnose` 토글). 측정 중: **이 탭의 세션이 진단 세션인지** —
+   * 그때는 서버가 연 세션(`StartedSessionView.diagnose` · `ActiveSessionView.diagnose`)이 정본이다.
+   */
+  diagnose: boolean
+  /**
+   * 측정 중 고지 줄 — 앱 slice 열림이 "모름" 칸이면 core 의 문장 그대로, 아니면 `null`.
+   * 진단 세션이 아닐 때도 `null` 이다. 설정 화면은 앱의 debuggable 을 모르므로 이 값이 없다 (DM-10).
+   */
+  diagnoseNotice: string | null
   appQuery: string
   phase: TabPhase
   /** 측정 중일 때만 값이 있다 (epoch ms). */
@@ -104,6 +114,9 @@ export function newTab(key: string, name = ''): Tab {
     launch: true,
     force: true,
     offline: false,
+    // 진단은 켤 때만 — 평소 세션이 기본이다 (`start` 도 `--diagnose` 를 줘야 진단이다).
+    diagnose: false,
+    diagnoseNotice: null,
     appQuery: '',
     phase: 'setup',
     startedAt: null,
