@@ -258,24 +258,32 @@ async function readTraceCells(
     const totals = await input.tp.queryJson<DiagnoseTotalsRow>(DIAGNOSE_TOTALS_SQL)
     const ftraceOverrun = totals.ftrace_overrun_events ?? null
 
-    // ftrace 가 원본에 안 남았거나(CPU 통계 0행) 켜다 오류가 났으면 slice 의 0개는 "재 봤더니 없었다"
-    // 가 아니다 (plan D35). 오류가 어느 이벤트 · 카테고리의 것인지는 원본이 말하지 않으므로 slice 칸을
-    // 전부 모름으로 둔다. 잃은 이벤트 수는 통계가 있으면 잰 그대로다.
     const setupErrors = totals.ftrace_setup_errors ?? null
-    if (totals.ftrace_cpu_stats === 0 || (setupErrors !== null && setupErrors > 0)) {
+
+    // ftrace 가 원본에 안 남았으면(CPU 통계 0행) slice 의 0개는 "재 봤더니 없었다" 가 아니다 (plan D35)
+    // — slice 칸을 전부 모름으로 둔다. 잃은 이벤트 수도 통계가 없으니 null 이다.
+    if (totals.ftrace_cpu_stats === 0) {
       return {
         status: 'partial',
         reason: {
           code: 'ftrace_not_recorded',
-          detail: {
-            cause: setupErrors !== null && setupErrors > 0 ? 'ftrace_setup_errors' : 'no_ftrace_stats',
-            ftrace_cpu_stats: totals.ftrace_cpu_stats,
-            setup_errors: setupErrors,
-          },
+          detail: { cause: 'no_ftrace_stats', ftrace_cpu_stats: 0, setup_errors: setupErrors },
         },
         cells: { ...NO_TRACE_CELLS, ftrace_overrun_events: ftraceOverrun },
       }
     }
+
+    // 켜기 오류는 있는데 ftrace 는 돌았다 — **잰 값을 지우지 않는다** (plan D37). `ftrace_setup_errors` 는
+    // atrace 실패만 세지 않는다: gfx · input 카테고리를 켠 실측 원본(research B2 · B3)은 오류 28 에
+    // slice 33만–38만이 실렸다. 어느 이벤트 · 카테고리의 오류인지 원본이 말하지 않으므로 일부가 빠졌을
+    // 수 있다는 사실만 status 로 남긴다 (process_name_stale_in_trace 처럼 값 있는 partial).
+    const setupReason: MetricReason | null =
+      setupErrors !== null && setupErrors > 0
+        ? {
+            code: 'ftrace_not_recorded',
+            detail: { cause: 'ftrace_setup_errors', ftrace_cpu_stats: totals.ftrace_cpu_stats, setup_errors: setupErrors },
+          }
+        : null
 
     const candidates = await input.tp.queryJson<AppProcessCandidate[]>(
       appProcessSql(input.packageName, input.appPid),
@@ -299,10 +307,13 @@ async function readTraceCells(
       diagnoseSlicesSql(resolved.candidate.upid, resolved.candidate.pid),
     )
     const table = buildSliceTable(groups)
-    const stale = staleNameReason(resolved, input.packageName)
+    // 블록 reason_code 는 하나다. 켜기 오류(일부 slice 가 빠졌을 수 있음)를 낡은 이름(값은 온전)보다
+    // 앞세운다 — 수를 믿어도 되는지가 프로세스를 어떻게 찾았는지보다 먼저다. 프로세스를 못 찾은 경우는
+    // 위에서 이미 process_not_in_trace 다 (그 칸들이 null 인 이유가 그것이므로).
+    const reason = setupReason ?? staleNameReason(resolved, input.packageName)
     return {
-      status: stale !== null ? 'partial' : 'collected',
-      reason: stale,
+      status: reason !== null ? 'partial' : 'collected',
+      reason,
       cells: {
         ...traceWide,
         target_process_slices: table.slices,

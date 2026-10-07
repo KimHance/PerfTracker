@@ -249,10 +249,12 @@ export const METRIC_REASON_CODES = [
   /**
    * **진단 블록 전용** — 블록 `reason_code` 에만 온다 (plan D35).
    *
-   * 원본에 ftrace 가 안 남았거나(CPU 별 `ftrace_cpu_*` 통계가 0행) traced_probes 가 ftrace 를 켜다
-   * 오류를 냈다(`ftrace_setup_errors` > 0). 그러면 slice 0개는 "재 봤더니 없었다" 가 아니므로 블록은
-   * `partial` 이고 slice 수 · 표가 null 이다. 오류가 atrace 의 것인지 다른 이벤트의 것인지는 원본이
-   * 말하지 않아 가르지 않는다.
+   * 두 갈래다 (detail `cause`):
+   *   - `no_ftrace_stats` — 원본에 CPU 별 `ftrace_cpu_*` 통계가 0행이다(ftrace 가 안 돌았다). slice 0개는
+   *     "재 봤더니 없었다" 가 아니므로 slice 수 · 표가 null 이다 (plan D35).
+   *   - `ftrace_setup_errors` — ftrace 는 돌았는데 traced_probes 가 켜다 오류를 냈다(> 0). 오류가 atrace 의
+   *     것인지 다른 이벤트의 것인지 원본이 말하지 않아 일부가 빠졌을 수 있다. **잰 수 · 표는 그대로다**
+   *     (plan D37 — 실측 gfx · input 원본이 오류 28 에 slice 33만–38만).
    * detail: cause('no_ftrace_stats' | 'ftrace_setup_errors'), ftrace_cpu_stats, setup_errors
    */
   'ftrace_not_recorded',

@@ -1655,9 +1655,11 @@ export const DiagnoseBlockSchema = z
         '- collected: 다 나왔다.\n' +
         '- partial: process_not_in_trace 면 대상 앱 프로세스를 트레이스에서 못 찾아 target_process_* ' +
         '네 칸이 null 이다(trace_slices · ftrace_overrun_events 는 있다). process_name_stale_in_trace 면 ' +
-        '이름이 낡아 캡처 때 받아 둔 pid 로 찾았고 값은 다 있다. ftrace_not_recorded 면 원본에 ftrace 가 ' +
-        '안 남았거나(CPU 별 ftrace 통계 0행) ftrace 를 켜다 오류가 나서, slice 0개가 "없었다" 인지 ' +
-        '"못 쟀다" 인지 모른다 — trace_slices 와 target_process_* 네 칸이 null 이다(0 · [] 이 아니다).\n' +
+        '이름이 낡아 캡처 때 받아 둔 pid 로 찾았고 값은 다 있다. ftrace_not_recorded 는 두 갈래다: ' +
+        'cause no_ftrace_stats 면 원본에 ftrace 가 안 남아(CPU 별 ftrace 통계 0행) slice 0개가 "없었다" 인지 ' +
+        '"못 쟀다" 인지 모른다 — trace_slices 와 target_process_* 네 칸이 null 이다(0 · [] 이 아니다). ' +
+        'cause ftrace_setup_errors 면 ftrace 는 돌았는데 켜다 오류가 나서 어느 이벤트가 빠졌는지 모른다 — ' +
+        '잰 수 · 표는 그대로 싣는다(값 있는 partial).\n' +
         '- unsupported: 기기에 linux.ftrace 데이터소스가 없어 atrace 를 기록할 수 없었다 ' +
         '(data_source_not_registered). 트레이스에서 읽는 칸은 null 이다.\n' +
         '- failed: 원본이 없거나(trace_missing) 쿼리가 터졌다(query_failed). 트레이스에서 읽는 칸은 null 이다.\n' +

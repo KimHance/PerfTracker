@@ -1281,15 +1281,19 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 | `partial` | `process_not_in_trace` | `target_process_slices` · `target_process_slices_unfinished` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
 | `partial` | `process_name_stale_in_trace` | 없음 |
 | `partial` | `ftrace_not_recorded` · `cause: no_ftrace_stats` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
-| `partial` | `ftrace_not_recorded` · `cause: ftrace_setup_errors` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
+| `partial` | `ftrace_not_recorded` · `cause: ftrace_setup_errors` | 없음 |
 | `unsupported` | `data_source_not_registered` · `data_source: linux.ftrace` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
 | `failed` | `trace_missing` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `trace_bytes` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
 | `failed` | `query_failed` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
 
-**`ftrace_not_recorded`** 는 slice 가 0개일 때 그것이 "없었다" 인지 "못 쟀다" 인지 모르는 경우입니다 —
-원본에 CPU 별 ftrace 통계(`ftrace_cpu_*`)가 한 행도 없거나(`no_ftrace_stats` — ftrace 가 안 돌았습니다),
-traced_probes 가 ftrace 를 켜다 오류를 냈습니다(`ftrace_setup_errors`). 오류가 atrace 의 것인지 다른 이벤트의
-것인지는 원본이 말하지 않아 slice 칸을 전부 `null` 로 둡니다. 잃은 이벤트 수는 통계가 있으면 잰 그대로입니다.
+**`ftrace_not_recorded`** 는 ftrace 기록을 다 믿을 수 없는 경우이고 두 갈래입니다 (`detail.cause`).
+
+- `no_ftrace_stats` — 원본에 CPU 별 ftrace 통계(`ftrace_cpu_*`)가 한 행도 없습니다. ftrace 가 안 돌았으므로
+  slice 0개가 "없었다" 인지 "못 쟀다" 인지 모릅니다 — slice 칸과 잃은 이벤트 수가 `null` 입니다.
+- `ftrace_setup_errors` — ftrace 는 돌았는데 traced_probes 가 켜다 오류를 냈습니다. 오류가 atrace 의 것인지
+  다른 이벤트의 것인지 원본이 말하지 않아 일부가 빠졌을 수 있지만, **잰 수 · 표는 그대로 싣습니다** —
+  gfx · input 카테고리를 켠 실측 원본은 오류 28 에 slice 33만–38만이 실렸습니다.
+  대상 앱 프로세스를 못 찾았으면 그쪽(`process_not_in_trace`)이, 이름이 낡았을 뿐이면 이쪽이 블록의 코드입니다.
 
 **앱 slice 열림은 `status` 와 따로 갑니다.** 트레이스가 아니라 sdk 와 `target_app.debuggable` 로
 정해지는 조건이라 원본이 없어도(`failed`) 값이 있고, `null` 이어도 `status` 는 `collected` 일 수 있습니다.

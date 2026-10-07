@@ -288,17 +288,56 @@ describe('D35 ftrace 가 원본에 안 남음', () => {
     expect(block.atrace_categories).toEqual(['am', 'wm', 'view'])
   })
 
-  it('D35 ftrace 설정 오류 — partial · ftrace_not_recorded(ftrace_setup_errors) · 잃은 이벤트 수는 잰 그대로', async () => {
+  /**
+   * D37 — `ftrace_setup_errors` 는 atrace 실패만 세지 않는다 (실측 gfx · input 원본 B2 · B3: 오류 28 ·
+   * slice 33만–38만). ftrace 가 돌았으면 잰 수 · 표를 지우지 않고, 일부가 빠졌을 수 있다는 사실만 status 로.
+   */
+  it('D37 ftrace 설정 오류 — partial · ftrace_not_recorded(ftrace_setup_errors) 이되 잰 수 · 표는 그대로', async () => {
+    const happy = await extractDiagnose(input())
     const block = await extractDiagnose(
-      input({ tp: tpWith([totals({ ftrace_setup_errors: 2, ftrace_overrun_events: 5 }), ...HAPPY.slice(1)]) }),
+      input({ tp: tpWith([totals({ ftrace_setup_errors: 28, ftrace_overrun_events: 5 }), ...HAPPY.slice(1)]) }),
     )
 
     expect(block.status).toBe('partial')
     expect(block.reason_code).toBe('ftrace_not_recorded')
-    expect(block.reason).toBe(fillCopy(DIAGNOSE_COPY.reasonFtraceSetupErrors, { count: 2 }))
-    expect(block.reason).toBe('ftrace 설정 오류 2건 · slice 수 모름')
-    for (const key of SLICE_CELLS) expect(block[key], key).toBeNull()
+    expect(block.reason).toBe(fillCopy(DIAGNOSE_COPY.reasonFtraceSetupErrors, { count: 28 }))
+    expect(block.reason).toBe('ftrace 설정 오류 28건 · slice 수 잰 그대로 · 빠진 이벤트 모름')
+    for (const key of SLICE_CELLS) expect(block[key], key).toEqual(happy[key])
+    expect(block.trace_slices).toBe(75_800)
+    expect(block.target_process_slice_names).toHaveLength(3)
     expect(block.ftrace_overrun_events).toBe(5)
+  })
+
+  it('D37 블록 코드 하나 — 프로세스를 못 찾으면 process_not_in_trace · 이름만 낡았으면 켜기 오류가 앞선다', async () => {
+    const noProcess = await extractDiagnose(
+      input({ tp: tpWith([totals({ ftrace_setup_errors: 3 }), [appProcessSql(PKG, APP_PID), []]]) }),
+    )
+    expect(noProcess.reason_code).toBe('process_not_in_trace')
+    expect(noProcess.target_process_slices).toBeNull()
+    expect(noProcess.trace_slices).toBe(75_800)
+
+    const stale = await extractDiagnose(
+      input({
+        tp: tpWith([
+          totals({ ftrace_setup_errors: 3 }),
+          [appProcessSql(PKG, APP_PID), [{ upid: UPID, pid: APP_PID, name: '<pre-initialized>' }]],
+          HAPPY[2]!,
+        ]),
+      }),
+    )
+    expect(stale.status).toBe('partial')
+    expect(stale.reason_code).toBe('ftrace_not_recorded')
+    expect(stale.target_process_slices).toBe(6)
+  })
+
+  it('D35 통계 0행이면 켜기 오류가 있어도 cause 는 no_ftrace_stats — slice 칸 null', async () => {
+    const block = await extractDiagnose(
+      input({
+        tp: tpWith([totals({ trace_slices: 0, ftrace_overrun_events: null, ftrace_cpu_stats: 0, ftrace_setup_errors: 4 })]),
+      }),
+    )
+    expect(block.reason).toBe(DIAGNOSE_COPY.reasonFtraceNoStats)
+    for (const key of SLICE_CELLS) expect(block[key], key).toBeNull()
   })
 
   it('D35 켜기 오류 수를 못 읽으면(null) 그것만으로 모름이라 하지 않는다 — CPU 통계가 있으면 collected', async () => {

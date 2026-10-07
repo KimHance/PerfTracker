@@ -34,8 +34,11 @@ export const DIAGNOSE_COPY = {
    * 블록 `reason` 으로 나가고 보고서 카드 제목 title 이 된다 (plan D35).
    */
   reasonFtraceNoStats: 'ftrace 기록 없음 · 원본에 ftrace 통계 0행 · slice 수 모름',
-  /** `ftrace_not_recorded` 의 reason — traced_probes 가 ftrace 를 켜다 낸 오류가 있다. `{count}` = 오류 수. */
-  reasonFtraceSetupErrors: 'ftrace 설정 오류 {count}건 · slice 수 모름',
+  /**
+   * `ftrace_not_recorded` 의 reason — traced_probes 가 ftrace 를 켜다 낸 오류가 있다. `{count}` = 오류 수.
+   * ftrace 는 돌았으므로 slice 수 · 표는 잰 그대로 싣고, 어느 이벤트가 빠졌는지만 모른다 (plan D37).
+   */
+  reasonFtraceSetupErrors: 'ftrace 설정 오류 {count}건 · slice 수 잰 그대로 · 빠진 이벤트 모름',
 } as const
 
 /**

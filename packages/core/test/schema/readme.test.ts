@@ -267,7 +267,11 @@ describe('DM-9 README 진단 절 ↔ 코드', () => {
       tp: tp([[DIAGNOSE_TOTALS_SQL, { ...OK_TOTALS, trace_slices: 0, ftrace_overrun_events: null, ftrace_cpu_stats: 0 }]]),
     }),
     'partial|ftrace_not_recorded|ftrace_setup_errors': input({
-      tp: tp([[DIAGNOSE_TOTALS_SQL, { ...OK_TOTALS, ftrace_setup_errors: 2 }]]),
+      tp: tp([
+        [DIAGNOSE_TOTALS_SQL, { ...OK_TOTALS, ftrace_setup_errors: 2 }],
+        [appProcessSql(PKG, PID), PROC],
+        [diagnoseSlicesSql(UPID, PID), GROUPS],
+      ]),
     }),
     'unsupported|data_source_not_registered|': input({ env: { sdkInt: 36, dataSources: ['linux.sys_stats'] } }),
     'failed|trace_missing|': input({ tp: null, tracePath: null }),
