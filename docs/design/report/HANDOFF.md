@@ -107,7 +107,7 @@ maxT = max( 모든 series 의 max t_s, 모든 mark 의 초, ceil(duration_ms/100
 
 ---
 
-## 2. 블록 6종
+## 2. 블록 8종
 
 | kind | 데이터 모양 | 쓰이는 곳 |
 | --- | --- | --- |
@@ -115,8 +115,10 @@ maxT = max( 모든 series 의 max t_s, 모든 mark 의 초, ceil(duration_ms/100
 | `series` | `[{t_s, <값 필드>}]` | 앱/기기 CPU · 앱 RSS · 기기 가용 메모리 · 로그 **(전부 선)** |
 | `bars` | `[{label, value}]` | 코어별 사용률, 클러스터 최대 주파수 |
 | `delta` | 배열 `[{label, before, after}]` 또는 두 객체 경로 + 키 목록 | 온도 존, 기기 상태 전/후 |
-| `pairs` | `[{key, value}]` | 기기·앱 정보, min/avg/max 요약, 오버헤드 |
+| `pairs` | `[{key, value}]` | 기기·앱 정보, min/avg/max 요약, 오버헤드, 진단 탭의 카드 셋 |
 | `stat` | 단일 값 + 부가 문장 | 상단 요약 타일 |
+| `frametimeline` | `[경과 ms, 앱 ms, 표시 ms, 마감 ms]` 의 배열 | 시간별 프레임 (렌더 섹션 타임라인 서브탭) |
+| `slicetable` | `[{name, <갈래>: {count, sum_ms, max_ms} \| null, …}]` | 진단 탭의 slice 이름별 표 (**진단 세션에만**) |
 
 ### 블록 선언
 
@@ -158,10 +160,19 @@ metrics.memory.data.system_timeline
 - **delta** — 배열형: `labelField` `beforeField` `afterField` `fmt` / 객체형: `beforePath` `afterPath` `keys[]`
 - **pairs** — `keys: [{p, l, f}]` (`p` 는 블록 `path` 기준 상대 경로, 점 표기 가능) 또는 `arrayAs: 'freq'` 같은 특수 변환
 - **stat** — `fmt`, `unit`, `sub: [{l, p, f}]`
+- **frametimeline** — `path` 하나 (`metrics.frame.data`)
+- **slicetable** — `nameField` `nameLabel`, `groups: [{field, label}]`(갈래 셋), `stats: [{field, label, fmt}]`(횟수 · 합 ms · 최대 ms), `rowsUnit`(`{n}` 자리에 행 수)
+
+블록 공통으로 둘이 더 있습니다.
+
+- `statePath` — 지표가 아닌 블록의 껍데기(`status` · `reason_code` · `reason`) 위치. `metric` 과 같은 일(배지 · 제목 툴팁 · 값 없는 자리의 코드)을 합니다. 진단 탭의 카드 넷이 `diagnose` 를 씁니다 — 진단 블록은 `metrics` 밖에 있지만 메트릭과 같은 껍데기입니다.
+- `diagnoseUnit` — **진단 세션에만** 쓰는 카드 단위. 지금은 측정 비용 카드 하나(`앱 프로세스 몫 미포함`)입니다.
+
+`pairs` 의 키에 `why: {code, reason}` 를 달면 **그 값이 `null` 일 때만** `값 없음` 옆에 코드를, 문장은 행 `title` 로 냅니다 (진단 탭의 `app_slices_open` 행). 블록 `path` 가 빈 문자열이면 문서 루트 기준입니다 (`원본` 카드의 `artifacts.trace` · `diagnose.trace_bytes`).
 
 ### 포맷터
 
-`int` `ms0` `ms2` `pct0` `pct1` `pct2` `c1` `hz` `mb0` `mb1` `gb1` `ghz2` `bytes` `bool` `list` `mbTriple`(`{min_kb,avg_kb,max_kb}` → `52 / 315 / 352 MB`) `wrap`(줄바꿈 허용) `raw` `n0` `n1`(순수 숫자 — 변환된 계열용).
+`int` `ms0` `ms2` `pct0` `pct1` `pct2` `c1` `hz` `mb0` `mb1` `gb1` `ghz2` `bytes` `bool` `list` `dots`(목록을 ` · ` 로 — `am · wm · view`) `mbTriple`(`{min_kb,avg_kb,max_kb}` → `52 / 315 / 352 MB`) `wrap`(줄바꿈 허용) `path`(기계값 경로 — `wrap` + 등폭, 값이 있을 때만 등폭) `raw` `n0` `n1`(순수 숫자 — 변환된 계열용).
 
 ---
 
@@ -177,6 +188,7 @@ metrics.memory.data.system_timeline
 │          │ 섹션들 (12칸 그리드)                           │
 │ [요약]   │                                                │
 │  기기    │                                                │
+│ (진단)   │  ← 진단 세션에만                               │
 │          │ 푸터: 도구 · 호스트 · schema_version            │
 └──────────┴────────────────────────────────────────────────┘
 ```
@@ -184,14 +196,15 @@ metrics.memory.data.system_timeline
 - 셸: `display:grid; grid-template-columns:212px minmax(0,1fr); min-height:100vh`
 - 레일: `position:sticky; top:0; height:100vh; border-right:1px solid var(--color-divider); padding:var(--space-6) 0`
 
-### 탭 2개
+### 탭 — 평소 2개 · 진단 세션 3개
 
-레일에 **요약 / 기기** 두 개만 둡니다. 섹션 목차나 스크롤 스파이는 없습니다.
+레일에 **요약 / 기기** 두 개를 둡니다. **진단 세션**(`session.options.diagnose === true`)이면 세 번째 **진단** 탭이 붙습니다 — 기준은 그 칸 하나이고 진단 블록의 유무로 가르지 않습니다. 평소 보고서는 탭 둘 그대로입니다. 섹션 목차나 스크롤 스파이는 없습니다.
 
 - 탭 버튼: `padding:8px var(--space-4)`, 13.5px, `border-radius:0 99px 99px 0`, 선택 시 `border-left:2px solid var(--color-accent)` + `background:var(--color-accent-100)` + `color:var(--color-accent-800)`
 - 미수집 블록이 있는 탭에는 개수 배지(monospace 9.5px, `--color-neutral-200`)
 - **요약** 탭 = `summary` `render` `cpu` `memory` `log` `context` 섹션
 - **기기** 탭 = `device` 섹션
+- **진단** 탭 = `diagnose` 섹션(머리 `atrace slice`) — 카드 넷: `기록 범위`(`atrace_categories` · `atrace_apps` · `app_slices_open`) · `slice 수`(`trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `target_process_slice_names_unfolded` · `ftrace_overrun_events`) · `원본`(`artifacts.trace` · `diagnose.trace_bytes`) 각 span 4 + `slice 이름별` 표 span 12. 라벨은 **필드 경로 그대로**입니다(logcat 카드와 같은 이유). 표가 `null` 이면 탭 개수 배지에 1 이 섭니다.
 - 탭 전환 시 `window.scrollTo(0, 0)`
 
 ### 헤더
@@ -199,9 +212,12 @@ metrics.memory.data.system_timeline
 - 세션 id: monospace 11px, `letter-spacing:.14em`, uppercase, `--color-accent-700`
 - 이름: `--font-heading` 600, `clamp(26px,3.4vw,34px)`
 - 상태 pill: monospace 10px uppercase, `padding:3px 10px; border-radius:99px`. `running` 이면 `background:var(--color-accent); color:var(--color-bg)`, 그 외 `--color-neutral-200`
+- **진단 pill** (진단 세션에만): 상태 pill 바로 옆 `진단`. 같은 글꼴 · 크기 · 모양에 **바탕 없이** `--color-neutral-700` 글자 + `--color-divider` 1px 안쪽 테두리 — 상태 pill 과 모양으로만 갈리고 색에 뜻을 싣지 않습니다. `옵션` 메타 칸은 그대로(`--launch` · `attach`)입니다
 - 메타 줄(12.5px, `--color-neutral-700`, wrap): 앱 `{label} · {package} · {version_name}` / 기기 `{model} · {serial} · Android {release} (sdk {sdk_int})` / 시작 `YYYY-MM-DD HH:MM:SS` / 길이 `{duration_ms} ms` 또는 `측정 중` / 옵션 `--launch` 또는 `attach`
 
 ### 플래그 줄
+
+> 지금 코드에는 이 줄이 없습니다 — 각 사실이 화면 안의 제자리로 갔습니다 (`header.ts` 머리 주석의 표). 진단 세션 표시도 플래그가 아니라 위 진단 pill 과 레일 탭입니다.
 
 pill (`font-size:11.5px; padding:3px 10px; border-radius:99px; border:1px solid`). 강조(`hot`)는 `--color-accent` 테두리 + `--color-accent-100` 배경 + `--color-accent-800` 글자, 보통은 `--color-divider` + `--color-neutral-100`.
 
@@ -290,6 +306,25 @@ viewBox `측정된 컨테이너 폭 × 190`, 여백 `{l:44, r:10, t:18, b:30}`. 
 
 **라벨은 옮겨 적지 않습니다.** `dumpsys gfxinfo` 의 `Slow issue draw commands` 를 "그리기 명령" 으로 쓰면 원문에서 grep 되지 않고, 우리 스키마 필드를 "앱 warn" 으로 쓰면 `result.json` 에서 찾을 수 없습니다. 기기가 영어로 준 이름은 **그 이름 그대로**, 우리 필드는 **경로 그대로**(`logcat 줄 수` 카드) 싣습니다. 우리말은 카드 제목에만 씁니다.
 
+### pairs — 진단 탭
+
+- 진단 블록의 `status` 는 네 카드 모두에 같은 규칙으로 닿습니다 — `unsupported` · `skipped` · `failed` 면 카드 배지, `reason` 문장은 카드 제목(과 배지)의 `title`. `partial` 은 배지 없이 제목 `title` 만, `collected` 는 아무것도 없습니다 (④ 관례를 진단 블록까지 넓힘).
+- `app_slices_open` 은 블록 `status` 와 따로 갑니다. `null` 이면 그 행만 `값 없음` + `app_slices_open_reason_code`(`.rp-none-code`), 문장은 행 `title`. 값이 있으면 코드도 `title` 도 없습니다.
+- 그 밖의 `null` 칸은 `값 없음` 만 냅니다. 코드는 열림 행과 표 자리에만 붙습니다.
+- `측정 비용` 카드(요약 탭 · 맥락)는 진단 세션에만 단위 칸에 `앱 프로세스 몫 미포함` 을 둡니다.
+
+### slice 표 (`slicetable`)
+
+진단 블록의 `target_process_slice_names` — 행 = 접은 이름 하나, 열 = 갈래 셋(`메인 스레드` · `그 밖 스레드` · `비동기 트랙`) × (`횟수` · `합 ms` · `최대 ms`). **판정하지 않는 표**입니다.
+
+- **행을 자르지 않고 다 그립니다** (1만 행도 — 창 안 행만 그리지 않습니다. 브라우저 찾기가 상자 밖 이름도 찾습니다). 이름은 자르지 않고 `overflow-wrap:anywhere` 로 줄바꿈합니다 (ellipsis · 툴팁 대체 없음). 이름 열은 등폭 11px `--color-neutral-800`.
+- **처음 순서는 이름의 UTF-16 코드 단위 순**입니다(`a < b` — `Z` 가 `a` 보다 앞). 순위 · 상위 N · 강조 · 줄무늬 · 행별 색 · 굵기 · 아이콘이 없습니다.
+- 카드 단위는 `대상 앱 프로세스 · {n}행` — 프레임워크와 앱 slice 를 가르지 않습니다. 표가 `null` 이면 카드 본문이 `값 없음` + 블록 `reason_code`, `[]` 이면 머리만 있는 `0행` 표입니다.
+- 빈 칸은 `—`(`--color-neutral-600`) — 그 갈래에 그 이름의 slice 가 없거나 끝난 slice 가 없어 합 · 최대가 없습니다. `0` 으로 채우지 않습니다. 숫자는 `tabular-nums` 오른쪽 정렬, 횟수 정수 · 합/최대 소수 한 자리.
+- **상자**: `max-height:min(70vh,640px); overflow:auto`. 머리 두 줄이 위에(`position:sticky`, 둘째 줄 `top:27px` — 첫 줄 높이를 `line-height:18px` 로 고정), 이름 열이 왼쪽에 붙습니다(`left:0`, 넓을 때 38% · ≤760 에서 140px 고정 + 표 `width:max-content`). 붙은 칸마다 `--color-surface` 바탕. 갈래 사이 · 이름 열 오른쪽에 `--color-divider` 세로선. **페이지는 옆으로 밀리지 않습니다** — 390 에서 열 열 개가 넘치는 것은 상자 안 가로 스크롤입니다.
+- **정렬**: 머리는 `<th aria-sort><button>` 10개(이름 + 9). 누름 · Enter · Space 로 그 열 정렬 — 숫자 열 첫 누름 내림 · 다시 오름 · `이름` 첫 누름 오름. 빈 칸은 방향과 무관하게 끝, 같은 값은 이름 코드 단위 오름. 정렬된 열에만 `▲`/`▼` 와 `aria-sort` 방향, 나머지 `none`. 정렬하면 상자 `scrollTop = 0`(새 순서의 첫 행부터) — 가로 위치 · 페이지 스크롤 · 포커스는 그대로. 포커스 링은 `:focus-visible` 액센트 2px 를 **안쪽**(`outline-offset:-2px`)에 — 상자 위 끝에 붙은 머리라 바깥 링은 잘립니다. 정렬 상태는 저장하지 않습니다.
+- 카드에 읽는 법(합 ms 를 행끼리 더하지 말 것 등)을 쓰지 않습니다 — 스키마 설명과 README 몫입니다.
+
 ### stat
 
 값 / (값이 없으면) `reason_code` / 부가 문장. 큼직한 `값 없음` 만 있으면 도구가 고장 난 것으로 읽히므로 **왜인지를 같이 냅니다** — 카드에는 코드만(`.rp-stat-why`, 등폭), 문장은 `title` 툴팁으로. **값이 있을 때는 붙이지 않습니다**: `partial` 지표의 사유가 멀쩡한 숫자 밑에 서면 그 숫자까지 의심하게 됩니다.
@@ -335,8 +370,11 @@ viewBox `측정된 컨테이너 폭 × 190`, 여백 `{l:44, r:10, t:18, b:30}`. 
 ## 7. 상태
 
 ```
-{ data, error, tab: 'summary'|'device', hoverT, tip, hoverBucket, distW }
+{ data, error, tab: 'summary'|'device'|'diagnose', hoverT, tip, hoverBucket, distW }
+slice 표 안: { sort: { key: 'name' | '<갈래>.<수>', dir: 'asc'|'desc' } }   // 처음 { name, asc } · 저장 안 함
 ```
+
+`tab` 의 `diagnose` 는 진단 세션 문서에서만 고를 수 있습니다. slice 표 뷰모델은 **문서가 바뀔 때만** 만듭니다 — 다른 블록은 호버마다 다시 만들지만 1만 행 표를 그 박자로 다시 포맷하면 요약 탭 호버가 끕니다.
 
 `hoverT` 는 **화면 전체가 공유**합니다 — 시계열 호버와 표식 칩 호버가 같은 값을 씁니다.
 

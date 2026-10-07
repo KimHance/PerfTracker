@@ -1,9 +1,10 @@
+import { DIAGNOSE_REPORT_COPY as DX } from './diagnose-copy.js'
 import type { Fmt } from './format.js'
 
 /**
  * **보고서의 유일한 확장 지점.**
  *
- * 지표마다 컴포넌트를 만들지 않는다. `result.json` 안의 데이터 모양은 실제로 일곱 가지뿐이고,
+ * 지표마다 컴포넌트를 만들지 않는다. `result.json` 안의 데이터 모양은 실제로 여덟 가지뿐이고,
  * 각 지표가 여기서 **자기 모양(`kind`)과 데이터 위치(`path`)** 를 선언하면 렌더러는 모양만
  * 안다. 지표가 늘면 이 배열에 한 줄, 새 *모양*이 나올 때만 `kind` 를 하나 늘린다.
  *
@@ -13,10 +14,11 @@ import type { Fmt } from './format.js'
  */
 
 export type BlockKind =
-  'stat' | 'distribution' | 'series' | 'bars' | 'delta' | 'pairs' | 'frametimeline'
+  'stat' | 'distribution' | 'series' | 'bars' | 'delta' | 'pairs' | 'frametimeline' | 'slicetable'
 
-export type SectionId = 'startup' | 'render' | 'cpu' | 'memory' | 'log' | 'context' | 'device'
-export type TabId = 'summary' | 'device'
+export type SectionId =
+  'startup' | 'render' | 'cpu' | 'memory' | 'log' | 'context' | 'device' | 'diagnose'
+export type TabId = 'summary' | 'device' | 'diagnose'
 export type MetricId = 'hwui' | 'frame' | 'startup' | 'cpu' | 'memory' | 'log' | 'thermal' | 'network'
 
 export interface BlockBase {
@@ -31,6 +33,17 @@ export interface BlockBase {
    * 지표에 속하지 않는 블록(기기 정보 · 오버헤드)은 생략한다.
    */
   metric?: MetricId
+  /**
+   * **지표가 아닌 블록의 껍데기**(`status` · `reason_code` · `reason`) 위치. `metric` 과 같은 일을 한다 —
+   * 배지 · 제목 툴팁 · 값 없는 자리의 코드. 진단 블록(`diagnose`)이 메트릭과 같은 껍데기를 쓰지만
+   * `metrics` 밖에 있어서다 (기능 문서 결정 5). 둘 다 주면 `metric` 이 이긴다.
+   */
+  statePath?: string
+  /**
+   * **진단 세션에만** 쓰는 카드 단위. 평소 세션은 `unit` 그대로다 — 같은 카드가 세션 종류에 따라
+   * 읽는 법이 달라지는 자리(측정 비용: 진단 세션의 slice 비용은 앱 프로세스 몫이라 여기 안 잡힌다)에만.
+   */
+  diagnoseUnit?: string
   /**
    * `result.json` 안의 위치. **점 표기 그대로 읽는다 — 규칙으로 유추하지 않는다.**
    *
@@ -200,8 +213,15 @@ export interface PairsBlock extends BlockBase {
   /**
    * `p` 는 블록 `path` 기준 **상대** 경로다 (점 표기 가능).
    * `pct` 가 있으면 그 경로를 분모로 비율을 뒤에 붙인다 — 분모도 같은 기준의 상대 경로다.
+   *
+   * `why` 는 **그 값 하나에 딸린 이유** 칸이다 (같은 기준의 상대 경로). 값이 `null` 이면 `값 없음`
+   * 옆에 `code` 를, 문장(`reason`)은 행 툴팁으로 낸다 — stat 카드의 관례를 행 하나로 옮긴 것이다.
+   * 값이 있으면 코드를 붙이지 않는다.
+   *
+   * 블록 `path` 가 빈 문자열이면 **문서 루트**가 기준이다 — 서로 다른 갈래의 값을 한 카드에 모을 때
+   * (`artifacts.trace` · `diagnose.trace_bytes`) 라벨을 루트 경로 그대로 쓰려는 것이다.
    */
-  keys?: { p: string; l: string; f: Fmt; pct?: string }[]
+  keys?: { p: string; l: string; f: Fmt; pct?: string; why?: { code: string; reason: string } }[]
   /** 표준 key/value 로 안 떨어지는 모양. */
   /** 표준 key/value 로 안 떨어지는 모양. `list` 는 배열 하나를 그대로 줄줄이 낸다. */
   arrayAs?: 'freq' | 'list'
@@ -224,9 +244,32 @@ export interface FrameTimelineBlock extends BlockBase {
   path: string
 }
 
+/**
+ * **이름 한 줄에 갈래 셋 × 수 셋인 표.** 진단 블록의 slice 이름별 표가 이 모양이다
+ * (`[{name, main_thread: {count, sum_ms, max_ms} | null, other_threads, async_tracks}]`).
+ *
+ * `pairs` 는 열이 셋이고 정렬이 없고, `bars` 는 값이 하나다 — 이름이 수천 줄이고 읽는 쪽이 열을 골라
+ * 다시 세우는 표는 다른 모양이다. **판정하지 않는다** (규칙 2): 처음 순서는 이름의 코드 단위 순이고,
+ * 순위 · 강조 · 상위 N 이 없고, 행마다 색 · 굵기 · 아이콘이 같다. 순서는 보는 사람이 열 머리를
+ * 누를 때만 바뀐다 (기능 문서 결정 7 · DM-13).
+ */
+export interface SliceTableBlock extends BlockBase {
+  kind: 'slicetable'
+  path: string
+  /** 행 이름 필드. */
+  nameField: string
+  nameLabel: string
+  /** 갈래 — 행 원소에서 읽을 필드와 머리. 갈래가 `null` 이면 그 이름의 slice 가 그 갈래에 없다. */
+  groups: { field: string; label: string }[]
+  /** 갈래 하나 안의 수 — 필드 · 머리 · 포맷. */
+  stats: { field: string; label: string; fmt: Fmt }[]
+  /** 카드 단위. `{n}` 자리에 행 수가 들어간다 (표가 있을 때만). */
+  rowsUnit: string
+}
+
 export type Block =
   | StatBlock | DistributionBlock | SeriesBlock | BarsBlock | DeltaBlock | PairsBlock
-  | FrameTimelineBlock
+  | FrameTimelineBlock | SliceTableBlock
 
 /**
  * `note` 는 **이 지표를 무엇으로 읽으면 되는지**를 한 문장으로 말한다. 값에 대한 평가가
@@ -256,11 +299,17 @@ export const SECTIONS: {
   { id: 'log', label: '로그', tab: 'summary' },
   { id: 'context', label: '맥락', tab: 'summary' },
   { id: 'device', label: '기기 · 앱', tab: 'device' },
+  { id: 'diagnose', label: DX.section, tab: 'diagnose' },
 ]
 
-export const TABS: { id: TabId; label: string }[] = [
+/**
+ * 레일의 탭. **`diagnose` 는 진단 세션에만 나온다** (`header.ts` 의 `tabsFor`) — 평소 보고서는 탭이
+ * 둘 그대로다. 진단 여부의 기준은 `session.options.diagnose === true` 하나다.
+ */
+export const TABS: { id: TabId; label: string; onlyDiagnose?: true }[] = [
   { id: 'summary', label: '요약' },
   { id: 'device', label: '기기' },
+  { id: 'diagnose', label: DX.tab, onlyDiagnose: true },
 ]
 
 export const KNOWN_METRICS: MetricId[] =
@@ -560,7 +609,11 @@ export const MANIFEST: Block[] = [
     listFields: { label: 'code', value: 'message' }, emptyLabel: '경고 없음',
   },
   {
+    // **진단 세션에서는 읽는 법이 달라진다.** atrace slice 를 남기는 비용은 앱 프로세스 자신의
+    // 몫이라 이 다섯 칸(트레이싱 프로세스만 센다)에 안 잡힌다 — 그 사실을 단위 칸에 둔다 (DM-13 ·
+    // DM-14). 평소 세션에는 붙지 않는다: 붙이면 없는 비용을 있는 것처럼 말한다.
     kind: 'pairs', section: 'context', title: '측정 비용', span: 4, unit: '',
+    diagnoseUnit: DX.overheadUnit,
     path: 'measurement_overhead',
     keys: [
       { p: 'tracing_processes_cpu_time_ms', l: '수집 CPU 시간', f: 'ms0' },
@@ -622,5 +675,61 @@ export const MANIFEST: Block[] = [
     kind: 'bars', section: 'device', title: 'CPU 클러스터 최대 주파수', span: 4, unit: 'GHz',
     path: 'device.static.cpu.clusters',
     labelField: 'cpus', labelPrefix: '', valueField: 'max_freq_khz', fmt: 'ghz2', scaleMax: null,
+  },
+
+  // ── 진단 (진단 세션에만 — 탭째로) ────────────────────────────
+  //
+  // 라벨은 **스키마 필드 경로 그대로**다 (logcat 카드와 같은 이유 — `result.json` 에서 그대로 찾을 수
+  // 있어야 한다). 이름의 정본은 README 「`diagnose`」. 블록 껍데기(`status` · `reason`)는 네 카드가
+  // 다 끌어온다 — 배지와 제목 툴팁. 블록 `status` 는 **트레이스에서 읽은 칸**의 상태이고, 앱 slice
+  // 열림은 그와 따로 가므로(README) 자기 행에 자기 이유를 단다.
+  {
+    kind: 'pairs', section: 'diagnose', title: DX.cardScope, span: 4, unit: 'diagnose',
+    statePath: 'diagnose', path: 'diagnose',
+    keys: [
+      { p: 'atrace_categories', l: 'atrace_categories', f: 'dots' },
+      { p: 'atrace_apps', l: 'atrace_apps', f: 'dots' },
+      {
+        p: 'app_slices_open', l: 'app_slices_open', f: 'bool',
+        why: { code: 'app_slices_open_reason_code', reason: 'app_slices_open_reason' },
+      },
+    ],
+  },
+  {
+    kind: 'pairs', section: 'diagnose', title: DX.cardCounts, span: 4, unit: 'diagnose',
+    statePath: 'diagnose', path: 'diagnose',
+    keys: [
+      { p: 'trace_slices', l: 'trace_slices', f: 'int' },
+      { p: 'target_process_slices', l: 'target_process_slices', f: 'int' },
+      { p: 'target_process_slices_unfinished', l: 'target_process_slices_unfinished', f: 'int' },
+      { p: 'target_process_slice_names_unfolded', l: 'target_process_slice_names_unfolded', f: 'int' },
+      { p: 'ftrace_overrun_events', l: 'ftrace_overrun_events', f: 'int' },
+    ],
+  },
+  {
+    // 원본은 진단 블록 밖(`artifacts.trace`)에 있다 — 그래서 이 카드만 루트 기준 경로로 적는다.
+    // 더 깊이 보려면 이 파일을 Perfetto UI 로 연다 (시간축 그림은 이 화면에 없다 · 결정 6).
+    kind: 'pairs', section: 'diagnose', title: DX.cardSource, span: 4, unit: '',
+    statePath: 'diagnose', path: '',
+    keys: [
+      { p: 'artifacts.trace', l: 'artifacts.trace', f: 'path' },
+      { p: 'diagnose.trace_bytes', l: 'diagnose.trace_bytes', f: 'bytes' },
+    ],
+  },
+  {
+    kind: 'slicetable', section: 'diagnose', title: DX.cardNames, span: 12,
+    statePath: 'diagnose', path: 'diagnose.target_process_slice_names',
+    rowsUnit: DX.tableUnit,
+    nameField: 'name', nameLabel: DX.colName,
+    groups: [
+      { field: 'main_thread', label: DX.groupMain },
+      { field: 'other_threads', label: DX.groupOther },
+      { field: 'async_tracks', label: DX.groupAsync },
+    ],
+    stats: [
+      { field: 'count', label: DX.colCount, fmt: 'int' },
+      { field: 'sum_ms', label: DX.colSum, fmt: 'n1' },
+      { field: 'max_ms', label: DX.colMax, fmt: 'n1' },
+    ],
   },
 ]

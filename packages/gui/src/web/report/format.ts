@@ -9,8 +9,8 @@ import { MISSING, type Read } from './read.js'
  */
 export type Fmt =
   | 'int' | 'ms0' | 'pct0' | 'pct2' | 'c1' | 'hz'
-  | 'mb0' | 'mb1' | 'gb1' | 'ghz2' | 'bytes' | 'bool' | 'list'
-  | 'mbTriple' | 'wrap' | 'raw' | 'n0' | 'n1' | 'thermal'
+  | 'mb0' | 'mb1' | 'gb1' | 'ghz2' | 'bytes' | 'bool' | 'list' | 'dots'
+  | 'mbTriple' | 'wrap' | 'path' | 'raw' | 'n0' | 'n1' | 'thermal'
 
 export const NONE_MISSING = '수집 안 함'
 export const NONE_NULL = '값 없음'
@@ -55,6 +55,10 @@ export function fmtValue(v: Read, f: Fmt | undefined): string {
   if (f === 'bool') return v === true ? '예' : v === false ? '아니오' : String(v)
   if (f === 'list') {
     return Array.isArray(v) ? (v.length === 0 ? '없음' : v.join(', ')) : String(v)
+  }
+  // 짧은 이름 목록(atrace 카테고리 `am · wm · view`). CLI 의 진단 라벨 줄과 같은 구분자다.
+  if (f === 'dots') {
+    return Array.isArray(v) ? (v.length === 0 ? '없음' : v.join(' · ')) : String(v)
   }
   if (f === 'mbTriple') {
     if (typeof v !== 'object') return NONE_NULL
