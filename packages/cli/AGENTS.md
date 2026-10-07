@@ -121,13 +121,21 @@ CLI 출력을 고쳤으면 `test/on-device/` 를 함께 grep 할 것.
 PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지> npm run test:device
 ```
 
-기기가 둘 이상이면 `PERFTRACKER_TEST_DEVICE` 가 없으면 19개가 전부 실패한다.
+기기가 둘 이상인데 `PERFTRACKER_TEST_DEVICE` 가 없으면 스펙이 하나도 돌지 못한다 (`AmbiguousDeviceError`).
+시험 안에서 기기를 잡는 11개는 실패, 기기를 `beforeAll` 에서 잡는 `diagnose.test.ts` 9개는 건너뜀으로 센다 —
+vitest 는 `beforeAll` 이 던지면 그 안의 시험을 skip 으로 세고 파일은 실패로 낸다
+(실측 2026-10-08 실기기 + 에뮬레이터: `Tests 11 failed | 9 skipped (20)` · 종료 코드 1).
 대상 앱이 없으면 **조용히 건너뛰지 않고 실패한다** — 건너뛴 스펙은 통과한 스펙과 같은 색이다.
 
 **`diagnose.test.ts`(진단 세션 · DM-16 · DM-5)는 측정 창 안에서 화면을 스와이프한다** — 4회, adb 를 직접
 불러서. 기능 문서 diagnostic-mode 결정 2 가 허용한 시나리오 입력이고 perftracker(`AdbClient`)를 거치지
 않는다 (거치면 래치가 막는다 — 막는 것이 옳다). 그 때문에 대상 앱 화면이 스크롤된다.
-`RV Scroll` 행(앱 slice)은 앱 slice 가 열리고 대상 앱이 YouTube 일 때만 단언한다 — 다른 앱으로는 돌려 보지 않았다.
+`RV Scroll` 행(앱 slice)은 따로 뗀 it 이 대상 앱이 YouTube 이고 앱 slice 가 열리고 켜기 오류가 없을 때만
+단언하고, 아니면 `ctx.skip(<이유>)` 로 건너뛴다 — 요약 줄에 `skipped` 로 세고 `--reporter=verbose` 면 이유가
+찍힌다 (기본 리포터는 이름을 안 찍는다). 다른 앱으로는 돌려 보지 않았다.
+블록 `partial` 은 값을 싣는 둘(`process_name_stale_in_trace` · `ftrace_setup_errors`)을 받고 값이 null 아님을
+본다. 켜기 오류 회에는 행을 보지 않는다 — 어느 카테고리가 빠졌는지 원본이 말하지 않으므로 행이 없어도 결함인지
+못 가린다.
 
 ### 못 재는 기기에서 실패시키지 않는다
 

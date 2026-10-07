@@ -1430,7 +1430,7 @@ npm install
 npm run build     # 먼저 한 번 — 아래 테스트가 core 의 dist/ 를 씁니다
 npm test          # 유닛 테스트 (기기 불필요). 1초 남짓
 npm run typecheck # src + test 전체 타입체크
-npm run test:device   # 온-디바이스 스펙 (기기가 꽂혀 있어야 함) — 현재 19개
+npm run test:device   # 온-디바이스 스펙 (기기가 꽂혀 있어야 함) — 현재 20개
 ```
 
 **갓 클론한 저장소에서는 `npm run build` 가 먼저입니다.** `packages/cli` 의 테스트가
@@ -1462,8 +1462,11 @@ PERFTRACKER_TEST_APP=<패키지명> npm run test:device
 PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지명> npm run test:device
 ```
 
-**기기가 둘이면 지정하지 않은 채로는 19개가 전부 실패합니다** (`AmbiguousDeviceError`).
-한 대만 꽂혀 있으면 `PERFTRACKER_TEST_DEVICE` 는 필요 없습니다.
+**기기가 둘이면 지정하지 않은 채로는 스펙이 하나도 돌지 못합니다** (`AmbiguousDeviceError`).
+기기를 시험 안에서 잡는 11개는 실패로, 기기를 `beforeAll` 에서 잡는 진단 스펙(`diagnose.test.ts`) 9개는
+건너뜀으로 셉니다 — vitest 는 `beforeAll` 이 던지면 그 안의 시험을 건너뜀으로 세고 그 파일은 실패로 냅니다.
+실측(2026-10-08, 실기기 + 에뮬레이터를 같이 연결): `Test Files 5 failed (5)` · `Tests 11 failed | 9 skipped (20)` ·
+종료 코드 1. 한 대만 꽂혀 있으면 `PERFTRACKER_TEST_DEVICE` 는 필요 없습니다.
 
 고를 앱의 조건은 둘입니다.
 
@@ -1487,7 +1490,7 @@ PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지명> npm run tes
 그 밖에 새 기기에서 걸리는 것들:
 
 - **기기를 하나만 연결하세요.** 온-디바이스 스펙은 `createContext({})` 라 serial 을 넘기지
-  않습니다 — 에뮬레이터가 함께 켜져 있으면 `AmbiguousDeviceError` 로 전부 실패합니다.
+  않습니다 — 에뮬레이터가 함께 켜져 있으면 `AmbiguousDeviceError` 로 하나도 돌지 못합니다 (위).
 - **화면이 꺼지면 세션이 의미를 잃습니다.** 필요하면 `adb shell svc power stayon usb`,
   **끝나면 반드시 `false` 로 원복하세요.**
 - 스펙 파일들은 **직렬로** 돕니다 (`vitest.device.config.ts` 의 `fileParallelism: false`).
@@ -1510,13 +1513,13 @@ PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지명> npm run tes
 | --- | --- | --- | --- |
 | 실기기 검증 웨이브 | 10 | **5회 연속 10/10** | `com.android.settings` |
 | CPU·Log 앱 단위화 이후 | 11 | **1회 11/11** | `com.nhn.android.webtoon` |
-| 진단 세션 스펙 추가 (현재, 2026-10-08) | 19 | **1회 19/19** | `com.google.android.youtube` |
+| 진단 세션 스펙 추가 (현재, 2026-10-08) | 20 | **1회 20/20** | `com.google.android.youtube` |
 
 즉 **현재 스펙 구성으로 5회 연속을 돌린 적은 없습니다.** 5회 연속의 근거는 그 앞 구성의
 것이고, 10 → 11 로 늘어난 스펙 하나는 "세션 스펙의 대상 앱이 이 기기에 설치되어 있다"(`m0`)입니다.
 대상 앱을 바꾼 이유는 아래 "온-디바이스 테스트를 다른 기기에서 돌리기" 에 있습니다.
-11 → 19 는 진단 세션 스펙(`diagnose.test.ts`, 8개)이고, 그 회차의 대상 앱은 YouTube 입니다 —
-**19개를 웹툰으로 돌린 적은 없습니다** ([아래](#진단-세션--diagnose을-실기기가-검증한-것-2026-10-08-sm-s901n--sdk-36)).
+11 → 20 은 진단 세션 스펙(`diagnose.test.ts`, 9개)이고, 그 회차의 대상 앱은 YouTube 입니다 —
+**20개를 웹툰으로 돌린 적은 없습니다** ([아래](#진단-세션--diagnose을-실기기가-검증한-것-2026-10-08-sm-s901n--sdk-36)).
 
 유닛 테스트는 그 시점에 `npm test` **723/723**, `npm run typecheck` · `npm run build`
 클린이었습니다 (M3 당시의 수치입니다 — 지금은 더 늘었습니다).
@@ -1553,17 +1556,22 @@ PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지명> npm run tes
   TraceConfig(`trace_config_pbtxt`)를 꺼내 보면 진단 세션 것에서 `atrace_*` 네 줄이 빠지고 `duration_ms` 만
   600000 → 1800000 으로 다를 뿐 나머지는 글자까지 같습니다. 평소 원본의 스레드 slice 는 0개입니다.
 
-온-디바이스 스펙 `packages/cli/test/on-device/diagnose.test.ts`(8개)가 같은 것을 봅니다. 수의 크기는 단언하지
+온-디바이스 스펙 `packages/cli/test/on-device/diagnose.test.ts`(9개)가 같은 것을 봅니다. 수의 크기는 단언하지
 않고 관계를 단언합니다 — `trace_processor` 로 따로 센 수 = 블록의 수, 보고서 행 모델의 행 수 = 블록 표 행 수,
 `extract` 를 다시 돌린 블록 = `stop` 이 쓴 블록(바이트까지). 스펙 회차 가운데 한 번은 앱이 트레이스에
 낡은 이름으로 남아 블록이 `partial` + `process_name_stale_in_trace` 였고 값은 다 있었습니다
-([아래](#트레이스가-앱을-다른-이름으로-아는-경우-zygote64--pre-initialized)).
+([아래](#트레이스가-앱을-다른-이름으로-아는-경우-zygote64--pre-initialized)). 스펙은 값을 싣는 `partial` 둘
+(`process_name_stale_in_trace` · `ftrace_setup_errors`)을 받고 그 값이 `null` 이 아닌지 보며, 켜기 오류가 있던
+회에는 행(`bindApplication` 등)을 보지 않습니다 — 어느 카테고리가 빠졌는지 원본이 말하지 않기 때문입니다.
 
 **검증하지 못한 것:**
 
 - **sdk 31–34 · sdk 30 이하 기기.** 앱 slice 열림 조건 표의 그 칸은 안드로이드 문서 근거와 합성 시험뿐입니다.
 - **YouTube 말고 다른 앱.** 진단 스펙을 다른 앱으로 돌린 적이 없습니다. `RV Scroll` 행(androidx RecyclerView 가
-  남기는 앱 slice)은 대상 앱이 YouTube 일 때만 단언합니다 — 스와이프를 빼면 그 행이 사라지는 것은 봤습니다.
+  남기는 앱 slice)은 대상 앱이 YouTube 일 때만 단언하고, 아니면 그 시험을 건너뜀으로 셉니다(요약 줄의
+  `skipped` · `--reporter=verbose` 면 이유까지) — 스와이프를 빼면 그 행이 사라지는 것은 봤습니다.
+- **켜기 오류(`ftrace_setup_errors`)가 있는 회차.** 이 기기에서 돈 진단 회차는 켜기 오류가 전부 0 이었습니다.
+  스펙이 그 갈래를 받는 것은 core 가 늘 켜기 오류로 내게 고친 빌드로만 돌려 봤습니다.
 - **`bindApplication` 행이 atrace 켜짐 대기 덕인지.** 대기를 뺀 빌드로 돌린 1회에서도 행이 잡혔습니다
   (대기를 넣기 전 실측은 0/1). 경합이라 한 번으로는 못 가립니다 — 대기 자체는 유닛 시험(`D14 …`)이 지킵니다.
 - **ftrace 손실이 0 이 아닌 회차** · **10분짜리 진단 원본으로 낸 블록**(쿼리 시간 · `result.json` 크기) — 본 적이 없습니다.

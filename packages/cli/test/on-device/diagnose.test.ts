@@ -37,12 +37,21 @@ import { type DeviceCapability, deviceCapabilities, DEVICE_OPTS, DEVICE_TARGET_A
  *
  * **못 재는 기기에서 실패시키지 않는다** (cli/AGENTS.md). 기기가 갈리는 자리는 core 의 판정을 그대로 쓴다:
  * `linux.ftrace` 등록 여부(`deviceCapabilities`) · 앱 slice 열림(`appSliceOpen`) · frametimeline(`frame` 지원).
+ * 블록 `partial` 은 잰 값을 싣는 둘(낡은 이름 · 켜기 오류)을 받고, 켜기 오류 회차에서는 행을 보지 않는다.
  * `RV Scroll`(androidx RecyclerView 가 남기는 **앱** slice)은 앱 slice 가 열리고 대상 앱이 YouTube 일 때만
- * 본다 — 그 행이 있어야 하는 것은 기능 문서 DM-16 의 앱(YouTube · 결정 2)에 대한 사실이다.
+ * 본다 — 그 행이 있어야 하는 것은 기능 문서 DM-16 의 앱(YouTube · 결정 2)에 대한 사실이다. 조건이 안 서면
+ * 그 it 은 `ctx.skip` 으로 건너뜀이 출력에 남는다.
  */
 
 /** 기능 문서 DM-16 · 결정 2 의 앱. */
 const DM16_APP = 'com.google.android.youtube'
+
+/**
+ * 잰 값을 그대로 싣는 `partial` 의 reason_code (core `extract/diagnose.ts`). 켜기 오류(`ftrace_setup_errors` ·
+ * plan D37 · D38)가 낡은 이름보다 앞선다. 통계 0행(`ftrace_not_recorded`) · 프로세스 못 찾음은 slice 칸이 null 이라
+ * 여기 없다 — 그 둘은 이 기기·앱에서 나오면 안 되는 결과다.
+ */
+const VALUED_PARTIAL: readonly (string | null)[] = ['process_name_stale_in_trace', 'ftrace_setup_errors']
 
 /** 스와이프 사이 간격 — 스크롤이 멈춘 뒤 다음 입력이 가도록. */
 const SWIPE_GAP_MS = 1_500
@@ -217,17 +226,23 @@ describe('DM-16 실기기 — 진단 세션 (start --launch --diagnose → 스�
       return
     }
 
-    // 블록 collected, 또는 앱이 `<pre-initialized>` · `zygote64` 로 남은 회면 낡은 이름 partial.
+    // 블록 collected, 또는 값 있는 partial 둘 — 앱이 `<pre-initialized>` · `zygote64` 로 남은 회(낡은 이름),
+    // 켜기 오류가 있었지만 ftrace 는 돈 회(일부가 빠졌을 수 있음 · plan D37 · D38). 둘 다 잰 값을 그대로 싣는다.
     expect(d.status, `diagnose: ${d.reason ?? ''}`).toMatch(/^(collected|partial)$/)
-    if (d.status === 'partial') expect(d.reason_code).toBe('process_name_stale_in_trace')
+    if (d.status === 'partial') expect(VALUED_PARTIAL).toContain(d.reason_code)
     else expect(d.reason_code).toBeNull()
+    expect(d.trace_slices).not.toBeNull()
+    expect(d.target_process_slices).not.toBeNull()
+    expect(d.target_process_slices_unfinished).not.toBeNull()
+    expect(d.target_process_slice_names_unfolded).not.toBeNull()
+    expect(d.target_process_slice_names).not.toBeNull()
 
     // 커널 ftrace 손실 칸은 재 봤어야 한다 — null 이면 통계가 원본에 없다는 뜻이다.
     expect(d.ftrace_overrun_events).not.toBeNull()
     expect(d.trace_bytes).toBeGreaterThan(0)
   })
 
-  it('DM-16 slice 표 — bindApplication · Choreographer#doFrame · RV Scroll 행 · 행 수 ≤ 접기 전 이름 수 · count 합 = 대상 앱 slice 수 · 코드 단위 순', () => {
+  it('DM-16 slice 표 — bindApplication · Choreographer#doFrame 행 · 행 수 ≤ 접기 전 이름 수 · count 합 = 대상 앱 slice 수 · 코드 단위 순', () => {
     const d = diag.result.diagnose!
     if (!caps.dataSources.includes('linux.ftrace')) {
       expect(d.status).toBe('unsupported')
@@ -237,12 +252,14 @@ describe('DM-16 실기기 — 진단 세션 (start --launch --diagnose → 스�
     expect(rows, '대상 앱 표가 null — 프로세스를 못 찾았다').not.toBeNull()
 
     const names = rows.map((x) => x.name)
-    // am(ActivityThread) · view(Choreographer) 는 프레임워크 slice — 앱 slice 열림과 무관하게 실린다.
-    // bindApplication 은 진단 --launch 가 atrace 켜짐을 기다린 뒤 앱을 띄워야 잡힌다 (결정 11).
-    expect(names.some((n) => n.startsWith('bindApplication')), 'bindApplication 행이 없다').toBe(true)
-    expect(names.some((n) => n.startsWith('Choreographer#doFrame')), 'Choreographer#doFrame 행이 없다').toBe(true)
-    if (d.app_slices_open === true && DEVICE_TARGET_APP === DM16_APP) {
-      expect(names, 'RV Scroll 행이 없다 — 스와이프가 피드를 굴렸나').toContain('RV Scroll')
+    // 켜기 오류가 있던 회는 어느 카테고리가 빠졌는지 원본이 말하지 않는다 — 행이 없어도 결함인지 못 가리므로
+    // 행은 보지 않고 아래 관계만 본다 (못 재는 기기에서 실패시키지 않는다).
+    if (d.reason_code !== 'ftrace_setup_errors') {
+      // am(ActivityThread) · view(Choreographer) 는 프레임워크 slice — 앱 slice 열림과 무관하게 실린다.
+      // 진단 --launch 는 atrace 켜짐을 기다린 뒤 앱을 띄운다 (결정 11). 다만 대기를 뺀 빌드로 돈 회(d07200)에서도
+      // bindApplication 이 잡혔다 (84.3 ms) — 경합이라 이 행이 대기 덕인지는 여기서 못 가린다 (대기는 유닛 D14).
+      expect(names.some((n) => n.startsWith('bindApplication')), 'bindApplication 행이 없다').toBe(true)
+      expect(names.some((n) => n.startsWith('Choreographer#doFrame')), 'Choreographer#doFrame 행이 없다').toBe(true)
     }
 
     expect(d.target_process_slice_names_unfolded!).toBeGreaterThanOrEqual(rows.length)
@@ -253,6 +270,26 @@ describe('DM-16 실기기 — 진단 세션 (start --launch --diagnose → 스�
     expect(sum).toBe(d.target_process_slices)
     // 처음 순서는 이름의 코드 단위 순 (호스트 로캘 무관 · 결정 7).
     expect(names).toEqual([...names].sort(compareCodeUnits))
+  })
+
+  it('DM-16 RV Scroll 행 — 스와이프가 굴린 피드의 앱 slice (대상 YouTube · 앱 slice 열림일 때)', (ctx) => {
+    const d = diag.result.diagnose!
+    // 조건이 안 서면 소리 없이 초록이 아니라 건너뜀으로 남긴다 — 이 단언이 앱 slice(atrace_apps)가 실제로
+    // 실렸다는 유일한 증거라, 안 본 회차가 본 회차와 같은 색이면 안 된다.
+    if (DEVICE_TARGET_APP !== DM16_APP) {
+      ctx.skip(`대상 앱이 ${DEVICE_TARGET_APP} — RV Scroll 행은 ${DM16_APP}(결정 2)에 대한 사실이다`)
+    }
+    if (!caps.dataSources.includes('linux.ftrace')) ctx.skip('이 기기에 linux.ftrace 가 없다 — 블록 unsupported')
+    if (d.app_slices_open !== true) {
+      ctx.skip(`앱 slice 가 열린다고 말할 수 없는 기기 — app_slices_open ${String(d.app_slices_open)}`)
+    }
+    if (d.reason_code === 'ftrace_setup_errors') {
+      ctx.skip('켜기 오류가 있던 회 — 어느 카테고리가 빠졌는지 원본이 말하지 않는다')
+    }
+
+    const rows = d.target_process_slice_names
+    expect(rows, '대상 앱 표가 null — 프로세스를 못 찾았다').not.toBeNull()
+    expect(rows!.map((x) => x.name), 'RV Scroll 행이 없다 — 스와이프가 피드를 굴렸나').toContain('RV Scroll')
   })
 
   it('DM-16 frametimeline 제외 — 같은 원본을 trace_processor 로 다시 세면 대상 앱 slice 수 · 비동기 갈래 · 접기 전 이름 수가 블록과 같다', async () => {
