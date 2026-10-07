@@ -8,6 +8,7 @@ import {
   type RunSummary,
   SessionStateError,
 } from '@perftracker/core'
+import { DIAGNOSE_CLI_COPY } from '../copy/diagnose.js'
 
 /**
  * 기록 관리. **기기에 접촉하지 않는다** — 기록은 이미 호스트에 있는 파일이고,
@@ -48,6 +49,8 @@ function formatRow(run: RunSummary): string {
   const tail = [`경고 ${run.warningCount}`]
   if (run.unsupportedCount > 0) tail.push(`미지원 ${run.unsupportedCount}`)
   if (run.markCount > 0) tail.push(`마킹 ${run.markCount}`)
+  // 진단 세션 기록은 평소 기록과 수치를 나란히 놓을 수 없다 — 목록에서 갈라 보이게 맨 끝에 (DM-11).
+  if (run.diagnose === true) tail.push(DIAGNOSE_CLI_COPY.runsTag)
 
   return (
     `${run.id}  ${padDisplay(run.name, 20)}  ${padDisplay(run.model ?? '모델 미상', 12)}  ` +

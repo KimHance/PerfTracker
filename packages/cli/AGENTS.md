@@ -15,7 +15,9 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
 로 죽는다. 루트 `build` 스크립트가 빌드 뒤에 다시 `chmod` 한다 — 잊고 지우면 조용히 재발한다.
 | `src/context.ts` | `--adb` / `--device` 를 core 의 컨텍스트로 |
 | `src/commands/` | 명령 하나당 파일 하나 (`browser.ts` 만 예외 — 브라우저 여는 헬퍼를 `open`·`report` 가 나눠 쓴다) |
-| `test/readme.test.ts` | 등록된 명령이 전부 README 에 있는지 대조 |
+| `src/copy/diagnose.ts` | 진단 모드가 새로 내는 cli 문구 모음 — 정본은 `docs/design/diagnostic-mode.md` `## 문구` 표 |
+| `test/readme.test.ts` | 등록된 명령이 전부 README 에 있는지 · `start` 옵션이 전부 README 에 있는지 대조 |
+| `test/copy/diagnose.test.ts` | cli 진단 문구 ↔ 디자인 문서 `## 문구` 표 양방향 대조 · 단어형 규칙 (DM-15) |
 | `test/on-device/` | **실기기가 있어야 도는 스펙.** `npm run test:device` 로만 실행 |
 
 **등록과 실행을 가른 이유는 테스트다.** 진입점이 곧 실행이면 import 하는 순간 `process.argv`
@@ -31,7 +33,9 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
 
 **명령을 늘리면 README 의 「명령 전체」도 같은 커밋에서 고친다.** `runs` 셋이 한동안 문서에
 없었다 — 틀린 것이 아니라 빠진 것이라 읽는 사람은 알 길이 없었다. `test/readme.test.ts` 가
-이제 그것을 막는다.
+이제 그것을 막는다. **`start` 의 옵션도 같다** — 등록된 옵션(`--app` `--name` `--device`
+`--launch` `--out` `--force` `--diagnose`)이 README 어딘가에, `--diagnose` 는 「명령 전체」 절 안에
+있어야 한다.
 
 ## 제약
 
@@ -92,6 +96,18 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
   됐다. 지금은 `--no-browser` 하나이고 `open`·`report`·`stop --report` 가 같은 이름을 쓴다.
 - **core 의 판정을 다시 구현하지 않는다.** `doctor` 의 지표 지원 여부도 collector 의
   `supports()` 를 그대로 부른다. 출처가 둘이면 "된다" 고 한 것이 실제로는 안 되는 상태가 생긴다.
+- **진단 세션(`start --diagnose`)은 진단 세션에만 표시한다.** `start` · `status` 의 `Diagnose`
+  줄, `runs` 행 끝의 `진단`, `status --json` · `runs --json` 의 진단 키 — 평소 세션에는 하나도
+  없고 JSON 에 `false` 도 싣지 않는다 (평소 세션의 출력이 진단 모드 이전과 같다).
+  `--diagnose` 에 기본값을 주지 않는 것도 같은 이유다 — 안 주면 core 로 가는 옵션 객체에
+  `diagnose` 키가 없다(`startSessionOptions`). 기본값을 주면 도움말에 `(default: false)` 도 붙는다.
+  `stop` · `extract` 는 진단 세션이어도 그대로다 — slice 요약을 찍지 않는다.
+  앱 slice 열림 판정과 그 문구(doctor 줄 · start 고지 줄)의 주인은 core 다(`appSliceOpen` ·
+  `DIAGNOSE_COPY`) — cli 는 core 가 세션에 실은 `diagnose.notice` 를 그대로 찍는다.
+- **진단 모드의 새 cli 문구는 `src/copy/diagnose.ts` 한 곳에 둔다.** 정본은 디자인 문서
+  `## 문구` 표이고 `test/copy/diagnose.test.ts` 가 표의 cli 줄과 양방향으로 대조한다. 문구를 바꾸려면
+  표를 먼저 고친다. 꼴은 단어형(끝 글자 `다`/`요` · 권유 · 평가 낱말 없음)이고 기존 문구는 대상이
+  아니다 (plan D10). 새 줄은 80칸 안 — 시험이 표시 폭(한글 2칸)으로 잰다.
 
 ## 온-디바이스 스펙
 

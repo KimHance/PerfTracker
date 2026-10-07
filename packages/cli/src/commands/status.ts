@@ -6,6 +6,7 @@ import {
   readActiveSession,
   sortedMarks,
 } from '@perftracker/core'
+import { DIAGNOSE_CLI_COPY } from '../copy/diagnose.js'
 
 /**
  * serial 을 명시하면 그 기기만 본다. 생략하면 활성 세션 포인터를 열거해서:
@@ -86,6 +87,9 @@ export async function runStatus(serial?: string, home?: string): Promise<string>
     `Elapsed   ${formatElapsed(status.elapsedMs)}`,
     `Run dir   ${session.runDir}`,
   ]
+
+  // 진단 세션이면 무엇을 켰는지 — start 가 찍은 줄과 같다 (DM-11). 평소 세션에는 줄이 없다.
+  if (session.options.diagnose === true) lines.push(DIAGNOSE_CLI_COPY.labelLine)
 
   // 마킹은 이 순간의 사실이고 세션이 끝나야 result.json 으로 간다.
   if (marks.length > 0) {

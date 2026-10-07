@@ -402,7 +402,7 @@ npx perftracker open -p 7333   # 포트를 고정하고 싶으면
 | `perftracker devices` | 연결된 기기와 스펙 요약 | 필요 |
 | `perftracker apps` | **열 수 있는** 앱을 런처 이름으로 (런처에 아이콘이 뜨는 것) | 필요 |
 | `perftracker schema` | `result.json` 의 JSON Schema 를 출력 | 불필요 |
-| `perftracker start` | 측정 시작 | 필요 |
+| `perftracker start` | 측정 시작 (`--diagnose` 면 진단 세션) | 필요 |
 | `perftracker mark <라벨>` | 측정 중인 세션에 마킹 | **접촉 안 함** |
 | `perftracker status` | 진행 중인 세션 | **접촉 안 함** |
 | `perftracker stop` | 종료 · 트레이스 회수 · `result.json` 생성 (`--report` 면 HTML 까지) | 필요 |
@@ -415,6 +415,35 @@ npx perftracker open -p 7333   # 포트를 고정하고 싶으면
 
 「접촉 안 함」은 기기가 연결돼 있어도 adb 를 **보내지 않는다**는 뜻입니다. 그래서 이 셋은
 측정 중에 불러도 안전합니다 — 마킹이 측정 결과를 바꾸지 않는 이유가 이것입니다.
+
+### 진단 세션 (`--diagnose`)
+
+평소 세션은 수치만 냅니다. 그 시간에 앱이 **무엇을** 했는지(atrace slice 이름)를 보려면
+진단 세션으로 엽니다.
+
+```bash
+npx perftracker doctor                       # diagnose: app slice 줄 — 이 기기에서 앱 slice 가 열리나
+npx perftracker start --app "네이버 웹툰" --launch --diagnose
+npx perftracker status                       # Diagnose 줄
+npx perftracker stop                         # 평소와 같습니다 — 경로와 보고서 명령만
+```
+
+- **기록하는 것** — atrace 카테고리 `am` · `wm` · `view` 와 대상 앱 하나의 앱 slice 입니다.
+  gfx · input · sched 는 켜지 않습니다.
+- **최대 10분입니다** (평소 세션은 30분). `status` 의 최대 시간 넘음 안내도 진단 세션은 10분 기준입니다.
+- **평소 세션과 수치를 나란히 놓을 수 없습니다.** slice 하나를 남기는 비용은 앱 프로세스
+  자신에게 청구되고 `measurement_overhead` 에 잡히지 않습니다. 그래서 진단 세션은 눈에 띄게
+  갈립니다 — `start` · `status` 에 `Diagnose` 줄, `runs` 행 끝에 `진단`.
+  `status --json` · `runs --json` 도 **진단 세션에만** 진단 표시를 싣습니다
+  (`status` 는 `session.options.diagnose` · `session.diagnose`, `runs` 는 `diagnose: true`).
+  평소 세션의 JSON 은 키가 진단 모드 이전과 같습니다.
+- **앱 slice 가 열리는 조건** — sdk 31 이상이면 앱과 무관하게 열립니다. sdk 30 이하는
+  debuggable 앱만 열리고, 그 밖의 앱이면 세션은 열되 `start` 가 `앱 slice 열림 모름 — …`
+  줄을 냅니다. 프레임워크 slice(`am` · `wm` · `view`)는 그대로 실립니다. `doctor` 의
+  `diagnose: app slice` 줄이 기기 단위로 같은 판정을 미리 보여 줍니다 (✗ 여도 종료 코드 0).
+- `stop` · `extract` 의 출력은 평소와 같습니다 — slice 요약을 찍지 않습니다. slice 는
+  `result.json` 에 실리고(아래 「`result.json` 읽는 법」), 시간축으로 보려면 run 디렉토리의
+  `trace.perfetto-trace` 를 [Perfetto UI](https://ui.perfetto.dev) 로 엽니다.
 
 ### 기록 관리 (`runs`)
 

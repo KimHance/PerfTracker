@@ -1,5 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import {
+  APP_SLICE_MIN_SDK,
+  DEFAULT_MAX_DURATION_MS,
+  DIAGNOSE_ATRACE_CATEGORIES,
+  DIAGNOSE_MAX_DURATION_MS,
+} from '@perftracker/core'
 import { describe, expect, it } from 'vitest'
 import { buildProgram } from '../src/program.js'
 
@@ -57,5 +63,79 @@ describe('옛 이름 호환', () => {
   /** 별칭은 README 의 「명령 전체」에 넣지 않는다 — 정본이 둘로 보이면 그것이 혼란이다. */
   it('별칭은 문서에 싣지 않는다', () => {
     expect(README).not.toContain('perftracker gui')
+  })
+})
+
+// ─── 옵션 ───
+
+/** `## <제목>` 절 — 다음 `## ` 까지. 그 아래 `###` 소절은 절 안이다. */
+function section(title: string): string {
+  const start = README.search(new RegExp(`^## ${title}\\s*$`, 'm'))
+  if (start < 0) throw new Error(`README 에 「${title}」 절이 없다`)
+  const rest = README.slice(start + 1)
+  const end = rest.search(/^## /m)
+  return end < 0 ? rest : rest.slice(0, end)
+}
+
+/** 플래그가 낱말로 적혀 있나 — `--force` 가 `--forceful` 에 걸리지 않게 앞뒤를 끊는다. */
+function mentions(text: string, flag: string): boolean {
+  return new RegExp(`(?<![\\w-])${flag.replace(/[-]/g, '\\-')}(?![\\w-])`).test(text)
+}
+
+function startOptions(): string[] {
+  const start = buildProgram().commands.find((c) => c.name() === 'start')
+  return (start?.options ?? []).map((o) => o.long ?? o.short ?? '')
+}
+
+/**
+ * **`start` 에 등록된 옵션이 README 에 있는가** (DM-1). 명령 대조와 같은 이유다 — 옵션을 더하고
+ * 문서를 안 고치면 틀린 것이 아니라 빠진 것이라 읽는 사람은 알 길이 없다. commander 가 실제로
+ * 등록한 트리를 읽으므로 옵션 이름을 바꾸면 여기가 같이 깨진다.
+ */
+describe('DM-1 README 옵션 대조', () => {
+  it('DM-1 README 옵션 대조 — start 에 등록된 옵션이 전부 README 에 있다', () => {
+    const missing = startOptions().filter((flag) => !mentions(README, flag))
+    expect(missing).toEqual([])
+  })
+
+  it('DM-1 README 옵션 대조 — --diagnose 는 「명령 전체」 절 안에 있다', () => {
+    expect(mentions(section('명령 전체'), '--diagnose')).toBe(true)
+  })
+
+  it('DM-1 README 옵션 대조 — start 옵션이 실제로 등록돼 있어야 이 시험이 의미를 갖는다', () => {
+    // 지금 7개 (--app --name --device --launch --out --force --diagnose). 트리가 비면 위 단언은 빈 배열끼리 통과한다.
+    expect(startOptions()).toContain('--diagnose')
+    expect(startOptions().length).toBeGreaterThanOrEqual(7)
+  })
+})
+
+/**
+ * README 「명령 전체」의 진단 세션 절이 코드에 대해 **숫자 · 목록으로** 말하는 것을 코드와 대조한다
+ * (루트 AGENTS.md). 상수가 바뀌고 문서가 남으면 문서가 조용히 거짓이 된다.
+ */
+describe('DM-17 README 진단 절의 숫자', () => {
+  const diagnose = (): string => {
+    const all = section('명령 전체')
+    const start = all.search(/^### 진단 세션/m)
+    if (start < 0) throw new Error('「명령 전체」 에 진단 세션 소절이 없다')
+    const rest = all.slice(start + 1)
+    const end = rest.search(/^### /m)
+    return end < 0 ? rest : rest.slice(0, end)
+  }
+
+  it('DM-17 README 진단 절의 숫자 — 최대 10분 · 평소 30분이 core 상수와 같다', () => {
+    expect(diagnose()).toContain(`최대 ${DIAGNOSE_MAX_DURATION_MS / 60_000}분`)
+    expect(diagnose()).toContain(`평소 세션은 ${DEFAULT_MAX_DURATION_MS / 60_000}분`)
+  })
+
+  it('DM-17 README 진단 절의 숫자 — 앱 slice 가 열리는 sdk 경계가 APP_SLICE_MIN_SDK 와 같다', () => {
+    expect(diagnose()).toContain(`sdk ${APP_SLICE_MIN_SDK} 이상`)
+    expect(diagnose()).toContain(`sdk ${APP_SLICE_MIN_SDK - 1} 이하`)
+  })
+
+  it('DM-17 README 진단 절의 숫자 — 기록하는 카테고리가 DIAGNOSE_ATRACE_CATEGORIES 와 같다', () => {
+    const categories = DIAGNOSE_ATRACE_CATEGORIES.map((c) => `\`${c}\``).join(' · ')
+    expect(diagnose()).toContain(`atrace 카테고리 ${categories} 와`)
+    expect(diagnose()).toContain(`프레임워크 slice(${categories})`)
   })
 })
