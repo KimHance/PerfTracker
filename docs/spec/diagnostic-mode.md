@@ -3,7 +3,7 @@
 | 항목 | 값 |
 |---|---|
 | 기능 | diagnostic-mode |
-| 마지막 변경 | 2026-10-08 · 재검토 반영 — slice 수 · 표 · 이름 수 모두 frametimeline 제외 · DM-15 평가 낱말 목록 |
+| 마지막 변경 | 2026-10-08 · DM-5 실기기 반영 — 진단 + launch 때 창 전 atrace 켜짐 읽기(최대 5초) · 기준에서 app_0 뺌 |
 | 디자인 | docs/design/diagnostic-mode.md |
 | 항목 ID | DM-<번호> (예 DM-3) |
 
@@ -53,6 +53,8 @@ README 와 디자인 문서가 정한다. 근거 실측은 2026-10-07 SM-S901N(R
 | 8 | 2026-10-08 · diagnostic-mode | slice 수 · 표는 **대상 앱 프로세스의 slice 전체**(프레임워크 + 앱, 가르지 않음). 앱 slice 가 실릴 수 있었는지는 따로 "앱 slice 열림" 칸이 말한다 | atrace 마커에 태그가 없어 트레이스에서 둘을 가를 수 없다(개발 검토) · 잰 프레임워크 slice 를 null 로 지우지 않는다(규칙 3) | 워커 | 정함 |
 | 9 | 2026-10-08 · diagnostic-mode | 새 문구의 정본은 디자인 문서 `## 문구` 표 · 패키지마다(cli · gui · core) 시험이 그 표와 코드를 양방향으로 대조 | 문구가 세 패키지에 흩어져 있고 기존 문구가 이미 규칙을 어겨 새것만 골라낼 장치가 필요(디자인 검토) · gui 는 cli 를 못 본다(규칙 4) | 워커 | 정함 |
 | 10 | 2026-10-08 · diagnostic-mode | DM-15 평가 낱말은 음절 단위 닫힌 목록 — 명사형 · 불규칙 활용형까지 적는다. NFD 자모 비교는 안 한다 | 어간만으론 `느림`(음절이 `느리` 와 다름) · `빨라` · `나빠` 를 못 잡는다 · 자모로 비교하면 음절 경계를 넘어 `좋`(ㅈㅗㅎ)이 `조회`(ㅈㅗ + ㅎㅚ)에 걸린다 (디자인 재검토) | 워커 | 정함 |
+| 11 | 2026-10-08 · diagnostic-mode | 진단 + `--launch` 는 측정 창 전에 atrace 가 켜졌는지 읽고 기다린 뒤 앱을 띄운다 — 같은 셸 호출 · 최대 5초 · 읽기만. 평소 세션 · `--launch` 없는 진단은 안 읽는다 | 실기기 R5CT0000001 4회: 기다림 없이 `bindApplication` 행 0 · 기다림 넣고 1 · 1 (68.2 · 66.2 ms). 래치 전이라 측정 창 안 기기 접촉 0 그대로 (plan D14 · D29) | 메인 | 정함 |
+| 12 | 2026-10-08 · diagnostic-mode | DM-5 기준에서 `debug.atrace.app_*` 빈 값을 뺀다 — `enableflags` 0 · `app_number` 빈 값 · perfetto 세션 0 · 원격 파일 0 만. `app_0` 에 마지막 패키지가 남는 것은 관측 사실로 적고 도구는 지우지 않는다 | stop · `--force` 뒤 평소 stop · 10분 자동 종료, 네 번 모두 `app_0` = `com.google.android.youtube` · 도구는 속성을 고치지 않는다 · 누수 감시 안 함 (plan D15 · D30) | 메인 | 정함 |
 
 ### 안 하는 것
 
@@ -66,7 +68,7 @@ README 와 디자인 문서가 정한다. 근거 실측은 2026-10-07 SM-S901N(R
 | 마킹 사이 slice 집계 | 이번 범위 밖 |
 | 대상 앱 말고 다른 앱의 앱 slice | 대상 앱 하나 |
 | `target_app` 에 profileable 싣기 | 읽을 출처 미확인 — 열린 질문 3 |
-| 기기 atrace 속성을 읽거나 되돌리기 | perfetto 몫 · 평소 세션 명령 목록 그대로 (plan D15) |
+| 기기 atrace 속성을 고치거나 되돌리기 (읽기는 DM-5 · 진단 + `--launch` 때 창 전에만) | perfetto 몫 · 평소 세션 명령 목록 그대로 (plan D15) |
 | 기존 화면 · CLI 문구를 단어형으로 바꾸기 | 새 문구만 (plan D10) |
 | 평소 세션과의 비교 · 차이 계산 | 판정 · 읽는 쪽 몫 |
 | 시간축 결함(트레이스 이전 프레임) 고치기 | 진단 모드와 별개 · 실기기 재현 안 됨 |
@@ -81,7 +83,7 @@ README 와 디자인 문서가 정한다. 근거 실측은 2026-10-07 SM-S901N(R
 | DM-2 | 화면으로 켜기 — 측정 화면 04 세션에 진단 토글 | 토글을 켜고 시작하면 서버가 core 에 진단 옵션을 넘기고, 시작 바 명령 예고에 `--diagnose` 가 붙는다. 끄면 둘 다 없다. cli 시험이 gui 의 명령 예고 함수를 불러, 예고의 옵션 철자가 cli 에 등록된 옵션과 같은지 대조한다 (cli → gui 방향) | `DM-2 진단 토글 → 시작 요청` · `DM-2 명령 예고` · `DM-2 예고 철자 = 등록 옵션` |
 | DM-3 | 기록 범위 — atrace `am` · `wm` · `view` + 대상 앱 하나의 앱 slice | 진단 config 의 atrace 카테고리가 정확히 {am, wm, view}, 앱 slice 대상이 대상 패키지 하나다. `ftrace_events` 는 평소 세션과 같은 집합. 평소 세션 config 에는 atrace 키가 0개 | `DM-3 진단 config 범위` · `DM-3 평소 config 에 atrace 없음` |
 | DM-4 | 설정 검증이 atrace 를 본다 | 평소 세션 config 에 `atrace_` 로 시작하는 키가 하나라도 있으면 거부된다. 진단 config 라도 허용한 두 키(카테고리 · 앱) 밖의 `atrace_` 키 · {am, wm, view} 밖 카테고리 · 대상 앱이 아닌 패키지 · 와일드카드(`*`) · 앱 둘 이상이면 거부된다. 거부되면 perfetto 세션 시작 · `am force-stop` · 시작 스냅샷 명령이 하나도 나가지 않는다 (그때까지 나간 것은 기기 조회 — probe · 앱 해석 — 뿐) | `DM-4 평소 config atrace 거부` · `DM-4 진단 config 허용 밖 거부` · `DM-4 거부는 perfetto · force-stop · 스냅샷 전` |
-| DM-5 | 기기 원상 — 끝나면 atrace 상태가 시작 전으로 | 진단 세션이 `stop` 으로 끝난 뒤 · `start --force` 나 화면의 중단으로 버려지고 평소 세션이 열린 뒤 · 최대 시간에 닿아 멈춘 뒤, 어느 경우든 기기의 `debug.atrace.tags.enableflags` 가 0, `debug.atrace.app_*` 가 빈 값이다. 도구는 이 속성을 읽거나 고치지 않는다 — perfetto 가 되돌린 것을 사람이 창 밖에서 확인한다 | 수동 (R5CT0000001 · `stop` 뒤 `getprop`) |
+| DM-5 | 기기 원상 — 끝나면 atrace 가 꺼진다 | 진단 세션이 `stop` 으로 끝난 뒤 · `start --force` 나 화면의 중단으로 버려지고 평소 세션이 열린 뒤 · 최대 시간에 닿아 멈춘 뒤, 어느 경우든 기기의 `debug.atrace.tags.enableflags` 가 0 · `debug.atrace.app_number` 가 빈 값 · perfetto 세션 0 · 그 세션이 기기에 만든 원격 파일 0 이다. `debug.atrace.app_0` 은 기준이 아니다 — perfetto 가 마지막 패키지를 남기는 것이 관측 사실이고(실기기 세 경우 네 번 모두 `com.google.android.youtube`) 도구는 지우지 않는다 (결정 12). 도구는 atrace 속성을 고치지 않는다. 읽기는 진단 + `--launch` 일 때만 — 측정 창 전에, 앱을 띄우는 것과 같은 셸 호출 안에서 `enableflags` · `app_number` 가 켜지길 최대 5초 기다리고, 넘으면 그냥 띄운다 (결정 11 · 실기기: 기다림 없이 `bindApplication` 행 0 · 기다림 넣고 1 · 1, 68.2 · 66.2 ms). 평소 세션 · `--launch` 없는 진단 세션은 이 속성을 읽지 않는다. perfetto 가 되돌린 것은 사람이 창 밖에서 확인한다 | 수동 (R5CT0000001 · 끝난 뒤 `getprop` · perfetto 세션 · 원격 파일) · `D14 진단 --launch 는 같은 호출 안에서 atrace 가 켜지길 기다린 뒤 앱을 띄운다` · `D14 평소 세션 · --launch 없는 진단 세션은 atrace 속성을 읽지 않는다` |
 | DM-6 | 결과 자리 — 진단 세션일 때만 싣는다 | 진단 세션의 `result.json` 에만 `session.options` 의 진단 여부(true)와 최상위 진단 블록이 있다. 평소 세션의 `result.json` 은 지금과 키가 같다 — 진단 관련 키 0 (없음 = 평소 또는 옛 문서 = 진단 아님). 이 필드들이 없는 옛 `result.json` 이 새 스키마를 그대로 통과한다. `schema_version` 은 1.2.0 (1.1.0 은 npm 0.1.0 ~ 0.2.1 로 출시됨 → optional 추가 = minor) 이고, "1.1.0 은 출시된 적이 없다" 는 문장이 코드 · README · STATUS 에 0 이다. README 「`result.json` 읽는 법」 최상위 구조 표 · 진단 블록 절에 자리가 적혀 있다 | `DM-6 진단 세션만 진단 키` · `DM-6 평소 result.json 키 그대로` · `DM-6 옛 result.json 통과` · `DM-6 schema_version 1.2.0` |
 | DM-7 | 진단 블록 내용 | 블록에: 켠 카테고리 · 앱 slice 대상 · 블록 `status` · `reason_code`(메트릭과 같은 껍데기) · **앱 slice 열림**(true 또는 null + `reason_code` — 앱 slice 가 실릴 수 있던 조건이었나, 앱이 실제로 남겼나가 아님) · 트레이스 전체 slice 수(스레드 트랙 + 비동기 트랙, frametimeline 제외) · 대상 앱 slice 수 · 끝나지 않은 slice 수 · ftrace 손실 수(커널 ftrace 버퍼 overrun 합, 못 읽으면 null) · 원본 크기(바이트) · 접기 전 고유 이름 수 · **slice 이름 표**. 블록의 slice 는 전부 atrace slice 다 — frametimeline 트랙(Actual · Expected Timeline · 이름이 프레임 토큰 숫자)의 slice 는 트레이스 전체 slice 수 · 대상 앱 slice 수 · 끝나지 않은 slice 수 · 접기 전 고유 이름 수 · 표(비동기 갈래 포함) 어디에도 들지 않는다. 표: 행 = 접은 이름 하나 (숫자 · 16진 · 숫자가 섞인 영숫자 토큰을 접음 — plan D16) · 열 = 갈래 셋(메인 스레드 · 그 밖 스레드 · 비동기 트랙) × (횟수 · 합 ms · 최대 ms). 행 수 = 접은 고유 이름 수 (자르지 않음) · 이름 원문 길이 그대로. 처음 순서는 이름의 코드 단위 순 (호스트 로캘 무관). 끝나지 않은 slice 는 횟수에만 들고 합 · 최대에서 빠진다. 순위 · 등급 · 기준선 · 비율 필드 0개. "안쪽 slice 도 각자 세므로 합 ms 를 행끼리 더하면 안 됨 · 표는 프레임워크와 앱 slice 를 가르지 않음" 이 스키마 설명에 있다 | `DM-7 표 자르지 않음 · 코드 단위 순` · `DM-7 접기 규칙` · `DM-7 frametimeline 제외` · `DM-7 갈래 셋 · 끝나지 않은 slice` · `DM-7 판정 필드 없음` · `DM-7 한정 describe` |
 | DM-8 | 원본 · 재산출 | 원본은 평소처럼 run 디렉토리의 `trace.perfetto-trace` 하나 (`artifacts.trace`). 별도 파일을 만들지 않는다. `perftracker extract <진단 run>` 이 기기 없이 같은 진단 블록을 다시 낸다 — 같은 원본으로 두 번 돌리면 블록이 바이트 단위로 같다 | `DM-8 extract 가 같은 블록` |
@@ -138,3 +140,4 @@ sdk ≤29 는 README 하한(Android 11) 밖이다 — 진단도 같은 표를 �
 | 2026-10-08 | diagnostic-mode | DM-1 ~ DM-16 | 처음 |
 | 2026-10-08 | diagnostic-mode | DM-1 ~ DM-13 · DM-15 · DM-16 고침 · DM-17 추가 | 실현성 검토 왕복 1 (개발 조건부 10 · 디자인 조건부 8) · plan D8 ~ D16 — `--diagnose` · 낱말 slice · 진단 세션에만 싣기 · schema 1.2.0 · 열림 칸과 수 · 표 분리 · 갈래 셋 · 이름 접기 · ftrace 손실 수 · 거부 시점 · `atrace_` 키 전부 · 재산출 바이트 같음 · 문구 정본 표 · 최대 10분. DM-14 는 낱말만 |
 | 2026-10-08 | diagnostic-mode | DM-7 · DM-9 · DM-15 · DM-16 고침 | 실현성 재검토 왕복 2 (개발 조건부 3 · 디자인 조건부 2) — slice 수 · 비동기 갈래 · 접기 전 이름 수에도 frametimeline 제외 · DM-15 평가 낱말을 명사형 · 불규칙 활용형까지 닫힌 목록으로 (결정 10) |
+| 2026-10-08 | diagnostic-mode | DM-5 고침 · 안 하는 것 한 줄 | diag-capture 실기기 4회 (intent 4-1 · 4-2 · plan D29 · D30) — 진단 + `--launch` 때 창 전 atrace 켜짐 읽기 · 최대 5초 (결정 11) · 기준에서 `app_*` 빈 값을 빼고 `enableflags` 0 · `app_number` 빈 값 · 세션 0 · 원격 파일 0 만, `app_0` 남음은 관측 사실 (결정 12) · 안 하는 것 「읽거나 되돌리기」 → 「고치거나 되돌리기」 |
