@@ -44,6 +44,13 @@ async (page) => {
 }
 ```
 
+```js
+// 2-1. (고침 1) reason 문장 자리 · 원본 라벨 · 정렬 뒤 스크롤 → shots/reason-titles.txt
+//   상태 diag · open-null · no-process · failed 마다: .rp-card-title[title] 개수 · .rp-badge[title] 개수 ·
+//   tr[title] 의 (라벨=문장) · .diag-pairs th 라벨 목록. 그리고 diag 에서 .diag-scroll.scrollTop = 300 →
+//   메인 스레드 합 ms 머리 클릭 → scrollTop 이 0 인지.
+```
+
 ```bash
 # 3. 검사
 python3 labs/diagnostic-mode-design/v1/check_shots.py

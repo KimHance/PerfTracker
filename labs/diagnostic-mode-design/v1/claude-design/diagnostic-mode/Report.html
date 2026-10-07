@@ -15,6 +15,7 @@
 .diag-ph{height:120px;background:var(--color-neutral-100);border-radius:var(--radius-md)}
 .diag-pairs td.diag-val{overflow-wrap:anywhere}
 .diag-pairs td.mono{font-size:11px}
+.diag-pairs td .rp-none-code{margin-top:2px}
 .num{font-variant-numeric:tabular-nums}
 @media (max-width:1180px){#slice-card{grid-column:1 / -1 !important}}
 .diag-scroll{max-height:min(70vh,640px);overflow:auto;border-top:1px solid var(--color-divider)}
@@ -66,14 +67,17 @@ const summary=`<section class="rp-section">${secHead('앱 시작')}<div class="r
 +`<section class="rp-section">${secHead('맥락')}<div class="rp-grid"><section class="rp-card" style="grid-column: span 4;"><header class="rp-card-head"><h3 class="rp-card-title">온도 (세션 전 → 후)</h3><span class="rp-card-unit">°C</span></header><table class="rp-table rp-delta"><tbody><tr><th>skin</th><td class="num rp-before">32.4°C</td><td class="rp-arrow">→</td><td class="num">33.1°C</td><td class="num rp-delta-v">+0.7°C</td></tr></tbody></table></section><section class="rp-card" style="grid-column: span 4;"><header class="rp-card-head"><h3 class="rp-card-title">스로틀 단계</h3><span class="rp-card-unit">dumpsys thermalservice</span></header><table class="rp-table"><tbody><tr><th>시작</th><td class="num">NONE (0)</td><td class="rp-share num"></td></tr><tr><th>종료</th><td class="num">NONE (0)</td><td class="rp-share num"></td></tr></tbody></table></section><section class="rp-card" style="grid-column: span 4;"><header class="rp-card-head"><h3 class="rp-card-title">기기 상태 (전 → 후)</h3></header><table class="rp-table rp-delta"><tbody><tr><th>배터리</th><td class="num rp-before">100%</td><td class="rp-arrow">→</td><td class="num">100%</td><td class="num rp-delta-v">-</td></tr><tr><th>충전</th><td class="num rp-before">아니오</td><td class="rp-arrow">→</td><td class="num">아니오</td><td class="num rp-delta-v">-</td></tr><tr><th>가용 메모리</th><td class="num rp-before">1,552 MB</td><td class="rp-arrow">→</td><td class="num">1,506 MB</td><td class="num rp-delta-v">-47 MB</td></tr><tr><th>네트워크</th><td class="num rp-before">wifi</td><td class="rp-arrow">→</td><td class="num">wifi</td><td class="num rp-delta-v">-</td></tr></tbody></table></section><section class="rp-card" style="grid-column: span 4;"><header class="rp-card-head"><h3 class="rp-card-title">네트워크</h3><span class="rp-card-unit">uid 델타 · 세션 총량</span></header><table class="rp-table"><tbody><tr><th>수신</th><td class="num">0 B</td><td class="rp-share num"></td></tr><tr><th>송신</th><td class="num">0 B</td><td class="rp-share num"></td></tr><tr><th>uid</th><td class="num">1000</td><td class="rp-share num"></td></tr></tbody></table></section><section class="rp-card" style="grid-column: span 4;"><header class="rp-card-head"><h3 class="rp-card-title">경고</h3><span class="rp-card-unit">측정 조건 관측 · 평가 아님</span></header><div class="rp-none"><span>경고 없음</span></div></section><section class="rp-card" style="grid-column: span 4;"><header class="rp-card-head"><h3 class="rp-card-title">측정 비용</h3><span class="rp-card-unit">앱 프로세스 몫 미포함</span></header><table class="rp-table"><tbody><tr><th>수집 CPU 시간</th><td class="num">370 ms</td><td class="rp-share num"></td></tr><tr><th>수집 CPU 몫</th><td class="num">0.28%</td><td class="rp-share num"></td></tr><tr><th>수집 RSS 최대</th><td class="num">13.0 MB</td><td class="rp-share num"></td></tr><tr><th>세션 중 adb 명령</th><td class="num">0</td><td class="rp-share num"></td></tr><tr><th>버퍼 넘침</th><td class="num">아니오</td><td class="rp-share num"></td></tr></tbody></table></section></div></section>`;
 
 const VALS={
- collected:{open:'예',reason:null,status:'collected',rcode:null,total:'74,906',app:'62,682',unf:'41',nbf:'5,369',lost:'0',trace:PATH,bytes:'6.5 MB',slice:null,unit:'대상 앱 프로세스 · 1,055행'},
- 'open-null':{open:null,reason:'app_slices_open_unknown',status:'collected',rcode:null,total:'31,207',app:'24,530',unf:'12',nbf:'2,204',lost:'0',trace:PATH,bytes:'3.1 MB',slice:null,unit:'대상 앱 프로세스 · 618행'},
- 'no-process':{open:'예',reason:null,status:'partial',rcode:'process_not_in_trace',total:'52,118',app:null,unf:null,nbf:null,lost:'0',trace:PATH,bytes:'5.0 MB',slice:'process_not_in_trace',unit:''},
- failed:{open:null,reason:null,status:'failed',rcode:'trace_missing',total:null,app:null,unf:null,nbf:null,lost:null,trace:null,bytes:null,slice:'trace_missing',unit:'',badge:1}
+ // 고침 1: 블록 status · reason_code 는 행이 아니라 카드 배지(unsupported · skipped · failed) · 카드 제목/배지 title(reason 문장),
+ // 이유 코드는 값이 null 일 때만 값 자리에 (report HANDOFF ④ · stat 관례). 열림 이유는 열림 행 title.
+ collected:{open:'예',reason:null,openWhy:null,why:null,total:'74,906',app:'62,682',unf:'41',nbf:'5,369',lost:'0',trace:PATH,bytes:'6.5 MB',slice:null,unit:'대상 앱 프로세스 · 1,055행'},
+ 'open-null':{open:null,reason:'app_slices_open_unknown',openWhy:'sdk 30 · debuggable 아님 · profileable 읽을 출처 없음',why:null,total:'31,207',app:'24,530',unf:'12',nbf:'2,204',lost:'0',trace:PATH,bytes:'3.1 MB',slice:null,unit:'대상 앱 프로세스 · 618행'},
+ 'no-process':{open:'예',reason:null,openWhy:null,why:'대상 앱(com.google.android.youtube)의 프로세스가 트레이스에 없습니다 — 세션 동안 실행되지 않았을 수 있습니다.',total:'52,118',app:null,unf:null,nbf:null,lost:'0',trace:PATH,bytes:'5.0 MB',slice:'process_not_in_trace',unit:''},
+ failed:{open:'예',reason:null,openWhy:null,why:'트레이스 원본이 없습니다.',total:null,app:null,unf:null,nbf:null,lost:null,trace:null,bytes:null,slice:'trace_missing',unit:'',badge:1}
 };
 const v=VALS[st]||VALS.collected;
-const pair=(label,val,o={})=>`<tr><th>${label}</th><td class="num diag-val${val!=null&&o.mono?' mono':''}${val!=null&&o.wrap?' rp-wrap':''}">${val==null?NONE:val}</td><td class="rp-share num"></td></tr>`;
-const cardHead=(title,unit)=>`<header class="rp-card-head"><h3 class="rp-card-title">${title}</h3><span class="rp-card-unit">${unit}</span>${v.badge?'<span class="rp-badge">실패</span>':''}</header>`;
+const pair=(label,val,o={})=>`<tr${o.title?` title="${o.title}"`:''}><th>${label}</th><td class="num diag-val${val!=null&&o.mono?' mono':''}${val!=null&&o.wrap?' rp-wrap':''}">${val==null?NONE+(o.code?`<code class="rp-none-code">${o.code}</code>`:''):val}</td><td class="rp-share num"></td></tr>`;
+const why=v.why?` title="${v.why}"`:'';
+const cardHead=(title,unit)=>`<header class="rp-card-head"><h3 class="rp-card-title"${why}>${title}</h3><span class="rp-card-unit">${unit}</span>${v.badge?`<span class="rp-badge"${why}>실패</span>`:''}</header>`;
 const pairsCard=(title,unit,rows)=>`<section class="rp-card" style="grid-column: span 4;">${cardHead(title,unit)}<table class="rp-table diag-pairs"><tbody>${rows.join('')}</tbody></table></section>`;
 
 const GROUPS=[['main','메인 스레드'],['other','그 밖 스레드'],['async','비동기 트랙']];
@@ -94,9 +98,9 @@ const tableHtml=`<div class="diag-scroll"><table class="rp-table diag-table"><th
 const sliceBody=v.slice?`<div class="rp-none"><span>${NONE}</span><code class="rp-none-code">${v.slice}</code></div>`:tableHtml;
 
 const diag=`<section class="rp-section">${secHead('atrace slice')}<div class="rp-grid">`
-+pairsCard('기록 범위','diagnose',[pair('atrace_categories','am · wm · view'),pair('atrace_apps','com.google.android.youtube'),pair('app_slices_open',v.open),pair('app_slices_open_reason_code',v.reason,{mono:1}),pair('status',v.status),pair('reason_code',v.rcode,{mono:1})])
++pairsCard('기록 범위','diagnose',[pair('atrace_categories','am · wm · view'),pair('atrace_apps','com.google.android.youtube'),pair('app_slices_open',v.open,{code:v.reason,title:v.openWhy})])
 +pairsCard('slice 수','diagnose',[pair('slices_total',v.total),pair('slices_app',v.app),pair('slices_unfinished',v.unf),pair('names_before_fold',v.nbf),pair('ftrace_lost',v.lost)])
-+pairsCard('원본','',[pair('artifacts.trace',v.trace,{mono:1,wrap:1}),pair('trace_bytes',v.bytes)])
++pairsCard('원본','',[pair('artifacts.trace',v.trace,{mono:1,wrap:1}),pair('diagnose.trace_bytes',v.bytes)])
 +`<section class="rp-card" id="slice-card" style="grid-column: span 12;">${cardHead('slice 이름별',v.unit)}${sliceBody}</section></div></section>`;
 
 const picker=shot?'':`<div class="diag-picker" aria-label="시안 상태">${STATES.map(s=>`<button type="button" data-s="${s}" aria-current="${s===st}">${s}</button>`).join('')}</div>`;
@@ -115,7 +119,7 @@ if(table){
  };
  const measure=()=>table.style.setProperty('--diag-h1',table.tHead.rows[0].getBoundingClientRect().height+'px');
  table.querySelectorAll('.diag-sort').forEach(b=>{
-  b.addEventListener('click',()=>{const k=b.dataset.k;if(sort.key===k)sort.dir=sort.dir==='asc'?'desc':'asc';else sort={key:k,dir:k==='name'?'asc':'desc'};paint();});
+  b.addEventListener('click',()=>{const k=b.dataset.k;if(sort.key===k)sort.dir=sort.dir==='asc'?'desc':'asc';else sort={key:k,dir:k==='name'?'asc':'desc'};paint();table.closest('.diag-scroll').scrollTop=0;});
   b.addEventListener('blur',()=>b.classList.remove('diag-focus'));
  });
  paint();measure();addEventListener('resize',measure);

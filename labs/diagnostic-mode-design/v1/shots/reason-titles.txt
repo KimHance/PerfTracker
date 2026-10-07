@@ -1,0 +1,7 @@
+# Report.html 상태마다 reason 문장 자리 (title) · 기록 범위 · 원본 카드 라벨 — shoot.md 의 playwright 절차가 잰 값 (2026-10-08 · 고침 1)
+diag | 카드 제목 title 0 | 배지 title 0 | 행 title 없음
+open-null | 카드 제목 title 0 | 배지 title 0 | 행 title app_slices_open=sdk 30 · debuggable 아님 · profileable 읽을 출처 없음
+no-process | 카드 제목 title 4 대상 앱(com.google.android.youtube)의 프로세스가 트레이스에 없습니다 — 세션 동안 실행되지 않았을 수 있습니다. | 배지 title 0 | 행 title 없음
+failed | 카드 제목 title 4 트레이스 원본이 없습니다. | 배지 title 4 | 행 title 없음
+라벨 (네 상태 같음) | atrace_categories · atrace_apps · app_slices_open · slices_total · slices_app · slices_unfinished · names_before_fold · ftrace_lost · artifacts.trace · diagnose.trace_bytes
+정렬 뒤 스크롤 | 정렬 전 scrollTop 300 → 정렬 뒤 0

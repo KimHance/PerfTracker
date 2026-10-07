@@ -107,3 +107,10 @@ slice 표 카드: 제목 `slice 이름별` · 단위 `대상 앱 프로세스 ·
 | 표 머리 | `이름` · `메인 스레드` · `그 밖 스레드` · `비동기 트랙` · `횟수` · `합 ms` · `최대 ms` |
 | 빈 칸 · 정렬 표시 | `—` · `▲` · `▼` |
 | 측정 비용 카드 단위 | `앱 프로세스 몫 미포함` |
+
+## 고침 1 (2026-10-08 · 검토 왕복 1 — Claude Design 의 Report.html 을 edit_file 로 직접 고침)
+
+- 기록 범위 카드에서 `status` · `reason_code` · `app_slices_open_reason_code` 행을 뺐다. 블록 상태 = 카드 배지(failed) · 카드 제목 · 배지 `title`(reason 문장). 열림이 null 이면 값 자리 `값 없음` + 코드, 열림 행 `title` = 열림 reason 문장.
+- 원본 카드 라벨은 루트 경로 하나로: `artifacts.trace` · `diagnose.trace_bytes`.
+- 정렬하면 표 상자를 맨 위로 (`scrollTop = 0`) · 가로 위치는 그대로.
+- failed 의 열림 값은 `예` 로 그림 (sdk · debuggable 로 정해짐 — 값은 diag-extract 가 정함, plan D18).
