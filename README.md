@@ -439,7 +439,9 @@ npx perftracker stop                         # 평소와 같습니다 — 경로
   평소 세션의 JSON 은 키가 진단 모드 이전과 같습니다.
 - **앱 slice 가 열리는 조건** — sdk 31 이상이면 앱과 무관하게 열립니다. sdk 30 이하는
   debuggable 앱만 열리고, 그 밖의 앱이면 세션은 열되 `start` 가 `앱 slice 열림 모름 — …`
-  줄을 냅니다. 프레임워크 slice(`am` · `wm` · `view`)는 그대로 실립니다. `doctor` 의
+  줄을 냅니다. **실측은 sdk 35(에뮬레이터) · 36(SM-S901N) 뿐입니다** — sdk 31–34 와
+  sdk 30 이하는 안드로이드 문서(`profileable` 요소) 근거이고 실기기로 확인하지 않았습니다.
+  프레임워크 slice(`am` · `wm` · `view`)는 그대로 실립니다. `doctor` 의
   `diagnose: app slice` 줄이 기기 단위로 같은 판정을 미리 보여 줍니다 (✗ 여도 종료 코드 0).
 - `stop` · `extract` 의 출력은 평소와 같습니다 — slice 요약을 찍지 않습니다. slice 는
   `result.json` 에 실리고(아래 「`result.json` 읽는 법」), 시간축으로 보려면 run 디렉토리의
