@@ -22,6 +22,13 @@ export const DIAGNOSE_COPY = {
   noticeNotDebuggable: '앱 slice 열림 모름 — sdk {sdk} · debuggable 아님',
   /** start 고지 · running 고지 — "모름" 칸, debuggable 을 읽지 못한 경우. */
   noticeDebuggableUnknown: '앱 slice 열림 모름 — sdk {sdk} · debuggable 모름',
+  /**
+   * `app_slices_open_unknown` 의 reason — 열림이 null 인 이유, debuggable 이 아님을 확인한 경우.
+   * `result.json` 의 `diagnose.app_slices_open_reason` 으로 나가고 보고서 열림 행 title 이 된다.
+   */
+  reasonNotDebuggable: 'sdk {sdk} · debuggable 아님 · profileable 읽을 출처 없음',
+  /** `app_slices_open_unknown` 의 reason — debuggable 을 읽지 못한 경우. */
+  reasonDebuggableUnknown: 'sdk {sdk} · debuggable 모름 · profileable 읽을 출처 없음',
 } as const
 
 /**

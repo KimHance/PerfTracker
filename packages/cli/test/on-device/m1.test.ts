@@ -44,6 +44,6 @@ describe('M1 end-to-end', () => {
 
     // 원본이 남아 있으므로 기기 없이 재산출된다.
     const again = await extractRun(active!.runDir, {})
-    expect(again.schema_version).toBe('1.1.0')
+    expect(again.schema_version).toBe('1.2.0')
   })
 })

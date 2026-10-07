@@ -1,4 +1,5 @@
 import { POLL_PERIOD_MS } from '../collectors/blocks.js'
+import { DIAGNOSE_COPY, fillCopy } from '../copy/diagnose.js'
 
 /**
  * 메트릭이 왜 수집되지 않았는지를 **안정적인 기계 키**로 말한다.
@@ -232,6 +233,19 @@ export const METRIC_REASON_CODES = [
    * detail: uid, package
    */
   'uid_not_in_package_list',
+  /**
+   * **진단 블록 전용** — 메트릭에는 실리지 않고 `diagnose.app_slices_open_reason_code` 에만 온다.
+   *
+   * 앱 slice(`atrace_apps` 가 여는 앱 자신의 slice)가 **실릴 수 있던 조건이었는지 모른다.**
+   * sdk ≤30 에서 앱 slice 는 debuggable 또는 profileable 앱에만 열리는데, 이 앱은 debuggable 이
+   * 아니거나(`false`) 그것을 읽지 못했고(`null`), profileable 은 읽을 출처가 없다
+   * (기능 문서 열린 질문 3). 판정은 `session/diagnose.ts` 의 `appSliceOpen` 하나다.
+   *
+   * 앱이 slice 를 **남겼는지가 아니다** — 그것은 트레이스가 말하고, atrace 마커에 태그가 없어
+   * 프레임워크 slice 와 가를 수도 없다 (결정 8). 그래서 이 코드가 붙어도 slice 수 · 표는 잰 그대로다.
+   * detail: sdk_int, debuggable(false | null)
+   */
+  'app_slices_open_unknown',
 ] as const
 
 export type MetricReasonCode = (typeof METRIC_REASON_CODES)[number]
@@ -426,6 +440,13 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
     `측정 대상(${String(d['package'])}) 자신도 그 uid 로 등재되어 있지 않습니다. ` +
     `목록은 이 uid 의 안드로이드 user 를 열거했으므로 "못 봤다" 가 아니라 "없다" 입니다. ` +
     `값은 전부 실었지만 이 숫자를 그 패키지의 것이라고 말할 근거를 확인하지 못했습니다.`,
+  // 진단 모드의 새 문구라 단어형이다 (DM-15) — 문장은 이 표가 아니라 문구 모음이 주인이고
+  // 정본은 디자인 문서 `## 문구` 표다. 기존 사유 문장(합쇼체)은 그대로 둔다 (plan D10).
+  app_slices_open_unknown: (d) =>
+    fillCopy(
+      d['debuggable'] === false ? DIAGNOSE_COPY.reasonNotDebuggable : DIAGNOSE_COPY.reasonDebuggableUnknown,
+      d['sdk_int'] !== undefined ? { sdk: String(d['sdk_int']) } : {},
+    ),
 }
 
 /** 코드 → 한국어 문장. 모르는 코드는 조용히 비우지 않고 코드 자체를 남긴다. */

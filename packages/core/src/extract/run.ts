@@ -32,6 +32,7 @@ import { type CaptureManifest, parseVersionedJson, readCaptureManifest } from '.
 import { sortedMarks } from '../session/marks.js'
 import { type ActiveSession, readActiveSession } from '../session/state.js'
 import { computeOverhead } from './overhead.js'
+import { extractDiagnose } from './diagnose.js'
 
 export const BUFFER_STATS_SQL =
   "select json_group_array(json_object('name', name, 'value', value)) as j from stats " +
@@ -321,6 +322,21 @@ export async function extractRun(
       ? await computeOverhead(tp)
       : { cpuTimeMs: null, cpuSharePct: null, peakRssKb: null }
 
+  // 진단 세션에만 블록을 싣는다 (plan D12) — 평소 세션은 키가 아예 없고, 그 "없음" 이 곧
+  // "진단 세션이 아님" 이다. 판정은 session.json 의 `options.diagnose` 하나다.
+  const diagnose =
+    session.options.diagnose === true
+      ? await extractDiagnose({
+          tp,
+          tracePath: traceReady ? tracePath : null,
+          packageName: manifest.target_app.package,
+          appPid: capture.appPid,
+          env: manifest.env,
+          debuggable: manifest.target_app.debuggable,
+          scope: session.diagnose ?? null,
+        })
+      : null
+
   // 렌더 프로세스는 트레이스를 파싱해야 알 수 있어 capture 단계에서는 null 이었다.
 
   const result: Result = {
@@ -343,7 +359,12 @@ export async function extractRun(
       // 옮기는 데 필요한 offset 도 여기서 나온다 — 이유는 `extract/traceWindow.ts` 에 있다.
       trace_span_ms: traceWindow.spanMs,
       trace_start_offset_ms: traceWindow.startOffsetMs,
-      options: session.options,
+      // 다시 만든다 — session.json 의 객체를 그대로 넘기면 거기 무엇이 붙어 있든 따라 나간다.
+      // 진단 여부는 진단 세션에만 싣는다 (평소 세션의 키는 1.1.0 과 같다 — DM-6).
+      options:
+        session.options.diagnose === true
+          ? { launch: session.options.launch, diagnose: true }
+          : { launch: session.options.launch },
       // 사람이 적은 것을 도구가 시간순으로 옮기기만 한다 — 내용은 해석하지 않는다.
       // 값이 없으면 빈 배열이다: "아무도 적지 않았다" 는 확인된 사실이다.
       marks: sortedMarks(session).map((m) => ({ offset_ms: m.offsetMs, label: m.label })),
@@ -366,6 +387,7 @@ export async function extractRun(
     // "나중에 더 나은 근거가 생기면 값을 갱신한다" 는 이 코드베이스의 관행이다.
     target_app: { ...manifest.target_app, uid: appUid, pid: manifest.target_app.pid ?? capture.appPid },
     metrics: metrics as Result['metrics'],
+    ...(diagnose !== null ? { diagnose } : {}),
     measurement_overhead: {
       tracing_processes_cpu_time_ms: overhead.cpuTimeMs,
       tracing_processes_cpu_share_pct: overhead.cpuSharePct,

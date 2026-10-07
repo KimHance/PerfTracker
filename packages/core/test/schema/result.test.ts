@@ -124,6 +124,25 @@ describe('ResultSchema', () => {
     expect(() => ResultSchema.parse(r)).not.toThrow()
   })
 
+  /**
+   * 진단 모드가 더한 자리(`diagnose` · `session.options.diagnose`)는 optional 이다 — 1.1.0 시절
+   * 문서가 **고친 데 없이** 통과해야 minor 라고 말할 수 있다 (기능 문서 DM-6). `.optional()` 을
+   * 지우면 이 시험이 깨진다.
+   */
+  it('DM-6 옛 result.json 통과 — 진단 키가 없는 1.1.0 문서가 그대로 통과하고 키가 늘지 않는다', () => {
+    const legacy = { ...minimalResult(), schema_version: '1.1.0' }
+    const parsed = ResultSchema.parse(legacy)
+    expect(parsed).not.toHaveProperty('diagnose')
+    expect(parsed.session.options).toEqual({ launch: true })
+    expect(Object.keys(parsed).sort()).toEqual(Object.keys(legacy).sort())
+  })
+
+  it('DM-6 진단 여부는 true 로만 실린다 — false 는 스키마가 거부한다 (없음 = 진단 아님)', () => {
+    const r = minimalResult()
+    expect(() => ResultSchema.parse({ ...r, session: { ...r.session, options: { launch: true, diagnose: true } } })).not.toThrow()
+    expect(() => ResultSchema.parse({ ...r, session: { ...r.session, options: { launch: true, diagnose: false } } })).toThrow()
+  })
+
   it('알 수 없는 status 는 거부한다', () => {
     const r = minimalResult()
     r.metrics.hwui.status = 'good' as never
