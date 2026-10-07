@@ -321,6 +321,9 @@
   max-height: min(70vh, 640px); overflow: auto;
   border-top: 1px solid var(--color-divider);
 }
+/* 가로 · 세로 스크롤바가 함께 서면(≤760) 만나는 구석이 브라우저 기본 흰색이다 — 바탕을 비운다.
+   app.css 의 전역 스크롤바 규칙은 측정 화면 몫이라 이 상자에만 둔다. */
+.rp-slice-scroll::-webkit-scrollbar-corner { background: transparent; }
 .rp-slice { border-collapse: separate; border-spacing: 0; }
 .rp-slice th, .rp-slice td {
   padding: 4px 8px; border-bottom: 1px solid var(--color-divider);

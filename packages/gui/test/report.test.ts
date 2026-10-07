@@ -24,6 +24,7 @@ import {
   metricState,
   timeTicks,
   NO_DELTA,
+  type MetricState,
   type NoneVm,
   type PairsVm,
   type SeriesVm,
@@ -1278,6 +1279,33 @@ describe('시간별 프레임 카드', () => {
 })
 
 /**
+ * `docs/design/report/HANDOFF.md` 「2. 블록 N종」 도 모양 목록을 **숫자와 표로** 말한다. 한동안 6종이라
+ * 적힌 채 코드는 7종이었다 — 이번에 8종으로 맞추면서 대조 시험을 단다 (루트 AGENTS 「문서가 숫자 ·
+ * 목록으로 말하면 대조 시험」).
+ */
+describe('HANDOFF 가 말하는 블록 목록', () => {
+  it('DM-13 HANDOFF §2 블록 수 · kind 표가 매니페스트의 kind 와 같다', () => {
+    const doc = readFileSync(
+      fileURLToPath(new URL('../../../docs/design/report/HANDOFF.md', import.meta.url)),
+      'utf8',
+    )
+    const kinds = [...new Set(MANIFEST.map((b) => b.kind))].sort()
+    const head = /^## 2\. 블록 (\d+)종$/m.exec(doc)
+    expect(head, 'HANDOFF 에 「## 2. 블록 N종」 머리가 없다').not.toBeNull()
+    expect(Number(head![1])).toBe(kinds.length)
+
+    // 머리 바로 아래 표의 첫 칸 — 백틱 하나로 감싼 kind 이름.
+    const section = doc.slice(head!.index).split('\n### ')[0]!
+    const tableKinds = section
+      .split('\n')
+      .filter((l) => l.startsWith('| `'))
+      .map((l) => /^\| `([^`]+)` \|/.exec(l)?.[1])
+    expect(tableKinds.every((k) => k !== undefined), section).toBe(true)
+    expect([...(tableKinds as string[])].sort()).toEqual(kinds)
+  })
+})
+
+/**
  * `packages/gui/AGENTS.md` 는 이 화면의 모양 목록을 **개수와 이름으로** 말한다. 새 `kind` 를
  * 늘리고 문서를 안 고치면 여기서 깨진다 — 통과하는 테스트는 문서가 맞다는 증거가 아니지만,
  * 이 테스트는 목록이 갈리는 순간을 잡는다.
@@ -1548,6 +1576,26 @@ describe('DM-13 진단 탭 전 필드', () => {
     })
   }
 
+  /**
+   * **partial 은 배지를 달지 않는다** (HANDOFF ④ · `BADGED_STATUS`) — 이유 문장은 제목 title 로만 닿는다.
+   * 배지를 달면 값이 멀쩡한 낡은 이름 · 켜기 오류 상태가 실패처럼 읽힌다.
+   */
+  it('DM-13 partial 은 네 카드 모두 배지 없이 제목 title 만 — 배지는 unsupported · skipped · failed 뿐', () => {
+    for (const s of ['no-process', 'stale', 'ftrace-not-recorded', 'ftrace-setup-errors'] as const) {
+      const doc = diagDoc(s)
+      for (const b of DIAG_BLOCKS) {
+        expect(badgeOf(blockState(doc, b)), `${s} / ${b.title}`).toBeNull()
+        expect(blockState(doc, b).reason, `${s} / ${b.title}`).not.toBeNull()
+      }
+    }
+    const shell = (status: string): MetricState => ({ status, reason: 'r', reasonCode: 'c' })
+    expect(badgeOf(shell('partial'))).toBeNull()
+    expect(badgeOf(shell('collected'))).toBeNull()
+    expect(badgeOf(shell('unsupported'))).toBe('기기 미지원')
+    expect(badgeOf(shell('skipped'))).toBe('건너뜀')
+    expect(badgeOf(shell('failed'))).toBe('실패')
+  })
+
   it('DM-13 collected 는 배지도 제목 title 도 없다 — 지표 카드와 같은 관례', () => {
     const doc = diagDoc('collected')
     for (const b of DIAG_BLOCKS) {
@@ -1614,6 +1662,20 @@ describe('DM-13 진단 탭 전 필드', () => {
       expect(byLabel[k]!.code, k).toBeUndefined()
     }
     expect(blockState(doc, SLICE_CARD).reasonCode).toBe('process_not_in_trace')
+  })
+
+  /** 카테고리 · 대상 앱 목록은 ` · ` 로 잇는다 — CLI 진단 라벨 줄과 같은 구분자 (plan D43 · 포맷 `dots`). */
+  it('DM-13 기록 범위 — 카테고리 · 대상 앱은 ` · ` 로 잇는다', () => {
+    const scope = DIAG_BLOCKS.find((b) => b.title === '기록 범위') as PairsBlock
+    const rows = (buildPairs(scope, diagDoc('collected')) as PairsVm).rows
+    expect(rows.map((r) => [r.label, r.value])).toEqual([
+      ['atrace_categories', 'am · wm · view'],
+      ['atrace_apps', 'com.google.android.youtube'],
+      ['app_slices_open', '예'],
+    ])
+    expect(fmtValue(['a', 'b'], 'dots')).toBe('a · b')
+    expect(fmtValue([], 'dots')).toBe('없음')
+    expect(fmtValue(null, 'dots')).toBe(NONE_NULL)
   })
 
   it('DM-13 원본 경로가 보인다 — 라벨은 루트 경로 그대로, 경로는 자르지 않는다', () => {
@@ -1703,6 +1765,14 @@ describe('DM-13 행 모델 자르지 않음 · 구별 없음', () => {
 describe('DM-13 정렬은 사람이 고를 때만', () => {
   const vm = buildSliceTable(SLICE_CARD, { diagnose: { target_process_slice_names: SLICE_ROWS } }) as SliceTableVm
   const names = (s: SliceSort): string[] => sortSliceRows(vm, s).map((r) => r.name)
+
+  it('DM-13 이름 내림은 코드 단위 순을 거꾸로 — 로캘 순의 거꾸로가 아니다', () => {
+    expect(names({ key: 'name', dir: 'desc' })).toEqual([
+      'onAccountReady', 'bindApplication', 'animation', 'Zygote preload',
+      'RV Scroll', 'Choreographer#doFrame *', '<missing root>',
+    ])
+    expect(names({ key: 'name', dir: 'desc' })).toEqual([...names(INITIAL_SORT)].reverse())
+  })
 
   it('DM-13 처음 정렬 상태는 이름 오름이고 그때 순서는 처음 순서 그대로다', () => {
     expect(INITIAL_SORT).toEqual({ key: 'name', dir: 'asc' })
