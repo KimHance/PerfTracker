@@ -85,6 +85,19 @@ describe('DM-7 한정 describe', () => {
     expect(d).toContain('app_slices_open 은 이 상태와 따로 간다')
     expect(d).toContain('process_not_in_trace')
   })
+
+  it('D35 블록 status 설명이 ftrace_not_recorded 와 그때 null 이 되는 칸을 말한다', () => {
+    const d = descriptionOf(diagnoseProps['status']!)
+    expect(d).toContain('ftrace_not_recorded')
+    expect(d).toContain('trace_slices 와 target_process_* 네 칸이 null')
+  })
+
+  it('D18 손실 칸 설명이 더하는 통계 셋을 다 말한다', () => {
+    const d = descriptionOf(diagnoseProps['ftrace_overrun_events']!)
+    for (const n of ['ftrace_cpu_overrun_delta', 'ftrace_cpu_commit_overrun_delta', 'ftrace_cpu_dropped_events_delta']) {
+      expect(d).toContain(n)
+    }
+  })
 })
 
 describe('DM-14 schema describe 한정', () => {

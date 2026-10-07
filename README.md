@@ -484,8 +484,9 @@ npx perftracker schema > result.schema.json
 
 > **`1.2.0` 은 진단 세션의 자리를 더한 minor 입니다.** 평소 세션의 `result.json` 은 `1.1.0` 과
 > 키가 같고, 진단 세션(`start --diagnose`)에만 `session.options.diagnose` 와 [`diagnose`](#diagnose)
-> 블록이 실립니다. `1.1.0` 은 npm 0.1.0 ~ 0.2.1 로 나간 버전인데, 그 전 개발 중에 같은 `1.1.0`
-> 안에서 계약이 여러 번 넓어졌습니다. 스키마를 캐시해 두고 쓰신다면 아래
+> 블록이 실립니다. `1.1.0` 은 npm 0.1.0 ~ 0.2.1 로 나간 버전인데, 개발 중에도 출시 뒤에도 같은
+> `1.1.0` 안에서 계약이 넓어졌습니다 — 0.2.0 이 `metrics.frame` 과 reason_code `no_frames` 를
+> 더했습니다. 스키마를 캐시해 두고 쓰신다면 아래
 > [스키마를 다시 꺼내야 하는 때](#스키마를-다시-꺼내야-하는-때)를 반드시 읽으세요.
 
 ### 최상위 구조
@@ -596,10 +597,11 @@ clock_snapshot 이 없거나 기기 시계를 못 읽은 경우(`trace_start_off
   CI 매칭은 반드시 이걸로 하세요. (예: `sdk_too_low`, `no_log_entries`,
   `trace_missing`, `data_source_not_registered`, `query_failed`)
 
-  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **37개**입니다
+  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **38개**입니다
   > (`1.0.0` 은 6개, `1.1.0` 의 마지막 판인 npm 0.2.1 은 36개였습니다). 그중 `process_name_stale_in_trace` 는 `1.0.0` 부터 있던
-  > `metrics.hwui` 에도 실립니다. `1.2.0` 에 더한 `app_slices_open_unknown` 은 메트릭에는 실리지 않고
-  > [`diagnose`](#diagnose) 블록의 `app_slices_open_reason_code` 에만 옵니다. 이 숫자는 테스트가
+  > `metrics.hwui` 에도 실립니다. `1.2.0` 에 더한 둘은 메트릭에는 실리지 않고 [`diagnose`](#diagnose)
+  > 블록에만 옵니다 — `app_slices_open_unknown` 은 `app_slices_open_reason_code` 에,
+  > `ftrace_not_recorded` 는 블록 `reason_code` 에. 이 숫자는 테스트가
   > `METRIC_REASON_CODES` 와 대조해 고정하므로 코드보다 낡을 수 없습니다.
 - `reason` — 사람이 읽는 한국어 문장. 다듬힐 수 있으니 매칭에 쓰지 마세요.
 - `data` — 메트릭별 본문. 수집되지 않았으면 `null`
@@ -614,9 +616,12 @@ clock_snapshot 이 없거나 기기 시계를 못 읽은 경우(`trace_start_off
   `session.options` 가 `additionalProperties: false` 라 `diagnose` 키와 `options.diagnose` 가
   거기 걸립니다. 평소 세션 산출물은 키가 `1.1.0` 과 같아 그대로 통과합니다.
 
-**`1.1.0` 끼리는 그 신호가 없습니다.** `1.1.0` 은 출시 전 개발 중에 계약이 넓어질 때 버전을 올리지
-않았습니다. 그래서 **깨지는 소비자는 `1.0.0` 을 고정한 쪽만이 아닙니다** — `1.1.0` 시절 중간에
-`perftracker schema` 를 한 번 받아 두고 그대로 쓰는 쪽도 같은 `1.1.0` 산출물을 거부할 수 있습니다.
+**`1.1.0` 끼리는 그 신호가 없습니다.** `1.1.0` 은 개발 중에도, 출시 뒤에도 계약이 넓어질 때 버전을
+올리지 않았습니다. npm 0.1.0(2026-08-20)의 스키마는 reason_code 35개에 `metrics.frame` 이 없었고,
+0.2.0(2026-08-31)이 같은 `1.1.0` 으로 `metrics.frame` 과 `no_frames` 를 더했습니다 — reason_code 가
+닫힌 enum 이라 0.1.0 때 받아 둔 스키마는 `no_frames` 가 실린 산출물을 거부합니다. 그래서 **깨지는
+소비자는 `1.0.0` 을 고정한 쪽만이 아닙니다** — `1.1.0` 시절 중간에 `perftracker schema` 를 한 번 받아
+두고 그대로 쓰는 쪽도 같은 `1.1.0` 산출물을 거부할 수 있습니다.
 그런데 `schema_version` 은 그때도 그 뒤도 `1.1.0` 이라, **`1.1.0` 산출물끼리는 다시 꺼내라는 신호가 산출물 안에
 존재하지 않습니다.**
 
@@ -1224,10 +1229,10 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 | `status` · `reason_code` · `reason` | [메트릭과 같은 껍데기](#메트릭-하나의-모양) — **트레이스에서 읽은 칸**(수 · 표)의 상태 | — |
 | `app_slices_open` | **앱 slice 열림** — 앱 자신의 slice 가 실릴 수 있던 조건이었나. 앱이 실제로 남겼나가 아닙니다. `true` 또는 `null` (`false` 는 없음) | 모름 — 이유는 다음 칸 |
 | `app_slices_open_reason_code` · `app_slices_open_reason` | 열림이 `null` 인 이유 (`app_slices_open_unknown`) | 열림이 `true` |
-| `trace_slices` | 트레이스 전체(모든 프로세스)의 slice 수 | 트레이스를 못 읽음 |
-| `target_process_slices` | 대상 앱 프로세스의 slice 수 = 표의 `count` 합 | 대상 앱 프로세스를 못 찾음 · 트레이스를 못 읽음 |
+| `trace_slices` | 트레이스 전체(모든 프로세스)의 slice 수 | ftrace 가 원본에 안 남음 · 트레이스를 못 읽음 |
+| `target_process_slices` | 대상 앱 프로세스의 slice 수 = 표의 `count` 합 | 대상 앱 프로세스를 못 찾음 · ftrace 가 원본에 안 남음 · 트레이스를 못 읽음 |
 | `target_process_slices_unfinished` | 그중 끝나지 않은 slice 수 | 같음 |
-| `ftrace_overrun_events` | 커널 ftrace 링버퍼가 넘쳐 잃은 이벤트 수 | 트레이스에 그 통계가 없음 (0 이 아님) |
+| `ftrace_overrun_events` | 커널 ftrace 링버퍼에서 잃은 이벤트 수 | 트레이스에 그 통계가 없음 (0 이 아님) |
 | `trace_bytes` | 원본(`artifacts.trace`) 크기 (바이트) | 원본이 없음 |
 | `target_process_slice_names_unfolded` | 접기 전 고유 이름 수 (표 행 수 이상) | `target_process_slices` 와 같음 |
 | `target_process_slice_names` | 접은 이름별 표 (아래) | 같음 — `[]` 는 "프로세스는 찾았고 slice 가 0개" |
@@ -1254,7 +1259,8 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 - **이름 접기** — 숫자가 하나라도 든 영문 · 숫자 토큰(연속한 `[A-Za-z0-9]`)을 `*` 하나로 바꿉니다.
   `Choreographer#doFrame 136993` → `Choreographer#doFrame *` · `tk-trace-id: 1001yo7d2xmcq` →
   `tk-trace-id: *` · `VRI[Shell$HomeActivity]@a1b2c3` → `VRI[Shell$HomeActivity]@*`. 숫자가 없는 토큰은
-  단어와 가를 수 없어 그대로입니다(`tk-trace-id: rlcyp`). 위 원본에서 4,921 → 1,082행이었습니다.
+  단어와 가를 수 없어 그대로입니다 — `tk-trace-id: rlcyp` → `tk-trace-id: rlcyp`. 위 원본에서
+  4,921 → 1,082행이었습니다.
   원문 이름은 원본 트레이스에 그대로 있습니다.
 - **행을 자르지 않고 이름도 자르지 않습니다.** 순서는 이름의 UTF-16 코드 단위 순 하나입니다 (호스트
   로캘과 무관 — `Z` 가 `a` 보다 앞). 순위 · 상위 N 은 없습니다 — 무엇이 길었는지 고르는 일은 읽는 쪽의 몫입니다.
@@ -1264,18 +1270,26 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   빠집니다. 한 갈래의 slice 가 전부 끝나지 않았으면 그 칸의 `sum_ms` · `max_ms` 가 `null` 입니다.
 - **`sum_ms` 를 행끼리 더하지 마세요.** 안쪽 slice 도 각자 세므로 바깥 slice 의 시간과 겹칩니다
   (같은 기기 · 앱 15초 원본 둘에서 대상 앱 스레드 slice 의 80.1% · 85.5% 가 안쪽이었습니다).
-- **`ftrace_overrun_events`** 는 stats 의 `ftrace_cpu_overrun_delta` 와 `ftrace_cpu_commit_overrun_delta` 를
-  CPU 마다 더한 값입니다. `measurement_overhead.trace_buffer_overrun` 은 perfetto 버퍼만 보므로 이 손실을
+- **`ftrace_overrun_events`** 는 stats 의 `ftrace_cpu_overrun_delta`(덮어써서) ·
+  `ftrace_cpu_commit_overrun_delta`(쓰는 중에 겹쳐서) · `ftrace_cpu_dropped_events_delta`(덮어쓰기를 끈 버퍼가
+  꽉 차서)를 CPU 마다 더한 값입니다. `measurement_overhead.trace_buffer_overrun` 은 perfetto 버퍼만 보므로 이 손실을
   못 잡습니다 — 0 이 아니면 slice 가 그만큼 빠졌습니다.
 
 | `status` | `reason_code` | `null` 이 되는 칸 |
 | --- | --- | --- |
 | `collected` | `null` | 없음 |
-| `partial` | `process_not_in_trace` | `target_process_` 로 시작하는 넷 |
+| `partial` | `process_not_in_trace` | `target_process_slices` · `target_process_slices_unfinished` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
 | `partial` | `process_name_stale_in_trace` | 없음 |
-| `unsupported` | `data_source_not_registered` (`linux.ftrace`) | 트레이스에서 읽는 칸 전부 |
-| `failed` | `trace_missing` | 트레이스에서 읽는 칸 전부 + `trace_bytes` |
-| `failed` | `query_failed` | 트레이스에서 읽는 칸 전부 |
+| `partial` | `ftrace_not_recorded` · `cause: no_ftrace_stats` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
+| `partial` | `ftrace_not_recorded` · `cause: ftrace_setup_errors` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
+| `unsupported` | `data_source_not_registered` · `data_source: linux.ftrace` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
+| `failed` | `trace_missing` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `trace_bytes` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
+| `failed` | `query_failed` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
+
+**`ftrace_not_recorded`** 는 slice 가 0개일 때 그것이 "없었다" 인지 "못 쟀다" 인지 모르는 경우입니다 —
+원본에 CPU 별 ftrace 통계(`ftrace_cpu_*`)가 한 행도 없거나(`no_ftrace_stats` — ftrace 가 안 돌았습니다),
+traced_probes 가 ftrace 를 켜다 오류를 냈습니다(`ftrace_setup_errors`). 오류가 atrace 의 것인지 다른 이벤트의
+것인지는 원본이 말하지 않아 slice 칸을 전부 `null` 로 둡니다. 잃은 이벤트 수는 통계가 있으면 잰 그대로입니다.
 
 **앱 slice 열림은 `status` 와 따로 갑니다.** 트레이스가 아니라 sdk 와 `target_app.debuggable` 로
 정해지는 조건이라 원본이 없어도(`failed`) 값이 있고, `null` 이어도 `status` 는 `collected` 일 수 있습니다.

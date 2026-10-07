@@ -29,6 +29,13 @@ export const DIAGNOSE_COPY = {
   reasonNotDebuggable: 'sdk {sdk} · debuggable 아님 · profileable 읽을 출처 없음',
   /** `app_slices_open_unknown` 의 reason — debuggable 을 읽지 못한 경우. */
   reasonDebuggableUnknown: 'sdk {sdk} · debuggable 모름 · profileable 읽을 출처 없음',
+  /**
+   * `ftrace_not_recorded` 의 reason — 원본에 CPU 별 ftrace 통계가 한 행도 없다 (ftrace 가 안 돌았다).
+   * 블록 `reason` 으로 나가고 보고서 카드 제목 title 이 된다 (plan D35).
+   */
+  reasonFtraceNoStats: 'ftrace 기록 없음 · 원본에 ftrace 통계 0행 · slice 수 모름',
+  /** `ftrace_not_recorded` 의 reason — traced_probes 가 ftrace 를 켜다 낸 오류가 있다. `{count}` = 오류 수. */
+  reasonFtraceSetupErrors: 'ftrace 설정 오류 {count}건 · slice 수 모름',
 } as const
 
 /**

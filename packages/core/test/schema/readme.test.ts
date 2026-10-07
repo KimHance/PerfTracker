@@ -1,8 +1,23 @@
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { appProcessSql } from '../../src/collectors/appProcess.js'
 import { COLLECTORS } from '../../src/collectors/registry.js'
-import { METRIC_REASON_CODES } from '../../src/schema/reasons.js'
+import {
+  DIAGNOSE_TOTALS_SQL,
+  type DiagnoseExtractInput,
+  diagnoseSlicesSql,
+  extractDiagnose,
+  FTRACE_LOSS_STATS,
+  foldSliceName,
+} from '../../src/extract/diagnose.js'
+import { DIAGNOSE_ATRACE_CATEGORIES, DIAGNOSE_MAX_DURATION_MS } from '../../src/perfetto/config.js'
+import { TraceProcessor } from '../../src/perfetto/traceProcessor/client.js'
+import { METRIC_REASON_CODES, renderReason } from '../../src/schema/reasons.js'
+import { APP_SLICE_MIN_SDK, appSliceOpen } from '../../src/session/diagnose.js'
+import { FakeProcessRunner } from '../support/fakeProcessRunner.js'
 import {
   DiagnoseBlockSchema,
   ResultSchema,
@@ -191,5 +206,196 @@ describe('DM-14 README measurement_overhead', () => {
     const text = section('### `measurement_overhead`')
     expect(text).toContain('atrace slice 비용이 앱 프로세스에 청구되어')
     expect(text).toContain('평소 세션과 수치를 나란히 놓을 수 없습니다')
+  })
+})
+
+/**
+ * README `diagnose` 절이 코드에 대해 **목록 · 표로** 말하는 것 전부를 코드와 대조한다 (명세 검수 #1).
+ * 필드 표 둘은 위 `DM-7 README 진단 블록 절` 이 본다. 여기는 그 밖 — 상태 표 · 열림 조건 표 · 접기 예 ·
+ * 손실 통계 이름 · 카테고리 · 최대 시간 · 예시 JSON. 하나라도 코드와 어긋나면 README 가 조용히 낡는다.
+ */
+describe('DM-9 README 진단 절 ↔ 코드', () => {
+  const DIAG = section('### `diagnose`')
+  const PKG = 'com.example.app'
+  const PID = 4242
+  const UPID = 7
+  const TRACE = '/tmp/readme-diag.pftrace'
+  const OK_TOTALS = { trace_slices: 10, ftrace_overrun_events: 0, ftrace_cpu_stats: 96, ftrace_setup_errors: 0 }
+  const PROC = [{ upid: UPID, pid: PID, name: PKG }]
+  const GROUPS = [{ name: 'RV Scroll', branch: 'main', count: 1, finished: 1, sum_ns: 1_000, max_ns: 1_000 }]
+  /** 원본 파일 — trace_bytes 가 잰 값이 되게. */
+  const tracePath = (() => {
+    const p = join(mkdtempSync(join(tmpdir(), 'pt-readme-')), 'trace.perfetto-trace')
+    writeFileSync(p, 'fake')
+    return p
+  })()
+
+  function tp(responses: [string, unknown][]): TraceProcessor {
+    const runner = new FakeProcessRunner()
+    for (const [sql, v] of responses) runner.on(`query ${TRACE} ${sql}`, { stdout: `"j"\n"${JSON.stringify(v)}"\n` })
+    return new TraceProcessor('/bin/tp', TRACE, runner)
+  }
+  function input(over: Partial<DiagnoseExtractInput>): DiagnoseExtractInput {
+    return {
+      tp: tp([
+        [DIAGNOSE_TOTALS_SQL, OK_TOTALS],
+        [appProcessSql(PKG, PID), PROC],
+        [diagnoseSlicesSql(UPID, PID), GROUPS],
+      ]),
+      tracePath,
+      packageName: PKG,
+      appPid: PID,
+      env: { sdkInt: 36, dataSources: ['linux.ftrace'] },
+      debuggable: false,
+      scope: { atraceCategories: ['am', 'wm', 'view'], atraceApps: [PKG] },
+      ...over,
+    }
+  }
+
+  /** README 상태 표의 줄마다 그 상태를 내는 입력. 키 = `status|reason_code|cause`. */
+  const SCENARIOS: Record<string, DiagnoseExtractInput> = {
+    'collected|null|': input({}),
+    'partial|process_not_in_trace|': input({ tp: tp([[DIAGNOSE_TOTALS_SQL, OK_TOTALS], [appProcessSql(PKG, PID), []]]) }),
+    'partial|process_name_stale_in_trace|': input({
+      tp: tp([
+        [DIAGNOSE_TOTALS_SQL, OK_TOTALS],
+        [appProcessSql(PKG, PID), [{ upid: UPID, pid: PID, name: '<pre-initialized>' }]],
+        [diagnoseSlicesSql(UPID, PID), GROUPS],
+      ]),
+    }),
+    'partial|ftrace_not_recorded|no_ftrace_stats': input({
+      tp: tp([[DIAGNOSE_TOTALS_SQL, { ...OK_TOTALS, trace_slices: 0, ftrace_overrun_events: null, ftrace_cpu_stats: 0 }]]),
+    }),
+    'partial|ftrace_not_recorded|ftrace_setup_errors': input({
+      tp: tp([[DIAGNOSE_TOTALS_SQL, { ...OK_TOTALS, ftrace_setup_errors: 2 }]]),
+    }),
+    'unsupported|data_source_not_registered|': input({ env: { sdkInt: 36, dataSources: ['linux.sys_stats'] } }),
+    'failed|trace_missing|': input({ tp: null, tracePath: null }),
+    'failed|query_failed|': input({ tp: tp([[DIAGNOSE_TOTALS_SQL, OK_TOTALS]]) }),
+  }
+  const CELLS = [
+    'trace_slices',
+    'target_process_slices',
+    'target_process_slices_unfinished',
+    'ftrace_overrun_events',
+    'trace_bytes',
+    'target_process_slice_names_unfolded',
+    'target_process_slice_names',
+  ] as const
+
+  /** 머리가 `head` 로 시작하는 표의 줄들 — 칸마다 문자열. */
+  function tableRows(text: string, head: string): string[][] {
+    const lines = text.split('\n')
+    const start = lines.findIndex((l) => l.startsWith(head))
+    if (start < 0) return []
+    const rows: string[][] = []
+    for (const line of lines.slice(start + 2)) {
+      if (!line.startsWith('|')) break
+      rows.push(line.replace(/^\||\|$/g, '').split('|').map((c) => c.trim()))
+    }
+    return rows
+  }
+  const ticks = (cell: string): string[] => [...cell.matchAll(/`([^`]+)`/g)].map((m) => m[1]!)
+
+  it('DM-9 README 상태 표 ↔ extractDiagnose — 줄마다 status · reason_code · null 이 되는 칸이 코드와 같고, 빠진 상태가 없다', async () => {
+    const rows = tableRows(DIAG, '| `status` | `reason_code` |')
+    expect(rows.length, 'README 에서 상태 표를 찾지 못했다').toBeGreaterThan(0)
+
+    const listed: string[] = []
+    for (const [statusCell, codeCell, nullCell] of rows) {
+      const status = ticks(statusCell!)[0]!
+      const [code, ...rest] = ticks(codeCell!)
+      const detail = Object.fromEntries(rest.map((t) => t.split(': ') as [string, string]))
+      const key = `${status}|${code}|${detail['cause'] ?? ''}`
+      listed.push(key)
+      const scenario = SCENARIOS[key]
+      expect(scenario, `README 상태 표의 줄 ${key} 에 맞는 경우가 코드에 없다`).toBeDefined()
+
+      const block = await extractDiagnose(scenario!)
+      expect(block.status, key).toBe(status)
+      expect(block.reason_code, key).toBe(code === 'null' ? null : code)
+      if (detail['cause'] !== undefined) {
+        expect(block.reason, key).toBe(
+          renderReason({ code: 'ftrace_not_recorded', detail: { cause: detail['cause'], setup_errors: 2 } }),
+        )
+      }
+      if (detail['data_source'] !== undefined) expect(block.reason, key).toContain(detail['data_source'])
+      const nulls = CELLS.filter((c) => block[c] === null)
+      const claimed = nullCell === '없음' ? [] : ticks(nullCell!)
+      expect([...claimed].sort(), `${key} 의 null 이 되는 칸`).toEqual([...nulls].sort())
+    }
+    expect(Object.keys(SCENARIOS).filter((k) => !listed.includes(k)), 'README 상태 표에 없는 경우').toEqual([])
+  })
+
+  it('DM-9 README 열림 조건 표 ↔ appSliceOpen — 경계 sdk 와 debuggable 마다 같은 값', () => {
+    const rows = tableRows(DIAG, '| 기기 · 앱 | `app_slices_open` |')
+    expect(rows).toHaveLength(3)
+    const [open, debug, unknown] = rows
+
+    const atLeast = Number(/^sdk ≥(\d+)$/.exec(open![0]!)?.[1])
+    expect(atLeast).toBe(APP_SLICE_MIN_SDK)
+    expect(ticks(open![1]!)).toEqual(['true'])
+    for (const d of [false, null, true]) expect(appSliceOpen(atLeast, d).open).toBe(true)
+
+    const below = Number(/^sdk ≤(\d+) · `debuggable: true`$/.exec(debug![0]!)?.[1])
+    expect(below).toBe(APP_SLICE_MIN_SDK - 1)
+    expect(ticks(debug![1]!)).toEqual(['true'])
+    expect(appSliceOpen(below, true).open).toBe(true)
+
+    const belowUnknown = Number(/^sdk ≤(\d+) · `debuggable` 이 `false` 또는 `null`$/.exec(unknown![0]!)?.[1])
+    expect(belowUnknown).toBe(APP_SLICE_MIN_SDK - 1)
+    expect(ticks(unknown![1]!).slice(0, 2)).toEqual(['null', 'app_slices_open_unknown'])
+    for (const d of [false, null]) expect(appSliceOpen(belowUnknown, d).open).toBeNull()
+  })
+
+  it('DM-7 README 접기 예 ↔ foldSliceName — 「A → B」 마다 foldSliceName(A) 가 B', () => {
+    const bullet = /- \*\*이름 접기\*\*[\s\S]*?(?=\n- )/.exec(DIAG)?.[0] ?? ''
+    const pairs = [...bullet.matchAll(/`([^`]+)`\s*→\s*`([^`]+)`/g)].map((m) => [m[1]!, m[2]!] as const)
+    expect(pairs.length, 'README 「이름 접기」 의 예를 찾지 못했다').toBeGreaterThanOrEqual(4)
+    for (const [raw, folded] of pairs) expect(foldSliceName(raw), raw).toBe(folded)
+    // 숫자 없는 토큰이 그대로라는 예가 있어야 한다 — 접기의 경계를 말하는 예다.
+    expect(pairs.some(([raw, folded]) => raw === folded)).toBe(true)
+  })
+
+  it('DM-7 README 손실 통계 이름 ↔ FTRACE_LOSS_STATS', () => {
+    const bullet = /- \*\*`ftrace_overrun_events`\*\*[\s\S]*?(?=\n- |\n\n)/.exec(DIAG)?.[0] ?? ''
+    const names = ticks(bullet).filter((t) => t.startsWith('ftrace_cpu_'))
+    expect(names).toEqual([...FTRACE_LOSS_STATS])
+  })
+
+  it('DM-7 README 진단 절의 카테고리 · 최대 시간 ↔ DIAGNOSE_ATRACE_CATEGORIES · DIAGNOSE_MAX_DURATION_MS', () => {
+    const cats = /카테고리 ((?:`[a-z]+` · )*`[a-z]+`)/.exec(DIAG)?.[1] ?? ''
+    expect(ticks(cats)).toEqual([...DIAGNOSE_ATRACE_CATEGORIES])
+    const minutes = Number(/최대 (\d+)분/.exec(DIAG)?.[1])
+    expect(minutes * 60_000).toBe(DIAGNOSE_MAX_DURATION_MS)
+  })
+
+  it('DM-7 README 예시 JSON ↔ DiagnoseBlockSchema — 모든 필드가 순서대로 있고 스키마를 그대로 통과한다', () => {
+    const json = /```json\n([\s\S]*?)\n```/.exec(DIAG)?.[1]
+    expect(json, 'README 진단 절에서 예시 JSON 을 찾지 못했다').toBeDefined()
+    const example = JSON.parse(json!) as Record<string, unknown>
+    expect(Object.keys(example)).toEqual(Object.keys(DiagnoseBlockSchema.shape))
+    // 스키마가 모르는 키는 parse 가 지운다 — 지운 것이 있으면 같지 않다.
+    expect(DiagnoseBlockSchema.parse(example)).toEqual(example)
+  })
+})
+
+describe('DM-6 README 1.1.0 역사', () => {
+  /**
+   * 코드 검수 #4. 1.1.0 은 npm 0.1.0(2026-08-20 · reason_code 35개 · metrics.frame 없음) 뒤 0.2.0
+   * (2026-08-31)이 같은 1.1.0 으로 metrics.frame 과 no_frames 를 더했다 (git 2ee8198 · 4a68127).
+   * "출시 전에만 넓혔다" · "출시 뒤 첫 확장" 은 그 사실과 다르다.
+   */
+  it('DM-6 1.1.0 역사 — 0.2.0 이 같은 1.1.0 으로 frame · no_frames 를 더한 사실이 있고, "첫 확장" 단정이 없다', () => {
+    const cache = section('### 스키마를 다시 꺼내야 하는 때')
+    expect(cache).toContain('0.2.0(2026-08-31)이 같은 `1.1.0` 으로 `metrics.frame` 과 `no_frames` 를 더했습니다')
+    for (const [where, text] of [
+      ['README.md', README],
+      ['docs/STATUS.md', STATUS],
+      ['packages/core/src/schema/result.ts', RESULT_TS],
+    ] as const) {
+      expect(text, where).toContain('no_frames')
+      expect(text, where).not.toMatch(/첫 확장|첫 적용|출시 전 개발 중에 계약이|그 전 개발 중에/)
+    }
   })
 })

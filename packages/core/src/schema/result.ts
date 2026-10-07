@@ -2,16 +2,19 @@ import { z } from 'zod'
 import { METRIC_REASON_CODES, type MetricReasonCode } from './reasons.js'
 
 // 1.2.0 — 진단 세션(기능 문서 diagnostic-mode)의 자리. 최상위 `diagnose` 블록과
-// `session.options.diagnose` 를 optional 로, reason_code `app_slices_open_unknown` 하나를 더했다.
+// `session.options.diagnose` 를 optional 로, reason_code 둘(`app_slices_open_unknown` · `ftrace_not_recorded`)을
+// 더했다.
 // 전부 아래 표의 minor 항목이다. **둘 다 진단 세션에만 실린다** — 평소 세션의 result.json 은
 // 1.1.0 과 키가 같고, 진단 키가 없는 1.1.0 문서는 이 스키마를 그대로 통과한다.
 //
 // 1.1.0 — M2 가 metrics 에 startup / cpu / memory / log 를, M3 가 thermal / network 를
 // optional 로 더했다. 1.0.0 문서(frame 하나만 있는)는 여전히 이 스키마를 통과한다.
-// 1.1.0 은 npm 0.1.0 ~ 0.2.1 로 출시됐다. 그 전 개발 중에는 "미출시 버전 안의 확장은 버전
-// 사유가 아니다" 로 판단해 1.1.0 안에서 계약을 여러 번 넓혔다 — 그래서 `1.1.0` 이라는 같은
+// 1.1.0 은 npm 0.1.0(2026-08-20) ~ 0.2.1 로 출시됐다. 개발 중에는 "미출시 버전 안의 확장은 버전
+// 사유가 아니다" 로 판단해 1.1.0 안에서 계약을 여러 번 넓혔고, 출시 뒤에도 0.2.0(2026-08-31)이
+// 같은 1.1.0 으로 metrics.frame 과 reason_code no_frames 를 더했다 (0.1.0 때 스키마는 reason_code
+// 35개 · metrics.frame 없음, 0.2.0 은 36개 — git 2ee8198 · 4a68127). 그래서 `1.1.0` 이라는 같은
 // 숫자가 넓이가 다른 계약 여럿을 가리킨다 (README 「스키마를 다시 꺼내야 하는 때」).
-// 출시된 계약에는 그 판단을 쓰지 않는다. 1.2.0 이 그 첫 적용이다.
+// 1.2.0 부터는 출시된 계약을 넓히면 아래 표대로 버전을 올린다.
 //
 // **규칙 (출시된 계약을 바꿀 때 이 표를 그대로 쓴다):**
 //   metrics 에 새 키를 .optional() 로 추가        → minor  (옛 문서가 통과한다)
@@ -1652,7 +1655,9 @@ export const DiagnoseBlockSchema = z
         '- collected: 다 나왔다.\n' +
         '- partial: process_not_in_trace 면 대상 앱 프로세스를 트레이스에서 못 찾아 target_process_* ' +
         '네 칸이 null 이다(trace_slices · ftrace_overrun_events 는 있다). process_name_stale_in_trace 면 ' +
-        '이름이 낡아 캡처 때 받아 둔 pid 로 찾았고 값은 다 있다.\n' +
+        '이름이 낡아 캡처 때 받아 둔 pid 로 찾았고 값은 다 있다. ftrace_not_recorded 면 원본에 ftrace 가 ' +
+        '안 남았거나(CPU 별 ftrace 통계 0행) ftrace 를 켜다 오류가 나서, slice 0개가 "없었다" 인지 ' +
+        '"못 쟀다" 인지 모른다 — trace_slices 와 target_process_* 네 칸이 null 이다(0 · [] 이 아니다).\n' +
         '- unsupported: 기기에 linux.ftrace 데이터소스가 없어 atrace 를 기록할 수 없었다 ' +
         '(data_source_not_registered). 트레이스에서 읽는 칸은 null 이다.\n' +
         '- failed: 원본이 없거나(trace_missing) 쿼리가 터졌다(query_failed). 트레이스에서 읽는 칸은 null 이다.\n' +
@@ -1690,7 +1695,11 @@ export const DiagnoseBlockSchema = z
       .int()
       .nonnegative()
       .nullable()
-      .describe('**트레이스 전체**(모든 프로세스)의 slice 수. ' + DIAGNOSE_SLICE_SCOPE),
+      .describe(
+        '**트레이스 전체**(모든 프로세스)의 slice 수. ' +
+          DIAGNOSE_SLICE_SCOPE +
+          ' null 은 트레이스를 못 읽었거나 ftrace 가 원본에 안 남은 것이다(status 참고).',
+      ),
     target_process_slices: z
       .number()
       .int()
@@ -1701,7 +1710,8 @@ export const DiagnoseBlockSchema = z
           '앱 slice 를 가르지 않는다(atrace 마커에 가를 태그가 없다). 대상 앱 프로세스는 metrics 와 같은 ' +
           '규칙으로 하나를 고른다. ' +
           DIAGNOSE_SLICE_SCOPE +
-          ' null 은 그 프로세스를 트레이스에서 못 찾았거나(status partial) 트레이스를 못 읽은 것이다.',
+          ' null 은 그 프로세스를 트레이스에서 못 찾았거나 · ftrace 가 원본에 안 남았거나(둘 다 status ' +
+          'partial) 트레이스를 못 읽은 것이다.',
       ),
     target_process_slices_unfinished: z
       .number()
@@ -1717,8 +1727,9 @@ export const DiagnoseBlockSchema = z
       .nonnegative()
       .nullable()
       .describe(
-        '**커널 ftrace 링버퍼가 넘쳐 잃은 이벤트 수** — trace_processor stats 의 ' +
-          'ftrace_cpu_overrun_delta 와 ftrace_cpu_commit_overrun_delta 를 CPU 마다 더한 값(트레이스 구간의 ' +
+        '**커널 ftrace 링버퍼에서 잃은 이벤트 수** — trace_processor stats 의 ' +
+          'ftrace_cpu_overrun_delta(덮어써서) · ftrace_cpu_commit_overrun_delta(쓰는 중에 겹쳐서) · ' +
+          'ftrace_cpu_dropped_events_delta(덮어쓰기를 끈 버퍼가 꽉 차서)를 CPU 마다 더한 값(트레이스 구간의 ' +
           '증가분). atrace slice 는 이 버퍼를 지나므로 0 이 아니면 slice 가 그만큼 빠졌다. ' +
           'measurement_overhead.trace_buffer_overrun 은 perfetto 버퍼(traced_buf*)만 보므로 이 손실을 못 잡는다. ' +
           'null 은 트레이스에 그 통계가 없다는 뜻이다(0 이 아니다).',
@@ -1753,7 +1764,8 @@ export const DiagnoseBlockSchema = z
           DIAGNOSE_SLICE_SCOPE +
           ' ' +
           DIAGNOSE_UNFINISHED +
-          '\n**null 은 표를 만들지 못했다는 뜻이다**(대상 앱 프로세스를 못 찾았거나 트레이스를 못 읽음) — ' +
+          '\n**null 은 표를 만들지 못했다는 뜻이다**(대상 앱 프로세스를 못 찾았거나 · ftrace 가 원본에 안 ' +
+          '남았거나 · 트레이스를 못 읽음) — ' +
           '빈 배열이면 프로세스는 찾았고 slice 가 0개였다.',
       ),
   })

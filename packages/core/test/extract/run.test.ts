@@ -843,7 +843,7 @@ describe('진단 세션의 result.json', () => {
   const json = (v: unknown) => ({ stdout: `"j"\n"${JSON.stringify(v)}"\n` })
   function diagnoseRunner(trace: string, groups: SliceGroupRow[]): FakeProcessRunner {
     return runner(trace)
-      .on(`query ${trace} ${DIAGNOSE_TOTALS_SQL}`, json({ trace_slices: 120, ftrace_overrun_events: 0 }))
+      .on(`query ${trace} ${DIAGNOSE_TOTALS_SQL}`, json({ trace_slices: 120, ftrace_overrun_events: 0, ftrace_cpu_stats: 96, ftrace_setup_errors: 0 }))
       .on(`query ${trace} ${appProcessSql(PKG, APP_PID)}`, json([{ upid: UPID, pid: APP_PID, name: PKG }]))
       .on(`query ${trace} ${diagnoseSlicesSql(UPID, APP_PID)}`, json(groups))
   }

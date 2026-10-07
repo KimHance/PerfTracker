@@ -246,6 +246,16 @@ export const METRIC_REASON_CODES = [
    * detail: sdk_int, debuggable(false | null)
    */
   'app_slices_open_unknown',
+  /**
+   * **진단 블록 전용** — 블록 `reason_code` 에만 온다 (plan D35).
+   *
+   * 원본에 ftrace 가 안 남았거나(CPU 별 `ftrace_cpu_*` 통계가 0행) traced_probes 가 ftrace 를 켜다
+   * 오류를 냈다(`ftrace_setup_errors` > 0). 그러면 slice 0개는 "재 봤더니 없었다" 가 아니므로 블록은
+   * `partial` 이고 slice 수 · 표가 null 이다. 오류가 atrace 의 것인지 다른 이벤트의 것인지는 원본이
+   * 말하지 않아 가르지 않는다.
+   * detail: cause('no_ftrace_stats' | 'ftrace_setup_errors'), ftrace_cpu_stats, setup_errors
+   */
+  'ftrace_not_recorded',
 ] as const
 
 export type MetricReasonCode = (typeof METRIC_REASON_CODES)[number]
@@ -447,6 +457,13 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
       d['debuggable'] === false ? DIAGNOSE_COPY.reasonNotDebuggable : DIAGNOSE_COPY.reasonDebuggableUnknown,
       d['sdk_int'] !== undefined ? { sdk: String(d['sdk_int']) } : {},
     ),
+  ftrace_not_recorded: (d) =>
+    d['cause'] === 'ftrace_setup_errors'
+      ? fillCopy(
+          DIAGNOSE_COPY.reasonFtraceSetupErrors,
+          d['setup_errors'] != null ? { count: String(d['setup_errors']) } : {},
+        )
+      : DIAGNOSE_COPY.reasonFtraceNoStats,
 }
 
 /** 코드 → 한국어 문장. 모르는 코드는 조용히 비우지 않고 코드 자체를 남긴다. */

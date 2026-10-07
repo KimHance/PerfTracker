@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { accessSync, constants, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -10,11 +10,14 @@ import {
   DIAGNOSE_TOTALS_SQL,
   type DiagnoseExtractInput,
   diagnoseSlicesSql,
+  type DiagnoseTotalsRow,
   extractDiagnose,
+  FTRACE_LOSS_STATS,
   foldSliceName,
   type SliceGroupRow,
 } from '../../src/extract/diagnose.js'
 import { TraceProcessor } from '../../src/perfetto/traceProcessor/client.js'
+import { artifactFor, cachedBinaryPath } from '../../src/perfetto/traceProcessor/locate.js'
 import { FakeProcessRunner } from '../support/fakeProcessRunner.js'
 
 const BIN = '/bin/trace_processor_shell'
@@ -46,8 +49,12 @@ const GROUPS: SliceGroupRow[] = [
   g('bindApplication', 'main', 1, 1, 67_307_000, 67_307_000),
 ]
 
+/** ftrace 가 돈 원본의 전체 수 — CPU 8개 × ftrace_cpu_* 통계 · 켜기 오류 0. */
+const TOTALS: DiagnoseTotalsRow = { trace_slices: 75_800, ftrace_overrun_events: 0, ftrace_cpu_stats: 96, ftrace_setup_errors: 0 }
+const totals = (over: Partial<DiagnoseTotalsRow>): [string, unknown] => [DIAGNOSE_TOTALS_SQL, { ...TOTALS, ...over }]
+
 const HAPPY: [string, unknown][] = [
-  [DIAGNOSE_TOTALS_SQL, { trace_slices: 75_800, ftrace_overrun_events: 0 }],
+  [DIAGNOSE_TOTALS_SQL, TOTALS],
   [appProcessSql(PKG, APP_PID), [{ upid: UPID, pid: APP_PID, name: PKG }]],
   [diagnoseSlicesSql(UPID, APP_PID), GROUPS],
 ]
@@ -219,27 +226,133 @@ describe('DM-7 frametimeline 제외', () => {
 })
 
 describe('D18 ftrace 손실 수', () => {
-  it('D18 ftrace 손실 = overrun · commit_overrun 의 delta 합 — begin · end 를 더하지 않는다', () => {
-    expect(DIAGNOSE_TOTALS_SQL).toContain("name in ('ftrace_cpu_overrun_delta', 'ftrace_cpu_commit_overrun_delta')")
+  it('D18 ftrace 손실 = overrun · commit_overrun · dropped_events 의 delta 합 — begin · end 를 더하지 않는다', () => {
+    expect([...FTRACE_LOSS_STATS]).toEqual([
+      'ftrace_cpu_overrun_delta',
+      'ftrace_cpu_commit_overrun_delta',
+      'ftrace_cpu_dropped_events_delta',
+    ])
+    expect(DIAGNOSE_TOTALS_SQL).toContain(
+      "name in ('ftrace_cpu_overrun_delta', 'ftrace_cpu_commit_overrun_delta', 'ftrace_cpu_dropped_events_delta')",
+    )
     expect(DIAGNOSE_TOTALS_SQL).not.toMatch(/_begin|_end/)
   })
 
-  it('D18 ftrace 통계가 없으면 null 이고 0 은 0 이다', async () => {
-    const none = await extractDiagnose(
+  /**
+   * **SQL 이 null 을 지키는가** — 가짜 runner 는 넣어 준 null 을 그대로 돌려주므로 TS 의 `?? null` 만
+   * 시험한다. SQLite 의 `sum` 은 행이 없으면 NULL 이고 `total` 은 0.0 이다 (실 trace_processor ·
+   * ftrace 가 안 돈 원본 B0: sum NULL · total 0.000). `total` · `coalesce(…, 0)` · `ifnull(…, 0)` 로
+   * 바꾸면 "통계 없음" 이 "잃은 것 0" 이 된다. 실제 엔진으로 보는 시험은 아래 「실 trace_processor」.
+   */
+  it('D18 ftrace 통계가 없으면 null — 손실 칸은 sum 이고 0 으로 접는 함수가 없다 (SQL)', () => {
+    const from = DIAGNOSE_TOTALS_SQL.indexOf("'ftrace_overrun_events', (") + "'ftrace_overrun_events', (".length
+    const loss = DIAGNOSE_TOTALS_SQL.slice(from, DIAGNOSE_TOTALS_SQL.indexOf("'ftrace_cpu_stats'"))
+    expect(loss).toMatch(/^select sum\(value\) from stats where name in \(/)
+    expect(DIAGNOSE_TOTALS_SQL).not.toMatch(/\b(total|coalesce|ifnull)\(/)
+  })
+
+  it('D18 ftrace 손실 — 통계가 있으면 잰 값 그대로 (0 은 0 · 37 은 37)', async () => {
+    expect((await extractDiagnose(input())).ftrace_overrun_events).toBe(0)
+    const lost = await extractDiagnose(input({ tp: tpWith([totals({ ftrace_overrun_events: 37 }), ...HAPPY.slice(1)]) }))
+    expect(lost.ftrace_overrun_events).toBe(37)
+  })
+})
+
+describe('D35 ftrace 가 원본에 안 남음', () => {
+  const SLICE_CELLS = [
+    'trace_slices',
+    'target_process_slices',
+    'target_process_slices_unfinished',
+    'target_process_slice_names_unfolded',
+    'target_process_slice_names',
+  ] as const
+
+  it('D35 ftrace 통계 0행 — partial · ftrace_not_recorded(no_ftrace_stats) · slice 칸 null (0 · [] 아님)', async () => {
+    // 실측 B0(ftrace 안 돈 원본) 모양: slice 0 · 손실 통계 없음 · CPU 통계 0행 · 켜기 오류 0.
+    const block = await extractDiagnose(
       input({
         tp: tpWith([
-          [DIAGNOSE_TOTALS_SQL, { trace_slices: 0, ftrace_overrun_events: null }],
+          totals({ trace_slices: 0, ftrace_overrun_events: null, ftrace_cpu_stats: 0 }),
           ...HAPPY.slice(1),
         ]),
       }),
     )
-    expect(none.ftrace_overrun_events).toBeNull()
 
-    const lost = await extractDiagnose(
-      input({ tp: tpWith([[DIAGNOSE_TOTALS_SQL, { trace_slices: 10, ftrace_overrun_events: 37 }], ...HAPPY.slice(1)]) }),
+    expect(block.status).toBe('partial')
+    expect(block.reason_code).toBe('ftrace_not_recorded')
+    expect(block.reason).toBe(DIAGNOSE_COPY.reasonFtraceNoStats)
+    for (const key of SLICE_CELLS) expect(block[key], key).toBeNull()
+    expect(block.ftrace_overrun_events).toBeNull()
+    // 열림 · 범위는 트레이스와 따로 간다.
+    expect(block.app_slices_open).toBe(true)
+    expect(block.atrace_categories).toEqual(['am', 'wm', 'view'])
+  })
+
+  it('D35 ftrace 설정 오류 — partial · ftrace_not_recorded(ftrace_setup_errors) · 잃은 이벤트 수는 잰 그대로', async () => {
+    const block = await extractDiagnose(
+      input({ tp: tpWith([totals({ ftrace_setup_errors: 2, ftrace_overrun_events: 5 }), ...HAPPY.slice(1)]) }),
     )
-    expect(lost.ftrace_overrun_events).toBe(37)
-    expect((await extractDiagnose(input())).ftrace_overrun_events).toBe(0)
+
+    expect(block.status).toBe('partial')
+    expect(block.reason_code).toBe('ftrace_not_recorded')
+    expect(block.reason).toBe(fillCopy(DIAGNOSE_COPY.reasonFtraceSetupErrors, { count: 2 }))
+    expect(block.reason).toBe('ftrace 설정 오류 2건 · slice 수 모름')
+    for (const key of SLICE_CELLS) expect(block[key], key).toBeNull()
+    expect(block.ftrace_overrun_events).toBe(5)
+  })
+
+  it('D35 켜기 오류 수를 못 읽으면(null) 그것만으로 모름이라 하지 않는다 — CPU 통계가 있으면 collected', async () => {
+    const block = await extractDiagnose(input({ tp: tpWith([totals({ ftrace_setup_errors: null }), ...HAPPY.slice(1)]) }))
+    expect(block.status).toBe('collected')
+    expect(block.target_process_slices).toBe(6)
+  })
+})
+
+/**
+ * **실제 엔진으로 SQL 을 돌린다** — 위 시험은 SQL 문자열과 가짜 응답을 본다. 여기는 이 컴퓨터에
+ * 고정 판 trace_processor 가 받아져 있으면(`~/.perftracker/bin`) 합성 systrace 원문(ftrace 통계가 없는
+ * 원본)에 `DIAGNOSE_TOTALS_SQL` 과 `extractDiagnose` 를 그대로 돌린다. 없으면 건너뛴다 — 시험이
+ * 바이너리를 내려받지 않는다.
+ */
+const TP_BIN = (() => {
+  try {
+    const bin = cachedBinaryPath(artifactFor(process.platform, process.arch))
+    accessSync(bin, constants.X_OK)
+    return bin
+  } catch {
+    return null
+  }
+})()
+
+describe.skipIf(TP_BIN === null)('D18 · D35 실 trace_processor (합성 systrace · ftrace 통계 없음)', () => {
+  function systrace(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'pt-diag-tp-'))
+    const path = join(dir, 'trace.systrace')
+    writeFileSync(
+      path,
+      '# tracer: nop\n#\n' +
+        '           <...>-100   (  100) [000] ....  10.000000: tracing_mark_write: B|100|doFrame 1\n' +
+        '           <...>-100   (  100) [000] ....  10.005000: tracing_mark_write: E|100\n' +
+        '           <...>-101   (  100) [001] ....  10.006000: tracing_mark_write: B|100|open\n',
+    )
+    return path
+  }
+
+  it('D18 실 엔진 — ftrace 통계가 없는 원본에서 손실 칸이 null 이다 (total · coalesce 면 0)', async () => {
+    const tp = new TraceProcessor(TP_BIN!, systrace())
+    const row = await tp.queryJson<DiagnoseTotalsRow>(DIAGNOSE_TOTALS_SQL)
+    expect(row.ftrace_overrun_events).toBeNull()
+    expect(row.ftrace_cpu_stats).toBe(0)
+    expect(row.trace_slices).toBe(2)
+  })
+
+  it('D35 실 엔진 — slice 가 있어도 ftrace 통계가 없으면 ftrace_not_recorded · slice 칸 null', async () => {
+    const path = systrace()
+    const block = await extractDiagnose(input({ tp: new TraceProcessor(TP_BIN!, path), tracePath: path, appPid: 100 }))
+    expect(block.status).toBe('partial')
+    expect(block.reason_code).toBe('ftrace_not_recorded')
+    expect(block.trace_slices).toBeNull()
+    expect(block.ftrace_overrun_events).toBeNull()
   })
 })
 
@@ -387,7 +500,7 @@ describe('extractDiagnose', () => {
     const block = await extractDiagnose(
       input({
         env: { sdkInt: 36, dataSources: ['linux.process_stats', 'linux.sys_stats'] },
-        tp: tpWith([[DIAGNOSE_TOTALS_SQL, { trace_slices: 0, ftrace_overrun_events: null }], ...HAPPY.slice(1)]),
+        tp: tpWith([totals({ trace_slices: 0, ftrace_overrun_events: null, ftrace_cpu_stats: 0 }), ...HAPPY.slice(1)]),
       }),
     )
 

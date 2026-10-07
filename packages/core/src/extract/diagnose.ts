@@ -29,23 +29,42 @@ const NOT_FRAMETIMELINE =
   'and s.id not in (select id from expected_frame_timeline_slice)'
 
 /**
- * 커널 ftrace 링버퍼에서 잃은 이벤트 — CPU 마다 하나씩 있는 `*_delta`(트레이스 구간의 증가분)를 더한다.
- * `_begin` · `_end` 는 같은 카운터의 시작 · 끝 값이라 더하면 세 번 센다 (실현성 재검토 #5).
+ * 커널 ftrace 링버퍼에서 잃은 이벤트의 stats 이름 — CPU 마다 하나씩 있는 `*_delta`(트레이스 구간의
+ * 증가분)를 더한다. `_begin` · `_end` 는 같은 카운터의 시작 · 끝 값이라 더하면 세 번 센다 (실현성 재검토 #5).
  *
- * **overrun 과 commit_overrun 둘 다 센다.** 둘 다 커널 per-cpu 링버퍼의 손실 카운터이고(앞의 것은
- * 덮어써서, 뒤의 것은 쓰는 중에 겹쳐서), 하나만 세면 다른 쪽으로 잃은 slice 가 있어도 0 을 낸다.
- * 통계가 아예 없으면 `sum` 이 null 이다 — ftrace 가 안 돈 트레이스(실측 B0)가 그렇다. 0 으로 접지 않는다.
+ * **손실 카운터 셋을 다 센다** — overrun(덮어써서) · commit_overrun(쓰는 중에 겹쳐서) ·
+ * dropped_events(덮어쓰기를 끈 링버퍼가 꽉 차서). 하나라도 빼면 그쪽으로 잃은 slice 가 있어도 0 을 낸다.
+ */
+export const FTRACE_LOSS_STATS = [
+  'ftrace_cpu_overrun_delta',
+  'ftrace_cpu_commit_overrun_delta',
+  'ftrace_cpu_dropped_events_delta',
+] as const
+
+/**
+ * 트레이스 전체에서 한 번에 읽는 넷.
+ *
+ * - `ftrace_overrun_events` 는 **`sum`** 이다 — SQLite 의 `sum` 은 행이 없으면 NULL 이고 `total` 은
+ *   0.0 이다. ftrace 가 안 돈 원본(실측 B0)에는 이 통계가 한 행도 없고, 그것은 "잃은 것 0" 이 아니라
+ *   "모른다" 다. `total` · `coalesce(…, 0)` 로 바꾸면 거짓 청정이 된다.
+ * - `ftrace_cpu_stats` 는 CPU 마다 붙는 `ftrace_cpu_*` 통계의 행 수 — ftrace 가 원본에 남았는지의 증거다.
+ *   전역 `ftrace_*` 통계(`ftrace_setup_errors` 등)는 ftrace 가 안 돈 원본에도 0 으로 있어 증거가 못 된다.
+ * - `ftrace_setup_errors` 는 traced_probes 가 ftrace(atrace 포함)를 켜다 낸 오류 수. 없으면 null.
  */
 export const DIAGNOSE_TOTALS_SQL =
   "select json_object('trace_slices', (select count(*) from slice s " +
   'where (s.track_id in (select id from thread_track) or s.track_id in (select id from process_track)) ' +
   `and ${NOT_FRAMETIMELINE}), ` +
   "'ftrace_overrun_events', (select sum(value) from stats " +
-  "where name in ('ftrace_cpu_overrun_delta', 'ftrace_cpu_commit_overrun_delta'))) as j"
+  `where name in (${FTRACE_LOSS_STATS.map((n) => `'${n}'`).join(', ')})), ` +
+  "'ftrace_cpu_stats', (select count(*) from stats where name glob 'ftrace_cpu_*'), " +
+  "'ftrace_setup_errors', (select value from stats where name = 'ftrace_setup_errors')) as j"
 
 export interface DiagnoseTotalsRow {
   trace_slices: number
   ftrace_overrun_events: number | null
+  ftrace_cpu_stats: number
+  ftrace_setup_errors: number | null
 }
 
 /** 갈래 셋 — 메인 스레드(tid = pid) · 그 밖 스레드 · 프로세스 트랙(비동기). */
@@ -237,13 +256,34 @@ async function readTraceCells(
 
   try {
     const totals = await input.tp.queryJson<DiagnoseTotalsRow>(DIAGNOSE_TOTALS_SQL)
+    const ftraceOverrun = totals.ftrace_overrun_events ?? null
+
+    // ftrace 가 원본에 안 남았거나(CPU 통계 0행) 켜다 오류가 났으면 slice 의 0개는 "재 봤더니 없었다"
+    // 가 아니다 (plan D35). 오류가 어느 이벤트 · 카테고리의 것인지는 원본이 말하지 않으므로 slice 칸을
+    // 전부 모름으로 둔다. 잃은 이벤트 수는 통계가 있으면 잰 그대로다.
+    const setupErrors = totals.ftrace_setup_errors ?? null
+    if (totals.ftrace_cpu_stats === 0 || (setupErrors !== null && setupErrors > 0)) {
+      return {
+        status: 'partial',
+        reason: {
+          code: 'ftrace_not_recorded',
+          detail: {
+            cause: setupErrors !== null && setupErrors > 0 ? 'ftrace_setup_errors' : 'no_ftrace_stats',
+            ftrace_cpu_stats: totals.ftrace_cpu_stats,
+            setup_errors: setupErrors,
+          },
+        },
+        cells: { ...NO_TRACE_CELLS, ftrace_overrun_events: ftraceOverrun },
+      }
+    }
+
     const candidates = await input.tp.queryJson<AppProcessCandidate[]>(
       appProcessSql(input.packageName, input.appPid),
     )
     const resolved = resolveAppProcess(candidates, input.packageName, input.appPid)
     const traceWide = {
       trace_slices: totals.trace_slices,
-      ftrace_overrun_events: totals.ftrace_overrun_events ?? null,
+      ftrace_overrun_events: ftraceOverrun,
     }
 
     // 프로세스를 못 찾으면 대상 앱 몫 칸은 전부 null 이다 — 표를 0행으로 내면 "slice 가 없었다" 가 된다.
