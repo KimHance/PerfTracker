@@ -1,8 +1,16 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import {
+  DiagnoseBlockSchema,
+  renderReason,
+  SliceBranchStatsSchema,
+  SliceNameRowSchema,
+} from '@perftracker/core'
 import { computeMaxT, type Mark, readMarks } from '../src/web/report/axis.js'
 import {
+  badgeOf,
+  blockState,
   buildBars,
   buildDelta,
   buildDistribution,
@@ -10,19 +18,32 @@ import {
   buildPairs,
   buildSeries,
   buildStat,
+  cardUnit,
   FPAD,
   type FrameTimelineVm,
   metricState,
   timeTicks,
   NO_DELTA,
+  type MetricState,
   type NoneVm,
+  type PairsVm,
   type SeriesVm,
   VITALS_SLOW_FRAME_MS,
 } from '../src/web/report/blocks.js'
-import { fmtValue, NONE_MISSING, NONE_NULL } from '../src/web/report/format.js'
-import { buildHeader } from '../src/web/report/header.js'
+import { fmtValue, NONE_MISSING, NONE_NULL, STATUS_LABEL } from '../src/web/report/format.js'
+import { buildHeader, isDiagnoseSession, tabsFor } from '../src/web/report/header.js'
 import { MANIFEST, NOT_DRAWN_METRICS, SECTIONS } from '../src/web/report/manifest.js'
 import { MISSING, readPath } from '../src/web/report/read.js'
+import {
+  ariaSort,
+  buildSliceTable,
+  INITIAL_SORT,
+  nextSort,
+  type SliceSort,
+  type SliceTableVm,
+  sortMark,
+  sortSliceRows,
+} from '../src/web/report/slices.js'
 import type {
   BarsBlock,
   DeltaBlock,
@@ -30,6 +51,7 @@ import type {
   FrameTimelineBlock,
   PairsBlock,
   SeriesBlock,
+  SliceTableBlock,
   StatBlock,
 } from '../src/web/report/manifest.js'
 
@@ -101,6 +123,7 @@ describe('표본 셋이 전부 렌더된다', () => {
           else if (b.kind === 'bars') buildBars(b, doc)
           else if (b.kind === 'delta') buildDelta(b, doc)
           else if (b.kind === 'pairs') buildPairs(b, doc)
+          else if (b.kind === 'slicetable') buildSliceTable(b, doc)
           else buildStat(b, doc)
         }, `${name} / ${b.title}`).not.toThrow()
       }
@@ -1256,6 +1279,33 @@ describe('시간별 프레임 카드', () => {
 })
 
 /**
+ * `docs/design/report/HANDOFF.md` 「2. 블록 N종」 도 모양 목록을 **숫자와 표로** 말한다. 한동안 6종이라
+ * 적힌 채 코드는 7종이었다 — 이번에 8종으로 맞추면서 대조 시험을 단다 (루트 AGENTS 「문서가 숫자 ·
+ * 목록으로 말하면 대조 시험」).
+ */
+describe('HANDOFF 가 말하는 블록 목록', () => {
+  it('DM-13 HANDOFF §2 블록 수 · kind 표가 매니페스트의 kind 와 같다', () => {
+    const doc = readFileSync(
+      fileURLToPath(new URL('../../../docs/design/report/HANDOFF.md', import.meta.url)),
+      'utf8',
+    )
+    const kinds = [...new Set(MANIFEST.map((b) => b.kind))].sort()
+    const head = /^## 2\. 블록 (\d+)종$/m.exec(doc)
+    expect(head, 'HANDOFF 에 「## 2. 블록 N종」 머리가 없다').not.toBeNull()
+    expect(Number(head![1])).toBe(kinds.length)
+
+    // 머리 바로 아래 표의 첫 칸 — 백틱 하나로 감싼 kind 이름.
+    const section = doc.slice(head!.index).split('\n### ')[0]!
+    const tableKinds = section
+      .split('\n')
+      .filter((l) => l.startsWith('| `'))
+      .map((l) => /^\| `([^`]+)` \|/.exec(l)?.[1])
+    expect(tableKinds.every((k) => k !== undefined), section).toBe(true)
+    expect([...(tableKinds as string[])].sort()).toEqual(kinds)
+  })
+})
+
+/**
  * `packages/gui/AGENTS.md` 는 이 화면의 모양 목록을 **개수와 이름으로** 말한다. 새 `kind` 를
  * 늘리고 문서를 안 고치면 여기서 깨진다 — 통과하는 테스트는 문서가 맞다는 증거가 아니지만,
  * 이 테스트는 목록이 갈리는 순간을 잡는다.
@@ -1270,5 +1320,544 @@ describe('AGENTS.md 가 말하는 모양 목록', () => {
     const kinds = [...new Set(MANIFEST.map((b) => b.kind))]
     expect(doc).toContain(`데이터 모양이 ${KO[kinds.length]} 가지`)
     for (const k of kinds) expect(doc, k).toContain(`\`${k}\``)
+  })
+})
+
+/* ══════════════════ 진단 세션 (DM-13) ══════════════════ */
+
+/**
+ * **합성 진단 블록.** 이름은 SM-S901N · YouTube 실측 이름을 접은 꼴이고 값은 지어 붙였다. 순서를
+ * 일부러 섞어 둔다 — 화면이 처음 순서를 스스로 지키는지 보려는 것이다. 블록은 core 의 스키마로
+ * 검사한다 (`DiagnoseBlockSchema.parse`) — 시험의 문서가 실제로 나올 수 있는 모양이어야 한다.
+ */
+const SLICE_ROWS = [
+  {
+    name: 'bindApplication',
+    main_thread: { count: 1, sum_ms: 67.307, max_ms: 67.307 },
+    other_threads: null,
+    async_tracks: null,
+  },
+  {
+    name: 'Choreographer#doFrame *',
+    main_thread: { count: 550, sum_ms: 3035.019, max_ms: 75.286 },
+    other_threads: { count: 7, sum_ms: 1.362, max_ms: 0.553 },
+    async_tracks: null,
+  },
+  {
+    name: '<missing root>',
+    main_thread: null,
+    other_threads: { count: 1500, sum_ms: 7574.2, max_ms: 2011.3 },
+    async_tracks: null,
+  },
+  {
+    name: 'animation',
+    main_thread: { count: 495, sum_ms: 830.2, max_ms: 24.9 },
+    other_threads: null,
+    async_tracks: null,
+  },
+  {
+    name: 'RV Scroll',
+    main_thread: { count: 364, sum_ms: 432.8, max_ms: 21.6 },
+    other_threads: null,
+    async_tracks: null,
+  },
+  {
+    // 한 갈래의 slice 가 전부 끝나지 않았으면 합 · 최대가 null 이다 (README).
+    name: 'onAccountReady',
+    main_thread: null,
+    other_threads: null,
+    async_tracks: { count: 2, sum_ms: null, max_ms: null },
+  },
+  {
+    // 같은 합 — 정렬에서 이름 순으로 갈린다.
+    name: 'Zygote preload',
+    main_thread: { count: 3, sum_ms: 432.8, max_ms: 200.1 },
+    other_threads: null,
+    async_tracks: null,
+  },
+]
+
+const OPEN_UNKNOWN_REASON = renderReason({
+  code: 'app_slices_open_unknown',
+  detail: { sdk_int: 30, debuggable: false },
+})
+
+type DiagState =
+  | 'collected' | 'open-null' | 'no-process' | 'failed' | 'stale'
+  | 'ftrace-not-recorded' | 'ftrace-setup-errors'
+
+function diagBlock(state: DiagState): Record<string, unknown> {
+  const base: Record<string, unknown> = {
+    atrace_categories: ['am', 'wm', 'view'],
+    atrace_apps: ['com.google.android.youtube'],
+    status: 'collected',
+    reason_code: null,
+    reason: null,
+    app_slices_open: true,
+    app_slices_open_reason_code: null,
+    app_slices_open_reason: null,
+    trace_slices: 75800,
+    target_process_slices: 62803,
+    target_process_slices_unfinished: 2,
+    ftrace_overrun_events: 0,
+    trace_bytes: 6783480,
+    target_process_slice_names_unfolded: 4921,
+    target_process_slice_names: SLICE_ROWS,
+  }
+  const reason = (code: string, detail: Record<string, unknown> = {}): Record<string, unknown> => ({
+    reason_code: code,
+    reason: renderReason({ code, detail } as Parameters<typeof renderReason>[0]),
+  })
+  const noSlices = {
+    target_process_slices: null,
+    target_process_slices_unfinished: null,
+    target_process_slice_names_unfolded: null,
+    target_process_slice_names: null,
+  }
+  switch (state) {
+    case 'collected':
+      return base
+    case 'open-null':
+      return {
+        ...base,
+        app_slices_open: null,
+        app_slices_open_reason_code: 'app_slices_open_unknown',
+        app_slices_open_reason: OPEN_UNKNOWN_REASON,
+      }
+    case 'no-process':
+      return {
+        ...base, ...noSlices, status: 'partial',
+        ...reason('process_not_in_trace', { package: 'com.google.android.youtube' }),
+      }
+    case 'failed':
+      return {
+        ...base, ...noSlices, status: 'failed', ...reason('trace_missing'),
+        trace_slices: null, ftrace_overrun_events: null, trace_bytes: null,
+      }
+    case 'stale':
+      return {
+        ...base, status: 'partial',
+        ...reason('process_name_stale_in_trace', {
+          pid: 10046, trace_name: '<pre-initialized>', package: 'com.google.android.youtube',
+        }),
+      }
+    case 'ftrace-not-recorded':
+      return {
+        ...base, ...noSlices, status: 'partial', ...reason('ftrace_not_recorded'),
+        trace_slices: null, ftrace_overrun_events: null,
+      }
+    case 'ftrace-setup-errors':
+      return { ...base, status: 'partial', ...reason('ftrace_setup_errors', { setup_errors: 28 }) }
+  }
+}
+
+/** 진단 세션 문서 — 진단 여부 · 블록 · 원본 경로. 원본이 없으면(failed) `artifacts.trace` 도 null. */
+function diagDoc(state: DiagState): Record<string, unknown> {
+  const block = DiagnoseBlockSchema.parse(diagBlock(state))
+  return {
+    schema_version: '1.2.0',
+    session: { id: 'a1b2c3', name: '유튜브 진단', state: 'completed', options: { launch: true, diagnose: true } },
+    measurement_overhead: {
+      tracing_processes_cpu_time_ms: 5570, tracing_processes_cpu_share_pct: 1,
+      tracing_processes_peak_rss_kb: 15436, adb_commands_during_session: 0, trace_buffer_overrun: false,
+    },
+    artifacts: { trace: state === 'failed' ? null : 'trace.perfetto-trace', raw: [] },
+    diagnose: block,
+  }
+}
+
+const DIAG_STATES: DiagState[] = [
+  'collected', 'open-null', 'no-process', 'failed', 'stale', 'ftrace-not-recorded', 'ftrace-setup-errors',
+]
+const DIAG_BLOCKS = MANIFEST.filter((b) => b.section === 'diagnose')
+const SLICE_CARD = MANIFEST.find((b) => b.kind === 'slicetable') as SliceTableBlock
+
+/**
+ * **진단 블록의 필드가 화면 어디에 나오는가** (plan D27 — 자리 다섯).
+ *
+ * 1. 행 — pairs 카드의 라벨이 필드 경로이고 값 칸이 그 값을 같은 포맷으로 낸다 (null 이면 `값 없음`)
+ * 2. 카드 배지 — `status` 가 unsupported · skipped · failed
+ * 3. 카드 제목 title — `reason` 문장. partial 의 `status` · `reason_code` 도 이 자리로 센다
+ * 4. 열림 행 title — `app_slices_open_reason`
+ * 5. null 값 자리의 코드 — 열림 행(`app_slices_open_reason_code`) · 표 자리(블록 `reason_code`)
+ *
+ * 뷰모델에서 거꾸로 센다 — 선언이 아니라 **그려질 것**이 근거다.
+ */
+function diagnosePlaces(doc: unknown): Map<string, string[]> {
+  const places = new Map<string, string[]>()
+  const add = (field: string, place: string): void => {
+    places.set(field, [...(places.get(field) ?? []), place])
+  }
+  const block = readPath(doc, 'diagnose') as Record<string, unknown>
+
+  for (const b of DIAG_BLOCKS) {
+    const state = blockState(doc, b)
+    const badge = badgeOf(state)
+    if (badge !== null && badge === STATUS_LABEL[block['status'] as string]) add('status', `배지:${b.title}`)
+    if (state.reason !== null && state.reason === block['reason']) {
+      add('reason', `제목 title:${b.title}`)
+      // D27 — partial · failed 의 status · reason_code 는 그 문장으로 센다.
+      if (block['status'] !== 'collected') {
+        add('status', `제목 title:${b.title}`)
+        add('reason_code', `제목 title:${b.title}`)
+      }
+    }
+
+    if (b.kind === 'pairs') {
+      const vm = buildPairs(b, doc)
+      if ((vm as NoneVm).none === true) continue
+      for (const [i, row] of (vm as PairsVm).rows.entries()) {
+        const key = b.keys![i]!
+        // 원본 카드는 루트 경로(`diagnose.trace_bytes`) · 나머지는 블록 기준(`trace_slices`).
+        const field = key.p.startsWith('diagnose.') ? key.p.slice('diagnose.'.length) : key.p
+        const own = b.path === 'diagnose' || key.p.startsWith('diagnose.')
+        if (!own) continue
+        if (row.label === key.p && row.value === fmtValue(block[field] as never, key.f)) add(field, `행:${b.title}`)
+        if (row.title !== undefined && row.title === block['app_slices_open_reason']) {
+          add('app_slices_open_reason', `열림 행 title`)
+        }
+        if (row.code !== undefined && row.code === block['app_slices_open_reason_code']) {
+          add('app_slices_open_reason_code', `열림 행 코드`)
+        }
+      }
+    }
+
+    if (b.kind === 'slicetable') {
+      const vm = buildSliceTable(b, doc)
+      const names = block['target_process_slice_names'] as { name: string }[] | null
+      if ((vm as NoneVm).none === true) {
+        // 표 자리의 `값 없음` + 블록 코드.
+        if (names === null && state.reasonCode === block['reason_code']) {
+          add('target_process_slice_names', '표 자리 값 없음')
+          add('reason_code', '표 자리 코드')
+        }
+      } else {
+        const t = vm as SliceTableVm
+        const want = [...names!].map((r) => r.name).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+        if (t.rows.length === names!.length && t.rows.every((r, i) => r.name === want[i])) {
+          add('target_process_slice_names', '표')
+        }
+      }
+    }
+  }
+  return places
+}
+
+describe('DM-13 진단 탭 전 필드', () => {
+  /** 스키마가 블록에 필드를 늘리면 여기서 먼저 깨진다 — 그 필드의 자리를 정하기 전엔 통과하지 않는다. */
+  it('DM-13 진단 탭 전 필드 — 블록 필드 목록이 core 스키마와 같다 (시험 문서가 전부를 싣는다)', () => {
+    const schemaKeys = Object.keys(DiagnoseBlockSchema.shape).sort()
+    for (const s of DIAG_STATES) expect(Object.keys(diagBlock(s)).sort(), s).toEqual(schemaKeys)
+    // 표 한 행 · 갈래 하나의 필드도 매니페스트가 선언한 것과 같다.
+    expect(Object.keys(SliceNameRowSchema.shape).sort()).toEqual(
+      [SLICE_CARD.nameField, ...SLICE_CARD.groups.map((g) => g.field)].sort(),
+    )
+    expect(Object.keys(SliceBranchStatsSchema.shape).sort()).toEqual(SLICE_CARD.stats.map((s) => s.field).sort())
+  })
+
+  for (const s of DIAG_STATES) {
+    it(`DM-13 진단 탭 전 필드 — ${s}: 블록의 모든 필드가 다섯 자리 중 하나에 나온다`, () => {
+      const doc = diagDoc(s)
+      const block = doc['diagnose'] as Record<string, unknown>
+      const places = diagnosePlaces(doc)
+
+      const hidden = Object.keys(block).filter((k) => !places.has(k))
+      // 화면에 안 나와도 되는 것은 **값이 없어 말할 것이 없는 이유 칸**과 `collected`(배지 없음 ·
+      // 제목 툴팁 없음 — 지표 카드와 같은 관례)뿐이다.
+      const silentOk = hidden.filter((k) => {
+        if (k === 'status') return block['status'] === 'collected'
+        if (k === 'reason_code' || k === 'reason') return block[k] === null && block['status'] === 'collected'
+        if (k === 'app_slices_open_reason_code' || k === 'app_slices_open_reason') {
+          return block[k] === null && block['app_slices_open'] === true
+        }
+        return false
+      })
+      expect(hidden.filter((k) => !silentOk.includes(k)), JSON.stringify([...places])).toEqual([])
+    })
+  }
+
+  /**
+   * **partial 은 배지를 달지 않는다** (HANDOFF ④ · `BADGED_STATUS`) — 이유 문장은 제목 title 로만 닿는다.
+   * 배지를 달면 값이 멀쩡한 낡은 이름 · 켜기 오류 상태가 실패처럼 읽힌다.
+   */
+  it('DM-13 partial 은 네 카드 모두 배지 없이 제목 title 만 — 배지는 unsupported · skipped · failed 뿐', () => {
+    for (const s of ['no-process', 'stale', 'ftrace-not-recorded', 'ftrace-setup-errors'] as const) {
+      const doc = diagDoc(s)
+      for (const b of DIAG_BLOCKS) {
+        expect(badgeOf(blockState(doc, b)), `${s} / ${b.title}`).toBeNull()
+        expect(blockState(doc, b).reason, `${s} / ${b.title}`).not.toBeNull()
+      }
+    }
+    const shell = (status: string): MetricState => ({ status, reason: 'r', reasonCode: 'c' })
+    expect(badgeOf(shell('partial'))).toBeNull()
+    expect(badgeOf(shell('collected'))).toBeNull()
+    expect(badgeOf(shell('unsupported'))).toBe('기기 미지원')
+    expect(badgeOf(shell('skipped'))).toBe('건너뜀')
+    expect(badgeOf(shell('failed'))).toBe('실패')
+  })
+
+  it('DM-13 collected 는 배지도 제목 title 도 없다 — 지표 카드와 같은 관례', () => {
+    const doc = diagDoc('collected')
+    for (const b of DIAG_BLOCKS) {
+      expect(badgeOf(blockState(doc, b)), b.title).toBeNull()
+      expect(blockState(doc, b).reason, b.title).toBeNull()
+    }
+  })
+
+  it('DM-13 failed 는 네 카드에 배지 · 제목 title, 표 자리는 값 없음 + trace_missing', () => {
+    const doc = diagDoc('failed')
+    for (const b of DIAG_BLOCKS) {
+      expect(badgeOf(blockState(doc, b)), b.title).toBe('실패')
+      expect(blockState(doc, b).reason, b.title).toBe('트레이스 원본이 없습니다.')
+    }
+    const vm = buildSliceTable(SLICE_CARD, doc)
+    expect((vm as NoneVm).none).toBe(true)
+    expect((vm as NoneVm).label).toBe(NONE_NULL)
+    expect(blockState(doc, SLICE_CARD).reasonCode).toBe('trace_missing')
+    // 표가 없으면 카드 단위(행 수)도 없다 — `0행` 이 아니다.
+    expect(cardUnit(SLICE_CARD, vm, true)).toBe('')
+    // 원본 경로가 null 이면 `값 없음` 은 문장이라 등폭이 아니다.
+    const source = DIAG_BLOCKS.find((b) => b.title === '원본') as PairsBlock
+    const trace = (buildPairs(source, doc) as PairsVm).rows[0]!
+    expect(trace.value).toBe(NONE_NULL)
+    expect(trace.mono).toBeUndefined()
+  })
+
+  /** 열림은 블록 status 와 따로 간다 — null 이어도 블록은 collected 이고 표가 있다 (README · D34). */
+  it('DM-13 열림 null — 열림 행만 값 없음 + 코드 · 문장은 그 행 title, 표는 그대로', () => {
+    const doc = diagDoc('open-null')
+    const scope = DIAG_BLOCKS.find((b) => b.title === '기록 범위') as PairsBlock
+    const row = (buildPairs(scope, doc) as PairsVm).rows.find((r) => r.label === 'app_slices_open')!
+    expect(row.value).toBe(NONE_NULL)
+    expect(row.code).toBe('app_slices_open_unknown')
+    expect(row.title).toBe(OPEN_UNKNOWN_REASON)
+    expect((buildSliceTable(SLICE_CARD, doc) as SliceTableVm).rows).toHaveLength(SLICE_ROWS.length)
+    expect(badgeOf(blockState(doc, scope))).toBeNull()
+  })
+
+  /** 값이 있으면 이유를 달지 않는다 — 멀쩡한 값까지 의심하게 만든다. */
+  it('DM-13 열림 true 면 그 행에 코드도 title 도 없다', () => {
+    const scope = DIAG_BLOCKS.find((b) => b.title === '기록 범위') as PairsBlock
+    const row = (buildPairs(scope, diagDoc('collected')) as PairsVm).rows.find((r) => r.label === 'app_slices_open')!
+    expect(row.value).toBe('예')
+    expect(row.code).toBeUndefined()
+    expect(row.title).toBeUndefined()
+
+    // 이유 칸에 무엇이 남아 있어도 값이 있으면 달지 않는다 — 값이 이긴다 (stat 카드와 같은 규칙).
+    const odd = { diagnose: { app_slices_open: true, app_slices_open_reason_code: 'x', app_slices_open_reason: 'y' } }
+    const oddRow = (buildPairs(scope, odd) as PairsVm).rows.find((r) => r.label === 'app_slices_open')!
+    expect(oddRow.code).toBeUndefined()
+    expect(oddRow.title).toBeUndefined()
+  })
+
+  /** 그 밖의 null 칸은 `값 없음` 만 — 코드는 열림 행과 표 자리에만 붙는다 (시안 · D27). */
+  it('DM-13 no-process — 대상 앱 몫 칸은 값 없음만 · 코드는 표 자리에만', () => {
+    const doc = diagDoc('no-process')
+    const counts = DIAG_BLOCKS.find((b) => b.title === 'slice 수') as PairsBlock
+    const rows = (buildPairs(counts, doc) as PairsVm).rows
+    const byLabel = Object.fromEntries(rows.map((r) => [r.label, r]))
+    expect(byLabel['trace_slices']!.value).toBe('75,800')
+    for (const k of ['target_process_slices', 'target_process_slices_unfinished', 'target_process_slice_names_unfolded']) {
+      expect(byLabel[k]!.value, k).toBe(NONE_NULL)
+      expect(byLabel[k]!.code, k).toBeUndefined()
+    }
+    expect(blockState(doc, SLICE_CARD).reasonCode).toBe('process_not_in_trace')
+  })
+
+  /** 카테고리 · 대상 앱 목록은 ` · ` 로 잇는다 — CLI 진단 라벨 줄과 같은 구분자 (plan D43 · 포맷 `dots`). */
+  it('DM-13 기록 범위 — 카테고리 · 대상 앱은 ` · ` 로 잇는다', () => {
+    const scope = DIAG_BLOCKS.find((b) => b.title === '기록 범위') as PairsBlock
+    const rows = (buildPairs(scope, diagDoc('collected')) as PairsVm).rows
+    expect(rows.map((r) => [r.label, r.value])).toEqual([
+      ['atrace_categories', 'am · wm · view'],
+      ['atrace_apps', 'com.google.android.youtube'],
+      ['app_slices_open', '예'],
+    ])
+    expect(fmtValue(['a', 'b'], 'dots')).toBe('a · b')
+    expect(fmtValue([], 'dots')).toBe('없음')
+    expect(fmtValue(null, 'dots')).toBe(NONE_NULL)
+  })
+
+  it('DM-13 원본 경로가 보인다 — 라벨은 루트 경로 그대로, 경로는 자르지 않는다', () => {
+    const source = DIAG_BLOCKS.find((b) => b.title === '원본') as PairsBlock
+    const rows = (buildPairs(source, diagDoc('collected')) as PairsVm).rows
+    expect(rows.map((r) => r.label)).toEqual(['artifacts.trace', 'diagnose.trace_bytes'])
+    expect(rows[0]!.value).toBe('trace.perfetto-trace')
+    expect(rows[0]!.wrap).toBe(true)
+    expect(rows[0]!.mono).toBe(true)
+    expect(rows[1]!.value).toBe('6.47 MB')
+  })
+
+  it('DM-13 slice 표 카드 단위는 행 수를 말한다 — 프레임워크와 앱 slice 를 가르지 않는 범위', () => {
+    const doc = diagDoc('collected')
+    expect(cardUnit(SLICE_CARD, buildSliceTable(SLICE_CARD, doc), true)).toBe(`대상 앱 프로세스 · ${SLICE_ROWS.length}행`)
+  })
+})
+
+describe('DM-13 행 모델 자르지 않음 · 구별 없음', () => {
+  const vmOf = (rows: unknown[]): SliceTableVm =>
+    buildSliceTable(SLICE_CARD, { diagnose: { target_process_slice_names: rows } }) as SliceTableVm
+
+  it('DM-13 행 모델 자르지 않음 — 1만 행이 1만 행이다', () => {
+    const many = Array.from({ length: 10_000 }, (_, i) => ({
+      name: `slice ${String(i).padStart(5, '0')}`,
+      main_thread: { count: i + 1, sum_ms: i * 1.5, max_ms: i },
+      other_threads: null,
+      async_tracks: null,
+    }))
+    const vm = vmOf(many)
+    expect(vm.rows).toHaveLength(10_000)
+    expect(vm.unit).toBe('대상 앱 프로세스 · 10,000행')
+  })
+
+  it('DM-13 행 모델 자르지 않음 — 이름은 원문 그대로다 (435자)', () => {
+    const long = `startActivity: Intent { ${'x'.repeat(400)} }`.padEnd(435, 'y')
+    expect(long).toHaveLength(435)
+    const vm = vmOf([{ name: long, main_thread: { count: 1, sum_ms: 12.4, max_ms: 12.4 }, other_threads: null, async_tracks: null }])
+    expect(vm.rows[0]!.name).toBe(long)
+  })
+
+  it('DM-13 처음 순서는 이름의 코드 단위 순이다 — 로캘 순이 아니다', () => {
+    const vm = vmOf(SLICE_ROWS)
+    expect(vm.rows.map((r) => r.name)).toEqual([
+      '<missing root>', 'Choreographer#doFrame *', 'RV Scroll', 'Zygote preload',
+      'animation', 'bindApplication', 'onAccountReady',
+    ])
+    // 로캘 순이면 `animation` 이 `Zygote preload` 보다 앞에 온다 — 그 순서가 아님을 못 박는다.
+    const names = vm.rows.map((r) => r.name)
+    expect(names.indexOf('Zygote preload')).toBeLessThan(names.indexOf('animation'))
+  })
+
+  it('DM-13 행 모델 구별 없음 — 모든 행이 이름과 칸뿐이고 모양이 같다', () => {
+    const vm = vmOf(SLICE_ROWS)
+    for (const r of vm.rows) {
+      expect(Object.keys(r).sort()).toEqual(['cells', 'name'])
+      expect(r.cells).toHaveLength(9)
+      for (const c of r.cells) expect(Object.keys(c).sort()).toEqual(['nil', 'text'])
+    }
+    // 뷰모델 전체에도 순위 · 강조 · 상위 N 자리가 없다.
+    expect(Object.keys(vm).sort()).toEqual(['columns', 'groups', 'nameLabel', 'rows', 'unit', 'values'])
+  })
+
+  it('DM-13 빈 갈래는 — 이고 0 이 아니다 · 끝나지 않은 slice 만 있으면 합 · 최대가 — 다', () => {
+    const vm = vmOf(SLICE_ROWS)
+    const bind = vm.rows.find((r) => r.name === 'bindApplication')!
+    expect(bind.cells.map((c) => c.text)).toEqual(['1', '67.3', '67.3', '—', '—', '—', '—', '—', '—'])
+    const open = vm.rows.find((r) => r.name === 'onAccountReady')!
+    expect(open.cells.slice(6).map((c) => c.text)).toEqual(['2', '—', '—'])
+    expect(open.cells.slice(6).map((c) => c.nil)).toEqual([false, true, true])
+  })
+
+  it('DM-13 표가 null 이면 0행이 아니라 값 없음 · 필드가 없으면 수집 안 함', () => {
+    expect((buildSliceTable(SLICE_CARD, { diagnose: { target_process_slice_names: null } }) as NoneVm).label).toBe(NONE_NULL)
+    expect((buildSliceTable(SLICE_CARD, {}) as NoneVm).label).toContain(NONE_MISSING)
+  })
+
+  /** `[]` 는 "프로세스는 찾았고 slice 가 0개" 다 — 재 봤더니 없었다. 표는 서고 단위가 0행을 말한다. */
+  it('DM-13 빈 배열은 0행 표다 — 값 없음이 아니다', () => {
+    const vm = vmOf([])
+    expect((vm as unknown as NoneVm).none).toBeUndefined()
+    expect(vm.rows).toEqual([])
+    expect(vm.unit).toBe('대상 앱 프로세스 · 0행')
+  })
+})
+
+describe('DM-13 정렬은 사람이 고를 때만', () => {
+  const vm = buildSliceTable(SLICE_CARD, { diagnose: { target_process_slice_names: SLICE_ROWS } }) as SliceTableVm
+  const names = (s: SliceSort): string[] => sortSliceRows(vm, s).map((r) => r.name)
+
+  it('DM-13 이름 내림은 코드 단위 순을 거꾸로 — 로캘 순의 거꾸로가 아니다', () => {
+    expect(names({ key: 'name', dir: 'desc' })).toEqual([
+      'onAccountReady', 'bindApplication', 'animation', 'Zygote preload',
+      'RV Scroll', 'Choreographer#doFrame *', '<missing root>',
+    ])
+    expect(names({ key: 'name', dir: 'desc' })).toEqual([...names(INITIAL_SORT)].reverse())
+  })
+
+  it('DM-13 처음 정렬 상태는 이름 오름이고 그때 순서는 처음 순서 그대로다', () => {
+    expect(INITIAL_SORT).toEqual({ key: 'name', dir: 'asc' })
+    expect(names(INITIAL_SORT)).toEqual(vm.rows.map((r) => r.name))
+  })
+
+  it('DM-13 숫자 열 첫 누름은 내림 · 다시 누르면 오름 · 이름 첫 누름은 오름', () => {
+    const s1 = nextSort(INITIAL_SORT, 'main_thread.sum_ms')
+    expect(s1).toEqual({ key: 'main_thread.sum_ms', dir: 'desc' })
+    expect(nextSort(s1, 'main_thread.sum_ms')).toEqual({ key: 'main_thread.sum_ms', dir: 'asc' })
+    expect(nextSort(s1, 'name')).toEqual({ key: 'name', dir: 'asc' })
+    expect(nextSort(INITIAL_SORT, 'name')).toEqual({ key: 'name', dir: 'desc' })
+  })
+
+  it('DM-13 빈 칸은 방향과 무관하게 끝 · 같은 값은 이름 코드 단위 순', () => {
+    const desc = names({ key: 'main_thread.sum_ms', dir: 'desc' })
+    expect(desc).toEqual([
+      'Choreographer#doFrame *', 'animation', 'RV Scroll', 'Zygote preload', 'bindApplication',
+      '<missing root>', 'onAccountReady',
+    ])
+    const asc = names({ key: 'main_thread.sum_ms', dir: 'asc' })
+    expect(asc).toEqual([
+      'bindApplication', 'RV Scroll', 'Zygote preload', 'animation', 'Choreographer#doFrame *',
+      '<missing root>', 'onAccountReady',
+    ])
+  })
+
+  it('DM-13 정렬은 새 배열이다 — 처음 순서를 망가뜨리지 않는다', () => {
+    const before = vm.rows.map((r) => r.name)
+    names({ key: 'other_threads.count', dir: 'desc' })
+    expect(vm.rows.map((r) => r.name)).toEqual(before)
+  })
+
+  it('DM-13 aria-sort · 표시는 정렬된 열에만', () => {
+    const s: SliceSort = { key: 'async_tracks.count', dir: 'desc' }
+    expect(ariaSort(s, 'async_tracks.count')).toBe('descending')
+    expect(ariaSort(s, 'name')).toBe('none')
+    expect(sortMark(s, 'async_tracks.count')).toBe('▼')
+    expect(sortMark({ key: 'name', dir: 'asc' }, 'name')).toBe('▲')
+    expect(sortMark(s, 'main_thread.count')).toBe('')
+  })
+
+  it('DM-13 정렬할 수 있는 머리는 이름 + 갈래 셋 × 수 셋 = 10개', () => {
+    expect(1 + vm.columns.length).toBe(10)
+    expect(vm.columns.map((c) => c.key)).toEqual([
+      'main_thread.count', 'main_thread.sum_ms', 'main_thread.max_ms',
+      'other_threads.count', 'other_threads.sum_ms', 'other_threads.max_ms',
+      'async_tracks.count', 'async_tracks.sum_ms', 'async_tracks.max_ms',
+    ])
+  })
+})
+
+describe('DM-13 평소 보고서 그대로', () => {
+  const overhead = MANIFEST.find((b) => b.title === '측정 비용')!
+
+  it('DM-13 평소 보고서 그대로 — 탭 둘 · 진단 pill 없음 · 측정 비용 단위 없음', () => {
+    for (const doc of [FULL, LEGACY, LOWEND]) {
+      expect(isDiagnoseSession(doc)).toBe(false)
+      expect(tabsFor(doc).map((t) => t.id)).toEqual(['summary', 'device'])
+      expect(buildHeader(doc).diagnosePill).toBeNull()
+      expect(cardUnit(overhead, buildPairs(overhead as PairsBlock, doc), isDiagnoseSession(doc))).toBe('')
+    }
+  })
+
+  it('DM-13 진단 세션 — 탭 셋 · 진단 pill · 측정 비용 단위 앱 프로세스 몫 미포함', () => {
+    const doc = diagDoc('collected')
+    expect(tabsFor(doc).map((t) => t.label)).toEqual(['요약', '기기', '진단'])
+    expect(buildHeader(doc).diagnosePill).toBe('진단')
+    expect(cardUnit(overhead, buildPairs(overhead as PairsBlock, doc), true)).toBe('앱 프로세스 몫 미포함')
+  })
+
+  /** 기준은 `session.options.diagnose === true` 하나 — 블록만 있거나 `false` 면 진단 세션이 아니다. */
+  it('DM-13 진단 여부는 options.diagnose === true 하나로 정한다', () => {
+    expect(isDiagnoseSession({ session: { options: { diagnose: false } }, diagnose: {} })).toBe(false)
+    expect(isDiagnoseSession({ diagnose: {} })).toBe(false)
+    expect(isDiagnoseSession({ session: { options: { diagnose: 'true' } } })).toBe(false)
+    expect(isDiagnoseSession({ session: { options: { diagnose: true } } })).toBe(true)
+  })
+
+  /** 평소 보고서의 기존 블록은 진단 칸이 생기기 전과 같은 뷰모델이다 — 새 칸(코드 · title · mono)이 안 붙는다. */
+  it('DM-13 평소 보고서 그대로 — 기존 pairs 행에 새 칸이 붙지 않는다', () => {
+    for (const b of MANIFEST.filter((x) => x.kind === 'pairs' && x.section !== 'diagnose')) {
+      const vm = buildPairs(b as PairsBlock, FULL)
+      if ((vm as NoneVm).none === true) continue
+      for (const r of (vm as PairsVm).rows) expect(Object.keys(r).sort(), b.title).toEqual(['label', 'share', 'value', 'wrap'])
+    }
   })
 })

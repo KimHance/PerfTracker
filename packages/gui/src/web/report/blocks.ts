@@ -1,7 +1,17 @@
 import type { FrameTimelineDto } from '../../contract/api.js'
 import type { Mark } from './axis.js'
 import type { Fmt } from './format.js'
-import { clock, fmtAxis, fmtValue, niceMax, nf, NONE_MISSING, NONE_NULL } from './format.js'
+import {
+  BADGED_STATUS,
+  clock,
+  fmtAxis,
+  fmtValue,
+  niceMax,
+  nf,
+  NONE_MISSING,
+  NONE_NULL,
+  STATUS_LABEL,
+} from './format.js'
 import type {
   BarsBlock,
   Block,
@@ -745,14 +755,27 @@ export function buildDelta(b: DeltaBlock, res: unknown): DeltaVm | NoneVm {
   }
 }
 
+export interface PairsRowVm {
+  label: string
+  value: string
+  /** `share` 는 값과 **따로** 낸다. 한 문자열로 붙이면 개수와 비율이 눈에서 섞인다. */
+  share: string
+  wrap: boolean
+  /** 기계값(경로) — 등폭으로 쓴다. */
+  mono?: true
+  /** 값이 `null` 인 이유 코드 (`why` 를 선언한 키만). 값이 있으면 없다. */
+  code?: string
+  /** 그 이유의 문장 — 행 툴팁. */
+  title?: string
+}
+
 export interface PairsVm {
   none?: false
-  /** `share` 는 값과 **따로** 낸다. 한 문자열로 붙이면 개수와 비율이 눈에서 섞인다. */
-  rows: { label: string; value: string; share: string; wrap: boolean }[]
+  rows: PairsRowVm[]
 }
 
 export function buildPairs(b: PairsBlock, res: unknown): PairsVm | NoneVm {
-  const raw = readPath(res, b.path)
+  const raw = readBlockRoot(res, b.path)
 
   if (b.arrayAs === 'list') {
     // 세 상태를 가른다: 필드가 없다 / 못 읽었다(null) / 재 봤더니 없었다([]).
@@ -802,9 +825,33 @@ export function buildPairs(b: PairsBlock, res: unknown): PairsVm | NoneVm {
         typeof v === 'number' && typeof d === 'number' && d > 0
           ? `${nf((v / d) * 100, 1)}%`
           : ''
-      return { label: k.l, value: fmtValue(v, k.f), share, wrap: k.f === 'wrap' }
+      const row: PairsRowVm = {
+        label: k.l,
+        value: fmtValue(v, k.f),
+        share,
+        wrap: k.f === 'wrap' || k.f === 'path',
+      }
+      // 등폭은 기계값에만 — `값 없음` 은 문장이라 본문 글꼴 그대로다.
+      if (k.f === 'path' && v !== null && v !== MISSING) row.mono = true
+      // **값이 없을 때만** 이유를 단다 — stat 카드와 같은 관례다. 값이 있는데 사유를 달면 멀쩡한
+      // 값까지 의심하게 된다.
+      if (v === null && k.why !== undefined) {
+        const code = readPath(raw, k.why.code)
+        const reason = readPath(raw, k.why.reason)
+        if (typeof code === 'string') row.code = code
+        if (typeof reason === 'string') row.title = reason
+      }
+      return row
     }),
   }
+}
+
+/**
+ * **블록 `path` 를 읽는다.** 빈 문자열은 문서 루트다 — 서로 다른 갈래의 값을 한 카드에 모으는
+ * 카드(진단 탭의 `원본`)가 라벨을 루트 경로 그대로 쓰게 하려는 것이다.
+ */
+function readBlockRoot(res: unknown, path: string): Read {
+  return path === '' ? (res ?? MISSING) : readPath(res, path)
 }
 
 export interface StatVm {
@@ -908,7 +955,12 @@ export interface MetricState {
 
 export function metricState(res: unknown, metric: Block['metric']): MetricState {
   if (metric === undefined) return { status: null, reason: null, reasonCode: null }
-  const m = readPath(res, `metrics.${metric}`)
+  return shellState(res, `metrics.${metric}`)
+}
+
+/** `status` · `reason` · `reason_code` 껍데기 하나를 읽는다. 메트릭과 진단 블록이 같은 모양이다. */
+function shellState(res: unknown, path: string): MetricState {
+  const m = readPath(res, path)
   if (m === MISSING || m === null || typeof m !== 'object') {
     return { status: null, reason: null, reasonCode: null }
   }
@@ -918,4 +970,34 @@ export function metricState(res: unknown, metric: Block['metric']): MetricState 
     reason: typeof o['reason'] === 'string' ? o['reason'] : null,
     reasonCode: typeof o['reason_code'] === 'string' ? o['reason_code'] : null,
   }
+}
+
+/**
+ * 블록 하나의 상태 — 지표면 `metrics.<id>`, 아니면 `statePath` 의 껍데기. 둘 다 없으면 상태가 없다
+ * (기기 정보 · 오버헤드 카드).
+ */
+export function blockState(res: unknown, b: Block): MetricState {
+  if (b.metric !== undefined) return metricState(res, b.metric)
+  if (b.statePath !== undefined) return shellState(res, b.statePath)
+  return { status: null, reason: null, reasonCode: null }
+}
+
+/**
+ * 카드 제목 줄의 상태 배지. `unsupported` · `skipped` · `failed` 에만 — **`partial` 은 달지 않는다**
+ * (`format.ts` 의 `BADGED_STATUS`). 이유 문장은 배지가 없어도 제목 툴팁으로 닿는다.
+ */
+export function badgeOf(state: MetricState): string | null {
+  if (state.status === null || !BADGED_STATUS.includes(state.status)) return null
+  return STATUS_LABEL[state.status] ?? state.status
+}
+
+/**
+ * 카드 단위. 값이 단위를 정하는 카드(stat · slice 표)는 뷰모델의 것을, 나머지는 매니페스트의 것을
+ * 쓴다. **진단 세션이면 `diagnoseUnit` 이 이긴다** — 평소 세션에는 그 단위가 붙지 않는다.
+ */
+export function cardUnit(b: Block, vm: unknown, diagnose: boolean): string {
+  const isNone = (vm as NoneVm | null)?.none === true
+  if (!isNone && (b.kind === 'stat' || b.kind === 'slicetable')) return (vm as { unit: string }).unit
+  if (diagnose && b.diagnoseUnit !== undefined) return b.diagnoseUnit
+  return b.unit ?? ''
 }

@@ -80,6 +80,14 @@
   background: var(--color-neutral-200); color: var(--color-neutral-700);
 }
 .rp-state-on { background: var(--color-accent); color: var(--color-bg); }
+/*
+ * 진단 세션 pill. **상태 pill 과 모양으로만 갈린다** — 바탕 없이 테두리 한 줄. 색에 뜻을 싣지 않는다
+ * (규칙 2): 진단 세션은 나쁜 세션이 아니라 다른 종류의 세션이다.
+ */
+.rp-state-diagnose {
+  background: transparent; color: var(--color-neutral-700);
+  box-shadow: inset 0 0 0 1px var(--color-divider);
+}
 
 .rp-meta {
   display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4);
@@ -293,12 +301,76 @@
 }
 .rp-table tr:last-child th, .rp-table tr:last-child td { border-bottom: 0; }
 .rp-wrap { word-break: break-all; }
+/* 기계값(원본 경로). 자르지 않고 줄바꿈한다 — 경로 끝(파일 이름)이 가장 쓸모 있다. */
+.rp-table td.rp-path { font-size: 11px; }
+.rp-table td .rp-none-code { margin-top: 2px; }
 .rp-delta .rp-before { color: var(--color-neutral-700); }
 .rp-delta .rp-arrow { text-align: center; color: var(--color-neutral-500); width: 24px; }
 /* 차이. 판정이 아니라 세 번째 숫자라 색으로 좋고 나쁨을 말하지 않는다 (규칙 2) —
    증감을 빨강/초록으로 칠하면 온도가 내려간 것이 "좋다" 가 된다. */
 .rp-delta .rp-delta-v {
   color: var(--color-neutral-600); padding-left: var(--space-3); white-space: nowrap;
+}
+
+/* ── slice 표 (진단 탭) ──────────────────────────────────────
+   **행을 가르지 않는다** — 줄무늬 · 굵기 · 색 · 아이콘 없이 모든 행이 같다 (DM-13 · 규칙 2).
+   빈 칸(`—`)만 한 단계 옅고, 그것도 모든 행에 같은 규칙이다.
+   상자 안에서 위아래 · 옆으로 스크롤한다. 머리 두 줄은 위에, 이름 열은 왼쪽에 붙는다 — 그래서
+   칸마다 바탕을 칠한다(붙은 칸 밑으로 지나가는 행이 비치지 않게). 페이지는 옆으로 밀리지 않는다. */
+.rp-slice-scroll {
+  max-height: min(70vh, 640px); overflow: auto;
+  border-top: 1px solid var(--color-divider);
+}
+/* 가로 · 세로 스크롤바가 함께 서면(≤760) 만나는 구석이 브라우저 기본 흰색이다 — 바탕을 비운다.
+   app.css 의 전역 스크롤바 규칙은 측정 화면 몫이라 이 상자에만 둔다. */
+.rp-slice-scroll::-webkit-scrollbar-corner { background: transparent; }
+.rp-slice { border-collapse: separate; border-spacing: 0; }
+.rp-slice th, .rp-slice td {
+  padding: 4px 8px; border-bottom: 1px solid var(--color-divider);
+  background: var(--color-surface);
+}
+/* `.rp-table` 의 마지막 줄 규칙이 머리 둘째 줄의 밑줄까지 지운다 — 머리는 늘 밑줄이 있다. */
+.rp-slice thead tr:last-child th { border-bottom: 1px solid var(--color-divider); }
+.rp-slice thead th {
+  position: sticky; top: 0; z-index: 2;
+  line-height: 18px; white-space: nowrap; vertical-align: bottom;
+}
+/* 머리 첫 줄 높이 = 4 + 18 + 4 + 밑줄 1. 둘째 줄은 그만큼 내려 붙는다 — 재는 코드 없이 고정한다. */
+.rp-slice thead tr + tr th { top: 27px; }
+.rp-slice-group {
+  text-align: center !important; color: var(--color-neutral-600);
+  border-left: 1px solid var(--color-divider);
+}
+.rp-slice .rp-slice-gs { border-left: 1px solid var(--color-divider); }
+.rp-slice-name-h, .rp-slice-name {
+  position: sticky; left: 0; width: 38%;
+  border-right: 1px solid var(--color-divider);
+}
+.rp-slice-name-h { z-index: 3 !important; }
+.rp-slice .rp-slice-name {
+  z-index: 1;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 400;
+  text-align: left; color: var(--color-neutral-800);
+  white-space: normal; overflow-wrap: anywhere; word-break: normal;
+}
+.rp-slice td { white-space: nowrap; color: var(--color-neutral-800); }
+.rp-slice td.rp-slice-nil { color: var(--color-neutral-600); }
+.rp-slice tbody tr:last-child th, .rp-slice tbody tr:last-child td { border-bottom: 0; }
+/* 좌우 3px 는 포커스 링 자리다 — 같은 만큼 바깥으로 빼서 글자 자리는 그대로 둔다. */
+.rp-slice-sort {
+  font: inherit; color: var(--color-neutral-600);
+  background: transparent; border: 0; padding: 0 3px; margin: 0 -3px; cursor: pointer;
+  width: calc(100% + 6px); text-align: right; white-space: nowrap; border-radius: var(--radius-sm);
+}
+.rp-slice-name-h .rp-slice-sort { text-align: left; }
+.rp-slice-sort:hover { color: var(--color-text); }
+/* 상자 위 끝에 붙은 머리라 바깥으로 그린 링은 상자에 잘린다 — 안쪽으로 그린다. */
+.rp-slice-sort:focus-visible { outline-offset: -2px; }
+.rp-slice-mark:not(:empty) { margin-left: 3px; }
+/* 좁으면 표가 제 폭을 갖고 상자 안에서 옆으로 스크롤한다. 이름 열은 폭을 고정한다. */
+@media (max-width: 760px) {
+  .rp-slice { width: max-content; min-width: 100%; }
+  .rp-slice-name-h, .rp-slice-name { width: 140px; min-width: 140px; max-width: 140px; }
 }
 
 /* ── stat ──────────────────────────────────────────────────── */

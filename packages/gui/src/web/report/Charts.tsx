@@ -430,9 +430,13 @@ export function PairsBody({ vm }: { vm: PairsVm }) {
     <table className="rp-table">
       <tbody>
         {vm.rows.map((r, i) => (
-          <tr key={i}>
+          // 이유 문장은 행 툴팁이다 — 본문에 박으면 짧은 카드가 글이 된다 (HANDOFF ④).
+          <tr key={i} title={r.title}>
             <th>{r.label}</th>
-            <td className={`num${r.wrap ? ' rp-wrap' : ''}`}>{r.value}</td>
+            <td className={`num${r.wrap ? ' rp-wrap' : ''}${r.mono === true ? ' mono rp-path' : ''}`}>
+              {r.value}
+              {r.code !== undefined && <code className="rp-none-code">{r.code}</code>}
+            </td>
           <td className="rp-share num">{r.share}</td>
           </tr>
         ))}

@@ -1,5 +1,4 @@
-import { BADGED_STATUS, STATUS_LABEL } from './format.js'
-import type { MetricState } from './blocks.js'
+import { badgeOf, type MetricState } from './blocks.js'
 
 /**
  * 블록 하나의 껍데기. 제목 · 단위 · 상태 배지 · 판독줄이 전부 여기 있다.
@@ -33,10 +32,7 @@ export function BlockCard({
 }) {
   // partial 은 배지를 달지 않는다 — 지표 넷이 동시에 partial 인 세션이 흔해서 노이즈가 된다.
   // 대신 이유는 제목 툴팁으로 남긴다. 배지가 없다고 이유까지 사라지면 안 된다.
-  const badge =
-    metric.status !== null && BADGED_STATUS.includes(metric.status)
-      ? (STATUS_LABEL[metric.status] ?? metric.status)
-      : null
+  const badge = badgeOf(metric)
 
   return (
     <section

@@ -41,9 +41,11 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
 
 ## 보고서는 팩토리다
 
-`src/web/report/` 는 지표마다 컴포넌트를 만들지 않는다. 데이터 모양이 일곱 가지뿐이고
-(`stat` `distribution` `series` `bars` `delta` `pairs` `frametimeline`), **각 지표가
+`src/web/report/` 는 지표마다 컴포넌트를 만들지 않는다. 데이터 모양이 여덟 가지뿐이고
+(`stat` `distribution` `series` `bars` `delta` `pairs` `frametimeline` `slicetable`), **각 지표가
 `manifest.ts` 에서 자기 모양과 데이터 위치를 선언**하면 렌더러는 모양만 안다.
+`slicetable` 은 진단 세션의 slice 이름별 표다 — 이름 한 줄에 갈래 셋 × 수 셋, 정렬은 보는 사람이
+열 머리를 누를 때만 (아래 「진단 탭」).
 
     지표가 늘어난다  →  manifest.ts 에 한 줄
     새 모양이 나온다 →  그때만 kind 를 하나 늘린다
@@ -56,7 +58,8 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
 | `read.ts` | 경로 읽기. **필드 부재 / `null` / 값** 세 상태를 가른다 | 나머지 전부 |
 | `format.ts` | 포맷터 · 상태 라벨 | 데이터 구조 |
 | `manifest.ts` | 블록 선언 — **유일한 확장 지점** | 렌더링 |
-| `axis.ts` `blocks.ts` `header.ts` | 기하 계산 · 결측 판정 (**순수 함수**) | React · DOM · 이벤트 |
+| `axis.ts` `blocks.ts` `header.ts` `slices.ts` | 기하 계산 · 결측 판정 · 표 행 모델 · 정렬 (**순수 함수**) | React · DOM · 이벤트 |
+| `diagnose-copy.ts` | 진단 모드가 보고서에 새로 내는 문구 — 정본은 디자인 문서 `## 문구` 표 | 나머지 전부 |
 | `*.tsx` | 그리기만 | 계산. 좌표는 받아서 쓴다 |
 
 화면은 `?report=<run id>` 로 뜬다 (`web/main.tsx`). 라우터를 들이지 않은 것은 경로가 둘뿐이기
@@ -204,6 +207,26 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
   숫자와 함께 그대로 쓴다(`NONE (0)`) — 우리가 좋고 나쁨을 매긴 것이 아니고, 숫자가 있어야
   `dumpsys thermalservice` 와 대조된다. 모르는 값은 지어내지 않고 숫자만 낸다.
 - **매니페스트에 없는 지표는 개수를 남긴다.** 조용히 버리면 새 지표가 생겨도 아무도 모른다.
+
+### 진단 탭 (진단 세션에만)
+
+`session.options.diagnose === true` 인 문서에만 머리 `진단` pill · 레일 세 번째 탭 `진단` · 측정 비용
+카드 단위 `앱 프로세스 몫 미포함`(`diagnoseUnit`)이 붙는다. 기준은 그 칸 하나다(`header.ts` 의
+`isDiagnoseSession`) — 진단 블록의 유무로 가르지 않는다. 평소 보고서는 탭 둘 그대로다.
+
+- **블록 껍데기는 지표처럼 끌어온다.** 진단 블록은 `metrics` 밖에 있지만 같은 `status` · `reason_code` ·
+  `reason` 을 쓴다. 매니페스트의 `statePath: 'diagnose'` 가 `metric` 과 같은 일을 한다 — 배지
+  (`unsupported` · `skipped` · `failed`), 카드 제목 툴팁(문장), 표 자리가 `null` 일 때의 코드.
+- **앱 slice 열림은 블록 `status` 와 따로 간다** (README). 그래서 그 행만 자기 이유를 단다 — 값이
+  `null` 이면 `값 없음` 옆에 코드, 문장은 행 툴팁 (`PairsBlock.keys[].why`). 그 밖의 `null` 칸은
+  `값 없음` 만 낸다.
+- **slice 표는 판정하지 않는다.** 행을 자르지 않고(1만 행도 다 그린다 — 창 안 행만 그리지 않는다),
+  이름을 자르지 않고(줄바꿈), 처음 순서는 이름의 **코드 단위** 순이다(`localeCompare` 가 아니다).
+  행마다 색 · 굵기 · 아이콘이 같다 — 행 뷰모델에 이름과 칸 말고는 없다. 순서는 보는 사람이 열 머리를
+  누를 때만 바뀌고(숫자 첫 누름 내림 · 이름 오름 · 빈 칸은 늘 끝 · 같은 값은 이름 순) 저장하지 않는다.
+- **카드에 읽는 법을 쓰지 않는다.** "합 ms 를 행끼리 더하지 말 것" 은 스키마 설명과 README 몫이다.
+- 새 문구는 `diagnose-copy.ts` 에만 있고 정본은 디자인 문서 `## 문구` 표다 — `test/report-copy.test.ts`
+  가 표의 보고서 줄과 양방향으로 대조한다. 카드 안 라벨은 필드 경로 그대로라 그 표 밖이다.
 
 ## 깨면 안 되는 것
 

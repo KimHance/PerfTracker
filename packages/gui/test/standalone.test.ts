@@ -111,6 +111,32 @@ describe('한 파일짜리 보고서', () => {
     expect(html).not.toContain('<script type="module"')
   })
 
+  /**
+   * **진단 세션 보고서도 파일 하나다** (DM-13 · 안 바뀔 것 「보고서 파일 하나 · 외부 요청 0」).
+   * slice 표는 1만 행도 자르지 않으므로 문서도 자르지 않고 심겨야 한다 — 이름에 든 `<` · `$&` 가
+   * 문서를 끊거나 치환 패턴으로 읽혀도 행이 사라진다.
+   */
+  it('DM-13 진단 보고서도 파일 하나 — 1만 행 slice 표가 그대로 심긴다', async () => {
+    const webRoot = await fixture({ 'app.js': 'BUNDLE', 'app.css': '' })
+    const names = Array.from({ length: 10_000 }, (_, i) => ({
+      name: i === 0 ? '<missing root>:$& </script>' : `slice ${i}`,
+      main_thread: { count: i + 1, sum_ms: i * 1.5, max_ms: i },
+      other_threads: null,
+      async_tracks: null,
+    }))
+    const report = {
+      schema_version: '1.2.0',
+      session: { options: { diagnose: true } },
+      diagnose: { target_process_slice_names: names },
+    }
+    const html = await buildStandaloneReport({ webRoot, report, title: 't' })
+
+    const m = /globalThis\.__PERFTRACKER_REPORT__=([\s\S]*?)<\/script>/.exec(html)
+    expect(JSON.parse(m![1]!)).toEqual(report)
+    expect(html).not.toContain('/assets/')
+    expect(html.match(/<script/g)).toHaveLength(2)
+  })
+
   it('제목을 바꾼다', async () => {
     const webRoot = await fixture({ 'app.js': '', 'app.css': '' })
     const html = await buildStandaloneReport({ webRoot, report: {}, title: 'Stream · PerfTracker' })

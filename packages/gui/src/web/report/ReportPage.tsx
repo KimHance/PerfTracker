@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { INLINE_REPORT_GLOBAL, type ReportDocument } from '../../contract/api.js'
 import { computeMaxT, readMarks } from './axis.js'
 import {
+  blockState,
   buildBars,
   buildDelta,
   buildDistribution,
@@ -9,7 +10,7 @@ import {
   buildPairs,
   buildSeries,
   buildStat,
-  metricState,
+  cardUnit,
   type NoneVm,
 } from './blocks.js'
 import { BlockCard, NoneBody } from './BlockCard.jsx'
@@ -27,8 +28,10 @@ import {
   useWidth,
 } from './Charts.jsx'
 import { clock } from './format.js'
-import { buildHeader } from './header.js'
-import { type Block, MANIFEST, SECTIONS, type TabId, TABS } from './manifest.js'
+import { buildHeader, isDiagnoseSession, tabsFor } from './header.js'
+import { type Block, MANIFEST, SECTIONS, type TabId } from './manifest.js'
+import { SliceTable } from './SliceTable.jsx'
+import { buildSliceTable, type SliceTableVm } from './slices.js'
 
 /**
  * **한 파일로 만 보고서가 심어 둔 데이터.** `perftracker report` 가 `result.json` 을 여기
@@ -60,6 +63,15 @@ export function ReportPage({ runId }: { runId: string }) {
   const [tip, setTip] = useState<Tip | null>(null)
   const [distW, distRef] = useWidth()
 
+  // **slice 표는 문서가 바뀔 때만 만든다.** 나머지 블록은 렌더마다 다시 만드는데(호버 한 번이
+  // 시계열 전부를 다시 그린다), 1만 행짜리 표를 그 박자로 다시 포맷하면 요약 탭의 호버가 끈다.
+  const sliceVms = useMemo(() => {
+    const m = new Map<Block, unknown>()
+    if (doc === null) return m
+    for (const b of MANIFEST) if (b.kind === 'slicetable') m.set(b, buildSliceTable(b, doc))
+    return m
+  }, [doc])
+
   useEffect(() => {
     // 심겨 있으면 부를 곳이 없다 — `file://` 에서 `/api/…` 는 어차피 실패한다.
     const inline = inlineReport()
@@ -89,7 +101,7 @@ export function ReportPage({ runId }: { runId: string }) {
   if (error !== null) {
     return (
       <div className="rp-shell">
-        <Rail tab={tab} setTab={setTab} counts={{ summary: 0, device: 0 }} />
+        <Rail tabs={tabsFor(null)} tab={tab} setTab={setTab} counts={{}} />
         <main className="rp-main">
           <p className="rp-error">{error}</p>
         </main>
@@ -99,7 +111,7 @@ export function ReportPage({ runId }: { runId: string }) {
   if (doc === null) {
     return (
       <div className="rp-shell">
-        <Rail tab={tab} setTab={setTab} counts={{ summary: 0, device: 0 }} />
+        <Rail tabs={tabsFor(null)} tab={tab} setTab={setTab} counts={{}} />
         <main className="rp-main">
           <p className="rp-loading">불러오는 중…</p>
         </main>
@@ -110,12 +122,14 @@ export function ReportPage({ runId }: { runId: string }) {
   const head = buildHeader(doc)
   const marks = readMarks(doc)
   const maxT = computeMaxT(doc, marks)
+  const diagnose = isDiagnoseSession(doc)
+  const tabs = tabsFor(doc)
 
   const built = MANIFEST.map((b, i) => ({
     key: `b${i}`,
     block: b,
-    metric: metricState(doc, b.metric),
-    vm: buildOne(b, doc, maxT, marks, hoverT, distW),
+    metric: blockState(doc, b),
+    vm: b.kind === 'slicetable' ? sliceVms.get(b) : buildOne(b, doc, maxT, marks, hoverT, distW),
   }))
 
   const missingIn = (t: TabId): number =>
@@ -146,7 +160,12 @@ export function ReportPage({ runId }: { runId: string }) {
 
   return (
     <div className="rp-shell">
-      <Rail tab={tab} setTab={setTab} counts={{ summary: missingIn('summary'), device: missingIn('device') }} />
+      <Rail
+        tabs={tabs}
+        tab={tab}
+        setTab={setTab}
+        counts={Object.fromEntries(tabs.map((t) => [t.id, missingIn(t.id)]))}
+      />
 
       <main className="rp-main">
         <header className="rp-head">
@@ -154,6 +173,9 @@ export function ReportPage({ runId }: { runId: string }) {
             <span className="rp-sid mono">{head.id}</span>
             <h1 className="rp-name">{head.name}</h1>
             <span className={`rp-state${head.running ? ' rp-state-on' : ''}`}>{head.stateLabel}</span>
+            {head.diagnosePill !== null && (
+              <span className="rp-state rp-state-diagnose">{head.diagnosePill}</span>
+            )}
           </div>
           <div className="rp-meta">
             {head.meta.map((m) => (
@@ -212,7 +234,7 @@ export function ReportPage({ runId }: { runId: string }) {
                   <BlockCard
                     key={key}
                     title={block.title}
-                    unit={stat && !isNone ? (vm as { unit: string }).unit : (block.unit ?? '')}
+                    unit={cardUnit(block, vm, diagnose)}
                     span={block.span}
                     tone={block.tone}
                     metric={metric}
@@ -284,14 +306,17 @@ export function ReportPage({ runId }: { runId: string }) {
   )
 }
 
+/** 레일. 탭 목록은 문서가 정한다 — `진단` 은 진단 세션에만 있다 (`header.ts` 의 `tabsFor`). */
 function Rail({
+  tabs,
   tab,
   setTab,
   counts,
 }: {
+  tabs: { id: TabId; label: string }[]
   tab: TabId
   setTab: (t: TabId) => void
-  counts: Record<TabId, number>
+  counts: Partial<Record<TabId, number>>
 }) {
   return (
     <nav className="rp-rail">
@@ -299,7 +324,7 @@ function Rail({
         <div className="rp-brand-1">PERFTRACKER</div>
         <div className="rp-brand-2">세션 데이터</div>
       </div>
-      {TABS.map((t) => (
+      {tabs.map((t) => (
         <button
           key={t.id}
           className={`rp-tab${tab === t.id ? ' rp-tab-on' : ''}`}
@@ -310,16 +335,19 @@ function Rail({
           }}
         >
           <span>{t.label}</span>
-          {counts[t.id] > 0 && <span className="rp-tab-count mono">{counts[t.id]}</span>}
+          {(counts[t.id] ?? 0) > 0 && <span className="rp-tab-count mono">{counts[t.id]}</span>}
         </button>
       ))}
     </nav>
   )
 }
 
-/** 매니페스트의 `kind` 하나가 빌더 하나로 간다. 지표 이름은 어디에도 안 나온다. */
+/**
+ * 매니페스트의 `kind` 하나가 빌더 하나로 간다. 지표 이름은 어디에도 안 나온다.
+ * `slicetable` 은 문서가 바뀔 때만 만들어 위에서 넘긴다 (`sliceVms`) — 여기서는 받은 것을 쓴다.
+ */
 function buildOne(
-  b: Block,
+  b: Exclude<Block, { kind: 'slicetable' }>,
   doc: ReportDocument,
   maxT: number,
   marks: { t: number; label: string }[],
@@ -402,6 +430,7 @@ function Body({
     case 'delta': return <DeltaBody vm={vm as Parameters<typeof DeltaBody>[0]['vm']} />
     case 'pairs': return <PairsBody vm={vm as Parameters<typeof PairsBody>[0]['vm']} />
     case 'stat': return <StatBody vm={vm as Parameters<typeof StatBody>[0]['vm']} title={block.title} />
+    case 'slicetable': return <SliceTable vm={vm as SliceTableVm} />
     default: {
       // **exhaustiveness 체크.** `case` 하나가 빠지면(예: `frametimeline` 삭제) `block` 이
       // `never` 로 안 좁혀져 컴파일이 깨진다 — 안 그러면 그 카드는 테스트를 다 통과한 채
