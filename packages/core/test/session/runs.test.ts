@@ -85,6 +85,50 @@ describe('목록', () => {
   })
 })
 
+/**
+ * 기록 목록의 진단 태그 (DM-11 · 드로어 메타 줄이 읽는 자리). 진단 세션 기록에만 `diagnose: true`
+ * 이고 평소 기록에는 키가 없다 (plan D12) — `runs --json` 의 평소 행이 진단 모드 이전과 같다.
+ */
+describe('진단 태그', () => {
+  it('runs 진단 태그 — 진단 기록에만 diagnose: true · 평소 기록엔 키가 없다', async () => {
+    await write('d', {
+      id: 'ddd',
+      name: 'ddd',
+      startedAt: '2026-10-08T10:00:00',
+      endedAt: '2026-10-08T10:00:30',
+      options: { launch: true, diagnose: true },
+    })
+    await write('n', {
+      id: 'nnn',
+      name: 'nnn',
+      startedAt: '2026-10-08T09:00:00',
+      endedAt: '2026-10-08T09:00:30',
+      options: { launch: true },
+    })
+
+    const [diag, normal] = await listRuns(out)
+    expect(diag!.diagnose).toBe(true)
+    expect(Object.keys(normal!)).not.toContain('diagnose')
+  })
+
+  it('runs 진단 태그 — result.json 이 있으면 그것이 정본이고, 진단 키가 없으면 session.json 을 본다', async () => {
+    await write('d', {
+      id: 'ddd',
+      name: 'ddd',
+      startedAt: '2026-10-08T10:00:00',
+      endedAt: '2026-10-08T10:00:30',
+      options: { launch: true, diagnose: true },
+    })
+    await writeFile(
+      join(out, 'd', 'result.json'),
+      JSON.stringify({ session: { id: 'ddd', started_at: '2026-10-08T10:00:00', ended_at: '2026-10-08T10:00:30', options: { launch: true } } }),
+      'utf8',
+    )
+
+    expect((await listRuns(out))[0]!.diagnose).toBe(true)
+  })
+})
+
 describe('이름 변경', () => {
   it('디렉토리 경로는 그대로 둔다', async () => {
     // 경로가 바뀌면 이미 그 경로를 적어 둔 메모와 CLI 로그가 전부 죽는다.

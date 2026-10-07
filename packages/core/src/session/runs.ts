@@ -22,6 +22,12 @@ export interface RunSummary {
   unsupportedCount: number
   warningCount: number
   markCount: number
+  /**
+   * **진단 세션 기록에만 있고 값은 언제나 true** 다 (plan D12) — `runs --json` 과 기록 드로어가
+   * 이것으로 진단 태그를 단다. 평소 기록에는 키가 없다: `false` 를 실으면 평소 기록의 JSON 이
+   * 진단 모드 이전과 달라진다. 없음 = 평소 또는 옛 기록 = 둘 다 진단 아님.
+   */
+  diagnose?: true
 }
 
 /**
@@ -46,7 +52,7 @@ interface StoredSessionFile {
   startedAt?: string
   endedAt?: string
   runDir?: string
-  options?: { launch?: boolean }
+  options?: { launch?: boolean; diagnose?: boolean }
   marks?: unknown[]
 }
 
@@ -57,7 +63,7 @@ interface ResultFile {
     started_at?: string
     ended_at?: string | null
     duration_ms?: number | null
-    options?: { launch?: boolean }
+    options?: { launch?: boolean; diagnose?: boolean }
     marks?: unknown[]
   }
   device?: { serial?: string; static?: { model?: string } }
@@ -137,6 +143,10 @@ export async function listRuns(dir: string): Promise<RunSummary[]> {
       unsupportedCount: countUnsupported(result?.metrics),
       warningCount: result?.warnings?.length ?? 0,
       markCount: (result?.session?.marks ?? session.marks ?? []).length,
+      // result.json 이 정본이고, 산출이 실패한 run 은 session.json 이 말한다 (`launch` 와 같다).
+      ...((result?.session?.options?.diagnose ?? session.options?.diagnose) === true
+        ? { diagnose: true as const }
+        : {}),
     })
   }
 

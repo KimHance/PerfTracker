@@ -9,7 +9,7 @@
 | `src/index.ts` | 공개 배럴. **구체 프로세스 실행기는 일부러 내보내지 않는다** |
 | `src/adb/` | `AdbClient` 와 측정 창 래치. 기기로 가는 모든 길목 |
 | `src/collectors/` | 지표 8개 ([AGENTS.md](src/collectors/AGENTS.md)) |
-| `src/session/` | `start` / `stop` / 활성 세션 포인터 / 마킹 / **기록 목록**(`runs.ts`) |
+| `src/session/` | `start` / `stop` / 활성 세션 포인터 / 마킹 / **기록 목록**(`runs.ts`) / **진단 세션**(`diagnose.ts` — 앱 slice 열림 판정 · atrace 대기) |
 | `src/extract/` | 트레이스 재파싱 → `result.json` 조립 |
 | `src/schema/` | `result.json` 의 zod 스키마 · `reason_code` · `references` |
 | `src/device/` | 기기 목록 · 정적 스펙 · 전/후 상태 스냅샷 · `probeDevice` |
@@ -17,6 +17,7 @@
 | `src/perfetto/` | TraceConfig 조립 · `--detach` 세션 · `trace_processor` |
 | `src/device/clock.ts` | 기기 시계 − 호스트 시계. 마킹과 시계열의 0초를 잇는다 |
 | `src/host/` | **기기가 아닌 이 컴퓨터.** 이 패키지에서 `AdbClient` 를 안 받는 유일한 수집 지점 |
+| `src/copy/` | 기능이 **새로** 내는 사용자 문구 모음. 정본은 디자인 문서 `## 문구` 표 (`docs/design/<기능>.md`) |
 
 ## 제약
 
@@ -30,6 +31,16 @@
   ftrace 이벤트는 화이트리스트(`ALLOWED_FTRACE_EVENTS`)이고, 새 이벤트는 **그것을 읽는
   collector 와 같은 커밋에** 넣는다. 읽지 않는 이벤트는 트레이스만 키우는 것이 아니라 커널이
   링버퍼에 쓰는 비용을 그 순간 인터럽트당한 프로세스(대상 앱일 수 있다)에 청구한다.
+- **atrace 는 진단 세션(`startSession` 의 `diagnose`)에만 있다.** 평소 세션 config 에 `atrace_` 로
+  시작하는 키가 하나라도 있으면 `assertLowOverheadConfig` 가 거부하고, 진단 세션도 두 키
+  (`atrace_categories` · `atrace_apps`) · 카테고리 허용 목록(`DIAGNOSE_ATRACE_CATEGORIES`) · 대상 앱
+  하나 밖이면 거부한다. atrace slice 의 비용은 커널 ftrace 와 달리 **slice 를 남기는 앱 프로세스
+  자신**에게 청구되고 `measurement_overhead` 에 안 잡힌다 — 평소 세션의 수치와 섞이면 안 되는 이유다.
+  평소 세션의 config · 기기 명령 목록은 진단 모드 이전과 글자 하나 다르지 않다 (`start.test.ts` 가 원문을 고정).
+- **config 는 기기에 아무 일도 시키기 전에 만든다.** `startSession` 은 probe 바로 뒤에 config 를 조립해
+  검증한다 — 거부될 config 로 시작 스냅샷 · force-stop · perfetto 가 먼저 나가면 앱만 죽은 채로 남는다.
+- **앱 slice 가 열리나는 `session/diagnose.ts` 의 `appSliceOpen` 하나가 정한다.** doctor 의 기기 줄 ·
+  start 고지 · 화면 · extract 가 전부 그것을 부른다. sdk 경계를 다른 파일에 다시 쓰지 않는다.
 - **`schema_version` 은 미출시 동안 올리지 않는다.** 규칙표는 `src/schema/result.ts` 상단에 있다.
 
 ## 자주 틀리는 자리

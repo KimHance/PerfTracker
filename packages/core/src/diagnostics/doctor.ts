@@ -1,7 +1,9 @@
 import { type AdbContextOptions, createBaseAdb, hasActiveSession } from '../adb/context.js'
 import { COLLECTORS } from '../collectors/registry.js'
 import type { CollectorEnv } from '../collectors/types.js'
+import { DIAGNOSE_COPY, fillCopy } from '../copy/diagnose.js'
 import { renderReason } from '../schema/reasons.js'
+import { appSliceOpen } from '../session/diagnose.js'
 import { listDevices, selectDevice } from '../device/list.js'
 import { evaluateDataSources, probeDevice } from '../device/probe.js'
 import { traceProcessorCacheState } from '../perfetto/traceProcessor/locate.js'
@@ -45,6 +47,26 @@ export function metricSupportChecks(env: CollectorEnv): DoctorCheck[] {
         : `이 기기에서는 측정할 수 없습니다 — ${renderReason(support.reason) ?? support.reason.code}`,
     }
   })
+}
+
+/**
+ * **이 기기에서 진단 세션(`--diagnose`)의 앱 slice 가 열리나** — 기기 단위 한 줄 (DM-10).
+ *
+ * 판정은 `appSliceOpen` 그대로다 — start 의 고지 줄 · 화면 · extract 와 출처가 하나여야
+ * doctor 가 ✓ 라 한 기기에서 보고서가 "모름" 을 내는 일이 없다. 앱을 정하기 전이라
+ * debuggable 은 모른다(`null`): sdk ≥31 이면 앱과 무관하게 열리고, ≤30 이면 debuggable 앱만이다.
+ *
+ * `capability` 다 — sdk 는 고칠 수 없는 사실이라 ✗ 여도 doctor 의 종료 코드를 바꾸지 않는다.
+ * 프레임워크 slice(am · wm · view)는 sdk 와 무관하게 실리므로 진단 세션 자체는 열린다.
+ */
+export function diagnoseDoctorCheck(sdkInt: number): DoctorCheck {
+  const open = appSliceOpen(sdkInt, null).open === true
+  return {
+    name: DIAGNOSE_COPY.doctorName,
+    ok: open,
+    kind: 'capability',
+    detail: fillCopy(open ? DIAGNOSE_COPY.doctorOpen : DIAGNOSE_COPY.doctorDebuggableOnly, { sdk: sdkInt }),
+  }
 }
 
 /**
@@ -115,6 +137,8 @@ export async function runDoctor(opts: AdbContextOptions = {}): Promise<DoctorChe
        */
       const env = { sdkInt: probe.sdkInt, dataSources: probe.dataSources }
       for (const line of metricSupportChecks(env)) checks.push(line)
+      // capability 의 끝 — 측정 화면 환경 점검 패널도 이 순서로 그린다.
+      checks.push(diagnoseDoctorCheck(probe.sdkInt))
     }
   } catch (e) {
     checks.push({ name: 'device', ok: false, kind: 'requirement', detail: (e as Error).message })

@@ -47,8 +47,9 @@ export function startableDevice(overrides: (r: FakeProcessRunner) => void = () =
     .on(`-s ${SERIAL} shell am force-stop '${PKG}'`, {})
     .onMatch(/--detach=perftracker_/, { stderr: 'Connected to the Perfetto traced service\n' })
     // `am start -W` 와 `pidof` 는 **한 셸 호출**로 나간다 (session/start.ts). 그래서 응답도
-    // 하나이고, 구분자 뒤에 pid 가 붙는다.
-    .onMatch(/shell am start -W -n /, {
+    // 하나이고, 구분자 뒤에 pid 가 붙는다. 진단 세션은 그 앞에 atrace 대기 조각이 붙으므로
+    // `shell` 바로 뒤가 아니어도 맞춘다.
+    .onMatch(/am start -W -n /, {
       stdout:
         'Starting: Intent { cmp=com.foo/.Main }\nStatus: ok\nLaunchState: COLD\n' +
         `TotalTime: 1842\nWaitTime: 1850\nComplete\n${AM_START_PIDOF_MARKER}\n24193\n`,

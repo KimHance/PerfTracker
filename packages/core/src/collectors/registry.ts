@@ -1,5 +1,6 @@
 import { mergeTraceConfigBlocks } from '../perfetto/config.js'
 import { renderReason } from '../schema/reasons.js'
+import { type AtraceScope, diagnoseFtraceBlock, FTRACE_POWER_BLOCK } from './blocks.js'
 import { cpuCollector } from './cpu/index.js'
 import { frameCollector } from './frame/index.js'
 import { hwuiCollector } from './hwui/index.js'
@@ -41,9 +42,26 @@ export function supportedCollectors(env: CollectorEnv): Collector<unknown>[] {
  * 지원되는 collector 들이 요청한 데이터소스 블록을 합친다.
  * 같은 데이터소스를 두 collector 가 요구하는 것은 정상이고(예: `linux.process_stats`),
  * 그때는 **완전히 같은 블록 텍스트**여야 한다 — 규칙은 `mergeTraceConfigBlocks` 에 있다.
+ *
+ * `atrace` 가 있으면 진단 세션이다. atrace 를 읽는 것은 collector 가 아니라 진단 블록이라,
+ * `linux.ftrace` 의 주인을 cpu collector 에서 떼어 여기서 진단 블록으로 바꾼다
+ * (`withAtrace`). 없으면(기본) 평소 세션이고 반환값은 이 인자가 없던 때와 글자까지 같다.
  */
-export function collectTraceConfigBlocks(env: CollectorEnv): string[] {
-  return mergeTraceConfigBlocks(supportedCollectors(env).flatMap((c) => c.traceConfigBlocks(env)))
+export function collectTraceConfigBlocks(env: CollectorEnv, atrace: AtraceScope | null = null): string[] {
+  const blocks = supportedCollectors(env).flatMap((c) => c.traceConfigBlocks(env))
+  return mergeTraceConfigBlocks(atrace === null ? blocks : withAtrace(blocks, atrace))
+}
+
+/**
+ * 평소 블록 목록에서 `FTRACE_POWER_BLOCK` 을 **같은 자리에서** 진단 블록으로 바꾼다 —
+ * 다른 블록의 순서는 평소 세션과 같다. 평소에 그 블록이 없으면(cpu 미지원) 이벤트 없는
+ * 진단 블록을 끝에 단다. cpu 가 꺼진 기기에서도 atrace 가 조용히 사라지지 않게 하려는 것이고,
+ * `blocks.ts` 가 소스의 주인을 collector 가 아니라 자기로 둔 것과 같은 이유다.
+ */
+function withAtrace(blocks: string[], atrace: AtraceScope): string[] {
+  const hasPower = blocks.includes(FTRACE_POWER_BLOCK)
+  const diagnose = diagnoseFtraceBlock(atrace, hasPower)
+  return hasPower ? blocks.map((b) => (b === FTRACE_POWER_BLOCK ? diagnose : b)) : [...blocks, diagnose]
 }
 
 /**
