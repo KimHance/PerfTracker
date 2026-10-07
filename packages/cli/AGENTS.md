@@ -21,7 +21,7 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
 | `test/preview-flag.test.ts` | GUI 가 적는 `start` 줄(시작 바 예고 · 서버 실행 줄)의 플래그가 commander 에 등록된 `start` 옵션과 같은지 대조 (DM-2) |
 | `test/on-device/` | **실기기가 있어야 도는 스펙.** `npm run test:device` 로만 실행 |
 
-**gui 소스를 상대 경로(`../../gui/src/…`)로 import 하는 cli 시험은 지금 `test/preview-flag.test.ts` 하나뿐인 예외다** — gui exports 는 서버 진입점(`.`) 하나라 예고 함수를 패키지로 못 읽고, 방향이 cli → gui 라 규칙 4 안이다 (gui 는 cli 를 모르므로 이 대조는 cli 쪽에만 둘 수 있다). `src/` 는 이 길을 쓰지 않는다.
+**gui 소스를 상대 경로(`…/gui/src/…`)로 import 하는 cli 시험은 지금 둘뿐인 예외다** — `test/preview-flag.test.ts`(예고 함수) · `test/on-device/diagnose.test.ts`(보고서 slice 표 행 모델). gui exports 는 서버 진입점(`.`) 하나라 둘 다 패키지로 못 읽고, 방향이 cli → gui 라 규칙 4 안이다 (gui 는 cli 를 모르므로 이 대조는 cli 쪽에만 둘 수 있다). `src/` 는 이 길을 쓰지 않는다.
 
 **등록과 실행을 가른 이유는 테스트다.** 진입점이 곧 실행이면 import 하는 순간 `process.argv`
 를 파싱해 버려서, 명령 목록을 확인하려면 소스를 정규식으로 긁는 수밖에 없다. `program.ts` 를
@@ -121,8 +121,13 @@ CLI 출력을 고쳤으면 `test/on-device/` 를 함께 grep 할 것.
 PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지> npm run test:device
 ```
 
-기기가 둘 이상이면 `PERFTRACKER_TEST_DEVICE` 가 없으면 11개가 전부 실패한다.
+기기가 둘 이상이면 `PERFTRACKER_TEST_DEVICE` 가 없으면 19개가 전부 실패한다.
 대상 앱이 없으면 **조용히 건너뛰지 않고 실패한다** — 건너뛴 스펙은 통과한 스펙과 같은 색이다.
+
+**`diagnose.test.ts`(진단 세션 · DM-16 · DM-5)는 측정 창 안에서 화면을 스와이프한다** — 4회, adb 를 직접
+불러서. 기능 문서 diagnostic-mode 결정 2 가 허용한 시나리오 입력이고 perftracker(`AdbClient`)를 거치지
+않는다 (거치면 래치가 막는다 — 막는 것이 옳다). 그 때문에 대상 앱 화면이 스크롤된다.
+`RV Scroll` 행(앱 slice)은 앱 slice 가 열리고 대상 앱이 YouTube 일 때만 단언한다 — 다른 앱으로는 돌려 보지 않았다.
 
 ### 못 재는 기기에서 실패시키지 않는다
 

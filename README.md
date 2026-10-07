@@ -1430,7 +1430,7 @@ npm install
 npm run build     # 먼저 한 번 — 아래 테스트가 core 의 dist/ 를 씁니다
 npm test          # 유닛 테스트 (기기 불필요). 1초 남짓
 npm run typecheck # src + test 전체 타입체크
-npm run test:device   # 온-디바이스 스펙 (기기가 꽂혀 있어야 함) — 현재 11개
+npm run test:device   # 온-디바이스 스펙 (기기가 꽂혀 있어야 함) — 현재 19개
 ```
 
 **갓 클론한 저장소에서는 `npm run build` 가 먼저입니다.** `packages/cli` 의 테스트가
@@ -1462,7 +1462,7 @@ PERFTRACKER_TEST_APP=<패키지명> npm run test:device
 PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지명> npm run test:device
 ```
 
-**기기가 둘이면 지정하지 않은 채로는 11개가 전부 실패합니다** (`AmbiguousDeviceError`).
+**기기가 둘이면 지정하지 않은 채로는 19개가 전부 실패합니다** (`AmbiguousDeviceError`).
 한 대만 꽂혀 있으면 `PERFTRACKER_TEST_DEVICE` 는 필요 없습니다.
 
 고를 앱의 조건은 둘입니다.
@@ -1498,10 +1498,10 @@ PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지명> npm run tes
 
 ## 검증 환경
 
-| 항목 | M0+M1 | M2 | M3 |
-|---|---|---|---|
-| 실기기 (SM-S901N, Android 16 / sdk 36) | ✅ | ✅ | ✅ |
-| 에뮬레이터 (sdk_gphone64_arm64, API 35, 4코어) | — | ✅ | ✅ |
+| 항목 | M0+M1 | M2 | M3 | 진단 세션 |
+|---|---|---|---|---|
+| 실기기 (SM-S901N, Android 16 / sdk 36) | ✅ | ✅ | ✅ | ✅ |
+| 에뮬레이터 (sdk_gphone64_arm64, API 35, 4코어) | — | ✅ | ✅ | — |
 
 실기기 검증(2026-07-27)은 두 단계로 나뉩니다. **숫자가 다른 이유를 함께 적습니다** —
 중간에 스펙이 하나 늘고 대상 앱이 바뀌었기 때문입니다.
@@ -1509,14 +1509,64 @@ PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지명> npm run tes
 | 언제 | 스펙 수 | 결과 | 대상 앱 |
 | --- | --- | --- | --- |
 | 실기기 검증 웨이브 | 10 | **5회 연속 10/10** | `com.android.settings` |
-| CPU·Log 앱 단위화 이후 (현재) | 11 | **1회 11/11** | `com.nhn.android.webtoon` |
+| CPU·Log 앱 단위화 이후 | 11 | **1회 11/11** | `com.nhn.android.webtoon` |
+| 진단 세션 스펙 추가 (현재, 2026-10-08) | 19 | **1회 19/19** | `com.google.android.youtube` |
 
 즉 **현재 스펙 구성으로 5회 연속을 돌린 적은 없습니다.** 5회 연속의 근거는 그 앞 구성의
-것이고, 늘어난 스펙 하나는 "세션 스펙의 대상 앱이 이 기기에 설치되어 있다"(`m0`)입니다.
+것이고, 10 → 11 로 늘어난 스펙 하나는 "세션 스펙의 대상 앱이 이 기기에 설치되어 있다"(`m0`)입니다.
 대상 앱을 바꾼 이유는 아래 "온-디바이스 테스트를 다른 기기에서 돌리기" 에 있습니다.
+11 → 19 는 진단 세션 스펙(`diagnose.test.ts`, 8개)이고, 그 회차의 대상 앱은 YouTube 입니다 —
+**19개를 웹툰으로 돌린 적은 없습니다** ([아래](#진단-세션--diagnose을-실기기가-검증한-것-2026-10-08-sm-s901n--sdk-36)).
 
 유닛 테스트는 그 시점에 `npm test` **723/723**, `npm run typecheck` · `npm run build`
 클린이었습니다 (M3 당시의 수치입니다 — 지금은 더 늘었습니다).
+
+### 진단 세션(`--diagnose`)을 실기기가 검증한 것 (2026-10-08, SM-S901N / sdk 36)
+
+대상은 YouTube 21.29.366 이고 흐름은 사람이 하는 것과 같습니다 —
+`start --app com.google.android.youtube --launch --diagnose` → **다른 셸에서** `adb shell input swipe` 4회
+(홈 피드 스크롤) → `stop`. 스와이프는 perftracker 를 거치지 않는 시나리오 입력이라 측정 창 안 기기 접촉 0
+과 부딪히지 않습니다 — `adb_commands_during_session` 은 도구가 창 안에서 낸 명령 수입니다.
+
+수동 1회의 `result.json` (18.6초 세션):
+
+| 칸 | 값 |
+| --- | --- |
+| `session.options.diagnose` · `adb_commands_during_session` · `trace_buffer_overrun` | `true` · 0 · `false` |
+| `diagnose.status` · `app_slices_open` | `collected` · `true` |
+| `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` | 123,772 · 116,165 · 1 |
+| `ftrace_overrun_events` · `trace_bytes` | 0 · 11,293,657 |
+| `target_process_slice_names_unfolded` → 표 행 | 8,314 → 1,088 |
+| `bindApplication` 행 | 메인 스레드 1회 · 115.2 ms |
+| `Choreographer#doFrame *` 행 | 메인 스레드 1,070회 |
+| `RV Scroll` 행 | 메인 스레드 795회 |
+
+- **frametimeline 은 실제로 빠졌습니다.** 같은 원본을 `trace_processor` 로 따로 세면 대상 앱 프로세스의
+  트랙에 slice 가 118,050개 있고 그중 1,885개가 Actual · Expected Timeline 입니다 — 블록의 116,165 는 그 차이와
+  같습니다. 고유 이름 9,219 → 8,314, 비동기 갈래 2,079 → 194 도 같은 방식으로 맞습니다.
+- **보고서** — `perftracker report` 로 낸 파일 하나의 진단 탭 slice 표가 1,088행(블록 표와 같음) ·
+  외부 요청 0 · 1440 폭 가로 넘침 0 이었습니다.
+- **끝난 뒤 기기** — `debug.atrace.tags.enableflags` 0 · `debug.atrace.app_number` 빈 값 · perfetto 세션 0 ·
+  그 세션의 원격 파일 0. `debug.atrace.app_0` 에는 `com.google.android.youtube` 가 남습니다 — perfetto 가 마지막
+  패키지를 남기는 것이고, 이 도구는 atrace 속성을 고치지 않습니다.
+- **같은 조건의 평소 세션** — `result.json` · `session.json` 에 진단 관련 키 0 · 최대 30분. 원본에 실린
+  TraceConfig(`trace_config_pbtxt`)를 꺼내 보면 진단 세션 것에서 `atrace_*` 네 줄이 빠지고 `duration_ms` 만
+  600000 → 1800000 으로 다를 뿐 나머지는 글자까지 같습니다. 평소 원본의 스레드 slice 는 0개입니다.
+
+온-디바이스 스펙 `packages/cli/test/on-device/diagnose.test.ts`(8개)가 같은 것을 봅니다. 수의 크기는 단언하지
+않고 관계를 단언합니다 — `trace_processor` 로 따로 센 수 = 블록의 수, 보고서 행 모델의 행 수 = 블록 표 행 수,
+`extract` 를 다시 돌린 블록 = `stop` 이 쓴 블록(바이트까지). 스펙 회차 가운데 한 번은 앱이 트레이스에
+낡은 이름으로 남아 블록이 `partial` + `process_name_stale_in_trace` 였고 값은 다 있었습니다
+([아래](#트레이스가-앱을-다른-이름으로-아는-경우-zygote64--pre-initialized)).
+
+**검증하지 못한 것:**
+
+- **sdk 31–34 · sdk 30 이하 기기.** 앱 slice 열림 조건 표의 그 칸은 안드로이드 문서 근거와 합성 시험뿐입니다.
+- **YouTube 말고 다른 앱.** 진단 스펙을 다른 앱으로 돌린 적이 없습니다. `RV Scroll` 행(androidx RecyclerView 가
+  남기는 앱 slice)은 대상 앱이 YouTube 일 때만 단언합니다 — 스와이프를 빼면 그 행이 사라지는 것은 봤습니다.
+- **`bindApplication` 행이 atrace 켜짐 대기 덕인지.** 대기를 뺀 빌드로 돌린 1회에서도 행이 잡혔습니다
+  (대기를 넣기 전 실측은 0/1). 경합이라 한 번으로는 못 가립니다 — 대기 자체는 유닛 시험(`D14 …`)이 지킵니다.
+- **ftrace 손실이 0 이 아닌 회차** · **10분짜리 진단 원본으로 낸 블록**(쿼리 시간 · `result.json` 크기) — 본 적이 없습니다.
 
 ### M3 에서 에뮬레이터가 **실제로 검증한** 것
 
