@@ -10,14 +10,14 @@
 | `src/adb/` | `AdbClient` 와 측정 창 래치. 기기로 가는 모든 길목 |
 | `src/collectors/` | 지표 8개 ([AGENTS.md](src/collectors/AGENTS.md)) |
 | `src/session/` | `start` / `stop` / 활성 세션 포인터 / 마킹 / **기록 목록**(`runs.ts`) / **진단 세션**(`diagnose.ts` — 앱 slice 열림 판정 · atrace 대기) |
-| `src/extract/` | 트레이스 재파싱 → `result.json` 조립 |
+| `src/extract/` | 트레이스 재파싱 → `result.json` 조립 · **진단 블록**(`diagnose.ts` — 진단 세션에만) |
 | `src/schema/` | `result.json` 의 zod 스키마 · `reason_code` · `references` |
 | `src/device/` | 기기 목록 · 정적 스펙 · 전/후 상태 스냅샷 · `probeDevice` |
 | `src/app/` | 앱 목록 · 라벨 해석(`resources.arsc` 직접 파싱) · 대상 특정 · 빌드 속성 |
 | `src/perfetto/` | TraceConfig 조립 · `--detach` 세션 · `trace_processor` |
 | `src/device/clock.ts` | 기기 시계 − 호스트 시계. 마킹과 시계열의 0초를 잇는다 |
 | `src/host/` | **기기가 아닌 이 컴퓨터.** 이 패키지에서 `AdbClient` 를 안 받는 유일한 수집 지점 |
-| `src/copy/` | 기능이 **새로** 내는 사용자 문구 모음. 정본은 디자인 문서 `## 문구` 표 (`docs/design/<기능>.md`) |
+| `src/copy/` | 기능이 **새로** 내는 사용자 문구 모음. 정본은 디자인 문서 `## 문구` 표 (`docs/design/<기능>.md`). 단어형 규칙(`wordform.ts`)은 cli · gui 시험도 여기서 가져간다 |
 
 ## 제약
 
@@ -41,7 +41,9 @@
   검증한다 — 거부될 config 로 시작 스냅샷 · force-stop · perfetto 가 먼저 나가면 앱만 죽은 채로 남는다.
 - **앱 slice 가 열리나는 `session/diagnose.ts` 의 `appSliceOpen` 하나가 정한다.** doctor 의 기기 줄 ·
   start 고지 · 화면 · extract 가 전부 그것을 부른다. sdk 경계를 다른 파일에 다시 쓰지 않는다.
-- **`schema_version` 은 미출시 동안 올리지 않는다.** 규칙표는 `src/schema/result.ts` 상단에 있다.
+- **출시된 계약을 넓히면 `schema_version` 의 minor 를 올린다.** 1.1.0 은 npm 0.1.0 ~ 0.2.1 로 나갔고
+  진단 블록이 1.2.0 이다. 규칙표는 `src/schema/result.ts` 상단에 있다. **진단 세션의 키(`diagnose` ·
+  `session.options.diagnose`)는 진단 세션에만 싣는다** — 평소 세션 `result.json` 의 키는 1.1.0 과 같다.
 
 ## 자주 틀리는 자리
 

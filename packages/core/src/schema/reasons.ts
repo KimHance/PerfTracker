@@ -1,4 +1,5 @@
 import { POLL_PERIOD_MS } from '../collectors/blocks.js'
+import { DIAGNOSE_COPY, fillCopy } from '../copy/diagnose.js'
 
 /**
  * 메트릭이 왜 수집되지 않았는지를 **안정적인 기계 키**로 말한다.
@@ -232,6 +233,40 @@ export const METRIC_REASON_CODES = [
    * detail: uid, package
    */
   'uid_not_in_package_list',
+  /**
+   * **진단 블록 전용** — 메트릭에는 실리지 않고 `diagnose.app_slices_open_reason_code` 에만 온다.
+   *
+   * 앱 slice(`atrace_apps` 가 여는 앱 자신의 slice)가 **실릴 수 있던 조건이었는지 모른다.**
+   * sdk ≤30 에서 앱 slice 는 debuggable 또는 profileable 앱에만 열리는데, 이 앱은 debuggable 이
+   * 아니거나(`false`) 그것을 읽지 못했고(`null`), profileable 은 읽을 출처가 없다
+   * (기능 문서 열린 질문 3). 판정은 `session/diagnose.ts` 의 `appSliceOpen` 하나다.
+   *
+   * 앱이 slice 를 **남겼는지가 아니다** — 그것은 트레이스가 말하고, atrace 마커에 태그가 없어
+   * 프레임워크 slice 와 가를 수도 없다 (결정 8). 그래서 이 코드가 붙어도 slice 수 · 표는 잰 그대로다.
+   * detail: sdk_int, debuggable(false | null)
+   */
+  'app_slices_open_unknown',
+  /**
+   * **진단 블록 전용** — 블록 `reason_code` 에만 온다 (plan D35).
+   *
+   * 원본에 CPU 별 `ftrace_cpu_*` 통계가 0행이다 — ftrace 가 안 돌았다. slice 0개는 "재 봤더니
+   * 없었다" 가 아니므로 블록은 `partial` 이고 slice 수 · 표 · 잃은 이벤트 수가 null 이다.
+   * 켜기 오류만 있고 ftrace 는 돈 경우는 이 코드가 아니라 `ftrace_setup_errors` 다 (plan D38 — 값이
+   * 있음 · 없음이 정반대인 둘을 한 코드로 두면 기계가 가를 수 없다).
+   * detail: ftrace_cpu_stats(0), setup_errors
+   */
+  'ftrace_not_recorded',
+  /**
+   * **진단 블록 전용** — 블록 `reason_code` 에만 온다 (plan D37 · D38).
+   *
+   * ftrace 는 돌았는데(CPU 별 통계가 있다) traced_probes 가 켜다 오류를 냈다(`ftrace_setup_errors` > 0).
+   * 오류가 atrace 의 것인지 다른 이벤트의 것인지 원본이 말하지 않아 일부가 빠졌을 수 있다.
+   * **잰 수 · 표는 그대로다** — `process_name_stale_in_trace` 처럼 값 있는 `partial`. 실측: gfx · input
+   * 카테고리를 켠 원본은 벤더 gfx 이벤트(`mdss` · `dpu` · `sde` …) 28개가 이 기기에 없어 오류 28 인데
+   * slice 33만–38만이 실렸다.
+   * detail: setup_errors, ftrace_cpu_stats
+   */
+  'ftrace_setup_errors',
 ] as const
 
 export type MetricReasonCode = (typeof METRIC_REASON_CODES)[number]
@@ -426,6 +461,16 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
     `측정 대상(${String(d['package'])}) 자신도 그 uid 로 등재되어 있지 않습니다. ` +
     `목록은 이 uid 의 안드로이드 user 를 열거했으므로 "못 봤다" 가 아니라 "없다" 입니다. ` +
     `값은 전부 실었지만 이 숫자를 그 패키지의 것이라고 말할 근거를 확인하지 못했습니다.`,
+  // 진단 모드의 새 문구라 단어형이다 (DM-15) — 문장은 이 표가 아니라 문구 모음이 주인이고
+  // 정본은 디자인 문서 `## 문구` 표다. 기존 사유 문장(합쇼체)은 그대로 둔다 (plan D10).
+  app_slices_open_unknown: (d) =>
+    fillCopy(
+      d['debuggable'] === false ? DIAGNOSE_COPY.reasonNotDebuggable : DIAGNOSE_COPY.reasonDebuggableUnknown,
+      d['sdk_int'] !== undefined ? { sdk: String(d['sdk_int']) } : {},
+    ),
+  ftrace_not_recorded: () => DIAGNOSE_COPY.reasonFtraceNoStats,
+  ftrace_setup_errors: (d) =>
+    fillCopy(DIAGNOSE_COPY.reasonFtraceSetupErrors, d['setup_errors'] != null ? { count: String(d['setup_errors']) } : {}),
 }
 
 /** 코드 → 한국어 문장. 모르는 코드는 조용히 비우지 않고 코드 자체를 남긴다. */

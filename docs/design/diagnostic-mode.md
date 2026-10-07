@@ -146,6 +146,8 @@
 | core | start 고지 · running 고지 (debuggable null) | `앱 slice 열림 모름 — sdk {sdk} · debuggable 모름` | 같은 칸 · debuggable 을 못 읽음 | 같음 |
 | core | 새 reason (열림 null · debuggable false) | `sdk {sdk} · debuggable 아님 · profileable 읽을 출처 없음` | 열림 null 이유 — 보고서 열림 행 title | `실패` |
 | core | 새 reason (열림 null · debuggable null) | `sdk {sdk} · debuggable 모름 · profileable 읽을 출처 없음` | 같음 | `실패` |
+| core | 새 reason (블록 partial · ftrace 통계 0행) | `ftrace 기록 없음 · 원본에 ftrace 통계 0행 · slice 수 모름` | `ftrace_not_recorded` — 보고서 카드 제목 title | `실패` |
+| core | 새 reason (블록 partial · ftrace 설정 오류) | `ftrace 설정 오류 {count}건 · slice 수 잰 그대로 · 빠진 이벤트 모름` | `ftrace_setup_errors` — `{count}` 오류 수 · 수 · 표는 잰 그대로 | `실패` |
 | cli | `start --help` 의 `--diagnose` 설명 | `진단 세션 — atrace slice 기록 · 최대 10분` | `default` 없이 66칸 | `측정한다` 꼴 |
 | cli | `start` · `status` 라벨 줄 | `Diagnose  atrace am · wm · view + 앱 slice · 최대 10분` | 진단 세션 표시 · 54칸 | `Mode` · `구간` |
 | cli | `runs` 행 꼬리 태그 | `진단` | 진단 세션 기록 | `diag` · `atrace` |

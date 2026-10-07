@@ -22,6 +22,23 @@ export const DIAGNOSE_COPY = {
   noticeNotDebuggable: '앱 slice 열림 모름 — sdk {sdk} · debuggable 아님',
   /** start 고지 · running 고지 — "모름" 칸, debuggable 을 읽지 못한 경우. */
   noticeDebuggableUnknown: '앱 slice 열림 모름 — sdk {sdk} · debuggable 모름',
+  /**
+   * `app_slices_open_unknown` 의 reason — 열림이 null 인 이유, debuggable 이 아님을 확인한 경우.
+   * `result.json` 의 `diagnose.app_slices_open_reason` 으로 나가고 보고서 열림 행 title 이 된다.
+   */
+  reasonNotDebuggable: 'sdk {sdk} · debuggable 아님 · profileable 읽을 출처 없음',
+  /** `app_slices_open_unknown` 의 reason — debuggable 을 읽지 못한 경우. */
+  reasonDebuggableUnknown: 'sdk {sdk} · debuggable 모름 · profileable 읽을 출처 없음',
+  /**
+   * `ftrace_not_recorded` 의 reason — 원본에 CPU 별 ftrace 통계가 한 행도 없다 (ftrace 가 안 돌았다).
+   * 블록 `reason` 으로 나가고 보고서 카드 제목 title 이 된다 (plan D35).
+   */
+  reasonFtraceNoStats: 'ftrace 기록 없음 · 원본에 ftrace 통계 0행 · slice 수 모름',
+  /**
+   * `ftrace_setup_errors` 의 reason — traced_probes 가 ftrace 를 켜다 낸 오류가 있다. `{count}` = 오류 수.
+   * ftrace 는 돌았으므로 slice 수 · 표는 잰 그대로 싣고, 어느 이벤트가 빠졌는지만 모른다 (plan D37).
+   */
+  reasonFtraceSetupErrors: 'ftrace 설정 오류 {count}건 · slice 수 잰 그대로 · 빠진 이벤트 모름',
 } as const
 
 /**

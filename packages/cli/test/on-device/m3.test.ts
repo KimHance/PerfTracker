@@ -118,7 +118,7 @@ describe('M3 기기 통합', () => {
 
     // 원본이 남아 있으므로 기기 없이 재산출된다.
     const result = await extractRun(active!.runDir, {})
-    expect(result.schema_version).toBe('1.1.0')
+    expect(result.schema_version).toBe('1.2.0')
 
     // M3 의 두 메트릭이 **산출물에** 자리를 갖는다 — 값이든 사유든 (m2 와 같은 이유).
     for (const id of ['thermal', 'network']) {

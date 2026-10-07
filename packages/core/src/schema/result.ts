@@ -1,14 +1,22 @@
 import { z } from 'zod'
 import { METRIC_REASON_CODES, type MetricReasonCode } from './reasons.js'
 
+// 1.2.0 — 진단 세션(기능 문서 diagnostic-mode)의 자리. 최상위 `diagnose` 블록과
+// `session.options.diagnose` 를 optional 로, reason_code 셋(`app_slices_open_unknown` · `ftrace_not_recorded` ·
+// `ftrace_setup_errors`)을 더했다.
+// 전부 아래 표의 minor 항목이다. **둘 다 진단 세션에만 실린다** — 평소 세션의 result.json 은
+// 1.1.0 과 키가 같고, 진단 키가 없는 1.1.0 문서는 이 스키마를 그대로 통과한다.
+//
 // 1.1.0 — M2 가 metrics 에 startup / cpu / memory / log 를, M3 가 thermal / network 를
 // optional 로 더했다. 1.0.0 문서(frame 하나만 있는)는 여전히 이 스키마를 통과한다.
+// 1.1.0 은 npm 0.1.0(2026-08-20) ~ 0.2.1 로 출시됐다. 개발 중에는 "미출시 버전 안의 확장은 버전
+// 사유가 아니다" 로 판단해 1.1.0 안에서 계약을 여러 번 넓혔고, 출시 뒤에도 0.2.0(2026-08-31)이
+// 같은 1.1.0 으로 metrics.frame 과 reason_code no_frames 를 더했다 (0.1.0 때 스키마는 reason_code
+// 35개 · metrics.frame 없음, 0.2.0 은 36개 — git 2ee8198 · 4a68127). 그래서 `1.1.0` 이라는 같은
+// 숫자가 넓이가 다른 계약 여럿을 가리킨다 (README 「스키마를 다시 꺼내야 하는 때」).
+// 1.2.0 부터는 출시된 계약을 넓히면 아래 표대로 버전을 올린다.
 //
-// **M3 에서도 1.1.0 그대로 간다.** 1.1.0 은 아직 출시된 적이 없다 (M2 가 병합됐을 뿐
-// 릴리스가 없다). 미출시 버전 안에서의 확장은 버전 사유가 아니다 — 지금 1.2.0 을 찍으면
-// "1.1.0 이라는 더 좁은 계약이 세상에 존재했다" 는 없던 역사를 만든다.
-//
-// **출시 후의 규칙 (M4 가 이 표를 그대로 쓴다):**
+// **규칙 (출시된 계약을 바꿀 때 이 표를 그대로 쓴다):**
 //   metrics 에 새 키를 .optional() 로 추가        → minor  (옛 문서가 통과한다)
 //   metrics 에 새 키를 required 로 추가           → major  (옛 문서가 깨진다)
 //   reason_code enum 값 추가                      → minor  (계약이 넓어질 뿐이다)
@@ -19,10 +27,7 @@ import { METRIC_REASON_CODES, type MetricReasonCode } from './reasons.js'
 //   non-null 필드를 nullable 로 넓히기            → major  (보장을 받던 소비자가 깨진다)
 //
 // 그래서 새 metrics 키는 **항상 optional 로** 넣는다 — required 로 넣는 순간 major 가 된다.
-// M3 가 한 것은 위 표의 minor 항목들(새 키 2개, reason_code 9개 추가, thermal_zones 에
-// type/status/source 를 optional 로 추가)과 "버전 사유 아님"(references 1건)뿐이다.
-// 출시 후였다면 1.2.0 이었을 것이고, 미출시이므로 1.1.0 그대로다.
-export const SCHEMA_VERSION = '1.1.0'
+export const SCHEMA_VERSION = '1.2.0'
 
 /**
  * `partial` 이면서 `data` 가 **null** 인 결과를 내는 사유 코드들 — 즉 "값이 아예 안 나왔다".
@@ -1344,6 +1349,19 @@ export const MarkSchema = z.object({
 })
 export type Mark = z.infer<typeof MarkSchema>
 
+/**
+ * **진단 세션의 수치는 평소 세션과 나란히 놓을 수 없다** (기능 문서 DM-14).
+ *
+ * atrace slice 하나를 남기는 비용(~5µs)은 커널 ftrace 처럼 인터럽트당한 프로세스가 아니라
+ * **slice 를 남기는 앱 프로세스 자신**에게 청구되고, `tracing_processes_*` 는 트레이싱 프로세스만
+ * 센다. 그 사실이 진단 여부 필드와 오버헤드 필드 양쪽에 있어야 한다 — 한쪽만 읽는 소비자가 있다.
+ * 같은 문장을 네 자리에 손으로 옮기면 한 곳만 고쳐지는 날이 오므로 상수 하나로 둔다.
+ */
+const DIAGNOSE_OVERHEAD_CAVEAT =
+  '**진단 세션(session.options.diagnose: true)은 atrace slice 비용이 앱 프로세스에 청구되어 ' +
+  'measurement_overhead.tracing_processes_* 에 안 잡힌다 — 평소 세션과 수치를 나란히 놓을 수 없다.** ' +
+  '두 종류를 섞어 비교하려면 이 필드로 먼저 가를 것.'
+
 export const SessionInfoSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -1398,7 +1416,23 @@ export const SessionInfoSchema = z.object({
         '어긋난 자리에 찍힌다). 트레이스에 clock_snapshot 이 없거나 기기 시계를 못 읽은 ' +
         '세션이 그렇다.',
     ),
-  options: z.object({ launch: z.boolean() }),
+  options: z.object({
+    launch: z.boolean(),
+    /**
+     * **진단 세션에만 있고 값은 언제나 true 다** (plan D12). 평소 세션에 `false` 를 싣지 않는 이유:
+     * 이 객체는 JSON Schema 에서 `additionalProperties: false` 라, 늘 실으면 캐시해 둔 1.1.0
+     * 스키마가 **모든** 새 파일을 거부한다. 없음 = 평소 세션 또는 이 필드가 없던 시절의 문서.
+     */
+    diagnose: z
+      .literal(true)
+      .optional()
+      .describe(
+        '진단 세션(`start --diagnose`)이면 true, 아니면 **키가 없다** — false 로 실리는 일은 없다. ' +
+          '없으면 평소 세션이거나 이 필드가 없던 시절(1.1.0 이하)의 문서이고, 둘 다 진단 세션이 아니다. ' +
+          '진단 세션에는 최상위 diagnose 블록이 함께 실린다. ' +
+          DIAGNOSE_OVERHEAD_CAVEAT,
+      ),
+  }),
   /**
    * `[]` 는 **"아무도 아무것도 적지 않았다"** 는 사실이다 (규칙 3 의 예외가 아니라 그 자체다).
    * CLI 로 잰 세션은 마킹을 남길 방법이 없으므로 항상 비어 있고, GUI 세션만 값을 가진다.
@@ -1432,14 +1466,16 @@ export const MeasurementOverheadSchema = z.object({
         '"프로세스들" 이 쓴 시간만 담는다 — 커널이 ftrace 이벤트를 링버퍼에 기록하는 비용은 ' +
         '인터럽트당한 프로세스(= 대상 앱일 수 있다)에 청구되므로 여기 들어오지 않는다. ' +
         '켜는 ftrace 이벤트를 줄이면 그 몫도 줄지만 0 이 되지는 않는다. ' +
-        'null 은 트레이스에 해당 카운터가 없었다는 뜻이다(record_process_runtime 이 꺼진 옛 캡처).',
+        'null 은 트레이스에 해당 카운터가 없었다는 뜻이다(record_process_runtime 이 꺼진 옛 캡처). ' +
+        DIAGNOSE_OVERHEAD_CAVEAT,
     ),
   tracing_processes_cpu_share_pct: z
     .number()
     .nullable()
     .describe(
       '위 CPU 시간을 같은 구간의 기기 전체 CPU 시간(모든 코어 합)으로 나눈 백분율. ' +
-        'linux.sys_stats 의 cpu.times.* 가 없으면 분모를 알 수 없어 null 이다.',
+        'linux.sys_stats 의 cpu.times.* 가 없으면 분모를 알 수 없어 null 이다. ' +
+        DIAGNOSE_OVERHEAD_CAVEAT,
     ),
   tracing_processes_peak_rss_kb: z
     .number()
@@ -1450,7 +1486,8 @@ export const MeasurementOverheadSchema = z.object({
         '정확히 낼 수 없으므로, 이 값은 진짜 동시 최대의 상계다. 과소평가하지 않는 쪽을 골랐다. ' +
         '다만 각 프로세스의 최댓값 자체는 **1초 주기 표본의 최댓값**이다(proc_stats_poll_ms: 1000) — ' +
         '표본과 표본 사이에 스쳐 간 순간 최고점은 이 값에 나타나지 않으므로, ' +
-        '이 상계가 모든 순간을 덮는다는 뜻은 아니다.',
+        '이 상계가 모든 순간을 덮는다는 뜻은 아니다. ' +
+        DIAGNOSE_OVERHEAD_CAVEAT,
     ),
   // 이 주의사항은 반드시 스키마에 실려야 한다. `perftracker schema` 는 CI 와 LLM 을 위한
   // 계약으로 팔리는데, 이 필드를 가장 잘못 읽기 쉬운 소비자가 바로 그들이다.
@@ -1521,6 +1558,228 @@ export const ArtifactsSchema = z.object({
 export type Artifacts = z.infer<typeof ArtifactsSchema>
 
 /**
+ * 진단 블록이 세는 slice 의 범위. 수 · 표 · 이름 수 칸이 전부 이 문장을 공유한다 — 칸마다 손으로
+ * 옮기면 한 칸만 고쳐진다 (`HWUI_CAUSE_DESCRIPTION` 과 같은 이유).
+ *
+ * frametimeline 을 빼는 이유: 평소 config 에도 있는 `android.surfaceflinger.frametimeline` 이
+ * 대상 앱의 프로세스 트랙에 Actual · Expected Timeline slice(이름이 프레임 토큰 숫자)를 남긴다.
+ * atrace 가 아니고, 빼지 않으면 15초에 이름 448–881개가 비동기 갈래를 덮는다 (실현성 재검토 #1).
+ */
+const DIAGNOSE_SLICE_SCOPE =
+  '**atrace slice 만 센다** — 스레드 트랙 slice 와 프로세스 트랙(비동기) slice 이고, frametimeline 트랙' +
+  '(actual_frame_timeline_slice · expected_frame_timeline_slice — Actual · Expected Timeline, 이름이 ' +
+  '프레임 토큰 숫자)의 slice 는 어디에도 들지 않는다.'
+
+/** 끝나지 않은 slice 의 규칙. 횟수와 합 · 최대가 같은 slice 를 세지 않는다는 사실. */
+const DIAGNOSE_UNFINISHED =
+  '끝나지 않은 slice(트레이스가 끝날 때 아직 열려 있던 것 — 길이를 모른다)는 횟수에만 들고 ' +
+  '합 · 최대에서 빠진다.'
+
+/** 표의 한 갈래 칸. 그 갈래에 그 이름의 slice 가 하나도 없으면 칸 자체가 null 이다. */
+export const SliceBranchStatsSchema = z.object({
+  count: z
+    .number()
+    .int()
+    .positive()
+    .describe('이 갈래에서 이 이름(접은 이름)으로 남은 slice 수. ' + DIAGNOSE_UNFINISHED),
+  sum_ms: z
+    .number()
+    .nonnegative()
+    .nullable()
+    .describe(
+      '끝난 slice 의 길이 합(ms, 소수 셋째 자리). **안쪽 slice 도 각자 세므로 바깥 slice 의 시간과 ' +
+        '겹친다** — 이 값을 행끼리 더하면 같은 시간을 여러 번 센다. ' +
+        '이 갈래의 slice 가 전부 끝나지 않았으면 null 이다 (0 이 아니다 — 길이를 모른다).',
+    ),
+  max_ms: z
+    .number()
+    .nonnegative()
+    .nullable()
+    .describe('끝난 slice 가운데 가장 긴 것(ms). 끝난 slice 가 없으면 null.'),
+})
+export type SliceBranchStats = z.infer<typeof SliceBranchStatsSchema>
+
+const SLICE_BRANCH_NULL =
+  ' **null 은 이 갈래에 이 이름의 slice 가 없었다는 뜻이다** — 트레이스를 읽었고 0개였다. ' +
+  '칸을 0 으로 채우지 않는 것은 slice 가 없으면 최대 ms 가 0 이 아니라 없기 때문이다.'
+
+export const SliceNameRowSchema = z.object({
+  name: z
+    .string()
+    .describe(
+      '**접은 이름.** 원문 이름에서 숫자가 든 영문 · 숫자 토큰(연속한 [A-Za-z0-9] 가운데 숫자가 ' +
+        '하나라도 있는 것 — 숫자 · 0x16진 · `1001yo7d2xmcq` 같은 토큰)을 `*` 하나로 바꾼 것이다. ' +
+        '`Choreographer#doFrame 136993` → `Choreographer#doFrame *` · `tk-trace-id: 1001yo7d2xmcq` → ' +
+        '`tk-trace-id: *`. 숫자가 없는 토큰은 그대로다. 원문에 이미 `*` 가 있었는지는 이 값으로 가를 수 ' +
+        '없다. 길이는 자르지 않는다. 원문 이름은 원본 트레이스(artifacts.trace)에 그대로 있다.',
+    ),
+  main_thread: SliceBranchStatsSchema.nullable().describe(
+    '메인 스레드 갈래 — 대상 앱 프로세스의 스레드 가운데 tid 가 pid 와 같은 스레드의 slice.' + SLICE_BRANCH_NULL,
+  ),
+  other_threads: SliceBranchStatsSchema.nullable().describe(
+    '그 밖 스레드 갈래 — 대상 앱 프로세스의 나머지 스레드의 slice.' + SLICE_BRANCH_NULL,
+  ),
+  async_tracks: SliceBranchStatsSchema.nullable().describe(
+    '비동기 트랙 갈래 — 대상 앱 프로세스의 프로세스 트랙(atrace 비동기 slice). frametimeline 은 ' +
+      '여기 들지 않는다.' + SLICE_BRANCH_NULL,
+  ),
+})
+export type SliceNameRow = z.infer<typeof SliceNameRowSchema>
+
+/**
+ * **진단 세션에만 있는 최상위 블록** (기능 문서 DM-6 · DM-7 · DM-9).
+ *
+ * `metrics` 밖에 둔 이유(결정 5): 지표 8개는 모든 세션의 계약이고, 진단은 세션 종류에 딸린 것이다.
+ * 그래도 상태 껍데기(`status` · `reason_code` · `reason`)는 메트릭과 같다 — 소비자가 같은 매처를 쓴다.
+ *
+ * 판정 필드(순위 · 등급 · 기준선 · 비율)는 없다 (규칙 2). 표는 이름의 코드 단위 순 하나로만 나간다.
+ */
+export const DiagnoseBlockSchema = z
+  .object({
+    atrace_categories: z
+      .array(z.string())
+      .nullable()
+      .describe(
+        '이 세션이 켠 atrace 카테고리 — 기기로 나간 config 에 실제로 실린 값(session.json 의 기록). ' +
+          'null 은 session.json 에 그 기록이 없다는 뜻이다 (상수에서 다시 만들지 않는다).',
+      ),
+    atrace_apps: z
+      .array(z.string())
+      .nullable()
+      .describe(
+        '앱 slice 대상 패키지 — config 의 atrace_apps 에 실제로 실린 값. 대상 앱 하나다. ' +
+          'null 은 session.json 에 그 기록이 없다는 뜻이다.',
+      ),
+    status: MetricStatusSchema.describe(
+      '이 블록에서 **트레이스를 읽어 낸 칸**(slice 수 · ftrace 손실 · 표)의 상태. 메트릭과 같은 다섯 값이다.\n' +
+        '- collected: 다 나왔다.\n' +
+        '- partial: process_not_in_trace 면 대상 앱 프로세스를 트레이스에서 못 찾아 target_process_* ' +
+        '네 칸이 null 이다(trace_slices · ftrace_overrun_events 는 있다). process_name_stale_in_trace 면 ' +
+        '이름이 낡아 캡처 때 받아 둔 pid 로 찾았고 값은 다 있다. ftrace_not_recorded 면 원본에 ftrace 가 ' +
+        '안 남아(CPU 별 ftrace 통계 0행) slice 0개가 "없었다" 인지 "못 쟀다" 인지 모른다 — trace_slices 와 ' +
+        'target_process_* 네 칸이 null 이다(0 · [] 이 아니다). ftrace_setup_errors 면 ftrace 는 돌았는데 ' +
+        '켜다 오류가 나서 어느 이벤트가 빠졌는지 모른다 — 잰 수 · 표는 그대로 싣는다(값 있는 partial).\n' +
+        '- unsupported: 기기에 linux.ftrace 데이터소스가 없어 atrace 를 기록할 수 없었다 ' +
+        '(data_source_not_registered). 트레이스에서 읽는 칸은 null 이다.\n' +
+        '- failed: 원본이 없거나(trace_missing) 쿼리가 터졌다(query_failed). 트레이스에서 읽는 칸은 null 이다.\n' +
+        '**app_slices_open 은 이 상태와 따로 간다** — 트레이스가 아니라 sdk · debuggable 로 정해지므로 ' +
+        '원본이 없어도 값이 있고, null 이어도 이 상태는 collected 일 수 있다. 그 칸의 이유는 ' +
+        'app_slices_open_reason_code 가 따로 말한다.',
+    ),
+    reason_code: z
+      .enum(METRIC_REASON_CODES)
+      .nullable()
+      .describe('status 의 기계 키 (메트릭과 같은 enum). collected 면 null. 사람용 문장은 reason 에 있다.'),
+    reason: z.string().nullable().describe('사람이 읽는 사유. 문구는 다듬힐 수 있으니 매칭에 쓰지 말 것.'),
+    app_slices_open: z
+      .literal(true)
+      .nullable()
+      .describe(
+        '**앱 slice 열림** — 앱 자신의 slice(atrace_apps 가 여는 것)가 **실릴 수 있던 조건이었나**. ' +
+          '앱이 실제로 slice 를 남겼나가 아니다. sdk ≥31 이면 true, sdk ≤30 이면 debuggable 앱만 true. ' +
+          '**false 는 없다** — sdk ≤30 에서 debuggable 이 아니면 profileable 이 갈라야 하는데 그것을 ' +
+          '읽을 출처가 없어 null(모름)이다. 이유는 app_slices_open_reason_code.',
+      ),
+    app_slices_open_reason_code: z
+      .enum(METRIC_REASON_CODES)
+      .nullable()
+      .describe(
+        'app_slices_open 이 null 인 이유의 기계 키. 이 버전에서 오는 값은 app_slices_open_unknown 하나다. ' +
+          'true 면 null.',
+      ),
+    app_slices_open_reason: z
+      .string()
+      .nullable()
+      .describe('app_slices_open 이 null 인 이유 — 사람용. 매칭에 쓰지 말 것.'),
+    trace_slices: z
+      .number()
+      .int()
+      .nonnegative()
+      .nullable()
+      .describe(
+        '**트레이스 전체**(모든 프로세스)의 slice 수. ' +
+          DIAGNOSE_SLICE_SCOPE +
+          ' null 은 트레이스를 못 읽었거나 ftrace 가 원본에 안 남은 것이다(status 참고).',
+      ),
+    target_process_slices: z
+      .number()
+      .int()
+      .nonnegative()
+      .nullable()
+      .describe(
+        '**대상 앱 프로세스**의 slice 수 — 표의 횟수를 모두 더한 값과 같다. 프레임워크 slice(am · wm · view)와 ' +
+          '앱 slice 를 가르지 않는다(atrace 마커에 가를 태그가 없다). 대상 앱 프로세스는 metrics 와 같은 ' +
+          '규칙으로 하나를 고른다. ' +
+          DIAGNOSE_SLICE_SCOPE +
+          ' null 은 그 프로세스를 트레이스에서 못 찾았거나 · ftrace 가 원본에 안 남았거나(둘 다 status ' +
+          'partial) 트레이스를 못 읽은 것이다.',
+      ),
+    target_process_slices_unfinished: z
+      .number()
+      .int()
+      .nonnegative()
+      .nullable()
+      .describe(
+        '대상 앱 프로세스의 slice 가운데 끝나지 않은 것의 수. ' + DIAGNOSE_UNFINISHED + ' null 은 위와 같다.',
+      ),
+    ftrace_overrun_events: z
+      .number()
+      .int()
+      .nonnegative()
+      .nullable()
+      .describe(
+        '**커널 ftrace 링버퍼에서 잃은 이벤트 수** — trace_processor stats 의 ' +
+          'ftrace_cpu_overrun_delta(덮어써서) · ftrace_cpu_commit_overrun_delta(쓰는 중에 겹쳐서) · ' +
+          'ftrace_cpu_dropped_events_delta(덮어쓰기를 끈 버퍼가 꽉 차서)를 CPU 마다 더한 값(트레이스 구간의 ' +
+          '증가분). atrace slice 는 이 버퍼를 지나므로 0 이 아니면 slice 가 그만큼 빠졌다. ' +
+          'measurement_overhead.trace_buffer_overrun 은 perfetto 버퍼(traced_buf*)만 보므로 이 손실을 못 잡는다. ' +
+          'null 은 트레이스에 그 통계가 없다는 뜻이다(0 이 아니다).',
+      ),
+    trace_bytes: z
+      .number()
+      .int()
+      .nonnegative()
+      .nullable()
+      .describe('원본 트레이스(artifacts.trace) 파일 크기(바이트). 원본이 없으면 null.'),
+    target_process_slice_names_unfolded: z
+      .number()
+      .int()
+      .nonnegative()
+      .nullable()
+      .describe(
+        '대상 앱 프로세스 slice 의 **접기 전** 고유 이름 수 — 표의 행 수(접은 뒤)보다 크거나 같다. ' +
+          DIAGNOSE_SLICE_SCOPE +
+          ' null 은 target_process_slices 와 같다.',
+      ),
+    target_process_slice_names: z
+      .array(SliceNameRowSchema)
+      .nullable()
+      .describe(
+        '**대상 앱 프로세스의 slice 이름별 표.** 행 = 접은 이름 하나, 칸 = 갈래 셋(main_thread · ' +
+          'other_threads · async_tracks) × (count · sum_ms · max_ms). **행을 자르지 않는다** — 행 수가 곧 ' +
+          '접은 고유 이름 수다. 순서는 이름의 UTF-16 코드 단위 순 하나다(호스트 로캘과 무관 — JS 의 `a < b`). ' +
+          '순위 · 상위 N · 기준선은 없다 — 무엇이 길었는지 고르는 일은 읽는 쪽의 몫이다.\n' +
+          '**이 표는 프레임워크 slice 와 앱 slice 를 가르지 않는다** — atrace 마커에 가를 태그가 없다. ' +
+          '앱 slice 가 실릴 수 있었는지는 app_slices_open 이 따로 말한다.\n' +
+          '**안쪽 slice 도 각자 세므로 sum_ms 를 행끼리 더하면 안 된다** — 바깥 slice 의 시간과 겹친다.\n' +
+          DIAGNOSE_SLICE_SCOPE +
+          ' ' +
+          DIAGNOSE_UNFINISHED +
+          '\n**null 은 표를 만들지 못했다는 뜻이다**(대상 앱 프로세스를 못 찾았거나 · ftrace 가 원본에 안 ' +
+          '남았거나 · 트레이스를 못 읽음) — ' +
+          '빈 배열이면 프로세스는 찾았고 slice 가 0개였다.',
+      ),
+  })
+  .describe(
+    '**진단 세션에만 있는 블록** (session.options.diagnose 가 true). 평소 세션에는 키가 없다. ' +
+      'atrace(카테고리 am · wm · view + 대상 앱 하나의 앱 slice)를 켠 세션의 slice 집계다. ' +
+      DIAGNOSE_OVERHEAD_CAVEAT +
+      ' 원본은 artifacts.trace 하나이고 `perftracker extract` 가 기기 없이 같은 블록을 다시 낸다. ' +
+      '시간축 그림은 이 블록에 없다 — 원본을 Perfetto UI 로 열 것.',
+  )
+export type DiagnoseBlock = z.infer<typeof DiagnoseBlockSchema>
+
+/**
  * **이 파일만 받은 사람에게 어디를 봐야 하는지 알려 준다.**
  *
  * 필드의 함정은 전부 스키마의 `.describe()` 에 있는데, `result.json` 자체에는 `schema_version`
@@ -1578,6 +1837,11 @@ export const ResultSchema = z.object({
       frame: metricResultSchema(FrameDataSchema).describe(FRAME_DESCRIPTION).optional(),
     })
     .catchall(metricResultSchema(z.unknown())),
+  /**
+   * **진단 세션에만 있다** (plan D12 · 기능 문서 DM-6). optional 이라 1.1.0 문서가 그대로 통과하고,
+   * 평소 세션은 이 키를 아예 싣지 않는다 — "없음" 이 곧 "진단 세션이 아님" 이다.
+   */
+  diagnose: DiagnoseBlockSchema.optional(),
   measurement_overhead: MeasurementOverheadSchema,
   references: z.array(ReferenceSchema),
   warnings: z.array(WarningSchema),

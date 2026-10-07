@@ -480,23 +480,27 @@ npx perftracker devices --json
 npx perftracker schema > result.schema.json
 ```
 
-`schema_version` 이 그 계약의 버전입니다 (현재 `1.1.0`).
+`schema_version` 이 그 계약의 버전입니다 (현재 `1.2.0`).
 
-> **다만 이 버전 하나로 "내 스키마가 최신인지" 를 판단할 수는 없습니다.** `1.1.0` 은 아직
-> 출시된 적이 없어서, 그 안에서 계약이 넓어질 때 이 도구는 버전을 올리지 않았습니다.
-> 스키마를 캐시해 두고 쓰신다면 아래 [스키마를 다시 꺼내야 하는 때](#스키마를-다시-꺼내야-하는-때)
-> 를 반드시 읽으세요.
+> **`1.2.0` 은 진단 세션의 자리를 더한 minor 입니다.** 평소 세션의 `result.json` 은 `1.1.0` 과
+> 키가 같고, 진단 세션(`start --diagnose`)에만 `session.options.diagnose` 와 [`diagnose`](#diagnose)
+> 블록이 실립니다. `1.1.0` 은 npm 0.1.0 ~ 0.2.1 로 나간 버전인데, 개발 중에도 출시 뒤에도 같은
+> `1.1.0` 안에서 계약이 넓어졌습니다 — 0.2.0 이 `metrics.frame` 과 reason_code `no_frames` 를
+> 더했습니다. 스키마를 캐시해 두고 쓰신다면 아래
+> [스키마를 다시 꺼내야 하는 때](#스키마를-다시-꺼내야-하는-때)를 반드시 읽으세요.
 
 ### 최상위 구조
 
 | 필드 | 무엇인가 |
 | --- | --- |
 | `schema_version` | 이 파일 형식의 버전 |
+| `schema_help` | 이 파일을 해석하기 전에 읽을 곳 (값은 늘 같습니다 — 데이터가 아니라 안내) |
 | `tool` | 도구 이름·버전과 **이것을 돌린 컴퓨터**(`host.os` / `arch` / `node`) |
-| `session` | id, 이름, `state`, 시작/종료 시각, 길이, **시간축 기준 두 개**(아래 참고) |
+| `session` | id, 이름, `state`, 시작/종료 시각, 길이, **시간축 기준 두 개**(아래 참고), `options`(`launch` · 진단 세션이면 `diagnose: true`) |
 | `device` | 기기 스펙(`static`)과 세션 전후 상태(`state_before` / `state_after`) |
 | `target_app` | 패키지, 라벨, 버전, 렌더 프로세스와 pid, **빌드 속성**(`debuggable` / `large_heap` / `min_sdk` / `target_sdk` / `primary_cpu_abi`) |
 | `metrics` | 메트릭들. 키가 곧 수집기 id (`hwui` / `startup` / `cpu` / `memory` / `log` / `thermal` / `network`) |
+| `diagnose` | **진단 세션에만.** atrace slice 집계 — 켠 범위, 앱 slice 열림, slice 수, 이름별 표 ([아래](#diagnose)). 평소 세션에는 키가 없습니다 |
 | `measurement_overhead` | 이 측정이 기기에 개입한 정도의 **하한** (아래 참고) |
 | `references` | 구글 공개 기준치. **비교에 쓰이지 않고 기록만 된다** |
 | `warnings` | 관측된 사건 (평가 아님) |
@@ -593,23 +597,35 @@ clock_snapshot 이 없거나 기기 시계를 못 읽은 경우(`trace_start_off
   CI 매칭은 반드시 이걸로 하세요. (예: `sdk_too_low`, `no_log_entries`,
   `trace_missing`, `data_source_not_registered`, `query_failed`)
 
-  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **36개**입니다
-  > (`1.0.0` 은 6개였습니다). 그중 `process_name_stale_in_trace` 는 `1.0.0` 부터 있던
-  > `metrics.hwui` 에도 실립니다. 이 숫자는 테스트가 `METRIC_REASON_CODES` 와 대조해
-  > 고정하므로 코드보다 낡을 수 없습니다.
+  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **39개**입니다
+  > (`1.0.0` 은 6개, `1.1.0` 의 마지막 판인 npm 0.2.1 은 36개였습니다). 그중 `process_name_stale_in_trace` 는 `1.0.0` 부터 있던
+  > `metrics.hwui` 에도 실립니다. `1.2.0` 에 더한 셋은 메트릭에는 실리지 않고 [`diagnose`](#diagnose)
+  > 블록에만 옵니다 — `app_slices_open_unknown` 은 `app_slices_open_reason_code` 에,
+  > `ftrace_not_recorded` · `ftrace_setup_errors` 는 블록 `reason_code` 에. 이 숫자는 테스트가
+  > `METRIC_REASON_CODES` 와 대조해 고정하므로 코드보다 낡을 수 없습니다.
 - `reason` — 사람이 읽는 한국어 문장. 다듬힐 수 있으니 매칭에 쓰지 마세요.
 - `data` — 메트릭별 본문. 수집되지 않았으면 `null`
 
 ### 스키마를 다시 꺼내야 하는 때
 
-**`schema_version` 만 보고 판단하면 안 됩니다.** `1.1.0` 은 아직 출시된 적이 없어서, 그 안에서
-계약이 넓어질 때 이 도구는 버전을 올리지 않았습니다. 그래서 **깨지는 소비자는 `1.0.0` 을
-고정한 쪽만이 아닙니다** — 지금 이 저장소가 만드는 산출물을 거부하는 가장 흔한 경우는
-`1.1.0` 시절 중간에 `perftracker schema` 를 한 번 받아 두고 그대로 쓰는 쪽입니다.
-그런데 `schema_version` 은 그때도 지금도 `1.1.0` 이라, **다시 꺼내라는 신호가 산출물 안에
+**`1.2.0` 부터는 `schema_version` 이 신호입니다.** 출시된 계약을 넓히면 minor 를 올립니다
+(`packages/core/src/schema/result.ts` 상단의 규칙표). 캐시해 둔 스키마를 꺼낸 때의 버전과
+산출물의 `schema_version` 이 다르면 다시 꺼내세요.
+
+- **`1.2.0` 산출물 가운데 진단 세션의 것은 `1.1.0` 스키마가 거부합니다.** 최상위 객체와
+  `session.options` 가 `additionalProperties: false` 라 `diagnose` 키와 `options.diagnose` 가
+  거기 걸립니다. 평소 세션 산출물은 키가 `1.1.0` 과 같아 그대로 통과합니다.
+
+**`1.1.0` 끼리는 그 신호가 없습니다.** `1.1.0` 은 개발 중에도, 출시 뒤에도 계약이 넓어질 때 버전을
+올리지 않았습니다. npm 0.1.0(2026-08-20)의 스키마는 reason_code 35개에 `metrics.frame` 이 없었고,
+0.2.0(2026-08-31)이 같은 `1.1.0` 으로 `metrics.frame` 과 `no_frames` 를 더했습니다 — reason_code 가
+닫힌 enum 이라 0.1.0 때 받아 둔 스키마는 `no_frames` 가 실린 산출물을 거부합니다. 그래서 **깨지는
+소비자는 `1.0.0` 을 고정한 쪽만이 아닙니다** — `1.1.0` 시절 중간에 `perftracker schema` 를 한 번 받아
+두고 그대로 쓰는 쪽도 같은 `1.1.0` 산출물을 거부할 수 있습니다.
+그런데 `schema_version` 은 그때도 그 뒤도 `1.1.0` 이라, **`1.1.0` 산출물끼리는 다시 꺼내라는 신호가 산출물 안에
 존재하지 않습니다.**
 
-`z.toJSONSchema()` 출력에서 실제로 갈라지는 곳은 둘이고, 서로 독립적입니다:
+`1.1.0` 시절 중간에 받은 스키마와 `z.toJSONSchema()` 출력이 실제로 갈라지는 곳은 셋이고, 서로 독립적입니다:
 
 1. **`device.state_*.thermal_zones` 의 항목 노드가 `additionalProperties: false` 입니다.**
    예전 그 스키마는 `{ name, celsius }` 뿐이었고 지금 산출물은 `type` / `status` / `source`
@@ -1166,6 +1182,133 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 - 누적 원값은 싣지 않습니다. 감사가 필요하면 `raw/netstats_{before,after}.txt` 원문이
   `artifacts.raw` 에 등재되어 있습니다.
 
+### `diagnose`
+
+**진단 세션(`start --diagnose`)에만 있는 블록입니다.** 평소 세션에는 키가 없고, 그 "없음" 이 곧
+"진단 세션이 아님" 입니다. `session.options.diagnose` 도 진단 세션에만 `true` 로 실립니다 —
+`false` 로 실리는 일은 없습니다. 진단 세션은 atrace(카테고리 `am` · `wm` · `view` + 대상 앱 하나의
+앱 slice)를 켜고 최대 10분 돕니다.
+
+> **진단 세션의 수치는 평소 세션과 나란히 놓을 수 없습니다.** atrace slice 를 남기는 비용은 앱
+> 프로세스 자신에게 청구되고 `measurement_overhead` 에 잡히지 않습니다 ([아래](#measurement_overhead)).
+
+```json
+{
+  "atrace_categories": ["am", "wm", "view"],
+  "atrace_apps": ["com.google.android.youtube"],
+  "status": "collected",
+  "reason_code": null,
+  "reason": null,
+  "app_slices_open": true,
+  "app_slices_open_reason_code": null,
+  "app_slices_open_reason": null,
+  "trace_slices": 75800,
+  "target_process_slices": 62803,
+  "target_process_slices_unfinished": 2,
+  "ftrace_overrun_events": 0,
+  "trace_bytes": 6783480,
+  "target_process_slice_names_unfolded": 4921,
+  "target_process_slice_names": [
+    { "name": "Choreographer#doFrame *",
+      "main_thread": { "count": 550, "sum_ms": 3035.019, "max_ms": 75.286 },
+      "other_threads": { "count": 7, "sum_ms": 1.362, "max_ms": 0.553 },
+      "async_tracks": null },
+    { "name": "bindApplication",
+      "main_thread": { "count": 1, "sum_ms": 67.307, "max_ms": 67.307 },
+      "other_threads": null, "async_tracks": null }
+  ]
+}
+```
+
+(SM-S901N · Android 16 · YouTube 15초 원본을 이 블록의 쿼리로 다시 센 값입니다. 표는 1,082행 가운데 둘만 옮겼습니다.)
+
+| 필드 | 무엇 | `null` 이면 |
+| --- | --- | --- |
+| `atrace_categories` | 켠 atrace 카테고리 — 기기로 나간 config 에 실린 값 | `session.json` 에 그 기록이 없다 |
+| `atrace_apps` | 앱 slice 대상 패키지 (대상 앱 하나) | 같음 |
+| `status` · `reason_code` · `reason` | [메트릭과 같은 껍데기](#메트릭-하나의-모양) — **트레이스에서 읽은 칸**(수 · 표)의 상태 | — |
+| `app_slices_open` | **앱 slice 열림** — 앱 자신의 slice 가 실릴 수 있던 조건이었나. 앱이 실제로 남겼나가 아닙니다. `true` 또는 `null` (`false` 는 없음) | 모름 — 이유는 다음 칸 |
+| `app_slices_open_reason_code` · `app_slices_open_reason` | 열림이 `null` 인 이유 (`app_slices_open_unknown`) | 열림이 `true` |
+| `trace_slices` | 트레이스 전체(모든 프로세스)의 slice 수 | ftrace 가 원본에 안 남음 · 트레이스를 못 읽음 |
+| `target_process_slices` | 대상 앱 프로세스의 slice 수 = 표의 `count` 합 | 대상 앱 프로세스를 못 찾음 · ftrace 가 원본에 안 남음 · 트레이스를 못 읽음 |
+| `target_process_slices_unfinished` | 그중 끝나지 않은 slice 수 | 같음 |
+| `ftrace_overrun_events` | 커널 ftrace 링버퍼에서 잃은 이벤트 수 | 트레이스에 그 통계가 없음 (0 이 아님) |
+| `trace_bytes` | 원본(`artifacts.trace`) 크기 (바이트) | 원본이 없음 |
+| `target_process_slice_names_unfolded` | 접기 전 고유 이름 수 (표 행 수 이상) | `target_process_slices` 와 같음 |
+| `target_process_slice_names` | 접은 이름별 표 (아래) | 같음 — `[]` 는 "프로세스는 찾았고 slice 가 0개" |
+
+표의 한 행:
+
+| 필드 | 무엇 |
+| --- | --- |
+| `name` | 접은 이름 |
+| `main_thread` | 메인 스레드(tid = pid) 갈래 |
+| `other_threads` | 대상 앱 프로세스의 나머지 스레드 갈래 |
+| `async_tracks` | 대상 앱 프로세스의 프로세스 트랙(비동기) 갈래 |
+| `count` | 그 갈래에서 그 이름으로 남은 slice 수 — 끝나지 않은 것도 셉니다 |
+| `sum_ms` | 끝난 slice 의 길이 합 (ms) |
+| `max_ms` | 끝난 slice 가운데 가장 긴 것 (ms) |
+
+- **atrace slice 만 셉니다** — 스레드 트랙 slice 와 프로세스 트랙(비동기) slice. frametimeline
+  트랙(Actual · Expected Timeline — 이름이 프레임 토큰 숫자)의 slice 는 수 · 표 · 이름 수 어디에도 들지 않습니다.
+- **대상 앱 프로세스는 `metrics` 와 같은 규칙으로 하나입니다.** 트레이스의 이름이 낡았으면 캡처 때 받아 둔
+  pid 로 찾고 `partial` + `process_name_stale_in_trace` 입니다 — 값은 다 있습니다
+  ([아래](#트레이스가-앱을-다른-이름으로-아는-경우-zygote64--pre-initialized)).
+- **표는 프레임워크 slice(am · wm · view)와 앱 slice 를 가르지 않습니다.** atrace 마커에 가를 태그가
+  없습니다. 앱 slice 가 실릴 수 있었는지는 `app_slices_open` 이 따로 말합니다.
+- **이름 접기** — 숫자가 하나라도 든 영문 · 숫자 토큰(연속한 `[A-Za-z0-9]`)을 `*` 하나로 바꿉니다.
+  `Choreographer#doFrame 136993` → `Choreographer#doFrame *` · `tk-trace-id: 1001yo7d2xmcq` →
+  `tk-trace-id: *` · `VRI[Shell$HomeActivity]@a1b2c3` → `VRI[Shell$HomeActivity]@*`. 숫자가 없는 토큰은
+  단어와 가를 수 없어 그대로입니다 — `tk-trace-id: rlcyp` → `tk-trace-id: rlcyp`. 위 원본에서
+  4,921 → 1,082행이었습니다.
+  원문 이름은 원본 트레이스에 그대로 있습니다.
+- **행을 자르지 않고 이름도 자르지 않습니다.** 순서는 이름의 UTF-16 코드 단위 순 하나입니다 (호스트
+  로캘과 무관 — `Z` 가 `a` 보다 앞). 순위 · 상위 N 은 없습니다 — 무엇이 길었는지 고르는 일은 읽는 쪽의 몫입니다.
+- **빈 갈래는 `null` 입니다** — 그 갈래에 그 이름의 slice 가 없었다는 뜻입니다. 0 으로 채우지 않는 것은
+  slice 가 없으면 최대가 0 이 아니라 없기 때문입니다.
+- **끝나지 않은 slice**(트레이스가 끝날 때 아직 열려 있던 것)는 `count` 에만 들고 `sum_ms` · `max_ms` 에서
+  빠집니다. 한 갈래의 slice 가 전부 끝나지 않았으면 그 칸의 `sum_ms` · `max_ms` 가 `null` 입니다.
+- **`sum_ms` 를 행끼리 더하지 마세요.** 안쪽 slice 도 각자 세므로 바깥 slice 의 시간과 겹칩니다
+  (같은 기기 · 앱 15초 원본 둘에서 대상 앱 스레드 slice 의 80.1% · 85.5% 가 안쪽이었습니다).
+- **`ftrace_overrun_events`** 는 stats 의 `ftrace_cpu_overrun_delta`(덮어써서) ·
+  `ftrace_cpu_commit_overrun_delta`(쓰는 중에 겹쳐서) · `ftrace_cpu_dropped_events_delta`(덮어쓰기를 끈 버퍼가
+  꽉 차서)를 CPU 마다 더한 값입니다. `measurement_overhead.trace_buffer_overrun` 은 perfetto 버퍼만 보므로 이 손실을
+  못 잡습니다 — 0 이 아니면 slice 가 그만큼 빠졌습니다.
+
+| `status` | `reason_code` | `null` 이 되는 칸 |
+| --- | --- | --- |
+| `collected` | `null` | 없음 |
+| `partial` | `process_not_in_trace` | `target_process_slices` · `target_process_slices_unfinished` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
+| `partial` | `process_name_stale_in_trace` | 없음 |
+| `partial` | `ftrace_not_recorded` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
+| `partial` | `ftrace_setup_errors` | 없음 |
+| `unsupported` | `data_source_not_registered` · `data_source: linux.ftrace` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
+| `failed` | `trace_missing` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `trace_bytes` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
+| `failed` | `query_failed` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
+
+ftrace 기록을 다 믿을 수 없는 경우는 코드 둘로 갈립니다 — 값이 있고 없음이 정반대라 `reason_code` 로 가르세요.
+
+- **`ftrace_not_recorded`** — 원본에 CPU 별 ftrace 통계(`ftrace_cpu_*`)가 한 행도 없습니다. ftrace 가
+  안 돌았으므로 slice 0개가 "없었다" 인지 "못 쟀다" 인지 모릅니다 — slice 칸과 잃은 이벤트 수가 `null` 입니다.
+- **`ftrace_setup_errors`** — ftrace 는 돌았는데 traced_probes 가 켜다 오류를 냈습니다. 오류가 atrace 의 것인지
+  다른 이벤트의 것인지 원본이 말하지 않아 일부가 빠졌을 수 있지만, **잰 수 · 표는 그대로 싣습니다** —
+  gfx · input 카테고리를 켠 실측 원본은 오류 28 에 slice 33만–38만이 실렸습니다.
+  대상 앱 프로세스를 못 찾았으면 그쪽(`process_not_in_trace`)이, 이름이 낡았을 뿐이면 이쪽이 블록의 코드입니다.
+
+**앱 slice 열림은 `status` 와 따로 갑니다.** 트레이스가 아니라 sdk 와 `target_app.debuggable` 로
+정해지는 조건이라 원본이 없어도(`failed`) 값이 있고, `null` 이어도 `status` 는 `collected` 일 수 있습니다.
+판정은 `doctor` 의 `diagnose: app slice` 줄과 같은 함수 하나입니다.
+
+| 기기 · 앱 | `app_slices_open` |
+| --- | --- |
+| sdk ≥31 | `true` |
+| sdk ≤30 · `debuggable: true` | `true` |
+| sdk ≤30 · `debuggable` 이 `false` 또는 `null` | `null` + `app_slices_open_unknown` (profileable 을 읽을 출처가 없습니다) |
+
+**다시 내기.** 원본은 평소처럼 run 디렉토리의 `trace.perfetto-trace` 하나(`artifacts.trace`)이고 진단
+세션이라고 다른 파일을 만들지 않습니다. `perftracker extract <run>` 이 기기 없이 같은 블록을 다시
+냅니다 — 같은 원본이면 바이트까지 같습니다. 시간축 그림은 이 블록에 없습니다. 원본을 Perfetto UI 로 여세요.
+
 ### `measurement_overhead`
 
 ```json
@@ -1214,6 +1357,11 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   > 링버퍼에 기록하는 비용은 그 순간 인터럽트당한 프로세스(대상 앱일 수 있습니다)에
   > 청구되므로 이 숫자에 들어오지 않습니다. 켜는 ftrace 이벤트를 줄이면 그 몫도 줄지만
   > 0 이 되지는 않습니다.
+
+  > **진단 세션(`session.options.diagnose: true`)은 atrace slice 비용이 앱 프로세스에 청구되어
+  > 여기 안 잡힙니다 — 평소 세션과 수치를 나란히 놓을 수 없습니다.** slice 하나를 남기는 비용(~5µs)은
+  > slice 를 남기는 앱 프로세스 자신의 몫이고, 이 세 필드는 트레이싱 프로세스만 셉니다. 두 종류를
+  > 섞어 비교하려면 `session.options.diagnose` 로 먼저 가르세요.
 
 ### `references`
 
