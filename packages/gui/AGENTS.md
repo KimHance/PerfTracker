@@ -256,6 +256,13 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
 14. **끝나지 않은 세션은 기록이 아니다.** `start` 가 run 디렉토리를 먼저 만들기 때문에,
    그냥 훑으면 진행 중인 세션이 `길이 0ms · 경고 0` 인 완료된 기록처럼 목록에 뜬다.
    기준은 `endedAt` 이고 규칙은 core 의 `session/runs.ts` 에 있다 (CLI 의 `runs` 와 공유한다).
+15. **진단 세션 칸(`diagnose`)은 진단일 때만 있다.** 계약의 `diagnose` 는 요청이든 뷰든 평소
+   세션 · 기록에는 키가 없다 — `false` 도 싣지 않는다. core 가 `session.json` · `result.json` 에
+   진단 키를 진단 세션에만 싣는 것(plan D12)과 같은 원칙이고, `test/server.test.ts` ·
+   `effects.test.ts` 가 평소 모양의 키를 고정한다. 진단 여부의 정본은 core 의
+   `options.diagnose` 이고, 화면에 오는 것은 진단 여부와 **core 가 쓴 고지 줄 그대로**뿐이다
+   (`server/view.ts` 의 `toDiagnoseView`) — 앱 slice 가 열리나를 화면이 다시 판정하지 않는다 (6 과 같은 이유).
+   목업은 core 를 import 하지 않아 그 문장을 다시 적었으므로 `test/mock.test.ts` 가 core 와 대조한다.
 
 ## 상태
 

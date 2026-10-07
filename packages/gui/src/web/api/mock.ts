@@ -3,6 +3,7 @@ import {
   type ActiveSessionView,
   type AppView,
   type DeviceView,
+  type DiagnoseSessionView,
   type DoctorCheckView,
   type EnvView,
   type MarkView,
@@ -54,6 +55,48 @@ function mockMetrics(sdkInt: number): MetricSupportView[] {
           : `sdk_int=${sdkInt} 로는 수집할 수 없습니다 (최소 ${min}${label !== null ? `, ${label}` : ''})`,
     }
   })
+}
+
+/**
+ * 진단 세션 목업 — **core 의 문장과 판정을 흉내 낸 것이다.** 웹은 core 를 import 하지 않으므로
+ * (규칙 4) 글자를 여기 다시 적고, 같은지는 `test/mock.test.ts` 가 core 의
+ * `diagnoseDoctorCheck` · `diagnoseNotice` 와 대조한다. 판정의 정본은 core 의 `appSliceOpen` 이다.
+ *
+ * 앱 slice 열림 조건(기능 문서 조건 표): sdk ≥31 은 열림 · sdk ≤30 은 debuggable 앱만 ·
+ * 그 밖은 모름. 측정 화면 6상태(디자인 문서 `## 상태`)가 평소 `?mock` 에서 이렇게 닿는다:
+ *
+ *   toggle-off · toggle-on  기기 · 앱을 고르고 04 의 `--diagnose` 를 끄고 켠다
+ *   doctor-sdk30            SM-A405S(`R38M20ABCDE`, sdk 30) 를 고르고 환경 점검 — 진단 줄 ✗
+ *   running                 sdk ≥31 기기(예 SM-S901N)에서 진단을 켜고 시작 — 고지 없음
+ *   running-unknown         SM-A405S + `.debug` 로 끝나지 않는 앱(예 Airbnb)으로 진단 시작 —
+ *                           `debuggable 아님` 고지 · `com.streamlive.blur.test` 면 `debuggable 모름`
+ *   drawer                  기록 맨 위 `진단 스크롤` 이 진단 기록 · 나머지는 평소 기록
+ */
+const MOCK_APP_SLICE_MIN_SDK = 31
+
+/**
+ * 목업 앱의 debuggable. 실제 서버는 `dumpsys package` 의 flags 에서 읽는다 — 여기는 지어낸 값이다.
+ * 이름이 `.debug` 로 끝나면 true, 시험 앱 하나는 **못 읽었다**(null), 나머지는 false.
+ */
+function mockDebuggable(packageName: string): boolean | null {
+  if (packageName.endsWith('.debug')) return true
+  if (packageName === 'com.streamlive.blur.test') return null
+  return false
+}
+
+function mockDiagnoseDoctorCheck(sdkInt: number): DoctorCheckView {
+  const open = sdkInt >= MOCK_APP_SLICE_MIN_SDK
+  return {
+    name: 'diagnose: app slice',
+    ok: open,
+    kind: 'capability',
+    detail: open ? `sdk ${sdkInt} · 열림` : `sdk ${sdkInt} · debuggable 앱만 열림`,
+  }
+}
+
+function mockDiagnoseNotice(sdkInt: number, debuggable: boolean | null): string | null {
+  if (sdkInt >= MOCK_APP_SLICE_MIN_SDK || debuggable === true) return null
+  return `앱 slice 열림 모름 — sdk ${sdkInt} · debuggable ${debuggable === false ? '아님' : '모름'}`
 }
 
 function mockDevice(
@@ -110,6 +153,24 @@ const MOCK_APPS: AppView[] = [
 ]
 
 const MOCK_RUNS: RunView[] = [
+  {
+    // 진단 세션 기록 — 기록 드로어의 진단 태그 자리 (디자인 문서 `## 상태` drawer)
+    id: 'd1a90c',
+    name: '진단 스크롤',
+    runDir: 'runs/20260727_183012_진단스크롤_d1a90c',
+    serial: 'R5CT0000001',
+    model: 'SM-S901N',
+    packageName: 'com.airbnb.android',
+    appLabel: 'Airbnb',
+    appVersion: '26.30',
+    at: '2026-07-27T18:30:12',
+    durationMs: 15872,
+    launch: true,
+    unsupportedCount: 0,
+    warningCount: 1,
+    markCount: 0,
+    diagnose: true,
+  },
   {
     id: 'eb6d24',
     name: '클린업 검증',
@@ -210,6 +271,8 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
   // 실제 서버에서는 활성 세션 포인터 파일이 정본이다. 목업은 그 자리를 메모리로 흉내 낸다.
   const marksBySerial = new Map<string, MarkView[]>()
   const startedAtBySerial = new Map<string, number>()
+  // 진단 세션으로 연 기기만 들어 있다 — 실제 서버의 포인터 파일처럼 진단 칸은 진단 세션에만.
+  const diagnoseBySerial = new Map<string, DiagnoseSessionView>()
 
   const wait = async <T>(value: T): Promise<T> => {
     await sleep(latency)
@@ -227,8 +290,10 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
         outDir: 'runs (목업)',
       }),
 
-    doctor: (serial) =>
-      wait<DoctorCheckView[]>([
+    doctor: (serial) => {
+      // 실제 doctor 처럼 기기를 알 때만 capability 줄이 붙는다 — 지표 판정 뒤 맨 끝에 진단 줄.
+      const sdkInt = devices.find((d) => d.serial === serial)?.spec?.sdkInt ?? null
+      return wait<DoctorCheckView[]>([
         { name: 'adb', ok: true, detail: '목업 클라이언트라 실제로 점검하지 않았습니다', kind: 'requirement' },
         {
           name: 'device',
@@ -236,7 +301,19 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
           detail: serial !== null ? `${serial} (목업)` : '기기를 고르지 않았습니다',
           kind: 'requirement',
         },
-      ]),
+        ...(sdkInt === null
+          ? []
+          : [
+              ...mockMetrics(sdkInt).map((m) => ({
+                name: `metric: ${m.id}`,
+                ok: m.ok,
+                detail: m.reason,
+                kind: 'capability' as const,
+              })),
+              mockDiagnoseDoctorCheck(sdkInt),
+            ]),
+      ])
+    },
 
     devices: () => wait(devices.map((d) => ({ ...d }))),
 
@@ -254,6 +331,7 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
           unsupported: (devices.find((d) => d.serial === serial)?.metrics ?? [])
             .filter((m) => !m.ok)
             .map((m) => ({ id: m.id, reason: m.reason })),
+          ...(diagnoseBySerial.has(serial) ? { diagnose: { ...diagnoseBySerial.get(serial)! } } : {}),
         })),
       ),
 
@@ -287,6 +365,12 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
       setMeasuring(req.serial, true)
       marksBySerial.set(req.serial, [])
       startedAtBySerial.set(req.serial, Date.now())
+      const sdkInt = devices.find((d) => d.serial === req.serial)?.spec?.sdkInt ?? 0
+      const diagnose: DiagnoseSessionView | null =
+        req.diagnose === true ? { notice: mockDiagnoseNotice(sdkInt, mockDebuggable(req.packageName)) } : null
+      // 시작마다 다시 정한다 — 버린(abort) 진단 세션의 칸이 같은 기기의 다음 평소 세션에 남지 않게.
+      if (diagnose !== null) diagnoseBySerial.set(req.serial, diagnose)
+      else diagnoseBySerial.delete(req.serial)
       seq += 1
       return wait<StartedSessionView>({
         id: `mock${String(seq).padStart(2, '0')}`,
@@ -297,13 +381,15 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
         unsupported: (devices.find((d) => d.serial === req.serial)?.metrics ?? [])
           .filter((m) => !m.ok)
           .map((m) => ({ id: m.id, reason: m.reason })),
-        command: `perftracker start --app "${req.packageName}" -d ${req.serial} -o runs (목업)`,
+        ...(diagnose !== null ? { diagnose: { ...diagnose } } : {}),
+        command: `perftracker start${diagnose !== null ? ' --diagnose' : ''} --app "${req.packageName}" -d ${req.serial} -o runs (목업)`,
       })
     },
 
     stop: (serial, _req: StopRequest) => {
       setMeasuring(serial, false)
       startedAtBySerial.delete(serial)
+      const diagnosed = diagnoseBySerial.delete(serial)
       const device = devices.find((d) => d.serial === serial)
       const run: RunView = {
         id: `mock${String(seq).padStart(2, '0')}`,
@@ -320,6 +406,7 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
         unsupportedCount: (device?.metrics ?? []).filter((m) => !m.ok).length,
         warningCount: 1,
         markCount: (marksBySerial.get(serial) ?? []).length,
+        ...(diagnosed ? { diagnose: true as const } : {}),
       }
       runs = [run, ...runs]
       // 실제 서버가 그렇듯 목업도 "내가 한 일" 을 함께 낸다.

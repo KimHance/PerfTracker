@@ -187,6 +187,83 @@ describe('시작', () => {
     expect(started).toMatchObject({ name: '세션-1', startedAt: Date.parse('2026-07-27T10:00:00.000Z') })
   })
 
+  /** 보낸 요청을 모으고, 서버가 진단 세션으로 열었으면 그 칸을 돌려주는 가짜 start. */
+  function startSpy(diagnose?: { notice: string | null }): { api: ApiClient; sent: StartRequest[] } {
+    const sent: StartRequest[] = []
+    const { api } = spyApi({
+      start: async (req: StartRequest) => {
+        sent.push(req)
+        return {
+          id: 's1',
+          name: '세션-1',
+          serial: req.serial,
+          runDir: 'runs/x',
+          startedAt: '2026-07-27T10:00:00.000Z',
+          unsupported: [],
+          ...(diagnose !== undefined ? { diagnose } : {}),
+          command: 'perftracker start (가짜)',
+        }
+      },
+    })
+    return { api, sent }
+  }
+
+  it('DM-2 진단 토글 → 시작 요청 — 켠 탭은 diagnose: true 를 싣고, 끈 탭의 요청은 키가 없다', async () => {
+    const on = startSpy({ notice: null })
+    const off = startSpy()
+    const tab = { ...newTab('t1'), serial: 'S1', packageName: 'com.x' }
+
+    await startSession({ api: on.api, dispatch: collector().dispatch }, { ...tab, diagnose: true }, 'runs')
+    await startSession({ api: off.api, dispatch: collector().dispatch }, tab, 'runs')
+
+    expect(on.sent[0]?.diagnose).toBe(true)
+    // 평소 세션의 요청은 진단 모드 이전과 같은 모양이다 — `false` 도 싣지 않는다.
+    expect(Object.keys(off.sent[0]!)).not.toContain('diagnose')
+  })
+
+  it('DM-2 진단 토글 → 시작 요청 — 로딩 오버레이 줄은 진단이면 start 바로 뒤에 --diagnose, 평소면 글자 그대로', async () => {
+    // 오버레이는 "무엇을 기다리는지" 다 — 진단 세션을 기다리면서 평소 줄을 보이면 사실과 다르다.
+    const tab = { ...newTab('t1'), serial: 'S1', packageName: 'com.x' }
+    const overlay = async (diagnose: boolean): Promise<string | undefined> => {
+      const { dispatch, actions } = collector()
+      await startSession({ api: startSpy(diagnose ? { notice: null } : undefined).api, dispatch }, { ...tab, diagnose }, 'runs')
+      const began = actions.find((a) => a.type === 'loading/began')
+      return began?.type === 'loading/began' ? began.loading.command : undefined
+    }
+
+    expect(await overlay(true)).toBe('perftracker start --diagnose --app "com.x" -d S1 -o runs')
+    expect(await overlay(false)).toBe('perftracker start --app "com.x" -d S1 -o runs')
+  })
+
+  it('DM-10 running 고지 — start 응답의 진단 칸이 탭의 진단 표시 · 고지로 간다', async () => {
+    const notice = '앱 slice 열림 모름 — sdk 30 · debuggable 아님'
+    const { api } = startSpy({ notice })
+    const { dispatch, actions } = collector()
+
+    await startSession({ api, dispatch }, { ...newTab('t1'), serial: 'S1', packageName: 'com.x', diagnose: true }, 'runs')
+
+    // 고지는 서버가 준 문장 그대로다 — 화면이 조립하지 않는다.
+    expect(actions).toContainEqual({
+      type: 'tab/patched',
+      key: 't1',
+      patch: { diagnose: true, diagnoseNotice: notice },
+    })
+  })
+
+  it('DM-10 running 고지 — 서버가 평소 세션으로 열었으면 토글이 켜져 있어도 진단 표시 · 고지가 없다', async () => {
+    // 정본은 요청이 아니라 서버가 실제로 연 세션이다.
+    const { api } = startSpy()
+    const { dispatch, actions } = collector()
+
+    await startSession({ api, dispatch }, { ...newTab('t1'), serial: 'S1', packageName: 'com.x', diagnose: true }, 'runs')
+
+    expect(actions).toContainEqual({
+      type: 'tab/patched',
+      key: 't1',
+      patch: { diagnose: false, diagnoseNotice: null },
+    })
+  })
+
   it('기기나 앱이 없으면 아무것도 부르지 않는다', async () => {
     const { api, calls } = spyApi()
     const { dispatch } = collector()

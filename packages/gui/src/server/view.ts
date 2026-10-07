@@ -1,12 +1,22 @@
-import type { DeviceSummary, DoctorCheck, LabeledApp, RunSummary } from '@perftracker/core'
+import {
+  sortedMarks,
+  type ActiveSession,
+  type DeviceSummary,
+  type DoctorCheck,
+  type LabeledApp,
+  type RunSummary,
+} from '@perftracker/core'
 import {
   METRIC_ORDER,
+  type ActiveSessionView,
   type AppView,
   type DeviceView,
+  type DiagnoseSessionView,
   type DoctorCheckView,
   type MetricId,
   type MetricSupportView,
   type RunView,
+  type StartedSessionView,
 } from '../contract/api.js'
 
 /**
@@ -96,5 +106,63 @@ export function toRunView(run: RunSummary): RunView {
     unsupportedCount: run.unsupportedCount,
     warningCount: run.warningCount,
     markCount: run.markCount,
+    // 진단 기록에만 싣는다 — 평소 기록의 뷰는 이 칸이 없던 때와 키가 같다.
+    ...(run.diagnose === true ? { diagnose: true as const } : {}),
+  }
+}
+
+/**
+ * 세션 → 진단 칸. **진단 세션이 아니면 `undefined`** — 부르는 쪽이 키째 빼도록 (평소 세션의 뷰는
+ * 이 칸이 없던 때와 같은 모양이다).
+ *
+ * 진단 여부는 `options.diagnose` 가 정본이다 (core 의 `listRuns` · `extract` 와 같은 기준).
+ * 고지는 core 가 `start` 때 정해 둔 문장을 옮기기만 한다 — 판정을 여기서 다시 하면 CLI 와
+ * 화면이 다른 줄을 내는 날이 온다 (DM-10 판정 출처 하나).
+ */
+export function toDiagnoseView(session: Pick<ActiveSession, 'options' | 'diagnose'>): DiagnoseSessionView | undefined {
+  if (session.options.diagnose !== true) return undefined
+  return { notice: session.diagnose?.notice ?? null }
+}
+
+/** 진단 세션이면 `{ diagnose }`, 아니면 빈 객체 — 뷰에 펼쳐 넣어 평소 세션엔 키가 생기지 않게. */
+function withDiagnose(session: Pick<ActiveSession, 'options' | 'diagnose'>): { diagnose?: DiagnoseSessionView } {
+  const diagnose = toDiagnoseView(session)
+  return diagnose === undefined ? {} : { diagnose }
+}
+
+/**
+ * 활성 세션 포인터 → 계약. 새로고침 · CLI 로 연 세션이 화면에 되살아나는 입구다.
+ * **기기에 접촉하지 않는다** — 부르는 쪽이 넘긴 포인터 파일 내용만 옮긴다.
+ */
+export function toActiveSessionView(s: ActiveSession): ActiveSessionView {
+  return {
+    id: s.id,
+    name: s.name,
+    serial: s.serial,
+    packageName: s.packageName,
+    runDir: s.runDir,
+    startedAt: s.startedAt,
+    launch: s.options.launch,
+    marks: sortedMarks(s).map((m) => ({ offsetMs: m.offsetMs, label: m.label })),
+    unsupported: s.unsupported ?? [],
+    ...withDiagnose(s),
+  }
+}
+
+/**
+ * 방금 연 세션 → 시작 응답. `serial` 은 요청의 것, `command` 는 서버가 실제로 한 일을 적은 줄이다.
+ * 진단 칸은 요청이 아니라 **core 가 실제로 연 세션**에서 읽는다 — 둘이 어긋나면 화면은 연 쪽을
+ * 말해야 하고, 세션 목록(`toActiveSessionView`)과 같은 번역을 지나야 새로고침 전후가 같다.
+ */
+export function toStartedSessionView(session: ActiveSession, serial: string, command: string): StartedSessionView {
+  return {
+    id: session.id,
+    name: session.name,
+    serial,
+    runDir: session.runDir,
+    startedAt: session.startedAt,
+    unsupported: session.unsupported ?? [],
+    ...withDiagnose(session),
+    command,
   }
 }

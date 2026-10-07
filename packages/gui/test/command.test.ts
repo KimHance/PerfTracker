@@ -42,6 +42,23 @@ describe('start', () => {
   })
 })
 
+describe('start — 진단 세션', () => {
+  it('DM-2 진단 세션의 실행 줄 — --diagnose 가 start 바로 뒤에 붙는다', () => {
+    // CLI 로그는 한 줄이고 넘치면 끝이 잘린다 — 진단이라는 사실이 잘린 꼬리에 묻히면 안 된다.
+    expect(startCommandLine({ ...req, diagnose: true }, 'runs')).toBe(
+      'perftracker start --diagnose --app "com.airbnb.android" -d R3CT0000003 --launch --force -o runs',
+    )
+  })
+
+  it('DM-2 평소 세션의 실행 줄 — --diagnose 가 없고 형식이 그대로다', () => {
+    // 본문의 `true` 만 믿는다 — 서버가 core 에 넘기는 옵션(`startOptions`)과 같은 기준이다.
+    for (const off of [undefined, false, 'true']) {
+      const line = startCommandLine({ ...req, diagnose: off as never }, 'runs')
+      expect(line).toBe('perftracker start --app "com.airbnb.android" -d R3CT0000003 --launch --force -o runs')
+    }
+  })
+})
+
 describe('stop · abort · mark', () => {
   it('offline 은 켠 만큼만 담는다', () => {
     expect(stopCommandLine('S1', false)).toBe('perftracker stop -d S1')
