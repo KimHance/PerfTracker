@@ -5,7 +5,7 @@
 | 기능 | diagnostic-mode |
 | 기능 문서 | docs/spec/diagnostic-mode.md (1c475d4) |
 | 등급 | 화면 |
-| 마지막 변경 | 2026-10-08 · 고침 1 — 검토 왕복 1 (부합 #1 · 구현 #1–#4) · D25 다 그림 |
+| 마지막 변경 | 2026-10-08 · ⑨ 승격 — `## 정한 것` · D33 runs 행 86칸 |
 
 측정 화면 · 보고서 · CLI 의 **지금 자리에 한 칸씩**. 새 화면은 보고서 진단 탭 하나(R-c). `slice`(D9) · `--diagnose`(D8) · 최대 10분(D11) · 후보 하나(D22).
 
@@ -13,8 +13,8 @@
 
 | 차수 | 후보 | 고른 것 | 누가 | 로컬 폴더 | 시안 생성기 | 검사 명령 | Claude Design 파일 |
 |---|---|---|---|---|---|---|---|
-| 1 | 1 | | | `labs/diagnostic-mode-design/v1/claude-design/` · `v1/shots/` | Claude Design (`v1/brief-claude-design.md` · `gen_sample.py`) · `v1/shoot.md` | `python3 labs/diagnostic-mode-design/v1/check_shots.py` | [성능 측정 CLI GUI 도구](https://claude.ai/design/p/9ee5c8ab-33b9-4586-ae73-69f9e53ecd42) · `diagnostic-mode/Measure.html` · `diagnostic-mode/Report.html` |
-| 1 · CLI | 1 | | | `labs/diagnostic-mode-design/v1/cli/` | `gen_cli.py` → `cli/blocks.txt` | `python3 labs/diagnostic-mode-design/v1/check_cli.py` | 없음 |
+| 1 | 1 | 1 | 메인 (D22) | `labs/diagnostic-mode-design/v1/claude-design/` · `v1/shots/` | Claude Design (`v1/brief-claude-design.md` · `gen_sample.py`) · `v1/shoot.md` | `python3 labs/diagnostic-mode-design/v1/check_shots.py` | [성능 측정 CLI GUI 도구](https://claude.ai/design/p/9ee5c8ab-33b9-4586-ae73-69f9e53ecd42) · `diagnostic-mode/Measure.html` · `diagnostic-mode/Report.html` |
+| 1 · CLI | 1 | 1 | 메인 (D22) | `labs/diagnostic-mode-design/v1/cli/` | `gen_cli.py` → `cli/blocks.txt` | `python3 labs/diagnostic-mode-design/v1/check_cli.py` | 없음 |
 | 1 · 문구 | — | — | 디자이너 | 이 문서 `## 문구` | 없음 | `python3 labs/diagnostic-mode-design/v1/check_copy.py` | 없음 |
 
 시안 기준 = 지금 코드 실렌더 DOM (`?mock` · `report-f48507.html`) → Claude Design `diagnostic-mode/ref/`. 옛 프로토타입은 안 씀. 지금 화면 `v1/before/`.
@@ -113,7 +113,7 @@
 | 탭 배지 `진단 mm:ss` | 라벨 150px | 라벨만 ellipsis (지금 그대로) |
 | 드로어 메타 꼬리 | 드로어 폭 | 줄바꿈 (truncate 아님) |
 | 시작 바 예고 · CLI 로그 | 한 줄 | 끝 ellipsis 그대로 — 924 에서 끝이 잘려 `--diagnose` 를 `start` 바로 뒤에 |
-| runs 행 | 80칸 | `경고 N · 진단` 행 77칸이 기준 · 기존 꼬리로 이미 넘치는 행은 그대로 (D20) |
+| runs 행 | 80칸 | `경고 N · 진단` 행 77칸이 기준 · 마킹 있는 진단 행 86칸은 그대로 (D33) |
 
 ## 색
 
@@ -176,7 +176,7 @@
 | gui | slice 표 정렬 표시 (내림) | `▼` | — | — |
 | gui | 측정 비용 카드 단위 (진단 세션에만) | `앱 프로세스 몫 미포함` | DM-13 · DM-14 한정 | — |
 
-`check_copy.py` (2026-10-08 · 고침 1 뒤): **줄 34 (cli 3 · core 7 · gui 24) · 걸림 0** · `--break` 표본 46 (규칙 · 낱말마다) 어긋남 0.
+`check_copy.py` (2026-10-08 · ⑨ 승격): **줄 36 (cli 3 · core 9 · gui 24) · 걸림 0** · `--break` 표본 46 (규칙 · 낱말마다) 어긋남 0.
 
 ## 기능 문서 항목
 
@@ -209,7 +209,25 @@
 
 ## 정한 것
 
-없음 — ⑨ 승격 때 디자이너 intent 4 의 `사람: 예` 와 후보 고르기 결과가 온다.
+⑨ 승격 — 디자이너 intent 4 의 색 · 문구 · 키 `사람: 예` 와 plan 디자인 결정. 단계 5 라 메인이 정함 (D9 만 사람).
+
+| # | 날짜 · run | 결정 | 확인 거리 |
+|---|---|---|---|
+| 1 | 2026-10-08 · diagnostic-mode | 후보 하나 · 진단 자리 = 보고서 레일 세 번째 탭 `진단` (R-c · D22) | `## 시안` · `report-diag-*` |
+| 2 | 2026-10-08 · diagnostic-mode | 낱말 `slice` (D9) | `## 문구` · `check_copy.py` |
+| 3 | 2026-10-08 · diagnostic-mode | 폭 측정 1440 · 924 · 보고서 1440 · 390 · CLI 80칸 (D13) | `## 폭` · `## 상태` |
+| 4 | 2026-10-08 · diagnostic-mode | slice 표 다 그림 — 가상 스크롤 없음 (D25) | `## 넘침` · `DM-13 행 모델 자르지 않음 · 구별 없음` |
+| 5 | 2026-10-08 · diagnostic-mode | 필드 자리 다섯 (행 · 카드 배지 · 제목 title · 열림 행 title · null 값 자리 코드) · status · reason 은 행 아님 (D27) | `DM-13 진단 탭 전 필드` |
+| 6 | 2026-10-08 · diagnostic-mode | 마킹 있는 진단 runs 행 86칸 받아들임 — 꼬리를 줄이면 D10 위반 (D33) | `## 넘침` · `check_cli.py` `*` 줄 |
+| 7 | 2026-10-08 · diagnostic-mode | core reason 2줄은 개발이 `## 문구` 에 먼저 더함 — 주인 예외 (D36) | `DM-15 문구 표 ↔ 코드 (core)` |
+| 8 | 2026-10-08 · diagnostic-mode | 정지 뒤 `--diagnose` 꺼짐 · `--launch` · `--force` 는 남김 (D41) | `DM-12 정지 뒤 진단은 남지 않는다` |
+| 9 | 2026-10-08 · diagnostic-mode | 보고서 표기 다섯 — 값 구분자 ` · ` · 원본 경로 등폭 · 끝나지 않은 갈래 합 · 최대 `—` · `[]` = 0행 표 · 포커스 링 안쪽 (D43) | `report-*` 사진 |
+| 10 | 2026-10-08 · diagnostic-mode | 진단 pill 테두리만 · 새 색 · 행 구별 없음 | `## 색` |
+| 11 | 2026-10-08 · diagnostic-mode | 측정 화면 진단 = 글자만 (배지 · 킥커 · 각주 · 고지 · 드로어 꼬리) | `DM-12 진단 표시 4곳` |
+| 12 | 2026-10-08 · diagnostic-mode | 칸 라벨 = 필드 경로 · 카드 제목만 우리말 · 한도는 `최대 10분` 글자 · debuggable `아님` · `모름` 두 줄 | `## 문구` |
+| 13 | 2026-10-08 · diagnostic-mode | 정렬 — 숫자 열 첫 누름 내림 · `이름` 오름 · 저장 안 함 · 정렬 뒤 맨 위 | `## 조작` · `DM-13 정렬은 사람이 고를 때만` |
+| 14 | 2026-10-08 · diagnostic-mode | 표 숫자 — 횟수 정수 · 합 · 최대 소수 한 자리 · 빈 갈래 `—` | `report-diag-*` |
+| 15 | 2026-10-08 · diagnostic-mode | `--diagnose` 는 `start` 바로 뒤 · `Diagnose` 줄 · 고지 · doctor 줄 자리 · `--help` default 없음 | `cli/blocks.txt` · `check_cli.py` |
 
 ## 확인
 
@@ -217,7 +235,7 @@
 |---|---|---|---|
 | 측정 6상태 × 1440 · 924 | 골든 없음 | playwright 사진 (`v1/shoot.md`) | `v1/shots/measure-*` 12장 전부 열어 봄 (2026-10-08 · 확인 2회) |
 | 보고서 6상태 × 1440 · 390 | 골든 없음 | playwright 사진 · `check_shots.py` | `v1/shots/report-*` 12장 (고침 1 에 다시 찍고 열어 봄) · 390 넘침 6/6 상태 0 · title · 라벨 · 정렬 스크롤 `reason-titles.txt` · `check_shots.py` 37칸 어긋남 0 |
-| CLI 8블록 | 없음 | `check_cli.py` (깨 봄 `--break` → exit 1) | 새 줄 10개 · 80칸 넘침 0 (최대 77칸 runs 행) |
+| CLI 8블록 | 없음 | `check_cli.py` (깨 봄 `--break` → exit 1) | 새 줄 10개 · 80칸 넘침 0 (최대 77칸 runs 행) · `*` 마킹 있는 진단 행 86칸 (D33) |
 | `## 문구` | 없음 | `check_copy.py` (깨 봄 `--break`) | 위 `## 문구` 끝 줄 |
 
 구현 화면 찍는 길 (단위 몫 · 골든 없음 — 폭마다 playwright):
@@ -243,3 +261,4 @@
 |---|---|---|
 | 2026-10-08 | diagnostic-mode | 처음 — 제약 · 시안 v1 후보 1 (24장 + CLI 8블록) · `## 문구` 정본 34줄 |
 | 2026-10-08 | diagnostic-mode | 고침 1 — reason 자리 · 상태 행 뺌 · 원본 라벨 · 정렬 뒤 맨 위 · 구현 찍는 길 · D25 다 그림 · 보고서 사진 12장 다시 |
+| 2026-10-08 | diagnostic-mode | ⑨ 승격 — `## 정한 것` 15줄 · 고른 후보 1 · D33 runs 행 86칸 (`## 넘침` · `check_cli.py`) · `## 문구` 36줄 (D36 core 2줄) |
