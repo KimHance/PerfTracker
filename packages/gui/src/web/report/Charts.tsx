@@ -15,7 +15,9 @@ import {
   SPAD,
   type StatVm,
   SW,
+  type TileVm,
 } from './blocks.js'
+import { Wbr } from './BlockCard.jsx'
 
 /**
  * 차트 여섯 종의 렌더러. **라이브러리를 쓰지 않는다** — SVG 를 직접 그린다.
@@ -372,17 +374,6 @@ export function useWidth(): [number, (el: HTMLDivElement | null) => void] {
 
 /* ── 나머지 ─────────────────────────────────────────────────── */
 
-/** `**…**` 만 굵게. 마크다운을 들이지 않는다 — 이 화면이 쓰는 강조는 이것 하나다. */
-export function emphasize(text: string): React.ReactNode[] {
-  return text.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
-    part.startsWith('**') && part.endsWith('**') ? (
-      <b key={i}>{part.slice(2, -2)}</b>
-    ) : (
-      <span key={i}>{part}</span>
-    ),
-  )
-}
-
 export function BarsBody({ vm }: { vm: BarsVm }) {
   return (
     <div className="rp-bars">
@@ -432,9 +423,28 @@ export function PairsBody({ vm }: { vm: PairsVm }) {
         {vm.rows.map((r, i) => (
           // 이유 문장은 행 툴팁이다 — 본문에 박으면 짧은 카드가 글이 된다 (HANDOFF ④).
           <tr key={i} title={r.title}>
-            <th>{r.label}</th>
+            {/* 경로 라벨은 두 줄 — 단어 위 · 경로 원문 아래 (RR-6). 경로 글자는 그대로라 ⌘F 가 닿는다. */}
+            <th>
+              {r.word !== undefined ? (
+                <>
+                  <span className="rp-lbl">{r.word}</span>
+                  <span className="rp-lbl-path">
+                    <Wbr text={r.label} />
+                  </span>
+                </>
+              ) : (
+                <Wbr text={r.label} />
+              )}
+            </th>
             <td className={`num${r.wrap ? ' rp-wrap' : ''}${r.mono === true ? ' mono rp-path' : ''}`}>
-              {r.value}
+              {r.wrap ? (
+                // 안쪽 상자가 칸 폭을 넓히지 않는다 — 구분자 없는 긴 토막(40자 해시)도 칸 안에서 끊긴다 (report.css).
+                <span className="rp-wrap-in">
+                  <Wbr text={r.value} />
+                </span>
+              ) : (
+                r.value
+              )}
               {r.code !== undefined && <code className="rp-none-code">{r.code}</code>}
             </td>
           <td className="rp-share num">{r.share}</td>
@@ -445,17 +455,25 @@ export function PairsBody({ vm }: { vm: PairsVm }) {
   )
 }
 
+/**
+ * 앱 시작 카드. **큰 숫자가 없다** — 숫자는 요약 타일과 `측정값` 카드의 TotalTime 행에 있고, 같은 값을 두 번 크게
+ * 쓰지 않는다 (report-readability 결정 10). 값이 있으면 제목 · 게이지 · 아래 줄뿐이다.
+ *
+ * 값이 없으면 `값 없음` · `수집 안 함` 을 본문 크기로(`.rp-none`) 그리고 그 이유 코드를 단다 — 이 글자를 레일
+ * 배지가 그대로 센다 (`blocks.ts` 의 `isUncollected`). 문장은 코드의 툴팁으로.
+ */
 export function StatBody({ vm, title }: { vm: StatVm; title: string }) {
   return (
     <>
       <div className="rp-stat-title">{title}</div>
-      <div className={`rp-stat-value num${vm.dim ? ' rp-stat-dim' : ''}`}>
-        {vm.value}
-        {vm.unit !== '' && <span className="rp-stat-unit">{vm.unit}</span>}
-      </div>
-      {vm.why !== null && (
-        <div className="rp-stat-why" title={vm.why.full ?? undefined}>
-          {vm.why.code}
+      {vm.dim && (
+        <div className="rp-none">
+          <span>{vm.value}</span>
+          {vm.why !== null && (
+            <code className="rp-none-code" title={vm.why.full ?? undefined}>
+              {vm.why.code}
+            </code>
+          )}
         </div>
       )}
       {vm.gauge !== null && <Gauge vm={vm.gauge} />}
@@ -513,6 +531,46 @@ export function Percentiles({
           </b>
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * 요약 타일 8 (RR-4). **값으로 아무것도 바꾸지 않는다** — 클래스는 값이 있나 없나로만 갈리고 색 · 굵기 · 아이콘이
+ * 값을 따르지 않는다. 큰 숫자와 작은 단위 사이 공백은 글자로 둔다 — 복사하면 카드와 같은 `1,234 ms` 다.
+ */
+export function Tiles({ tiles }: { tiles: TileVm[] }) {
+  return (
+    <div className="rp-tiles">
+      {tiles.map((t) => (
+        <div className="rp-tile" key={t.metric} title={t.title ?? undefined}>
+          <div className="rp-tile-top">
+            <span className="rp-tile-word">{t.word}</span>
+            {t.badge !== null && <span className="rp-badge">{t.badge}</span>}
+          </div>
+          {t.value !== null ? (
+            <div className="rp-tile-value num">
+              <span className="rp-tile-num">{t.big}</span>
+              {t.small !== '' && (
+                <>
+                  {' '}
+                  <span className="rp-tile-unit">{t.small}</span>
+                </>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="rp-tile-none">
+                <Wbr text={t.none ?? ''} />
+              </div>
+              {t.code !== null && <code className="rp-tile-code">{t.code}</code>}
+            </>
+          )}
+          <div className="rp-tile-path">
+            <Wbr text={t.path} />
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

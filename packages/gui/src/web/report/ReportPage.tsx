@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { INLINE_REPORT_GLOBAL, type ReportDocument } from '../../contract/api.js'
 import { computeMaxT, readMarks } from './axis.js'
-import { blockState, buildBlock, cardUnit, type NoneVm, tabBadgeCount } from './blocks.js'
+import { blockState, buildBlock, buildTiles, cardUnit, type NoneVm, tabBadgeCount } from './blocks.js'
 import { BlockCard, NoneBody } from './BlockCard.jsx'
 import {
   BarsBody,
@@ -10,15 +10,16 @@ import {
   FrameTimelineChart,
   PairsBody,
   Percentiles,
-  emphasize,
   SeriesChart,
   StatBody,
+  Tiles,
   type Tip,
   useWidth,
 } from './Charts.jsx'
 import { clock } from './format.js'
 import { buildHeader, isDiagnoseSession, tabsFor } from './header.js'
 import { type Block, MANIFEST, SECTIONS, type TabId } from './manifest.js'
+import { READABILITY_COPY } from './readability-copy.js'
 import { SliceTable } from './SliceTable.jsx'
 import { buildSliceTable, type SliceTableVm } from './slices.js'
 
@@ -43,7 +44,9 @@ function inlineReport(): ReportDocument | null {
  * 옮기지 않고 읽으라는 것이 이 화면의 요점이다.
  */
 export function ReportPage({ runId }: { runId: string }) {
-  const [doc, setDoc] = useState<ReportDocument | null>(null)
+  // 심겨 있으면 첫 그림부터 그 문서다 — 불러오는 중 화면을 거치지 않는다. 시험도 같은 길로 화면 전체를 그린다
+  // (`test/report.test.ts` 의 `react-dom/server` — 레일 배지 · 타일을 렌더 결과로 본다).
+  const [doc, setDoc] = useState<ReportDocument | null>(inlineReport)
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<TabId>('summary')
   const [sub, setSub] = useState<Record<string, string>>({})
@@ -186,6 +189,17 @@ export function ReportPage({ runId }: { runId: string }) {
           </div>
         )}
 
+        {/* 들어가는 자리 — 지표마다 타일 하나, 순서 고정 (RR-4). 블록이 아니라 레일 배지에 안 센다 (결정 12). */}
+        {tab === 'summary' && (
+          <section className="rp-section rp-section-tiles">
+            <h2 className="rp-section-head">
+              <span>{READABILITY_COPY.tilesSection}</span>
+              <i />
+            </h2>
+            <Tiles tiles={buildTiles(doc)} />
+          </section>
+        )}
+
         {sections.map((s) => (
           <section className="rp-section" key={s.id}>
             <h2 className="rp-section-head">
@@ -207,7 +221,6 @@ export function ReportPage({ runId }: { runId: string }) {
                 ))}
               </div>
             )}
-            {s.note !== undefined && <p className="rp-section-note">{emphasize(s.note)}</p>}
             <div className="rp-grid">
               {s.items.map(({ key, block, metric, vm }) => {
                 const isNone = (vm as NoneVm).none === true
@@ -231,20 +244,20 @@ export function ReportPage({ runId }: { runId: string }) {
                         ? (vm as { readoutKind: 'idle' | 'value' | 'nosample' }).readoutKind
                         : undefined
                     }
-                    footnote={
+                    footnotes={
                       isNone
                         ? undefined
                         : block.kind === 'series' || block.kind === 'distribution'
-                          ? (vm as { footnote: string }).footnote
-                          : // 표본을 뽑았다는 사실. 전부 실었으면 `null` 이고 각주가 없다.
+                          ? [(vm as { footnote: string }).footnote]
+                          : // 단어 각주 + 표본을 뽑았다는 사실(전부 실었으면 `null` 이고 그 줄이 없다).
                             block.kind === 'frametimeline'
-                            ? ((vm as { note: string | null }).note ?? undefined)
+                            ? [
+                                (vm as { footnote: string }).footnote,
+                                (vm as { note: string | null }).note ?? '',
+                              ]
                             : undefined
                     }
                   >
-                    {block.note !== undefined && (
-                      <p className="rp-section-note">{emphasize(block.note)}</p>
-                    )}
                     <Body
                       block={block}
                       vm={vm}

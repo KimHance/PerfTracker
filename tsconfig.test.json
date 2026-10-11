@@ -4,6 +4,7 @@
     "composite": false,
     "declaration": false,
     "noEmit": true,
+    "jsx": "react-jsx",
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },

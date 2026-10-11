@@ -144,6 +144,8 @@ slice 표 머리 첫 줄 `line-height: 18px` · 둘째 줄 `top: 27px` 그대로
 | gui | 시계열 카드 `[]` (재 봤더니 0건 · plan B22) | `표본 없음` | `series` 데이터가 `[]` — 배지에 안 셈 | `값 없음` (null 글자) · `0` 선 |
 | gui | 분포 · 시간별 프레임 카드 `[]` | `프레임 없음` | `distribution` · `frametimeline` 데이터 `[]` | `값 없음` |
 | gui | 막대 카드 `[]` | `항목 없음` | `bars` 데이터 `[]` | `값 없음` |
+| gui | 전/후 표 `[]` (배열형 — 온도 존 · plan B37) | `항목 없음` | `delta` 배열 `[]` — 재 봤더니 0개 · 배지에 안 셈 | `값 없음` |
+| gui | 클러스터 주파수 카드 `[]` (`freq` · plan B37) | `항목 없음` | `device_frequency` `[]` — 배지에 안 셈 | `값 없음` |
 | gui | `앱 RSS 구성` 새 행 단어 | `RSS 최대` | 경로 줄 `rss.max_kb` (mb0) — 타일과 같은 문자열 | — |
 
 라벨 단어 줄 (RR-6) — 경로 줄은 지금 라벨 그대로. 기기 원문 라벨(`TotalTime` · `Janky frames` · `user` · `anon` …)은 한 줄 그대로.
@@ -193,6 +195,7 @@ slice 표 머리 첫 줄 `line-height: 18px` · 둘째 줄 `top: 27px` 그대로
 | 보고서 8상태 × 1440 · 390 | 없음 | `shoot.mjs` · `check_shots.py` (`--break` · 지금 코드 걸림 64) | `v1/shots/` 16장 (2026-10-11 · 고침 3) — **16/16: 12px 미만 0% · 4.5:1 미만 0% · 최소 12px · 5.48 · 층 31.7(390 26) > 18 > 15 > 13 · 390 넘침 0 · 카드 안 가로 스크롤 0** · 배지 0/4/1/2 · 판정 낱말 0 (`v1/README.md`) |
 | 지금 코드 8상태 × 1440 · 390 | 골든 없음 | `shoot.mjs … before` | `v1/before/` · 요약 1440 12px 미만 85.1% · 4.5:1 미만 12.3% |
 | 구현 rr-type (글자 크기 · 색) 8상태 × 1440 · 390 | 없음 | `packages/gui/test/report-css.test.ts` · `shoot.mjs <base> <runs>/shots/rr-type before` | 2026-10-11 · `samples/` → `perftracker report --file` 실렌더 · **16/16: 12px 미만 0% · 4.5:1 미만 0% · 최소 12px · 4.84 (neutral-200 배지) · 층 18 > 15 > 13 · 넘침 0** · 타일 · 라벨 두 줄 · `<wbr>` 은 rr-layout 뒤 |
+| 구현 rr-layout (타일 · 라벨 두 줄 · `<wbr>` · 차트 `[]` · 앱 시작 게이지만) 8상태 × 1440 · 390 | 없음 | `report.test.ts` (`RR-4 …` · `RR-5 …` · `RR-6 …` · `RR-7 …` · `B22 …`) · `report-copy.test.ts` (`RR-5 문구 표 ↔ 코드` · `RR-6 단어 표 ↔ 코드`) · `report-css.test.ts` (`RR-3 요약 타일 값 > 섹션 제목` · `RR-7 줄바꿈은 break-word`) | 2026-10-11 · `samples/` → `perftracker report --file` 실렌더 · **16/16: 12px 미만 0% · 4.5:1 미만 0% · 층 31.68(390 26) > 18 > 15 > 13 · 390 넘침 0 · 카드 안 가로 스크롤 0 · ellipsis 0** · 레일 요약 배지 summary 0 · missing 4 (시안과 같음) · legacy 0 · diag-noapp 진단 1 (시안 1 · 2 는 bp-gui-report 의 컴파일 카드 몫) |
 
 구현 화면 찍는 길: `gen_samples.py` → `perftracker report <id> -o <runs> --file <html> --no-browser` → `shoot.mjs <base> <폴더> before` (시계열 눈금은 SVG 배율로 잼 · 결정 13).
 
@@ -227,3 +230,5 @@ slice 표 머리 첫 줄 `line-height: 18px` · 둘째 줄 `top: 27px` 그대로
 | 2026-10-11 | baseline-profile | 고침 1 (디자인 검토 #5 · 6 · 8 · 9 · 11) — `스로틀 단계 · 종료` · 크기 표 셋 · HANDOFF 단위별 · 배지 2 (B30) · 기준 701a79f |
 | 2026-10-11 | baseline-profile | 구현 rr-type — `## 확인` 한 줄. `## 넘침` 의 표 th 줄바꿈 · 시계열 `overflow:visible` · 분포 ≤422px 눈금 14 단위는 글자를 키운 결과를 막으려고 rr-type 이 먼저 넣음 (intent rr-type 4) |
 | 2026-10-11 | baseline-profile | rr-type 검수 왕복 1 — 머리 메타 값 색은 `## 색` 대로 `neutral-700` (코드 · HANDOFF 를 맞춤 · 시안 CSS 는 800) · 키/값 표 라벨 열 규칙 특정도 `:where()` 로 낮춤 (dex 표 규칙이 이김) · 눈금 렌더 ≈ 362px 미만 창은 12 아래 (측정 폭 밖 · 주석) |
+| 2026-10-11 | baseline-profile | 구현 rr-layout — `## 확인` 한 줄. 구분자 없는 긴 토막(dex 경로의 40자 해시)이 키/값 표 최소 폭을 밀던 것은 `anywhere` 대신 값 안쪽 상자(`.rp-wrap-in` 폭 0 · 최소 폭 100%)로 막음 — `## 넘침` 「토막이 칸보다 넓을 때만 토막 안」 그대로 (rr-type 검수 후속 3). 타일 경로의 위가 `null` 이면 `값 없음`(카드와 같은 상태) |
+| 2026-10-11 | baseline-profile | rr-layout 검수 왕복 1 · plan B37 — `## 문구` 두 줄 (전/후 표 · 클러스터 주파수 `[]` → `항목 없음`) · `## 확인` rr-layout 줄 배지 숫자 다시 |

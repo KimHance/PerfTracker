@@ -1,4 +1,5 @@
 import { memo, useMemo, useRef, useState } from 'react'
+import { Wbr } from './BlockCard.jsx'
 import {
   ariaSort,
   INITIAL_SORT,
@@ -74,7 +75,7 @@ export const SliceTable = memo(function SliceTable({ vm }: { vm: SliceTableVm })
           {rows.map((r) => (
             <tr key={keyOf.get(r)}>
               <th scope="row" className="rp-slice-name">
-                {r.name}
+                <Wbr text={r.name} />
               </th>
               {r.cells.map((c, i) => (
                 <td

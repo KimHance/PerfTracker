@@ -1,5 +1,6 @@
 import { DIAGNOSE_REPORT_COPY as DX } from './diagnose-copy.js'
 import type { Fmt } from './format.js'
+import { LABEL_WORDS as LW, READABILITY_COPY as RC } from './readability-copy.js'
 
 /**
  * **보고서의 유일한 확장 지점.**
@@ -70,11 +71,8 @@ export interface BlockBase {
    * 그것을 매니페스트 테스트가 막는다.
    */
   sub?: string
-  /**
-   * 이 블록 하나에 대한 읽는 법 한 문장. 섹션 전체가 아니라 **이 블록에만** 해당할 때 쓴다 —
-   * 섹션 안에 다른 모양의 블록이 섞이면 섹션 레벨 note 는 엉뚱한 카드까지 가리킨다.
-   */
-  note?: string
+  // **읽는 법 문장 칸(`note`)은 없다** (report-readability 결정 3 · RR-5). 카드 위 설명 문장을 지우고 각주
+  // 단어로 바꿨다 — 각주는 뷰모델의 `footnote` 가 실제로 일어난 일(프레임 수 · 버킷 칸 수)만 적는다.
 }
 
 /**
@@ -138,6 +136,8 @@ export interface DistributionBlock extends BlockBase {
    * 달라진다.
    */
   share?: { label: string; countPath: string; totalPath: string }
+  /** 각주 `{frames} 프레임 · 버킷 {buckets}칸` 의 프레임 수 경로. 못 읽으면 프레임 수 토막을 뺀다 — 지어내지 않는다. */
+  framesPath?: string
   /**
    * 빈 버킷이 이만큼 이어지면 축을 끊는다.
    *
@@ -220,8 +220,13 @@ export interface PairsBlock extends BlockBase {
    *
    * 블록 `path` 가 빈 문자열이면 **문서 루트**가 기준이다 — 서로 다른 갈래의 값을 한 카드에 모을 때
    * (`artifacts.trace` · `diagnose.trace_bytes`) 라벨을 루트 경로 그대로 쓰려는 것이다.
+   *
+   * `w` 는 **경로 라벨의 단어 줄**이다 (report-readability RR-6 · 결정 2). 있으면 라벨이 두 줄 — 단어 한 줄 +
+   * 경로(`l`) 원문 한 줄. `l` 은 그대로라 ⌘F · grep 이 `result.json` 에 닿는다. 단어의 정본은 디자인 문서
+   * `## 문구` 표이고 `readability-copy.ts` 의 `LABEL_WORDS` 가 그 모음이다. 기기 원문 라벨(`TotalTime` ·
+   * `Janky frames`)에는 달지 않는다 — 한 줄 그대로.
    */
-  keys?: { p: string; l: string; f: Fmt; pct?: string; why?: { code: string; reason: string } }[]
+  keys?: { p: string; l: string; w?: string; f: Fmt; pct?: string; why?: { code: string; reason: string } }[]
   /** 표준 key/value 로 안 떨어지는 모양. */
   /** 표준 key/value 로 안 떨어지는 모양. `list` 는 배열 하나를 그대로 줄줄이 낸다. */
   arrayAs?: 'freq' | 'list'
@@ -272,15 +277,13 @@ export type Block =
   | FrameTimelineBlock | SliceTableBlock
 
 /**
- * `note` 는 **이 지표를 무엇으로 읽으면 되는지**를 한 문장으로 말한다. 값에 대한 평가가
- * 아니라 읽는 법이라 규칙 2 를 깨지 않는다 — "이 앱이 느리다" 가 아니라 "이 숫자는 이런
- * 질문에 답한다" 다.
+ * 보고서 섹션 순서. 요약 탭 맨 위 `지표` 섹션(타일 8)은 블록이 아니라 여기 없다 — 아래 `TILES` · `ReportPage`.
+ * 섹션에 읽는 법 문장을 두지 않는다 (report-readability 결정 3).
  */
 export const SECTIONS: {
   id: SectionId
   label: string
   tab: TabId
-  note?: string
   /** 이 섹션이 서브탭으로 나뉘어 있으면 여기 적는다. 없으면 섹션은 서브탭 없이 하나다. */
   subTabs?: { id: string; label: string }[]
 }[] = [
@@ -333,9 +336,9 @@ export const SCHEMA_MAJOR = 1
 export const MANIFEST: Block[] = [
   // ── 앱 시작 ──────────────────────────────────────────────────
   //
-  // 요약 타일 여섯 개가 있던 자리다. 다섯은 바로 아래 섹션이 같은 값을 더 자세히 말하고
-  // 있어 지웠고, startup 만 남겨 자기 섹션으로 올렸다 — 한 번뿐인 사건이라 시계열도 분포도
-  // 없어서 다른 지표와 같은 모양으로는 표현되지 않는다.
+  // 요약 타일은 맨 위 `지표` 섹션으로 돌아왔다 (`TILES` · report-readability RR-4). 같은 값을 두 번 크게
+  // 쓰지 않으므로 이 카드는 **큰 숫자 없이** 게이지와 아래 줄만 그린다 (결정 10) — 숫자는 타일과
+  // `측정값` 카드의 TotalTime 행에 있다. 값이 없으면 `값 없음` · `수집 안 함` 을 본문 크기로 낸다.
   {
     kind: 'stat', section: 'startup', title: '앱 시작', metric: 'startup', span: 3,
     path: 'metrics.startup.data.total_time_ms', fmt: 'int', unit: 'ms',
@@ -367,7 +370,7 @@ export const MANIFEST: Block[] = [
     kind: 'pairs', section: 'startup', title: '진입점', span: 4, unit: '', path: 'target_app',
     keys: [
       { p: 'launcher_activity', l: '런처 액티비티', f: 'wrap' },
-      { p: 'pid', l: 'pid', f: 'raw' },
+      { p: 'pid', l: 'pid', w: LW.pid, f: 'raw' },
     ],
   },
 
@@ -380,10 +383,9 @@ export const MANIFEST: Block[] = [
     // 버전 하한이 없어서 sdk 30 처럼 트레이스가 없는 기기에서도 이 카드는 그려진다.
     kind: 'distribution', section: 'render', title: '프레임 시간 분포',
     metric: 'hwui', unit: 'ms', span: 12, tone: 'alt', sub: 'distribution',
-    // 섹션 note 였던 것을 여기로 옮겼다 — 이 문장은 히스토그램 막대를 어떻게 읽는지를
-    // 말하는 것이라, 섹션이 분포/타임라인 둘을 담게 된 지금은 이 블록에만 붙어야 맞다.
-    note: '**막대가 왼쪽에 몰릴수록 부드럽습니다.** 오른쪽으로 갈수록 오래 걸린 프레임입니다.',
+    // 읽는 법 문장(평가 낱말 `부드럽`)이 있던 자리 — 각주 단어 `{frames} 프레임 · 버킷 {buckets}칸` 으로 (RR-5).
     path: 'metrics.hwui.data.histogram',
+    framesPath: 'metrics.hwui.data.total_frames',
     percentilesPath: 'metrics.hwui.data.percentiles',
     share: {
       label: 'jank',
@@ -427,9 +429,7 @@ export const MANIFEST: Block[] = [
     // `기기 미지원` · `sdk_too_low` 를 말한다 — 사라지면 "원래 안 재는 것" 으로 읽힌다.
     kind: 'frametimeline', section: 'render', title: '시간별 프레임', metric: 'frame',
     span: 12, unit: 'ms · perfetto frametimeline', sub: 'timeline',
-    note:
-      '**막대 하나가 프레임 한 장입니다.** 아래 칸은 앱이 그린 시간, 위 칸은 그 뒤 화면에 ' +
-      '나가기까지 걸린 시간입니다. 가로는 트레이스가 시작된 뒤 흐른 시각입니다.',
+    // 읽는 법 두 문장이 있던 자리 — 각주 단어로 (RR-5 · 뷰모델 `footnote`).
     path: 'metrics.frame.data',
   },
 
@@ -487,6 +487,9 @@ export const MANIFEST: Block[] = [
     kind: 'pairs', section: 'memory', title: '앱 RSS 구성', metric: 'memory', span: 4,
     unit: 'min / avg / max', path: 'metrics.memory.data',
     keys: [
+      // 요약 타일 `앱 RSS 최대` 와 같은 값 · 같은 문자열 (RR-4 · 디자인 결정 1) — 이 행이 없으면 타일 값이
+      // 화면 어느 카드에도 없다.
+      { p: 'rss.max_kb', l: 'rss.max_kb', w: LW['rss.max_kb'], f: 'mb0' },
       { p: 'rss_anon', l: 'anon', f: 'mbTriple' },
       { p: 'rss_file', l: 'file', f: 'mbTriple' },
       { p: 'rss_watermark_peak_kb', l: 'watermark peak', f: 'mb0' },
@@ -516,19 +519,19 @@ export const MANIFEST: Block[] = [
   },
   {
     // 제목이 "우선순위별" 이었다. 무엇의 우선순위인지도, 앱 것인지 기기 것인지도 그 말로는
-    // 알 수 없다. **라벨은 스키마 필드 경로 그대로다** — `result.json` 에서 그대로 찾을 수
-    // 있어야 하고, 옮겨 적은 우리말은 그 대조를 끊는다 (gfxinfo 라벨과 같은 이유).
+    // 알 수 없다. **경로 줄은 스키마 필드 경로 그대로다** — `result.json` 에서 그대로 찾을 수
+    // 있어야 한다. 우리말 단어는 그 위 한 줄로 더할 뿐 경로를 바꾸지 않는다 (RR-6 · 결정 2).
     kind: 'pairs', section: 'log', title: 'logcat 줄 수', metric: 'log', span: 4,
     unit: 'metrics.log.data', path: 'metrics.log.data',
     keys: [
-      { p: 'min_prio', l: 'min_prio', f: 'raw' },
-      { p: 'app.total', l: 'app.total', f: 'int' },
-      { p: 'app.by_priority.warn', l: 'app.by_priority.warn', f: 'int' },
-      { p: 'app.by_priority.error', l: 'app.by_priority.error', f: 'int' },
-      { p: 'app.by_priority.fatal', l: 'app.by_priority.fatal', f: 'int' },
-      { p: 'device_total', l: 'device_total', f: 'int' },
-      { p: 'device_by_priority.warn', l: 'device_by_priority.warn', f: 'int' },
-      { p: 'device_by_priority.error', l: 'device_by_priority.error', f: 'int' },
+      { p: 'min_prio', l: 'min_prio', w: LW.min_prio, f: 'raw' },
+      { p: 'app.total', l: 'app.total', w: LW['app.total'], f: 'int' },
+      { p: 'app.by_priority.warn', l: 'app.by_priority.warn', w: LW['app.by_priority.warn'], f: 'int' },
+      { p: 'app.by_priority.error', l: 'app.by_priority.error', w: LW['app.by_priority.error'], f: 'int' },
+      { p: 'app.by_priority.fatal', l: 'app.by_priority.fatal', w: LW['app.by_priority.fatal'], f: 'int' },
+      { p: 'device_total', l: 'device_total', w: LW.device_total, f: 'int' },
+      { p: 'device_by_priority.warn', l: 'device_by_priority.warn', w: LW['device_by_priority.warn'], f: 'int' },
+      { p: 'device_by_priority.error', l: 'device_by_priority.error', w: LW['device_by_priority.error'], f: 'int' },
     ],
   },
   {
@@ -597,7 +600,7 @@ export const MANIFEST: Block[] = [
       { p: 'tx_bytes', l: '송신', f: 'bytes' },
       { p: 'rx_packets', l: '수신 패킷', f: 'int' },
       { p: 'tx_packets', l: '송신 패킷', f: 'int' },
-      { p: 'uid', l: 'uid', f: 'raw' },
+      { p: 'uid', l: 'uid', w: LW.uid, f: 'raw' },
       { p: 'shared_uid_packages', l: 'uid 공유', f: 'list' },
     ],
   },
@@ -631,12 +634,12 @@ export const MANIFEST: Block[] = [
       { p: 'manufacturer', l: '제조사', f: 'raw' },
       { p: 'model', l: '모델', f: 'raw' },
       { p: 'android_release', l: 'Android', f: 'raw' },
-      { p: 'sdk_int', l: 'sdk_int', f: 'int' },
+      { p: 'sdk_int', l: 'sdk_int', w: LW.sdk_int, f: 'int' },
       { p: 'soc_model', l: 'SoC', f: 'raw' },
       { p: 'soc_manufacturer', l: 'SoC 제조사', f: 'raw' },
       { p: 'memory_total_kb', l: '메모리', f: 'gb1' },
       { p: 'abis', l: 'ABI', f: 'list' },
-      { p: 'build_fingerprint', l: 'fingerprint', f: 'wrap' },
+      { p: 'build_fingerprint', l: 'fingerprint', w: LW.fingerprint, f: 'wrap' },
     ],
   },
   {
@@ -645,14 +648,14 @@ export const MANIFEST: Block[] = [
       { p: 'label', l: '이름', f: 'raw' },
       { p: 'package', l: '패키지', f: 'wrap' },
       { p: 'version_name', l: '버전', f: 'raw' },
-      { p: 'version_code', l: 'versionCode', f: 'int' },
-      { p: 'debuggable', l: 'debuggable', f: 'bool' },
-      { p: 'large_heap', l: 'largeHeap', f: 'bool' },
-      { p: 'min_sdk', l: 'minSdk', f: 'int' },
-      { p: 'target_sdk', l: 'targetSdk', f: 'int' },
+      { p: 'version_code', l: 'versionCode', w: LW.versionCode, f: 'int' },
+      { p: 'debuggable', l: 'debuggable', w: LW.debuggable, f: 'bool' },
+      { p: 'large_heap', l: 'largeHeap', w: LW.largeHeap, f: 'bool' },
+      { p: 'min_sdk', l: 'minSdk', w: LW.minSdk, f: 'int' },
+      { p: 'target_sdk', l: 'targetSdk', w: LW.targetSdk, f: 'int' },
       { p: 'primary_cpu_abi', l: 'ABI', f: 'raw' },
-      { p: 'uid', l: 'uid', f: 'raw' },
-      { p: 'pid', l: 'pid', f: 'raw' },
+      { p: 'uid', l: 'uid', w: LW.uid, f: 'raw' },
+      { p: 'pid', l: 'pid', w: LW.pid, f: 'raw' },
       { p: 'install_source', l: '설치 경로', f: 'raw' },
       { p: 'launcher_activity', l: '진입점', f: 'wrap' },
     ],
@@ -679,31 +682,32 @@ export const MANIFEST: Block[] = [
 
   // ── 진단 (진단 세션에만 — 탭째로) ────────────────────────────
   //
-  // 라벨은 **스키마 필드 경로 그대로**다 (logcat 카드와 같은 이유 — `result.json` 에서 그대로 찾을 수
-  // 있어야 한다). 이름의 정본은 README 「`diagnose`」. 블록 껍데기(`status` · `reason`)는 네 카드가
+  // 경로 줄은 **스키마 필드 경로 그대로**다 (logcat 카드와 같은 이유 — `result.json` 에서 그대로 찾을 수
+  // 있어야 한다) · 그 위에 우리말 단어 줄 (RR-6). 이름의 정본은 README 「`diagnose`」. 카드 단위 칸은
+  // 비운다 — `diagnose` 는 뜻 없는 글자였다 (RR-6). 블록 껍데기(`status` · `reason`)는 네 카드가
   // 다 끌어온다 — 배지와 제목 툴팁. 블록 `status` 는 **트레이스에서 읽은 칸**의 상태이고, 앱 slice
   // 열림은 그와 따로 가므로(README) 자기 행에 자기 이유를 단다.
   {
-    kind: 'pairs', section: 'diagnose', title: DX.cardScope, span: 4, unit: 'diagnose',
+    kind: 'pairs', section: 'diagnose', title: DX.cardScope, span: 4, unit: '',
     statePath: 'diagnose', path: 'diagnose',
     keys: [
-      { p: 'atrace_categories', l: 'atrace_categories', f: 'dots' },
-      { p: 'atrace_apps', l: 'atrace_apps', f: 'dots' },
+      { p: 'atrace_categories', l: 'atrace_categories', w: LW.atrace_categories, f: 'dots' },
+      { p: 'atrace_apps', l: 'atrace_apps', w: LW.atrace_apps, f: 'dots' },
       {
-        p: 'app_slices_open', l: 'app_slices_open', f: 'bool',
+        p: 'app_slices_open', l: 'app_slices_open', w: LW.app_slices_open, f: 'bool',
         why: { code: 'app_slices_open_reason_code', reason: 'app_slices_open_reason' },
       },
     ],
   },
   {
-    kind: 'pairs', section: 'diagnose', title: DX.cardCounts, span: 4, unit: 'diagnose',
+    kind: 'pairs', section: 'diagnose', title: DX.cardCounts, span: 4, unit: '',
     statePath: 'diagnose', path: 'diagnose',
     keys: [
-      { p: 'trace_slices', l: 'trace_slices', f: 'int' },
-      { p: 'target_process_slices', l: 'target_process_slices', f: 'int' },
-      { p: 'target_process_slices_unfinished', l: 'target_process_slices_unfinished', f: 'int' },
-      { p: 'target_process_slice_names_unfolded', l: 'target_process_slice_names_unfolded', f: 'int' },
-      { p: 'ftrace_overrun_events', l: 'ftrace_overrun_events', f: 'int' },
+      { p: 'trace_slices', l: 'trace_slices', w: LW.trace_slices, f: 'int' },
+      { p: 'target_process_slices', l: 'target_process_slices', w: LW.target_process_slices, f: 'int' },
+      { p: 'target_process_slices_unfinished', l: 'target_process_slices_unfinished', w: LW.target_process_slices_unfinished, f: 'int' },
+      { p: 'target_process_slice_names_unfolded', l: 'target_process_slice_names_unfolded', w: LW.target_process_slice_names_unfolded, f: 'int' },
+      { p: 'ftrace_overrun_events', l: 'ftrace_overrun_events', w: LW.ftrace_overrun_events, f: 'int' },
       // ART 칸 (baseline-profile BP-7) — 블록 status 와 따로 가는 이유를 행마다 단다 (열림 행과 같은 꼴).
       // 자리 · 라벨은 최소로 둔 것이다 — bp-gui-report 가 디자인 문서대로 다듬는다 (plan B26).
       // 컴파일 상태는 객체 배열이다 — `list` 포맷이 항목마다 `키=값` 을 공백으로 이은 한 줄(기기 slice 원문 꼴)로
@@ -727,8 +731,8 @@ export const MANIFEST: Block[] = [
     kind: 'pairs', section: 'diagnose', title: DX.cardSource, span: 4, unit: '',
     statePath: 'diagnose', path: '',
     keys: [
-      { p: 'artifacts.trace', l: 'artifacts.trace', f: 'path' },
-      { p: 'diagnose.trace_bytes', l: 'diagnose.trace_bytes', f: 'bytes' },
+      { p: 'artifacts.trace', l: 'artifacts.trace', w: LW['artifacts.trace'], f: 'path' },
+      { p: 'diagnose.trace_bytes', l: 'diagnose.trace_bytes', w: LW['diagnose.trace_bytes'], f: 'bytes' },
     ],
   },
   {
@@ -747,4 +751,36 @@ export const MANIFEST: Block[] = [
       { field: 'max_ms', label: DX.colMax, fmt: 'n1' },
     ],
   },
+]
+
+/**
+ * **요약 타일 — 들어가는 자리** (report-readability RR-4 · 결정 9 · 10 · 12).
+ *
+ * 지표마다 하나 · 보고서 섹션 순 · **값이 바뀌어도 순서와 수가 그대로**다 (결정 1 — 위계는 값이 아니라 종류로).
+ * 값으로 고르거나 칠하지 않는다: 색 · 굵기 · 아이콘이 값에 따라 바뀌는 칸이 없고, `references` 를 안 쓴다.
+ *
+ * 타일 값은 **아래 카드의 같은 값과 같은 문자열**이다 — 경로 · 포맷을 그 카드 행과 똑같이 적고 시험이 대조한다
+ * (`RR-4 타일 값 = 카드 값`). `frame` 만 예외다: 개수 · 백분위가 없는 지표라 **수집 상태**(`status` 원문)를 낸다 —
+ * `frames_seen` 을 `hwui` 프레임 수 옆에 세우면 README 가 막은 비교를 화면이 부른다.
+ *
+ * 타일은 블록이 아니다 — `MANIFEST` 밖이라 레일 배지에 세지 않는다 (같은 값의 카드가 이미 센다 · 결정 12).
+ * `unit` 은 카드 값에 단위가 없는 둘(`장` · `줄`)에만 — 나머지는 포맷이 단위를 붙인다(`ms` · `MB`).
+ */
+export interface TileSpec {
+  metric: MetricId
+  word: string
+  path: string
+  fmt: Fmt
+  unit?: string
+}
+
+export const TILES: TileSpec[] = [
+  { metric: 'startup', word: RC.tileStartup, path: 'metrics.startup.data.total_time_ms', fmt: 'ms0' },
+  { metric: 'hwui', word: RC.tileHwui, path: 'metrics.hwui.data.total_frames', fmt: 'int', unit: RC.unitFrames },
+  { metric: 'frame', word: RC.tileFrame, path: 'metrics.frame.status', fmt: 'raw' },
+  { metric: 'cpu', word: RC.tileCpu, path: 'metrics.cpu.data.app.total_ms', fmt: 'ms0' },
+  { metric: 'memory', word: RC.tileMemory, path: 'metrics.memory.data.rss.max_kb', fmt: 'mb0' },
+  { metric: 'log', word: RC.tileLog, path: 'metrics.log.data.app.total', fmt: 'int', unit: RC.unitLines },
+  { metric: 'thermal', word: RC.tileThermal, path: 'metrics.thermal.data.device_status_after', fmt: 'thermal' },
+  { metric: 'network', word: RC.tileNetwork, path: 'metrics.network.data.rx_bytes', fmt: 'bytes' },
 ]

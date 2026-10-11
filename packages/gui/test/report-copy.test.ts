@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url'
 import { COPY_ADVICE_WORDS, COPY_EVAL_WORDS, copyViolations } from '@perftracker/core'
 import { describe, expect, it } from 'vitest'
 import { DIAGNOSE_REPORT_COPY, fillReportCopy } from '../src/web/report/diagnose-copy.js'
+import { MANIFEST } from '../src/web/report/manifest.js'
+import { LABEL_WORDS, READABILITY_COPY } from '../src/web/report/readability-copy.js'
 
 /**
  * **진단 모드가 보고서에 새로 내는 문구** (DM-15 · 기능 문서 결정 9 · 10).
@@ -104,5 +106,83 @@ describe('DM-15 단어형 규칙 (gui 보고서)', () => {
   it('DM-15 값 자리 — 채우면 행 수가 들어가고 모르는 자리는 남는다', () => {
     expect(fillReportCopy(DIAGNOSE_REPORT_COPY.tableUnit, { n: '1,055' })).toBe('대상 앱 프로세스 · 1,055행')
     expect(fillReportCopy(DIAGNOSE_REPORT_COPY.tableUnit, {})).toBe(DIAGNOSE_REPORT_COPY.tableUnit)
+  })
+})
+
+/* ══════════════════ report-readability — 문구 표 ↔ 코드 (RR-5 · RR-6) ══════════════════ */
+
+/**
+ * 보고서 가독성이 새로 내거나 바꾸는 문구. 정본은 `docs/design/report-readability.md` `## 문구` (결정 7) —
+ * 첫 표(패키지 · 자리 · 문구 · 뜻 · 안 쓰는 말)와 라벨 단어 표(카드 · `경로` → `단어`). 표에만 있거나 코드에만
+ * 있는 문구가 생기면 깨진다.
+ */
+const RR_DESIGN = readFileSync(
+  fileURLToPath(new URL('../../../docs/design/report-readability.md', import.meta.url)),
+  'utf8',
+)
+/** `## 문구` 절 — 다음 `## ` 까지. */
+const RR_SECTION = ((): string => {
+  const at = RR_DESIGN.indexOf('\n## 문구\n')
+  expect(at).toBeGreaterThan(0)
+  const rest = RR_DESIGN.slice(at + 1)
+  const end = rest.indexOf('\n## ', 1)
+  return end < 0 ? rest : rest.slice(0, end)
+})()
+/** 첫 표만 — 라벨 단어 표 앞에서 끊는다. */
+const RR_ROWS = copyTable(RR_SECTION.slice(0, RR_SECTION.indexOf('라벨 단어 줄')))
+/** `앱 RSS 구성` 새 행의 단어는 라벨 단어다 — 첫 표에 있지만 `LABEL_WORDS` 쪽. */
+const isLabelRow = (r: CopyRow): boolean => r.place.includes('새 행 단어')
+/** 라벨 단어 표 — `` `경로` → `단어` `` 짝. `` `diagnose` → 빈 칸 `` 처럼 단어가 백틱이 아니면 짝이 아니다. */
+const RR_LABEL_PAIRS = ((): [string, string][] => {
+  const table = RR_SECTION.slice(RR_SECTION.indexOf('라벨 단어 줄'))
+  return [...table.matchAll(/`([^`]+)` → `([^`]+)`/g)].map((m) => [m[1]!, m[2]!])
+})()
+
+describe('RR-5 문구 표 ↔ 코드', () => {
+  it('RR-5 문구 표 ↔ 코드 — 첫 표와 READABILITY_COPY 가 양방향으로 같다', () => {
+    const table = RR_ROWS.filter((r) => !isLabelRow(r)).map((r) => r.copy).sort()
+    const code = Object.values(READABILITY_COPY).map(String).sort()
+    expect(code).toEqual(table)
+    // 표가 실제로 읽혔다 — 빈 배열끼리 같다고 통과하지 않게.
+    expect(table.length).toBe(19)
+    expect(RR_ROWS.every((r) => r.pkg === 'gui')).toBe(true)
+  })
+
+  it('RR-5 문구 표 ↔ 코드 — 새 · 바뀐 문구가 단어 꼴이다 (DM-15)', () => {
+    const all = [...Object.values(READABILITY_COPY), ...Object.values(LABEL_WORDS)].map(String)
+    expect(all.map((c) => ({ c, v: copyViolations(c) })).filter((x) => x.v.length > 0)).toEqual([])
+    const filled = fillReportCopy(READABILITY_COPY.distFootnote, { frames: '7,531', buckets: '61' })
+    expect(filled).toBe('7,531 프레임 · 버킷 61칸')
+    expect(copyViolations(filled)).toEqual([])
+    // 깨 본다 — 평가 낱말이 각주에 들어오면 걸린다.
+    expect(copyViolations(`${READABILITY_COPY.timelineFootnote} 부드럽습니다`).length).toBeGreaterThan(0)
+  })
+})
+
+describe('RR-6 단어 표 ↔ 코드', () => {
+  it('RR-6 단어 표 ↔ 코드 — 라벨 단어 표 + 새 행 = LABEL_WORDS = 매니페스트의 (경로, 단어)', () => {
+    const fromTable = new Map<string, string>(RR_LABEL_PAIRS)
+    for (const r of RR_ROWS.filter(isLabelRow)) {
+      const path = /경로 줄 `([^`]+)`/.exec(RR_DESIGN.split('\n').find((l) => l.includes(r.place)) ?? '')?.[1]
+      expect(path, r.place).toBeDefined()
+      fromTable.set(path!, r.copy)
+    }
+    // 표가 실제로 읽혔다 — 단어 줄 27 + 새 행 1.
+    expect(RR_LABEL_PAIRS.length).toBe(27)
+    expect(fromTable.size).toBe(28)
+    const words = new Map<string, string>(Object.entries(LABEL_WORDS))
+    expect([...words.entries()].sort()).toEqual([...fromTable.entries()].sort())
+
+    // 매니페스트 — 단어를 단 키는 모두 표의 짝이고, 표의 짝은 모두 어느 키엔가 달려 있다.
+    const keyed = new Map<string, string>()
+    for (const b of MANIFEST) {
+      if (b.kind !== 'pairs') continue
+      for (const k of b.keys ?? []) {
+        if (k.w === undefined) continue
+        expect(fromTable.get(k.l), `${b.title} · ${k.l}`).toBe(k.w)
+        keyed.set(k.l, k.w)
+      }
+    }
+    expect([...keyed.entries()].sort()).toEqual([...fromTable.entries()].sort())
   })
 })

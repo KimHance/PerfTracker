@@ -172,8 +172,12 @@
 .rp-grid {
   display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--space-2);
 }
-/* 좁아지면 12칸을 6칸으로 접는다 — span 2 짜리 타일이 3개씩 두 줄이 된다. */
-@media (max-width: 1180px) { .rp-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+/* 좁아지면 12칸을 6칸으로 접는다. 6칸보다 넓은 카드(span 12)는 한 줄을 다 쓴다 — 안 그러면 암묵 칸이
+   생겨 그리드가 카드 밖으로 넓어진다. */
+@media (max-width: 1180px) {
+  .rp-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .rp-span-wide { grid-column: 1 / -1 !important; }
+}
 @media (max-width: 760px) { .rp-grid { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .rp-card { grid-column: 1 / -1 !important; } }
 
@@ -195,10 +199,13 @@
 .rp-readout-value { font-weight: 600; color: var(--color-accent-700); }
 .rp-readout-nosample { color: var(--color-neutral-600); }
 
-.rp-none { font-size: 13px; color: var(--color-neutral-700); padding: var(--space-2) 0; }
+.rp-none {
+  font-size: 13px; color: var(--color-neutral-700); padding: var(--space-2) 0; overflow-wrap: break-word;
+}
 .rp-none-code {
   display: block; margin-top: 6px;
   font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--color-neutral-600);
+  overflow-wrap: break-word;
 }
 .rp-footnote { font-size: 12px; color: var(--color-neutral-600); margin: var(--space-2) 0 0; }
 
@@ -233,8 +240,8 @@
 .rp-markline { stroke: var(--color-neutral-600); stroke-width: 1; stroke-dasharray: 2 3; }
 .rp-cursor { stroke: var(--color-accent); stroke-width: 1; }
 .rp-cursor-dot { fill: var(--color-bg); stroke: var(--color-accent); stroke-width: 2; }
-/* 왼쪽 여백(`SPAD.l`)이 12 단위 눈금 `3,000` 보다 좁다 — 잘리면 `,000` 이 다른 값으로 읽힌다.
-   카드 안쪽 여백으로 흘러 나가게 둔다 (여백을 넓히는 것은 `blocks.ts` 몫). */
+/* 왼쪽 여백 `SPAD.l` 46 이 12 단위 눈금 `3,000` 을 담는다. 그보다 긴 눈금(`12,000`)이 오면 잘리지 않고
+   카드 안쪽 여백으로 흐르게 둔다 — 잘리면 `,000` 이 다른 값으로 읽힌다. */
 .rp-series { display: block; overflow: visible; }
 
 .rp-dist { display: block; }
@@ -310,7 +317,8 @@
 /*
  * 라벨 · 값은 줄바꿈한다 — 13px 에서 `target_process_slice_names_unfolded` 같은 경로 라벨이나 공백 없는
  * 긴 값(dex 경로)이 한 줄이면 표가 카드 밖으로 밀어 페이지가 옆으로 넘친다 (1440 · 390 넘침 0 그대로).
- * `anywhere` 는 다른 줄바꿈 기회(공백 · `<wbr>`)가 없을 때만 토막 안에서 끊는다. 키/값 표는 라벨 열에
+ * 줄바꿈 자리는 구분자(`/ : $ . ; , _`) 뒤의 `<wbr>` 다 (RR-7 · `Wbr`). `break-word` 는 토막 하나가 칸보다
+ * 넓을 때만 그 토막 안에서 끊는다 — `anywhere` · `break-all` 은 쓰지 않는다 (토막 가운데서 먼저 끊는다). 키/값 표는 라벨 열에
  * 45% 를 잡아 둔다 — 안 잡으면 긴 값이 폭을 다 가져가 라벨이 한 글자씩 선다. 전/후 · slice 표는 열 폭을
  * 따로 정하므로 빼놓는다. **특정도는 `th` 하나(0,0,1)** — `:where()` 로 낮춰, 다른 표(진단 dex 표 같은)가
  * 자기 클래스로 `width` · `vertical-align` 을 정하면 그쪽이 이긴다.
@@ -318,15 +326,28 @@
 .rp-table th {
   text-align: left; font-weight: 400; color: var(--color-neutral-700);
   padding: 4px var(--space-3) 4px 0; border-bottom: 1px solid var(--color-divider);
-  white-space: normal; overflow-wrap: anywhere;
+  white-space: normal; overflow-wrap: break-word;
 }
 :where(.rp-table:not(.rp-delta):not(.rp-slice)) th { width: 45%; vertical-align: top; }
 .rp-table td {
   padding: 4px 0; border-bottom: 1px solid var(--color-divider);
-  text-align: right; color: var(--color-neutral-800); overflow-wrap: anywhere;
+  text-align: right; color: var(--color-neutral-800); overflow-wrap: break-word;
 }
 .rp-table tr:last-child th, .rp-table tr:last-child td { border-bottom: 0; }
-.rp-wrap { word-break: break-all; }
+.rp-wrap { overflow-wrap: break-word; word-break: normal; }
+/*
+ * 기계 이름 값의 안쪽 상자. **칸 폭을 정하는 데 끼지 않는다**(폭 0 · 최소 폭 = 칸) — 구분자가 없는 긴 토막
+ * (dex 경로의 40자 해시 `59F779C9…`)이 표의 최소 폭을 밀어 390 에서 카드 밖으로 넘치던 것을 막는다. 칸 폭은
+ * 라벨 열 45% 와 나머지로 정해지고, 그 안에서 토막이 칸보다 넓을 때만 `break-word` 가 토막 안에서 끊는다
+ * (RR-7 — `anywhere` 없이).
+ */
+.rp-table td.rp-wrap > .rp-wrap-in { display: block; width: 0; min-width: 100%; }
+/* 경로 라벨 두 줄 (RR-6 · 결정 2) — 우리말 단어 위 · 경로 원문 아래. 경로 줄도 구분자 뒤에서 줄바꿈한다. */
+.rp-lbl { display: block; font-size: 13px; color: var(--color-neutral-700); }
+.rp-lbl-path {
+  display: block; font-family: var(--font-mono); font-size: 12px; line-height: 1.4;
+  color: var(--color-neutral-600); overflow-wrap: break-word; word-break: normal;
+}
 /* 기계값(원본 경로). 자르지 않고 줄바꿈한다 — 경로 끝(파일 이름)이 가장 쓸모 있다. */
 .rp-table td.rp-path { font-family: var(--font-mono); font-size: 13px; }
 .rp-table td .rp-none-code { margin-top: 2px; }
@@ -377,7 +398,7 @@
   z-index: 1;
   font-family: var(--font-mono); font-size: 13px; font-weight: 400;
   text-align: left; color: var(--color-neutral-800);
-  white-space: normal; overflow-wrap: anywhere; word-break: normal;
+  white-space: normal; overflow-wrap: break-word; word-break: normal;
 }
 .rp-slice td { white-space: nowrap; color: var(--color-neutral-800); }
 .rp-slice td.rp-slice-nil { color: var(--color-neutral-600); }
@@ -399,14 +420,9 @@
   .rp-slice-name-h, .rp-slice-name { width: 140px; min-width: 140px; max-width: 140px; }
 }
 
-/* ── stat ──────────────────────────────────────────────────── */
+/* ── stat (앱 시작) ─────────────────────────────────────────
+   큰 숫자가 없다 — 숫자는 요약 타일에 (결정 10). 값이 없으면 `.rp-none` 본문 크기 + 코드. */
 .rp-stat-title { font-size: 13px; color: var(--color-neutral-700); }
-.rp-stat-value {
-  font-family: var(--font-heading); font-size: clamp(17px, 1.5vw, 21px); font-weight: 600;
-  letter-spacing: 0.01em; line-height: 1.1; margin-top: 2px; white-space: nowrap;
-}
-.rp-stat-dim { font-size: 16px; color: var(--color-neutral-600); }
-.rp-stat-unit { font-size: 12px; font-weight: 400; color: var(--color-neutral-600); margin-left: 4px; }
 .rp-stat-sub { font-size: 13px; color: var(--color-neutral-800); margin-top: 4px; }
 /* ── 기준선 막대 ────────────────────────────────────────────
    이 화면에서 **색이 좋고 나쁨을 말하는 유일한 자리**다 (규칙 2 의 의도적 예외).
@@ -437,10 +453,36 @@
   );
 }
 
-/* 값이 없는 이유(reason_code). 스키마 식별자라 본문 글꼴이 아니라 등폭으로 쓴다. */
-.rp-stat-why {
-  font-family: ui-monospace, Menlo, monospace; font-size: 12px;
-  color: var(--color-neutral-600); margin-top: 5px;
+/* ── 요약 타일 (RR-4) ──────────────────────────────────────
+   지표마다 하나 · 순서 고정 · 1440 4열 × 2줄 · ≤760 2열 × 4줄 (1열이면 첫 화면이 타일로 참 — 카드 1열 규칙의
+   예외). **값으로 아무것도 바꾸지 않는다** — 크기는 값이 있나(26–32) 없나(18)로만 갈린다 (디자인 결정 2).
+   타일 값 > 섹션 제목 18 (RR-3). */
+.rp-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); }
+@media (max-width: 760px) { .rp-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.rp-tile {
+  display: flex; flex-direction: column; min-width: 0;
+  background: var(--color-surface); border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md); padding: var(--space-3);
+}
+.rp-tile-top { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-1) var(--space-2); }
+.rp-tile-word { font-size: 13px; color: var(--color-neutral-700); }
+.rp-tile-value {
+  font-family: var(--font-heading); font-size: clamp(26px, 2.2vw, 32px); font-weight: 600;
+  line-height: 1.15; margin-top: 2px; color: var(--color-text); overflow-wrap: break-word;
+}
+/* 숫자는 한 줄 — 단위만 다음 줄로 내려갈 수 있다 (`## 넘침`). */
+.rp-tile-num { white-space: nowrap; }
+.rp-tile-unit { font-family: var(--font-body); font-size: 13px; font-weight: 400; color: var(--color-neutral-600); }
+.rp-tile-none {
+  font-family: var(--font-heading); font-size: 18px; font-weight: 600; line-height: 1.3;
+  margin-top: 8px; color: var(--color-neutral-700); overflow-wrap: break-word;
+}
+.rp-tile-code {
+  font-family: var(--font-mono); font-size: 12px; color: var(--color-neutral-600); overflow-wrap: break-word;
+}
+.rp-tile-path {
+  margin-top: auto; padding-top: 6px; line-height: 1.4;
+  font-family: var(--font-mono); font-size: 12px; color: var(--color-neutral-600); overflow-wrap: break-word;
 }
 
 /* ── 툴팁 · 푸터 ───────────────────────────────────────────── */
@@ -472,13 +514,3 @@
 .rp-card-alt .rp-bar-value { color: var(--color-neutral-800); }
 .rp-card-alt .rp-card-title { color: var(--color-text); }
 .rp-card-alt .rp-table td.num { color: var(--color-neutral-800); }
-
-/* 섹션 설명. 값이 아니라 **읽는 법**이라 카드 밖, 제목 바로 아래에 둔다. */
-.rp-section-note {
-  margin: calc(var(--space-2) * -1) 0 var(--space-3);
-  max-width: 78ch;
-  font-size: 12px;
-  line-height: 1.65;
-  color: var(--color-neutral-700);
-}
-.rp-section-note b { color: var(--color-neutral-900); font-weight: 600; }

@@ -1,13 +1,22 @@
+// 화면(.tsx)을 `react-dom/server` 로 그려 보는 시험이 있다 — 그 소스가 쓰는 DOM 타입(`ResizeObserver` ·
+// `getBoundingClientRect`)을 이 파일에서만 싣는다 (tsconfig.test.json 은 Node 만 싣는다 · plan B39).
+/// <reference lib="dom" />
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
+  copyViolations,
   DiagnoseBlockSchema,
   renderReason,
   SliceBranchStatsSchema,
   SliceNameRowSchema,
 } from '@perftracker/core'
+import { INLINE_REPORT_GLOBAL } from '../src/contract/api.js'
 import { computeMaxT, type Mark, readMarks } from '../src/web/report/axis.js'
+import { Tiles } from '../src/web/report/Charts.jsx'
+import { ReportPage } from '../src/web/report/ReportPage.jsx'
 import {
   badgeOf,
   blockState,
@@ -19,6 +28,7 @@ import {
   buildPairs,
   buildSeries,
   buildStat,
+  buildTiles,
   cardUnit,
   FPAD,
   type FrameTimelineVm,
@@ -29,12 +39,22 @@ import {
   type NoneVm,
   type PairsVm,
   type SeriesVm,
+  splitUnit,
   tabBadgeCount,
+  type TileVm,
   VITALS_SLOW_FRAME_MS,
 } from '../src/web/report/blocks.js'
-import { fmtValue, NONE_MISSING, NONE_NULL, STATUS_LABEL } from '../src/web/report/format.js'
+import {
+  BREAK_AFTER,
+  breakAfterSeparators,
+  fmtValue,
+  NONE_MISSING,
+  NONE_NULL,
+  STATUS_LABEL,
+} from '../src/web/report/format.js'
 import { buildHeader, isDiagnoseSession, tabsFor } from '../src/web/report/header.js'
-import { MANIFEST, NOT_DRAWN_METRICS, SECTIONS } from '../src/web/report/manifest.js'
+import { MANIFEST, NOT_DRAWN_METRICS, SECTIONS, TILES } from '../src/web/report/manifest.js'
+import { READABILITY_COPY as RC } from '../src/web/report/readability-copy.js'
 import { MISSING, readPath } from '../src/web/report/read.js'
 import {
   ariaSort,
@@ -790,8 +810,13 @@ describe('스키마 메이저', () => {
     expect(buildHeader({ schema_version: '1.1.0' }).schemaMismatch).toBe(false)
   })
 
-  it('duration 라벨을 쓴다', () => {
-    expect(buildHeader(FULL).meta.some((m) => m.k === 'duration')).toBe(true)
+  /** 머리 메타 라벨은 우리말이다 — 영어 필드 이름(`duration`)을 쓰지 않는다 (HANDOFF 의 `길이`). */
+  it('RR-6 머리 메타 영어 라벨 없음', () => {
+    const keys = buildHeader(FULL).meta.map((m) => m.k)
+    expect(keys).toContain('길이')
+    expect(keys.filter((k) => /[A-Za-z]/.test(k))).toEqual([])
+    // 측정 중 세션도 같은 라벨이다 — 값만 `측정 중`.
+    expect(buildHeader({ session: { state: 'running' } }).meta.find((m) => m.k === '길이')?.v).toBe('측정 중')
   })
 })
 
@@ -1212,14 +1237,16 @@ describe('buildFrameTimeline', () => {
     expect((buildFrameTimeline(card, {}, 20, [], null) as NoneVm).none).toBe(true)
   })
 
-  /** 재 봤더니 프레임이 0장인 것도 사실이지만, 그릴 막대는 없다. */
-  it('표본이 비면 값 없음이다', () => {
-    const vm = buildFrameTimeline(
-      card,
-      { metrics: { frame: { data: { samples: [], sampling: 'all', bucket_ms: null, frames_seen: 0 } } } },
-      20, [], null,
-    )
-    expect((vm as NoneVm).none).toBe(true)
+  /**
+   * 재 봤더니 프레임이 0장인 것도 사실이고, 그릴 막대는 없다 — `프레임 없음` (B22). `값 없음` 은 못 읽은 것이라
+   * 레일 배지가 센다. 표본 칸 자체가 배열이 아니면 그때는 못 읽은 것이다.
+   */
+  it('B22 표본이 [] 면 프레임 없음 — 값 없음이 아니다', () => {
+    const frame = (samples: unknown): unknown => ({
+      metrics: { frame: { data: { samples, sampling: 'all', bucket_ms: null, frames_seen: 0 } } },
+    })
+    expect((buildFrameTimeline(card, frame([]), 20, [], null) as NoneVm).label).toBe('프레임 없음')
+    expect((buildFrameTimeline(card, frame(null), 20, [], null) as NoneVm).label).toBe(NONE_NULL)
   })
 
   /**
@@ -1247,8 +1274,9 @@ describe('buildFrameTimeline', () => {
   it('뷰모델·막대의 키가 허용 목록과 정확히 같다 — 새 필드는 반드시 리뷰에서 보인다', () => {
     const vm = ftl(one(6, 8, 8.33))
 
+    // `footnote` 는 고정 단어 각주다 (RR-5) — 수를 싣지 않는다 (아래 RR-5 시험이 문자열을 고정한다).
     const VM_KEYS = [
-      'width', 'bars', 'idxAt', 'guide', 'yTicks', 'xTicks', 'markLines', 'note', 'tipOf',
+      'width', 'bars', 'idxAt', 'guide', 'yTicks', 'xTicks', 'markLines', 'note', 'footnote', 'tipOf',
     ]
     const BAR_KEYS = [
       'tMs', 'tSec', 'appMs', 'presentMs', 'totalMs', 'deadlineMs', 'hz', 'x', 'w', 'app', 'present',
@@ -1938,10 +1966,16 @@ describe('DM-13 평소 보고서 그대로', () => {
 
   /** 평소 보고서의 기존 블록은 진단 칸이 생기기 전과 같은 뷰모델이다 — 새 칸(코드 · title · mono)이 안 붙는다. */
   it('DM-13 평소 보고서 그대로 — 기존 pairs 행에 새 칸이 붙지 않는다', () => {
+    // 진단 칸(`code` · `title` · `mono`)이 평소 보고서 행에 새지 않는다. `word` 는 경로 라벨의 단어 줄이다 (RR-6) —
+    // 선언한 키에만 붙는다.
     for (const b of MANIFEST.filter((x) => x.kind === 'pairs' && x.section !== 'diagnose')) {
       const vm = buildPairs(b as PairsBlock, FULL)
       if ((vm as NoneVm).none === true) continue
-      for (const r of (vm as PairsVm).rows) expect(Object.keys(r).sort(), b.title).toEqual(['label', 'share', 'value', 'wrap'])
+      for (const [i, r] of (vm as PairsVm).rows.entries()) {
+        const want = ['label', 'share', 'value', 'wrap']
+        if ((b as PairsBlock).keys?.[i]?.w !== undefined) want.push('word')
+        expect(Object.keys(r).sort(), b.title).toEqual(want.sort())
+      }
     }
   })
 })
@@ -2033,5 +2067,341 @@ describe('RR-8 레일 배지', () => {
     expect(drawnUncollected(diagDoc('failed'), 'diagnose')).toEqual([SLICE_CARD.title])
     expect(badge(diagDoc('failed'), 'diagnose')).toBe(1)
     expect(badge(diagDoc('collected'), 'diagnose')).toBe(0)
+  })
+})
+
+/* ══════════════════ report-readability (rr-layout) ══════════════════ */
+
+/** 화면이 만드는 블록 전부 — `ReportPage` 와 같은 빌더. */
+const builtAll = (doc: unknown): { block: (typeof MANIFEST)[number]; vm: unknown }[] => {
+  const marks = readMarks(doc)
+  const maxT = computeMaxT(doc, marks)
+  return MANIFEST.map((b) => ({
+    block: b,
+    vm: b.kind === 'slicetable' ? buildSliceTable(b, doc) : buildBlock(b, doc, maxT, marks, null, 600),
+  }))
+}
+
+/** 표본 `full` 에 시간별 프레임을 얹은 세션 — `full` 은 `metrics.frame` 이 없는 옛 세션이다. */
+const withFrame = (status = 'collected'): Record<string, any> => {
+  const doc = structuredClone(FULL) as Record<string, any>
+  doc['metrics']['frame'] = {
+    status,
+    data: { samples: [[1000, 8, 4, 16.6]], sampling: 'all', bucket_ms: null, frames_seen: 7531 },
+  }
+  return doc
+}
+
+const ORDER = ['startup', 'hwui', 'frame', 'cpu', 'memory', 'log', 'thermal', 'network']
+
+describe('RR-4 요약 타일', () => {
+  it('RR-4 타일 8개 · 순서 고정', () => {
+    // 값이 바뀌어도 · 지표가 빠져도 · 문서가 비어도 같은 8장이 같은 순서다 (결정 9 — 값으로 고르지 않는다).
+    for (const doc of [FULL, LEGACY, LOWEND, withFrame(), {}, null]) {
+      expect(buildTiles(doc).map((t) => t.metric)).toEqual(ORDER)
+    }
+    // 보고서 섹션 순 — 그 지표의 첫 블록이 서는 섹션이 앞에서 뒤로만 간다.
+    const sectionAt = (m: string): number =>
+      SECTIONS.findIndex((s) => s.id === MANIFEST.find((b) => b.metric === m)!.section)
+    const at = ORDER.map(sectionAt)
+    expect(at.every((x) => x >= 0)).toBe(true)
+    expect([...at].sort((a, b) => a - b)).toEqual(at)
+    // 단어는 문구 모음에서 — 디자인 문서 표와 대조는 report-copy.test.ts.
+    expect(buildTiles(FULL).map((t) => t.word)).toEqual([
+      RC.tileStartup, RC.tileHwui, RC.tileFrame, RC.tileCpu, RC.tileMemory, RC.tileLog, RC.tileThermal, RC.tileNetwork,
+    ])
+  })
+
+  it('RR-4 frame 타일은 상태만', () => {
+    // 개수 · 백분위가 없는 지표 — `status` 원문을 낸다. `frames_seen`(7,531) 은 어디에도 안 나온다.
+    for (const status of ['collected', 'partial']) {
+      const t = buildTiles(withFrame(status)).find((x) => x.metric === 'frame')!
+      expect(t.value).toBe(status)
+      expect(t.path).toBe('metrics.frame.status')
+      expect(JSON.stringify(t)).not.toMatch(/7[,.]?531/)
+    }
+    expect(TILES.find((x) => x.metric === 'frame')).toEqual({
+      metric: 'frame', word: RC.tileFrame, path: 'metrics.frame.status', fmt: 'raw',
+    })
+  })
+
+  it('RR-4 null · 없음 · 미수집 타일', () => {
+    const tile = (doc: unknown, m: string): TileVm => buildTiles(doc).find((t) => t.metric === m)!
+    // 필드 없음 — `수집 안 함` (옛 세션 `full` 에는 `metrics.frame` 이 없다).
+    expect(tile(FULL, 'frame')).toMatchObject({ value: null, none: NONE_MISSING, code: null, badge: null })
+    // null — `값 없음` + 이유 코드 (low-end 앱 시작 타임아웃 · 앱 CPU).
+    expect(tile(LOWEND, 'startup')).toMatchObject({ value: null, none: NONE_NULL, code: 'launch_wait_timed_out' })
+    // 위(`cpu.data.app`)가 null 이면 그 아래 값도 null — 카드 `앱 CPU 시간` 이 그리는 `값 없음` 과 같은 상태다.
+    expect(tile(LOWEND, 'cpu')).toMatchObject({ value: null, none: NONE_NULL, code: 'no_app_cpu_samples' })
+    expect((buildPairs(block<PairsBlock>('앱 CPU 시간'), LOWEND) as NoneVm).label).toBe(NONE_NULL)
+    // unsupported — 카드와 같은 배지 + 값 자리에 reason_code (디자인 결정 3).
+    expect(tile(LOWEND, 'network')).toMatchObject({
+      value: null, none: 'sdk_too_low', badge: STATUS_LABEL['unsupported'], code: null,
+    })
+    // partial 은 배지 없이 title 만.
+    expect(tile(FULL, 'cpu')).toMatchObject({ badge: null, title: expect.stringContaining('') })
+    expect(tile(FULL, 'cpu').title).not.toBeNull()
+    // 타일은 사라지지 않는다 — 문서가 비어도 8장 모두 `수집 안 함`.
+    expect(buildTiles({}).map((t) => t.none)).toEqual(ORDER.map(() => NONE_MISSING))
+  })
+
+  /**
+   * 결정 12 — 타일이 `값 없음` · `수집 안 함` 을 그려도 레일 배지에 안 센다. **화면 전체를 그려서 본다**
+   * (`react-dom/server` · 심은 문서) — 레일에 선 숫자가 블록에서 센 수와 같고, 타일의 빈 칸은 더해지지 않는다.
+   */
+  it('RR-4 타일은 레일 배지에 안 셈 (결정 12) — 화면 렌더', () => {
+    const g = globalThis as Record<string, unknown>
+    const before = g[INLINE_REPORT_GLOBAL]
+    try {
+      let tileNones = 0
+      for (const doc of [FULL, LOWEND, LEGACY, diagDoc('failed')]) {
+        g[INLINE_REPORT_GLOBAL] = doc
+        const html = renderToStaticMarkup(createElement(ReportPage, { runId: 'x' }))
+        tileNones += (html.match(/class="rp-tile-none"/g) ?? []).length
+        // 레일 버튼마다 숫자 — 없으면 0.
+        const rail = [...html.matchAll(/<button class="rp-tab[^"]*"[^>]*><span>([^<]+)<\/span>(?:<span class="rp-tab-count mono">(\d+)<\/span>)?<\/button>/g)]
+          .map((m) => [m[1]!, Number(m[2] ?? 0)] as const)
+        expect(rail.length, '레일을 못 읽음').toBe(tabsFor(doc).length)
+        // 기대 수는 블록이 그린 글자에서 따로 센다 — `tabBadgeCount` 를 거치지 않는다.
+        for (const [label, n] of rail) {
+          const tab = tabsFor(doc).find((t) => t.label === label)!.id
+          const want = builtAll(doc).filter((x) => {
+            if (SECTIONS.find((s) => s.id === x.block.section)?.tab !== tab) return false
+            const v = x.vm as { none?: boolean; label?: string; dim?: boolean; value?: string }
+            const t = v.none === true ? v.label : x.block.kind === 'stat' && v.dim === true ? v.value : null
+            return typeof t === 'string' && (t === NONE_NULL || t.startsWith(NONE_MISSING))
+          }).length
+          expect(n, `${label}`).toBe(want)
+        }
+      }
+      // 빈 대조가 아니게 — 그린 화면에 `값 없음` · `수집 안 함` 타일이 실제로 있었다.
+      expect(tileNones).toBeGreaterThan(0)
+    } finally {
+      g[INLINE_REPORT_GLOBAL] = before
+    }
+  })
+
+  it('RR-4 값으로 칠하지 않음', () => {
+    // 뷰모델에 색 · 굵기 · 등급 · 순위를 정하는 칸이 없다 — 키가 허용 목록과 정확히 같다.
+    const KEYS = ['metric', 'word', 'path', 'badge', 'title', 'value', 'big', 'small', 'none', 'code']
+    for (const t of buildTiles(FULL)) expect(Object.keys(t).sort()).toEqual([...KEYS].sort())
+    // 값이 아주 다른 두 세션 — 글자 칸 말고는 같다.
+    const hot = structuredClone(FULL) as Record<string, any>
+    hot['metrics']['startup']['data']['total_time_ms'] = 9999
+    hot['metrics']['thermal']['data']['device_status_after'] = 6
+    hot['metrics']['cpu']['data']['app']['total_ms'] = 1
+    const shape = (t: TileVm): unknown => ({ ...t, value: typeof t.value, big: typeof t.big, small: t.small })
+    expect(buildTiles(hot).map(shape)).toEqual(buildTiles(FULL).map(shape))
+    // `references`(구글 기준치)를 안 쓴다 — 지워도 · 바꿔도 같은 타일.
+    const noRefs = structuredClone(FULL) as Record<string, any>
+    delete noRefs['references']
+    expect(buildTiles(noRefs)).toEqual(buildTiles(FULL))
+    // 렌더러도 값으로 칠하지 않는다 — **그린 결과**를 본다 (`react-dom/server`). 글자를 지운 마크업(태그 · 클래스 ·
+    // style · title)이 값이 아주 다른 두 세션에서 같고, 인라인 style 이 하나도 없다 (색 · 굵기를 값으로 못 바꿈).
+    const markup = (doc: unknown): string => renderToStaticMarkup(createElement(Tiles, { tiles: buildTiles(doc) }))
+    const bare = (html: string): string => html.replace(/>[^<]*</g, '><')
+    expect(markup(FULL)).toContain('rp-tile-value')
+    expect(bare(markup(hot))).toBe(bare(markup(FULL)))
+    for (const doc of [FULL, hot, LOWEND, LEGACY, withFrame()]) expect(markup(doc)).not.toMatch(/ style="/)
+  })
+
+  it('RR-4 타일 값 = 카드 값', () => {
+    // 타일 경로 = 아래 카드 행의 경로(블록 path + 키 p) — 그 행이 그리는 문자열과 같아야 한다.
+    const cardRow = (path: string): { block: PairsBlock; i: number } | null => {
+      for (const b of MANIFEST) {
+        if (b.kind !== 'pairs') continue
+        const i = (b.keys ?? []).findIndex((k) => `${b.path}.${k.p}` === path)
+        if (i >= 0) return { block: b, i }
+      }
+      return null
+    }
+    const compared = new Set<string>()
+    for (const doc of [FULL, LEGACY, LOWEND, withFrame()]) {
+      for (const t of buildTiles(doc)) {
+        if (t.metric === 'frame') continue // 상태만 — 위 시험
+        const at = cardRow(t.path)
+        expect(at, `${t.metric} 타일 경로 ${t.path} 를 그리는 카드 행이 없다`).not.toBeNull()
+        if (t.value === null) continue
+        const vm = buildPairs(at!.block, doc) as PairsVm
+        expect(t.value, `${t.metric} — ${at!.block.title}`).toBe(vm.rows[at!.i]!.value)
+        // 큰 숫자 · 작은 단위로 나눠도 글자는 그대로 (덧단위 `장` · `줄` 만 더한다).
+        const unit = TILES.find((x) => x.metric === t.metric)!.unit
+        expect(unit === undefined ? `${t.big}${t.small === '' ? '' : ` ${t.small}`}` : t.big).toBe(t.value)
+        compared.add(t.metric)
+      }
+    }
+    // 대조가 빈 것끼리가 아니게 — 일곱 지표 모두 값이 있는 표본으로 한 번 이상 맞댔다.
+    expect([...compared].sort()).toEqual(ORDER.filter((m) => m !== 'frame').sort())
+    // memory 는 `앱 RSS 구성` 의 새 행 (디자인 결정 1).
+    expect(cardRow('metrics.memory.data.rss.max_kb')!.block.title).toBe('앱 RSS 구성')
+    expect(cardRow('metrics.startup.data.total_time_ms')!.block.title).toBe('측정값')
+  })
+
+  it('RR-4 타일 값 단위 나눔 — 숫자 뒤 영문 단위만', () => {
+    expect(splitUnit('1,234 ms')).toEqual(['1,234', 'ms'])
+    expect(splitUnit('352 MB')).toEqual(['352', 'MB'])
+    expect(splitUnit('12.34 kB')).toEqual(['12.34', 'kB'])
+    expect(splitUnit('NONE (0)')).toEqual(['NONE (0)', ''])
+    expect(splitUnit('collected')).toEqual(['collected', ''])
+    expect(splitUnit('7,531')).toEqual(['7,531', ''])
+  })
+
+  it('RR-4 앱 시작 섹션 큰 숫자 없음', () => {
+    // 결정 10 — 숫자는 타일 · `측정값` TotalTime 행에. 앱 시작 카드(stat)는 값이 있으면 그 문자열을 그리지 않는다.
+    const charts = readFileSync(fileURLToPath(new URL('../src/web/report/Charts.tsx', import.meta.url)), 'utf8')
+    const body = charts.slice(charts.indexOf('export function StatBody'), charts.indexOf('function Gauge'))
+    expect(body.length).toBeGreaterThan(100)
+    // `vm.value` 는 값이 없을 때(`vm.dim &&` 안)만 — 그 밖에서 값 문자열 · 단위를 그리지 않는다.
+    const outsideDim = body.replace(/\{vm\.dim && \([\s\S]*?\n {6}\)\}/, '')
+    expect(outsideDim).not.toMatch(/vm\.value|vm\.unit/)
+    expect(body).toMatch(/vm\.dim &&/)
+    const css = readFileSync(fileURLToPath(new URL('../src/web/report/report.css', import.meta.url)), 'utf8')
+    expect(css).not.toMatch(/\.rp-stat-value/)
+    // 앱 시작 섹션의 stat 블록은 하나 — 같은 값의 큰 숫자를 내는 다른 블록이 없다.
+    expect(MANIFEST.filter((b) => b.section === 'startup' && b.kind === 'stat')).toHaveLength(1)
+  })
+})
+
+describe('RR-5 렌더 · 타임라인 설명 문장 없음', () => {
+  it('RR-5 렌더 · 타임라인 설명 문장 없음', () => {
+    // 블록 · 섹션에 읽는 법 문장 칸이 없다 (결정 3).
+    for (const b of MANIFEST) expect(Object.keys(b), b.title).not.toContain('note')
+    for (const s of SECTIONS) expect(Object.keys(s), s.id).not.toContain('note')
+    // 매니페스트 어느 글자에도 문장 끝 · 평가 낱말이 없다.
+    const text = JSON.stringify(MANIFEST)
+    expect(text).not.toMatch(/니다|부드럽/)
+
+    // 각주는 단어 — 분포는 실제 수(프레임 · 버킷 칸), 타임라인은 고정 단어.
+    const dist = MANIFEST.find((b) => b.kind === 'distribution') as DistributionBlock
+    const dvm = buildDistribution(dist, FULL, 600) as { footnote: string }
+    const total = readPath(FULL, 'metrics.hwui.data.total_frames') as number
+    const buckets = (readPath(FULL, 'metrics.hwui.data.histogram') as unknown[]).length
+    expect(dvm.footnote).toBe(`${fmtValue(total, 'int')} 프레임 · 버킷 ${buckets}칸`)
+    // 프레임 수를 못 읽으면 그 토막만 뺀다 — 지어내지 않는다.
+    const noTotal = structuredClone(FULL) as Record<string, any>
+    noTotal['metrics']['hwui']['data']['total_frames'] = null
+    expect((buildDistribution(dist, noTotal, 600) as { footnote: string }).footnote).toBe(`버킷 ${buckets}칸`)
+
+    const ftl = MANIFEST.find((b) => b.kind === 'frametimeline') as FrameTimelineBlock
+    const fvm = buildFrameTimeline(ftl, withFrame(), 20, [], null) as FrameTimelineVm
+    expect(fvm.footnote).toBe(RC.timelineFootnote)
+    for (const f of [dvm.footnote, fvm.footnote]) expect(copyViolations(f), f).toEqual([])
+  })
+})
+
+describe('RR-6 경로 라벨', () => {
+  it('RR-6 경로 라벨 두 줄 · 경로 원문 그대로', () => {
+    const row = (title: string, label: string, doc: unknown = FULL) =>
+      (buildPairs(block<PairsBlock>(title), doc) as PairsVm).rows.find((r) => r.label === label)
+    // 단어 줄 + 경로 줄 — 경로는 지금 라벨 글자 그대로 (⌘F · grep).
+    expect(row('기기', 'sdk_int')).toMatchObject({ word: 'SDK 버전', label: 'sdk_int' })
+    expect(row('앱', 'versionCode')).toMatchObject({ word: '버전 코드', label: 'versionCode' })
+    expect(row('logcat 줄 수', 'app.by_priority.warn')).toMatchObject({ word: '앱 warn', label: 'app.by_priority.warn' })
+    // 기기 원문 라벨은 한 줄 그대로 — 단어를 달지 않는다.
+    expect(row('프레임 수', 'Janky frames')?.word).toBeUndefined()
+    expect(row('측정값', 'TotalTime')?.word).toBeUndefined()
+    // logcat 카드의 경로 줄은 키 경로와 글자 하나 다르지 않다.
+    for (const k of block<PairsBlock>('logcat 줄 수').keys!) expect(k.l).toBe(k.p)
+    // 진단 카드 단위의 뜻 없는 글자 `diagnose` 0.
+    expect(MANIFEST.filter((b) => b.unit === 'diagnose' || b.diagnoseUnit === 'diagnose')).toEqual([])
+    for (const b of MANIFEST.filter((x) => x.section === 'diagnose' && x.kind === 'pairs')) {
+      expect(cardUnit(b, buildPairs(b as PairsBlock, diagDoc('collected')), true), b.title).toBe('')
+    }
+  })
+})
+
+describe('RR-7 긴 기계 이름의 줄바꿈 자리', () => {
+  it('RR-7 구분자 뒤 줄바꿈 기회 (`_` 포함)', () => {
+    expect(BREAK_AFTER).toBe('/:$.;,_')
+    // `…Shell$HomeActivity` 는 `$` 뒤에서 — `HomeA / ctivity` 가 아니다.
+    const act = 'com.google.android.youtube/com.google.android.apps.youtube.app.watchwhile.Shell$HomeActivity'
+    const parts = breakAfterSeparators(act)
+    expect(parts.at(-1)).toBe('HomeActivity')
+    expect(parts).toContain('Shell$')
+    // `target_process_slice_names_unfolded` 는 `_` 뒤에서.
+    expect(breakAfterSeparators('target_process_slice_names_unfolded')).toEqual([
+      'target_', 'process_', 'slice_', 'names_', 'unfolded',
+    ])
+    // 모든 토막은 구분자로 끝난다 (마지막 빼고) — 토막 가운데에는 구분자가 없다.
+    for (const s of [act, 'L*;Lcom/a/B;->c(I)V', 'samsung/r0q:14/UP1A.231005.007:user/release-keys', 'a,b;c.d']) {
+      const p = breakAfterSeparators(s)
+      for (const x of p.slice(0, -1)) expect(BREAK_AFTER).toContain(x.at(-1))
+      for (const x of p) expect([...x.slice(0, -1)].some((c) => BREAK_AFTER.includes(c)), x).toBe(false)
+    }
+    // 값 칸에 줄바꿈 자리를 두는 것은 기계 이름 포맷뿐 — 숫자(`1,234`)가 쉼표에서 끊기지 않게.
+    const app = (buildPairs(block<PairsBlock>('앱'), FULL) as PairsVm).rows
+    expect(app.find((r) => r.label === '진입점')?.wrap).toBe(true)
+    expect(app.find((r) => r.label === 'versionCode')?.wrap).toBe(false)
+    const diag = (buildPairs(block<PairsBlock>('기록 범위'), diagDoc('collected')) as PairsVm).rows
+    expect(diag.find((r) => r.label === 'atrace_apps')?.wrap).toBe(true)
+  })
+
+  it('RR-7 이름 원문 그대로', () => {
+    // 이어 붙이면 원문 — 글자를 넣지도 빼지도 않는다 (보이지 않는 글자 0 · 복사하면 원문).
+    for (const s of ['', '_', '//', 'a', '한글/이름_끝', 'emoji😀/x', 'L*;', 'x'.repeat(435), 'a b/c']) {
+      const p = breakAfterSeparators(s)
+      expect(p.join(''), s).toBe(s)
+      expect(p.join('').length).toBe(s.length)
+      expect(p.join('')).not.toMatch(/[​-‍﻿­]/)
+    }
+  })
+})
+
+describe('B22 차트 [] 낱말', () => {
+  it('B22 차트 [] 낱말 — 표본 없음 · 프레임 없음 · 항목 없음 · 배지에 안 셈', () => {
+    const series = block<SeriesBlock>('앱 로그')
+    const dist = MANIFEST.find((b) => b.kind === 'distribution') as DistributionBlock
+    const bars = block<BarsBlock>('기기 코어별 사용률')
+    const doc = structuredClone(withFrame()) as Record<string, any>
+    doc['metrics']['log']['data']['app']['timeline'] = []
+    doc['metrics']['hwui']['data']['histogram'] = []
+    doc['metrics']['cpu']['data']['device_per_core'] = []
+    doc['metrics']['frame']['data']['samples'] = []
+    expect((buildSeries(series, doc, 10, [], null) as NoneVm).label).toBe('표본 없음')
+    expect((buildDistribution(dist, doc, 600) as NoneVm).label).toBe('프레임 없음')
+    expect((buildBars(bars, doc) as NoneVm).label).toBe('항목 없음')
+    // 재 봤더니 0건 — 레일 배지가 세지 않는다. 같은 넷이 null 이면 넷 다 센다 (세 상태가 셈에서도 갈린다).
+    expect(tabBadgeCount(builtAll(doc), 'summary')).toBe(0)
+    const nul = structuredClone(doc) as Record<string, any>
+    nul['metrics']['log']['data']['app']['timeline'] = null
+    nul['metrics']['hwui']['data']['histogram'] = null
+    nul['metrics']['cpu']['data']['device_per_core'] = null
+    nul['metrics']['frame']['data']['samples'] = null
+    expect((buildSeries(series, nul, 10, [], null) as NoneVm).label).toBe(NONE_NULL)
+    expect(tabBadgeCount(builtAll(nul), 'summary')).toBe(4)
+  })
+})
+
+describe('B37 전/후 표 · 주파수 카드 [] 낱말', () => {
+  it('B37 전/후 표 · 주파수 [] → 항목 없음 · null · 필드 없음과 갈림 · 배지에 안 셈', () => {
+    const temp = block<DeltaBlock>('온도 (세션 전 → 후)')
+    const freq = block<PairsBlock>('클러스터 주파수')
+    const set = (zones: unknown, f: unknown): Record<string, any> => {
+      const doc = structuredClone(FULL) as Record<string, any>
+      doc['metrics']['thermal']['data']['zones'] = zones
+      doc['metrics']['cpu']['data']['device_frequency'] = f
+      return doc
+    }
+    // [] — 재 봤더니 0개.
+    const empty = set([], [])
+    expect((buildDelta(temp, empty) as NoneVm).label).toBe('항목 없음')
+    expect((buildPairs(freq, empty) as NoneVm).label).toBe('항목 없음')
+    // null — 못 읽었다.
+    const nul = set(null, null)
+    expect((buildDelta(temp, nul) as NoneVm).label).toBe(NONE_NULL)
+    expect((buildPairs(freq, nul) as NoneVm).label).toBe(NONE_NULL)
+    // 필드 없음 — 수집 안 함.
+    const gone = structuredClone(FULL) as Record<string, any>
+    delete gone['metrics']['thermal']['data']['zones']
+    delete gone['metrics']['cpu']['data']['device_frequency']
+    expect((buildDelta(temp, gone) as NoneVm).label).toBe(`${NONE_MISSING} — metrics.thermal.data.zones 없음`)
+    expect((buildPairs(freq, gone) as NoneVm).label.startsWith(NONE_MISSING)).toBe(true)
+    // 셈 — [] 는 안 세고, null · 없음은 둘 다 센다 (표본 full 의 요약 배지 기준선에서).
+    const base = tabBadgeCount(builtAll(FULL), 'summary')
+    expect(tabBadgeCount(builtAll(empty), 'summary')).toBe(base)
+    expect(tabBadgeCount(builtAll(nul), 'summary')).toBe(base + 2)
+    expect(tabBadgeCount(builtAll(gone), 'summary')).toBe(base + 2)
+    // 문구는 모음에서 — 디자인 문서 표와 대조는 report-copy.test.ts.
+    expect([RC.emptyDelta, RC.emptyFreq]).toEqual(['항목 없음', '항목 없음'])
   })
 })
