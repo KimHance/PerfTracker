@@ -1191,6 +1191,9 @@ bp-cli 단위 몫입니다.
 - **시간 한도 10분** — adb 호출 기본 한도 60초가 실측 67.5초(speed)를 끊던 것. runner 가 한도로 죽인 것을
   `timedOut` 으로 따로 알려 종료 코드와 가릅니다. 실패(종료 코드 ≠ 0 · `Failure` · 한도)면 `CompileFailedError` —
   세션을 열지 않고 실패 뒤 상태는 읽지 않습니다.
+- **compile 은 성공했는데 뒤 단계가 던지면** (run 디렉토리 · 스냅샷 · perfetto 시작 · 앱 실행 등) 원래 오류를
+  `CompileAppliedError` 로 감쌉니다 — 메시지 · code 는 원래 것, 원래 오류는 `cause`, 되돌림 재료는 `compile`
+  (plan B32). 감싸기만 하고 기기 명령은 더하지 않습니다.
 - **schema 1.2.0 그대로** — `session.compile` 은 optional 이고 `--compile` 세션에만 실립니다. `session` 이 닫힌
   객체라 캐시한 1.1.0 스키마는 그 세션의 산출물을 거부합니다. 새 reason_code 없음.
 - **확인하지 못한 것:** 실기기에서 이 경로 전체(기능 문서 BP-9 · device 단위) · sdk ≤33 의 `cmd package compile`

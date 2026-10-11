@@ -10,11 +10,11 @@ import {
   COLLECTORS,
   unsupportedReasons,
 } from '../collectors/registry.js'
-import type { AmStartResult } from '../collectors/types.js'
+import type { AmStartResult, CollectorEnv } from '../collectors/types.js'
 import { probeDevice } from '../device/probe.js'
 import { collectDeviceStatic } from '../device/spec.js'
 import { collectDeviceState, runSnapshots } from '../device/state.js'
-import { CompileFailedError, SessionStateError } from '../errors.js'
+import { CompileAppliedError, CompileFailedError, SessionStateError } from '../errors.js'
 import { buildTraceConfig, DEFAULT_MAX_DURATION_MS, DIAGNOSE_MAX_DURATION_MS } from '../perfetto/config.js'
 import {
   isSessionDetached,
@@ -361,6 +361,39 @@ export async function startSession(
   const compiled = compile !== null ? await changeCompileState(ctx.adb, app, compile) : null
   const target = compiled?.app ?? app
 
+  const prepared: PreparedStart = { probe, env, diagnose, atrace, maxDurationMs, configText, target, compiled }
+  if (compiled === null) return openSession(ctx, app, opts, prepared)
+  // 여기부터 던지면 기기 컴파일 상태는 **이미 바뀌었다** — 그 사실과 되돌림 재료를 오류에 싣는다 (plan B32).
+  // 감싸기만 한다: 실패 뒤 기기 명령은 0 이다 (상태를 다시 읽지 않는다).
+  try {
+    return await openSession(ctx, app, opts, prepared)
+  } catch (e) {
+    throw new CompileAppliedError(compiled.record, e)
+  }
+}
+
+/** `startSession` 의 앞 단계(검사 · probe · config · compile)가 만든 것. 뒤 단계(`openSession`)가 그대로 쓴다. */
+interface PreparedStart {
+  probe: Awaited<ReturnType<typeof probeDevice>>
+  env: CollectorEnv
+  diagnose: boolean
+  atrace: ReturnType<typeof diagnoseScope> | null
+  maxDurationMs: number
+  configText: string
+  /** `target_app` 으로 실을 앱 — `--compile` 세션이면 시작 칸이 바꾼 뒤 다시 읽은 출력이다. */
+  target: TargetApp
+  compiled: { app: TargetApp; record: SessionCompile } | null
+}
+
+/**
+ * run 디렉토리 → 시작 스냅샷 → force-stop → perfetto → 앱 실행 → 기록 → 측정 창. 순서와 이유는 각 단계 주석에 있다.
+ */
+async function openSession(
+  ctx: { adb: AdbClient; serial: string },
+  app: TargetApp,
+  opts: StartOptions,
+  { probe, env, diagnose, atrace, maxDurationMs, configText, target, compiled }: PreparedStart,
+): Promise<ActiveSession> {
   const name = opts.name ?? app.label
   const id = newSessionId()
   // 상대 경로로 저장하면 start 와 stop 사이에 cd 한 사용자가 세션을 통째로 잃는다.

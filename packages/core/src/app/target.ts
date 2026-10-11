@@ -70,7 +70,8 @@ export async function resolveTargetApp(ctx: AdbContext, query?: string): Promise
     target_sdk: detail.targetSdk,
     primary_cpu_abi: detail.primaryCpuAbi,
     // 시작 컴파일 상태도 같은 출력에서 온다 (BP-1 — 기기 명령 목록 그대로). 끝 상태는 `stop` 이 채운다.
-    // `--compile` 세션은 바꾼 뒤 다시 읽은 출력이 이 자리를 덮는다 (BP-4 · 다른 단위).
+    // `--compile` 세션에서는 이 값이 바꾸기 **전** 상태다 — `startSession` 이 compile 바로 뒤 `dumpsys package` 를
+    // 다시 읽어 이 자리를 덮고(BP-4), 이 값은 바꾼 기록의 `compile_state_before` 로 옮긴다 (plan B31).
     ...compileStateFields('start', detail.compileState),
   }
 }

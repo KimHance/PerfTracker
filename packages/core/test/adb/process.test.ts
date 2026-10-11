@@ -19,6 +19,20 @@ describe('nodeProcessRunner — 시간 한도', () => {
     expect('timedOut' in r).toBe(false)
   })
 
+  it('BP-4 compile 시간 한도 — 밖에서 신호로 죽은 것은 한도가 아니다 (같은 SIGTERM 이어도)', async () => {
+    const r = await nodeProcessRunner.run('sh', ['-c', 'kill -TERM $$'], { timeoutMs: 5_000 })
+
+    expect(r.code).toBe(1)
+    expect('timedOut' in r).toBe(false)
+  })
+
+  it('BP-4 compile 시간 한도 — 출력 한도(maxBuffer)로 끊긴 것은 시간 한도가 아니다', async () => {
+    const r = await nodeProcessRunner.run('sh', ['-c', 'yes | head -c 200000'], { timeoutMs: 5_000, maxBufferBytes: 10 })
+
+    expect(r.code).toBe(1)
+    expect('timedOut' in r).toBe(false)
+  })
+
   it('BP-4 compile 시간 한도 — 한도 안에 끝나면 timedOut 키가 없다', async () => {
     const r = await nodeProcessRunner.run('sh', ['-c', 'echo Success'], { timeoutMs: 5_000 })
 

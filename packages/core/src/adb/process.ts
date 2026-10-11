@@ -45,9 +45,10 @@ export const nodeProcessRunner: ProcessRunner = {
           const e = error as { code?: number | string | null; killed?: boolean } | null
           const raw = e?.code
           const code = typeof raw === 'number' ? raw : error ? 1 : 0
-          // `killed` 는 이 쪽이 죽였다는 뜻이다 — 한도 말고는 maxBuffer 넘침뿐이고, 그때는 code 가
-          // 문자열(`ERR_CHILD_PROCESS_STDIO_MAXBUFFER`)이다.
-          const timedOut = e?.killed === true && typeof raw !== 'string'
+          // `killed` 는 이 쪽(execFile 의 한도 타이머)이 죽였다는 뜻이다. 신호(`signal`)로는 가르지 않는다 —
+          // 밖에서 SIGTERM 으로 죽은 adb 도 같은 신호를 갖는다. maxBuffer 넘침도 이 쪽이 죽이지만 그 오류에는
+          // `killed` 가 실리지 않는다 (실측 node 25: `{ code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' }` 뿐).
+          const timedOut = e?.killed === true
           resolve({ stdout, stderr: stderr.toString('utf8'), code, ...(timedOut ? { timedOut: true as const } : {}) })
         },
       )

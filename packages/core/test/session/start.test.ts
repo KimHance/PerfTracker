@@ -1,11 +1,13 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { compileStateFields, parseDexoptState } from '../../src/app/dexopt.js'
 import {
+  CompileAppliedError,
   CompileFailedError,
   MeasurementWindowViolationError,
+  PerfTrackerError,
   PerfettoSessionError,
   SessionStateError,
 } from '../../src/errors.js'
@@ -788,9 +790,11 @@ describe('startSession — --compile (BP-4)', () => {
       runner?: ReturnType<typeof startableDevice>
       app?: Parameters<typeof targetApp>[0]
       home?: string
+      out?: string
     } = {},
   ) {
     const dirs = tempDirs()
+    if (opts.out !== undefined) dirs.out = opts.out
     const home = opts.home ?? dirs.home
     const runner = opts.runner ?? compileDevice()
     const adb = clientFor(runner)
@@ -856,6 +860,8 @@ describe('startSession — --compile (BP-4)', () => {
     const h = compileStart({ compile: 'speed', diagnose: true, app: { ...ytApp, package: 'com.google.*' } })
 
     await expect(h.result).rejects.toBeInstanceOf(PerfettoSessionError)
+    // compile 전 실패라 감싸지 않는다 (B32).
+    await expect(h.result).rejects.not.toBeInstanceOf(CompileAppliedError)
     expect(h.runner.commands).toEqual(PROBE)
     expect(readdirSync(h.dirs.out)).toEqual([])
   })
@@ -920,6 +926,7 @@ describe('startSession — --compile (BP-4)', () => {
     const cases = [
       { name: '종료 코드 ≠ 0', reply: { code: 255, stderr: 'cmd: Failure calling service package\n' }, exit: 255, timedOut: false },
       { name: '종료 코드 0 · 출력 Failure', reply: { stdout: 'Failure: package com.google.android.youtube could not be compiled\n' }, exit: 0, timedOut: false },
+      { name: '종료 코드 0 · stderr Failure', reply: { stdout: '', stderr: 'Failure: package com.google.android.youtube could not be compiled\n' }, exit: 0, timedOut: false },
       { name: '한도 넘음', reply: { code: 1, timedOut: true as const }, exit: null, timedOut: true },
     ]
     for (const c of cases) {
@@ -931,6 +938,8 @@ describe('startSession — --compile (BP-4)', () => {
           (e: unknown) => e,
         )
         expect(err).toBeInstanceOf(CompileFailedError)
+        // compile 자체 실패는 감싸지 않는다 — 기기가 바뀌었는지 모르는 자리라 B32 의 "이미 바뀌었다" 가 거짓이 된다.
+        expect(err).not.toBeInstanceOf(CompileAppliedError)
         const f = err as CompileFailedError
         expect(f.value).toBe('speed')
         expect(f.command).toBe(`cmd package compile -m speed -f '${YT}'`)
@@ -1024,5 +1033,119 @@ describe('startSession — --compile (BP-4)', () => {
     expect(h.runner.commands.some((c) => c.includes('cmd package compile'))).toBe(false)
     expect(h.runner.commands).not.toContain(DUMPSYS)
     expect(manifestOf(session.runDir).target_app).toEqual(targetApp(ytApp))
+  })
+})
+
+/**
+ * compile 은 성공했는데 같은 start 의 뒤 단계가 던진 경우 (plan B32). 세션은 안 열렸지만 기기는 이미 바뀌었다 —
+ * 그 사실과 되돌림 재료를 오류에 싣는다. 감싸기만 하고 기기 명령은 더하지 않는다.
+ */
+describe('startSession — compile 뒤 실패 (B32)', () => {
+  const YT = 'com.google.android.youtube'
+  const fixture = (n: string): string =>
+    readFileSync(fileURLToPath(new URL(`../fixtures/${n}`, import.meta.url)), 'utf8')
+  const BEFORE = fixture('dumpsys-package-dexopt-youtube.txt')
+  const DUMPSYS = `-s ${SERIAL} shell dumpsys package '${YT}'`
+  const COMPILE = `-s ${SERIAL} shell cmd package compile -m speed -f '${YT}'`
+  const ytApp = {
+    package: YT,
+    launcher_activity: 'com.google.android.apps.youtube.app.watchwhile.MainActivity',
+    ...compileStateFields('start', parseDexoptState(BEFORE, YT)),
+  }
+  /** perfetto 세션 시작이 실패하는 기기 — compile · 다시 읽기는 성공한다. */
+  const perfettoFails = () =>
+    startableDevice((r) =>
+      r
+        .onMatch(/shell cmd package compile /, { stdout: 'Success\n' })
+        .on(DUMPSYS, { stdout: fixture('dumpsys-package-dexopt-reset.txt') })
+        .onMatch(/--detach=perftracker_/, { code: 1, stderr: 'perfetto: failed to connect to traced\n' }),
+    )
+
+  function run(opts: { compile?: string; runner?: ReturnType<typeof startableDevice>; out?: string; app?: Parameters<typeof targetApp>[0] }) {
+    const dirs = tempDirs()
+    const runner = opts.runner ?? perfettoFails()
+    const adb = clientFor(runner)
+    const result = startSession({ adb, serial: SERIAL }, targetApp(opts.app ?? ytApp), {
+      launch: true,
+      outDir: opts.out ?? dirs.out,
+      force: false,
+      now: NOW,
+      home: dirs.home,
+      ...(opts.compile !== undefined ? { compile: opts.compile } : {}),
+    })
+    const error = result.then(
+      () => null,
+      (e: unknown) => e,
+    )
+    return { adb, runner, dirs, error }
+  }
+
+  it('B32 perfetto 시작이 던지면 감싼 오류에 "이미 바뀌었다" 와 되돌림 재료 — 원래 오류는 cause · 메시지 · code 그대로', async () => {
+    const h = run({ compile: 'speed' })
+    const err = await h.error
+
+    expect(err).toBeInstanceOf(CompileAppliedError)
+    expect(err).toBeInstanceOf(PerfTrackerError)
+    const e = err as CompileAppliedError
+    expect(e.cause).toBeInstanceOf(PerfettoSessionError)
+    const cause = e.cause as PerfettoSessionError
+    expect(e.message).toBe(cause.message)
+    expect(e.code).toBe(cause.code)
+    expect(e.compile).toEqual({
+      value: 'speed',
+      command: `cmd package compile -m speed -f '${YT}'`,
+      elapsed_ms: expect.any(Number) as number,
+      compile_state_before: ytApp.compile_state_start,
+      compile_state_before_reason_code: null,
+      compile_state_before_reason: null,
+    })
+  })
+
+  it('B32 감싸기만 한다 — 실패 뒤 기기 명령 0 (다시 읽기 · 되돌리기 없음) · 세션 포인터 0 · 창 닫힘', async () => {
+    const h = run({ compile: 'speed' })
+    await h.error
+
+    const detach = h.runner.commands.findIndex((c) => c.includes('--detach=perftracker_'))
+    expect(detach).toBe(h.runner.commands.length - 1)
+    expect(h.runner.commands.filter((c) => c === COMPILE)).toHaveLength(1)
+    expect(h.runner.commands.filter((c) => c === DUMPSYS)).toHaveLength(1)
+    expect(await readActiveSession(SERIAL, h.dirs.home)).toBeNull()
+    expect(h.adb.window.isOpen).toBe(false)
+  })
+
+  it('B32 run 디렉토리를 못 만들어도 감싼다 — PerfTrackerError 가 아닌 원래 오류는 cause 로 · code START_FAILED_AFTER_COMPILE', async () => {
+    // 파일 자리에 run 디렉토리를 만들려 하면 mkdir 이 ENOTDIR 로 던진다 — compile 바로 다음 단계다.
+    const dirs = tempDirs()
+    const file = join(dirs.out, 'not-a-dir')
+    writeFileSync(file, '')
+    const h = run({ compile: 'reset', out: file, runner: startableDevice((r) => r.onMatch(/shell cmd package compile /, { stdout: 'Success\n' }).on(DUMPSYS, { stdout: BEFORE })) })
+    const err = await h.error
+
+    expect(err).toBeInstanceOf(CompileAppliedError)
+    const e = err as CompileAppliedError
+    expect(e.cause).toBeInstanceOf(Error)
+    expect(e.cause).not.toBeInstanceOf(PerfTrackerError)
+    expect(e.message).toBe((e.cause as Error).message)
+    expect(e.code).toBe('START_FAILED_AFTER_COMPILE')
+    expect(e.compile.value).toBe('reset')
+    expect(e.compile.command).toBe(`cmd package compile --reset '${YT}'`)
+    // 스펙 · 스냅샷 이후는 하나도 안 나갔다 — compile 과 다시 읽기 뿐.
+    expect(h.runner.commands.slice(3)).toEqual([`-s ${SERIAL} shell cmd package compile --reset '${YT}'`, DUMPSYS])
+  })
+
+  it('B32 compile 전 실패는 감싸지 않는다 — 런처 없음 (설정 검증 거부는 위 「BP-4 compile 은 DM-4 뒤」)', async () => {
+    const h = run({ compile: 'speed', app: { ...ytApp, launcher_activity: null } })
+    const err = await h.error
+
+    expect(err).toBeInstanceOf(SessionStateError)
+    expect(err).not.toBeInstanceOf(CompileAppliedError)
+    expect(h.runner.commands.some((c) => c.includes('cmd package compile'))).toBe(false)
+  })
+
+  it('B32 --compile 없는 세션의 뒤 단계 실패는 원래 오류 그대로', async () => {
+    const err = await run({ runner: perfettoFails() }).error
+
+    expect(err).toBeInstanceOf(PerfettoSessionError)
+    expect(err).not.toBeInstanceOf(CompileAppliedError)
   })
 })

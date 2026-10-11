@@ -1446,14 +1446,6 @@ export const MarkSchema = z.object({
 export type Mark = z.infer<typeof MarkSchema>
 
 /**
- * **진단 세션의 수치는 평소 세션과 나란히 놓을 수 없다** (기능 문서 DM-14).
- *
- * atrace slice 하나를 남기는 비용(~5µs)은 커널 ftrace 처럼 인터럽트당한 프로세스가 아니라
- * **slice 를 남기는 앱 프로세스 자신**에게 청구되고, `tracing_processes_*` 는 트레이싱 프로세스만
- * 센다. 그 사실이 진단 여부 필드와 오버헤드 필드 양쪽에 있어야 한다 — 한쪽만 읽는 소비자가 있다.
- * 같은 문장을 네 자리에 손으로 옮기면 한 곳만 고쳐지는 날이 오므로 상수 하나로 둔다.
- */
-/**
  * `start --compile` 이 받는 값 (기능 문서 baseline-profile BP-4 · plan B10) — 기기 낱말 그대로, 실측한 셋뿐이다
  * (결정 3 — `-m verify` 등 실측 안 한 모드는 결과를 모른다). 보낸 명령과 기록 문자열이 같다.
  */
@@ -1503,6 +1495,14 @@ export const SessionCompileSchema = z
   )
 export type SessionCompile = z.infer<typeof SessionCompileSchema>
 
+/**
+ * **진단 세션의 수치는 평소 세션과 나란히 놓을 수 없다** (기능 문서 DM-14).
+ *
+ * atrace slice 하나를 남기는 비용(~5µs)은 커널 ftrace 처럼 인터럽트당한 프로세스가 아니라
+ * **slice 를 남기는 앱 프로세스 자신**에게 청구되고, `tracing_processes_*` 는 트레이싱 프로세스만
+ * 센다. 그 사실이 진단 여부 필드와 오버헤드 필드 양쪽에 있어야 한다 — 한쪽만 읽는 소비자가 있다.
+ * 같은 문장을 네 자리에 손으로 옮기면 한 곳만 고쳐지는 날이 오므로 상수 하나로 둔다.
+ */
 const DIAGNOSE_OVERHEAD_CAVEAT =
   '**진단 세션(session.options.diagnose: true)은 atrace slice 비용이 앱 프로세스에 청구되어 ' +
   'measurement_overhead.tracing_processes_* 에 안 잡힌다 — 평소 세션과 수치를 나란히 놓을 수 없다.** ' +
