@@ -1,25 +1,32 @@
 # PerfTracker
 
-안드로이드 앱의 성능을 **앱을 고치지 않고** 측정하는 CLI 입니다.
+![PerfTracker — start 와 stop 사이에 기기가 남긴 트레이스를 지표 8개로](https://raw.githubusercontent.com/KimHance/PerfTracker/main/docs/media/banner.png)
 
-측정 대상 앱에 SDK 를 넣지 않고, 기기를 루팅하지 않고, 기기에 무언가를 설치하지도 않습니다.
-adb 로 붙어서 Perfetto 트레이스를 기기에 남기고, 그것을 호스트에서 파싱해
-세션마다 `result.json` 하나를 남깁니다.
+안드로이드 앱 성능을 앱 수정 없이 재는 CLI 입니다.
 
-측정 대상은 **릴리즈 빌드로 설치된 아무 앱**입니다. 내가 만든 앱이든 아니든 상관없습니다.
+adb 로 기기에 붙어서 Perfetto 트레이스와 측정 전후 기기 상태를 남기고, 계산은 내 컴퓨터에서 합니다.
+세션마다 `result.json` 하나와, 원하면 보고서 HTML 한 장이 나옵니다.
+
+- 앱에 SDK 를 넣지 않고, 루팅도 기기에 설치할 것도 없습니다
+- 릴리스 빌드로 깔린 아무 앱이나 잴 수 있습니다
+- 측정하는 동안에는 기기에 명령을 하나도 보내지 않습니다
 
 ```bash
-npx perftracker doctor        # 설치 없이 바로 — 이 기기에서 뭘 잴 수 있는지
+npx perftracker doctor                          # 이 기기에서 뭘 잴 수 있는지
+npx perftracker start --app YouTube --launch    # 측정 시작
+#   … 폰에서 앱을 조작 …
+npx perftracker stop --report                   # result.json + 보고서
 ```
 
-> 이 문서는 **도구를 쓰는 법**입니다. 아래 「개발」 절만 저장소에서 직접 작업하는 사람
-> 대상이고, 나머지는 npm 으로 받아 쓰는 데 필요한 것입니다. 저장소는 [https://github.com/KimHance/PerfTracker](https://github.com/KimHance/PerfTracker) 입니다.
+![adb 연결 하나로 기기 신호 세 갈래 — Perfetto 시스템 트레이스 · 측정 전후 기기 상태 · 앱 시작 시간 — 를 모아 호스트에서 지표 8개를 계산하고, 판정 없는 결과 파일과 서버 없이 열리는 보고서 한 장으로 내보내는 흐름](https://raw.githubusercontent.com/KimHance/PerfTracker/main/docs/media/diagram-dataflow.png)
+
+버전별 변경은 [CHANGELOG](https://github.com/KimHance/PerfTracker/blob/main/CHANGELOG.md) 에 있습니다.
 
 ---
 
 ## 무엇을 재는가 — 지표 8개
 
-`result.json` 의 `metrics` 아래에 이 여덟 개가 들어갑니다. 키가 곧 수집기 id 입니다.
+`result.json` 의 `metrics` 아래 키가 그대로 지표 이름입니다.
 
 | 지표 | 귀속 범위 | 무엇인가 | 어디서 나오는가 |
 | --- | --- | --- | --- |
@@ -31,6 +38,9 @@ npx perftracker doctor        # 설치 없이 바로 — 이 기기에서 뭘 �
 | [`network`](#metricsnetwork) | **uid** | 세션 동안 오간 바이트·패킷 | `dumpsys netstats` 전/후 스냅샷 |
 | [`hwui`](#metricshwui) | 앱 | 프레임워크가 직접 센 렌더링 집계와 **원인별 개수** | `dumpsys gfxinfo` 전/후 스냅샷 |
 | [`frame`](#metricsframe) | 앱 + **표시 프레임은 기기 합성** | 화면에 나간 프레임의 **시간축** (개수·백분위는 없음) | perfetto `android.surfaceflinger.frametimeline` — **sdk 31 이상** |
+
+<details>
+<summary>범위 열 읽는 법 — 앱 단위와 기기 전역</summary>
 
 범위 열을 그냥 넘기지 마세요. 이 도구가 가장 자주 오해받은 자리입니다:
 
@@ -49,17 +59,24 @@ npx perftracker doctor        # 설치 없이 바로 — 이 기기에서 뭘 �
   레이어가 공유하는 시간**입니다 — 다른 앱·시스템 UI 가 같은 화면에 얹혀 있으면 대상 앱이
   아무것도 안 해도 이 값이 늡니다. 앱에 청구할 수 있는 것은 두 번째 값(앱이 그린 시간)뿐입니다.
 
+</details>
+
 ---
 
 ## 어느 안드로이드에서 되는가
 
-**Android 11(sdk 30)부터 동작합니다.** 두 지표에만 더 높은 하한이 있습니다:
+Android 11(sdk 30)부터 됩니다. 두 지표만 하한이 더 높습니다.
 
 | 지표 | 최소 | 왜 |
 | --- | --- | --- |
 | `network` | **Android 14** (sdk 34) | `dumpsys netstats` 의 `mAppUidStatsMap` 절이 그때부터입니다 |
 | `frame` | **Android 12** (sdk 31) | `android.surfaceflinger.frametimeline` 데이터소스가 그때부터입니다 |
 | 나머지 6개 | Android 11 | thermal 만 sdk 29 하한이 따로 있습니다 |
+
+기기를 꽂고 `perftracker doctor` 를 돌리면 그 기기에서 무엇을 잴 수 있는지 알려 줍니다.
+
+<details>
+<summary>doctor 출력 예 · 버전별 자세한 차이</summary>
 
 **렌더링 집계(`hwui`)는 어느 기기에서나 볼 수 있습니다.** `dumpsys gfxinfo` 에서 와서 버전
 하한이 없습니다 — 실측 SM-A405S(sdk 30)에서도 전체 799장·분포 70칸이 나왔습니다.
@@ -81,6 +98,7 @@ npx perftracker doctor        # 설치 없이 바로 — 이 기기에서 뭘 �
 기기의 성질이지 환경 오류가 아니기 때문입니다 — `adb` 를 못 찾는 것과는 다릅니다.
 `start` 도 세션을 열면서 같은 목록을 한 번 더 보여줍니다.
 
+</details>
 
 ---
 
@@ -88,7 +106,13 @@ npx perftracker doctor        # 설치 없이 바로 — 이 기기에서 뭘 �
 
 ### 1. 측정이 측정 대상을 바꾸지 않는다
 
-`start` 가 끝난 순간부터 `stop` 을 부를 때까지 **기기에 단 한 개의 adb 명령도 나가지 않습니다.**
+`start` 가 끝나고 `stop` 을 부를 때까지 기기에 adb 명령을 하나도 보내지 않습니다.
+명령 하나만 보내도 CPU · 로그 수치가 흔들리기 때문입니다. 트레이스는 기기가 혼자 기록하고, `stop` 때 한 번에 가져옵니다.
+
+![한 번의 측정 흐름 — 시작에서 상태를 찍고 기록을 켠 뒤, 측정하는 동안 사람이 앱을 조작하고 도구는 기기에 명령을 0회 보낸다. 끝에서 기록을 회수하고 상태를 다시 찍으며, 지표 계산은 나중에 기기 없이 호스트에서 언제든 다시 한다](https://raw.githubusercontent.com/KimHance/PerfTracker/main/docs/media/diagram-session.png)
+
+<details>
+<summary>어떻게 막는지 · 예외(--launch · 진단 · --compile)</summary>
 
 한 가지는 나란히 알아야 합니다. **트레이스는 `start` 가 끝나기 전에 이미 시작합니다** —
 그래야 콜드 스타트가 트레이스 안에 들어갑니다. `--launch` 를 주면 트레이스가 켜진 뒤,
@@ -138,7 +162,15 @@ npx perftracker doctor        # 설치 없이 바로 — 이 기기에서 뭘 �
 - 모든 파싱은 호스트에서 합니다. `extract` 단계는 기기에 접촉하지 않습니다.
 - `doctor` 와 `devices` 조차 측정 중인 기기는 건드리지 않습니다.
 
+</details>
+
 ### 2. 판정하지 않는다
+
+결과에 "좋다 / 느리다" 가 없습니다. 측정값과 관측된 사실만 남기고, 기준과 비교하는 건 CI 나 사람의 몫입니다.
+구글 기준치는 `references` 에 출처와 함께 적어 두기만 합니다.
+
+<details>
+<summary>자세히</summary>
 
 `result.json` 에는 "좋다 / 나쁘다 / 느리다" 가 없습니다. 측정값과 관측된 사실만 있습니다.
 
@@ -156,18 +188,19 @@ npx perftracker doctor        # 설치 없이 바로 — 이 기기에서 뭘 �
 값을 안 찍는 것과 **다음에 무엇을 열면 되는지 안 알려주는 것은 다릅니다.** `stop` 은 경로
 아래에 보고서를 만드는 명령 한 줄을 같이 냅니다 — 그 줄은 그대로 쳐서 도는 명령입니다.
 
+</details>
+
 ---
 
 ## 설치
 
-**Node 20.19 이상**과 **adb**(Android Platform Tools)가 필요합니다. 그 둘뿐입니다 —
-기기에 설치할 것도, 앱에 넣을 것도 없습니다.
+Node 20.19 이상과 adb(Android Platform Tools)만 있으면 됩니다. 폰에서는 USB 디버깅만 켜 두세요.
 
 ```bash
 npx perftracker doctor        # 설치 없이 바로. 이 기기에서 뭘 잴 수 있는지 알려줍니다
 ```
 
-자주 쓰면 전역으로 두는 편이 낫습니다.
+자주 쓰면 전역으로 깔아 두세요.
 
 ```bash
 npm i -g perftracker
@@ -175,6 +208,9 @@ perftracker doctor
 ```
 
 ### 저장소에서 직접 쓸 때
+
+<details>
+<summary>펼치기</summary>
 
 npm workspaces 를 쓰는 모노레포라 **저장소 루트에서 한 번** `npm install` 하면
 `packages/*` 가 함께 설치되고 서로 링크됩니다. 패키지 디렉토리 안에서 따로 설치하지 마세요.
@@ -189,7 +225,12 @@ npx perftracker doctor
 런타임 의존성은 `zod` 와 `commander` 둘뿐입니다. 안드로이드 SDK 도, Gradle 도,
 JDK 도 필요 없습니다 — 이 도구는 앱을 빌드하지 않습니다.
 
+</details>
+
 ### `adb`
+
+<details>
+<summary>펼치기</summary>
 
 다음 순서로 찾습니다. 하나만 되면 됩니다.
 
@@ -212,7 +253,12 @@ export ANDROID_HOME="$HOME/Library/Android/sdk"
 
 `perftracker doctor` 가 무엇을 찾았는지 그대로 보여줍니다. 막히면 거기서부터 보세요.
 
+</details>
+
 ### 기기
+
+<details>
+<summary>펼치기</summary>
 
 준비물은 **USB 디버깅 켜기**가 전부입니다. 기기에 아무것도 설치하지 않고 루팅도 필요 없습니다.
 
@@ -223,7 +269,12 @@ export ANDROID_HOME="$HOME/Library/Android/sdk"
   `AmbiguousDeviceError` 가 납니다. 굳이 둘을 두려면 `-d, --device <serial>` 로 지목하세요
   (단 온-디바이스 테스트는 serial 을 넘기지 않습니다 — 아래 "개발" 참고).
 
+</details>
+
 ### 트레이스 파서 (`trace_processor_shell`)
+
+<details>
+<summary>펼치기</summary>
 
 **따로 설치하지 않습니다.** 첫 `stop`(또는 `extract`) 때 자동으로 내려받아
 `~/.perftracker/bin/` 에 캐시합니다. 받은 바이트는 **크기와 SHA256 을 둘 다 검증**한 뒤에만
@@ -239,16 +290,18 @@ export ANDROID_HOME="$HOME/Library/Android/sdk"
 - 회사 방화벽 등으로 `commondatastorage.googleapis.com` 이 막혀 있으면 다른 머신에서 받아
   옮긴 뒤 `PERFTRACKER_TRACE_PROCESSOR` 로 지정하는 것이 가장 빠릅니다.
 
+</details>
+
 ---
 
-## 네 개의 명령으로 끝나는 흐름
+## 사용법
 
 ```bash
 # 0) 환경과 기기가 준비됐는지 본다
 npx perftracker doctor
 
 # 1) 측정 시작 (앱을 콜드로 띄우고 싶으면 --launch)
-npx perftracker start --app "네이버 웹툰" --name "홈 스크롤" --launch
+npx perftracker start --app YouTube --name "홈 스크롤" --launch
 
 # --- 여기서 손으로 앱을 조작한다. 이 동안 도구는 기기를 건드리지 않는다 ---
 
@@ -259,6 +312,12 @@ npx perftracker status
 npx perftracker stop
 npx perftracker stop --report      # 보고서(HTML)까지 만들고 브라우저로 연다
 ```
+
+`start` 는 앱을 라벨로도 패키지명으로도 찾습니다(`--app` 을 빼면 지금 화면에 떠 있는 앱). 설치된 앱은 `perftracker apps` 로 봅니다.
+세션 하나가 `runs/` 아래 디렉토리 하나이고, 원본이 남아 있어서 기기 없이 `perftracker extract` 로 언제든 다시 계산할 수 있습니다.
+
+<details>
+<summary>stop 출력 · run 디렉토리 구성 · extract</summary>
 
 `stop` 은 `result.json` 의 경로와 **보고서를 만드는 명령**을 냅니다:
 
@@ -293,7 +352,12 @@ npx perftracker extract runs/2026-07-26T02-31-40_홈-스크롤_a3f9c1
 
 파싱 규칙이 바뀌었을 때, 다른 사람이 뜬 트레이스를 받았을 때 유용합니다.
 
+</details>
+
 ### 뭔가 잘못됐을 때
+
+<details>
+<summary>펼치기</summary>
 
 - **`stop` 이 트레이스 회수에 실패했다** — 세션은 그대로 남습니다. 기기의 트레이스도
   지우지 않습니다. `perftracker stop` 을 그냥 다시 실행하면 그 지점부터 재개합니다.
@@ -302,7 +366,12 @@ npx perftracker extract runs/2026-07-26T02-31-40_홈-스크롤_a3f9c1
 - **이미 세션이 있다고 한다** — `perftracker stop` 으로 끝내거나 `--force` 로 시작하세요.
   `--force` 는 기기 쪽에 남은 Perfetto 세션까지 정리합니다.
 
+</details>
+
 ### 측정 중에 무슨 일이 있었는지 적어 두기 (`mark`)
+
+<details>
+<summary>펼치기</summary>
 
 시계열(`timeline`)은 "3초에 CPU 가 뛰었다" 는 말해 주지만 **그 3초가 무엇이었는지**는 말해
 주지 못합니다. 그것을 아는 것은 기기 앞에 있던 사람뿐이고, 그 순간에 적어 두지 않으면 다시는
@@ -342,7 +411,12 @@ t_s = (offset_ms − session.trace_start_offset_ms) / 1000
 진행 중인 세션이 하나뿐이면 아무것도 지정하지 않아도 되고, 둘 이상인데 지정하지 않으면
 **아무 데도 붙이지 않고 어느 세션인지 묻습니다.**
 
+</details>
+
 ### 화면으로 하고 싶다면
+
+<details>
+<summary>펼치기</summary>
 
 같은 흐름을 브라우저에서 할 수 있습니다.
 
@@ -389,13 +463,13 @@ npx perftracker open -p 7333   # 포트를 고정하고 싶으면
 못 잰 값은 `수집 안 함`(이 도구가 그 값을 낼 줄 모르던 시절의 세션)과 `값 없음`(재려다
 못 잼)으로 **다르게** 적히고, 어느 쪽이든 카드가 사라지지는 않습니다.
 
+</details>
 
 ---
 
 ## 명령 전체
 
-위 흐름에 나오지 않는 것까지 포함한 목록입니다. **실제로 측정하는 것은 `start` 와 `stop`
-둘뿐이고** 나머지는 점검·조회·마킹·기록 관리입니다.
+실제로 재는 건 `start` 와 `stop` 둘이고, 나머지는 점검 · 조회 · 마킹 · 기록 관리입니다.
 
 | 명령 | 무엇 | 기기 |
 | --- | --- | --- |
@@ -414,10 +488,12 @@ npx perftracker open -p 7333   # 포트를 고정하고 싶으면
 | `perftracker report <id>` | 기록을 **파일 하나짜리 HTML** 로 (서버 불필요) | 불필요 |
 | `perftracker open` | 화면을 띄웁니다 — 로컬 서버 (Ctrl-C 까지 붙잡습니다) | 필요 |
 
-「접촉 안 함」은 기기가 연결돼 있어도 adb 를 **보내지 않는다**는 뜻입니다. 그래서 이 셋은
-측정 중에 불러도 안전합니다 — 마킹이 측정 결과를 바꾸지 않는 이유가 이것입니다.
+「접촉 안 함」인 명령은 기기에 adb 를 보내지 않아서 측정 중에 불러도 됩니다.
 
 ### 진단 세션 (`--diagnose`)
+
+<details>
+<summary>펼치기</summary>
 
 평소 세션은 수치만 냅니다. 그 시간에 앱이 **무엇을** 했는지(atrace slice 이름)를 보려면
 진단 세션으로 엽니다.
@@ -449,7 +525,12 @@ npx perftracker stop                         # 평소와 같습니다 — 경로
   `result.json` 에 실리고(아래 「`result.json` 읽는 법」), 시간축으로 보려면 run 디렉토리의
   `trace.perfetto-trace` 를 [Perfetto UI](https://ui.perfetto.dev) 로 엽니다.
 
+</details>
+
 ### 컴파일 상태를 맞춰 재기 (`--compile`)
+
+<details>
+<summary>펼치기</summary>
 
 같은 앱이라도 컴파일 상태(`speed-profile` · `verify` · `speed` …)에 따라 콜드 스타트 · 스크롤 수치가 달라집니다.
 상태를 맞춰 다시 재려면 `--compile <reset|speed-profile|speed>` 를 줍니다. **`--compile` 은 `--launch` 와만 받습니다** —
@@ -490,7 +571,12 @@ npx perftracker stop                         # 경로 · 보고서 명령 + 되�
   같습니다. 모르는 칸은 `null` 이고, `runs` 의 `baseStatusAfter` 는 `result.json` 이 있는 기록에서만 읽습니다.
 - `--compile` 없는 세션의 `start` · `stop` · `status` 출력은 이 옵션 이전과 같습니다.
 
+</details>
+
 ### 기록 관리 (`runs`)
+
+<details>
+<summary>펼치기</summary>
 
 측정이 끝난 뒤의 파일 정리입니다. **GUI 의 기록 목록과 같은 일을 합니다** — 한쪽에만 있는
 기능을 만들지 않는 것이 이 도구의 규칙이고, 판정과 파일 조작은 양쪽 다 core 의 같은 코드를
@@ -510,7 +596,12 @@ npx perftracker runs rm --all --yes           # 전부 (--yes 없으면 거부�
 `--all` 이 `--yes` 를 요구하는 것은 되묻지 않기 위해서입니다. CI 에서 입력을 기다리면 빌드가
 타임아웃까지 매달립니다. id 를 직접 적은 삭제는 그 자체가 의사 표시라 묻지 않습니다.
 
+</details>
+
 ### 보고서를 파일 하나로 (`report`)
+
+<details>
+<summary>펼치기</summary>
 
 `gui` 와 **같은 화면**인데 서버가 없습니다. 자산과 데이터를 전부 문서 안에 말아 넣어 더블클릭
 하면 열리는 HTML 하나를 냅니다.
@@ -531,7 +622,12 @@ npx perftracker stop --report                 # 측정을 끝내면서 바로 (-
 `-o` 는 다른 명령과 **같은 뜻**(기록이 있는 디렉토리)이고 쓸 자리는 `--file` 입니다 —
 한 글자를 명령마다 다른 뜻으로 쓰면 그것이 가장 비싼 종류의 함정이 됩니다.
 
+</details>
+
 ### 조회 결과를 JSON 으로 (`--json`)
+
+<details>
+<summary>펼치기</summary>
 
 `doctor` · `devices` · `apps` · `status` · `runs` 는 `--json` 을 받습니다.
 
@@ -543,6 +639,8 @@ npx perftracker devices --json
 **사람이 읽는 문장이 기본이고 이것은 추가 모드입니다** — 사람과 기계(CI · LLM)가 둘 다
 소비자입니다. `start` / `stop` / `mark` 에는 없습니다: 그 셋의 출력은 이미 한 줄(경로 하나)이고,
 시작 전에 알아야 할 것은 `doctor --json` 이 전부 줍니다.
+
+</details>
 
 ---
 
@@ -556,6 +654,9 @@ npx perftracker schema > result.schema.json
 
 `schema_version` 이 그 계약의 버전입니다 (현재 `1.2.0`).
 
+<details>
+<summary>1.2.0 에서 바뀐 것 · 캐시한 스키마를 쓴다면</summary>
+
 > **`1.2.0` 은 진단 세션의 자리와 컴파일 상태를 더한 minor 입니다.** 진단 세션(`start --diagnose`)에만
 > `session.options.diagnose` 와 [`diagnose`](#diagnose) 블록이 실리고, **모든 세션**의 `target_app` 에
 > [컴파일 상태](#target_app-의-컴파일-상태)(`compile_state_*`)가 실립니다. `start --compile` 세션에만
@@ -566,7 +667,14 @@ npx perftracker schema > result.schema.json
 > 더했습니다. 스키마를 캐시해 두고 쓰신다면 아래
 > [스키마를 다시 꺼내야 하는 때](#스키마를-다시-꺼내야-하는-때)를 반드시 읽으세요.
 
+</details>
+
+아래 절마다 제목만 보이고, 펼치면 필드 설명이 나옵니다.
+
 ### 최상위 구조
+
+<details>
+<summary>펼치기</summary>
 
 | 필드 | 무엇인가 |
 | --- | --- |
@@ -590,7 +698,12 @@ npx perftracker schema > result.schema.json
 > (아래). `warnings` 에는 `session_still_running` 이 함께 실립니다.
 > `stop` 한 뒤 같은 run 디렉토리로 `extract` 를 다시 돌리면 전부 채워집니다.
 
+</details>
+
 ### 시계열을 그릴 때 쓰는 두 값
+
+<details>
+<summary>펼치기</summary>
 
 **이 도구에는 0초가 둘입니다.** 시계열의 `t_s` 는 **트레이스 시작**(기기 시계)이 0이고,
 `session.marks[].offset_ms` 는 **세션 시작**(호스트 시계)이 0입니다. `start` 가 adb 왕복을
@@ -612,7 +725,12 @@ clock_snapshot 이 없거나 기기 시계를 못 읽은 경우(`trace_start_off
 **`trace_start_offset_ms` 가 `null` 이면 마킹을 옮기지 마세요.** 0으로 가정하면 어긋난 자리에
 찍히면서 맞는 것처럼 보입니다.
 
+</details>
+
 ### `target_app` 의 빌드 속성
+
+<details>
+<summary>펼치기</summary>
 
 `dumpsys package` 한 번의 출력에서 함께 읽습니다 — **기기 왕복이 늘지 않습니다.**
 
@@ -637,7 +755,12 @@ clock_snapshot 이 없거나 기기 시계를 못 읽은 경우(`trace_start_off
 - `primary_cpu_abi` 는 이 앱이 **실제로 실행되는** ABI 로, `device.static.abis` 의 부분집합입니다.
   64비트 기기에서 32비트로 도는 앱이 여기서 갈립니다. 네이티브 코드가 없으면 `null` 입니다.
 
+</details>
+
 ### `target_app` 의 컴파일 상태
+
+<details>
+<summary>펼치기</summary>
 
 **모든 세션**에 실립니다 — 같은 기기 · 같은 앱이라도 ART 가 앱을 어떤 상태로 컴파일해 두었느냐에 따라
 콜드 스타트 · 스크롤 수치가 크게 달라지기 때문입니다 (실측 SM-S901N · YouTube: TotalTime 중앙값
@@ -698,7 +821,12 @@ speed-profile 471 · verify 618 · speed 665 ms). 두 세션의 수치가 다를
   어느 쪽이든 `null` 이면 경고는 없습니다.
 - 이 키들이 **아예 없는** `result.json` 은 이 기록이 생기기 전에 산출된 것입니다.
 
+</details>
+
 ### `session.compile` — 바꾼 기록
+
+<details>
+<summary>펼치기</summary>
 
 `start --launch --compile <reset|speed-profile|speed>` 로 연 세션에만 있습니다 — 측정 창을 열기 전에 이 도구가
 **기기의 컴파일 상태를 바꿨다**는 기록입니다. 키가 없으면 그 세션은 상태를 바꾸지 않았습니다(`cmd package compile`
@@ -733,7 +861,12 @@ speed-profile 471 · verify 618 · speed 665 ms). 두 세션의 수치가 다를
     대상 앱의 **의존 패키지 · split · 보조 dex 까지** 바꿀 수 있습니다 (실측: `reset` 뒤 보조 dex 셋 중 둘이
     `verify` → `run-from-apk`). 기록과 되돌림은 대상 앱만 다룹니다.
 
+</details>
+
 ### `warnings`
+
+<details>
+<summary>펼치기</summary>
 
 관측된 사건만 담습니다 — 평가는 없습니다. 이 버전이 내는 `code` 는 아래가 전부입니다
 (옛 run 을 `extract` 하면 그때의 코드가 그대로 옮겨질 수 있어 스키마는 닫힌 enum 이 아닙니다).
@@ -748,12 +881,22 @@ speed-profile 471 · verify 618 · speed 665 ms). 두 세션의 수치가 다를
 | `session_still_running` | 아직 `stop` 하지 않은 세션을 `extract` 했음 — 부분 상태 |
 | `compile_state_changed` | 세션 중 base.apk 의 컴파일 상태(`status` · `reason`)가 바뀌었음 ([위](#target_app-의-컴파일-상태)) |
 
+</details>
+
 ### `tool.host`
+
+<details>
+<summary>펼치기</summary>
 
 이 도구를 **돌린 컴퓨터**입니다 (`os` / `arch` / `node`). 같은 앱·같은 기기인데 수치가 다른 두
 세션을 비교할 때, 호스트가 달랐다는 사실이 후보에서 빠지면 원인을 기기에서만 찾게 됩니다.
 
+</details>
+
 ### 메트릭 하나의 모양
+
+<details>
+<summary>펼치기</summary>
 
 모든 메트릭은 같은 껍데기를 씁니다. **값이 없는 이유를 null 로 뭉뚱그리지 않습니다.**
 
@@ -798,7 +941,12 @@ speed-profile 471 · verify 618 · speed 665 ms). 두 세션의 수치가 다를
 - `reason` — 사람이 읽는 한국어 문장. 다듬힐 수 있으니 매칭에 쓰지 마세요.
 - `data` — 메트릭별 본문. 수집되지 않았으면 `null`
 
+</details>
+
 ### 스키마를 다시 꺼내야 하는 때
+
+<details>
+<summary>펼치기</summary>
 
 **`1.2.0` 부터는 `schema_version` 이 신호입니다.** 출시된 계약을 넓히면 minor 를 올립니다
 (`packages/core/src/schema/result.ts` 상단의 규칙표). 캐시해 둔 스키마를 꺼낸 때의 버전과
@@ -843,7 +991,12 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 개수를 세어 보세요. 위에 적힌 개수보다 적으면 낡은 것입니다. `thermal_zones` 항목에
 `source` 가 없어도 마찬가지입니다.
 
+</details>
+
 ### `metrics.hwui`
+
+<details>
+<summary>펼치기</summary>
 
 **프레임워크(HWUI)가 자기 렌더링을 직접 센 값**입니다. `dumpsys gfxinfo <패키지>` 를 세션 전과
 후에 한 번씩 찍어 **차이**를 냅니다 — 누적 카운터라 측정 중에는 기기에 아무것도 보내지 않습니다
@@ -927,7 +1080,12 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 나옵니다 (실측 sdk 36). 그 옵션이 켜는 `framestats`(프레임별 단계 분해)는 마지막 120장만
 남아 세션을 담을 수 없어 쓰지 않습니다 — 담으려면 측정 중 폴링이고 규칙 1 위반입니다.
 
+</details>
+
 ### `metrics.frame`
+
+<details>
+<summary>펼치기</summary>
 
 **프레임의 시간축입니다.** `hwui` 와 다른 것을 답합니다 — `hwui` 는 "몇 장이 얼마나
 걸렸나", 이쪽은 "언제 그랬나" 입니다. perfetto `android.surfaceflinger.frametimeline`
@@ -984,7 +1142,12 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   6,932 · 실제 프레임 2,875, 2.4배). `frame` 은 프레임 토큰으로 접어 **가장 오래 걸린
   레이어**를 그 프레임의 앱 시간으로 씁니다 — 레이어 이름으로 거르지 않습니다.
 
+</details>
+
 ### `metrics.startup`
+
+<details>
+<summary>펼치기</summary>
 
 **이 값은 트레이스에서 계산한 것이 아니라 `am start -W` 가 보고한 숫자입니다.**
 트레이스를 읽지 않는 두 지표 중 하나입니다(다른 하나는 `hwui`) — `start` 가 앱을 띄우면서 받아
@@ -1056,7 +1219,12 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 > `target_app.pid` 와 다른 지표들이 말합니다. 세션 전체에는 경고
 > `app_launch_time_unmeasured` 가 함께 실립니다.
 
+</details>
+
 ### `metrics.cpu`
+
+<details>
+<summary>펼치기</summary>
 
 **앱 단위 값과 기기 전역 값이 함께 들어 있고, 필드 이름이 그 범위를 말합니다.**
 `app` 아래는 대상 앱 프로세스의 것이고 `device_` 로 시작하는 것은 기기 전체의 것입니다.
@@ -1114,7 +1282,12 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   집계값 `device_total_busy_pct` 와 이 배열의 평균은 정확히 같지 않습니다 — 집계는 전체
   첫·마지막 표본의 차이 하나로 내고 배열은 초 경계마다 끊습니다 (실측 36.44 vs 35.9).
 
+</details>
+
 ### `metrics.memory`
+
+<details>
+<summary>펼치기</summary>
 
 대상 앱 프로세스 **하나**의 RSS 를 세션 동안 1초 주기로 관측한 통계입니다.
 기기 전체 메모리(`system`)는 그 옆에 두고 읽는 맥락입니다 — "앱이 큰 것" 과 "기기가 이미
@@ -1227,7 +1400,12 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 (`5a6e26`, `da49c4`)이 둘 다 이 사유를 달았습니다. **값이 잘못됐다는 뜻이 아닙니다.**
 자세한 것은 아래 "트레이스가 앱을 다른 이름으로 아는 경우" 를 보세요.
 
+</details>
+
 ### `metrics.log`
+
+<details>
+<summary>펼치기</summary>
 
 **개수는 앱 단위와 기기 전역이 나뉘고, 크래시·ANR 목록은 일부러 기기 전역입니다.**
 
@@ -1259,7 +1437,12 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   `no_log_entries` 로 값을 내지 않습니다) 로그 경로가 살아 있었다는 것이 확인된 상태입니다.
   `null` 은 앱 프로세스를 **특정하지 못했다**는 뜻입니다.
 
+</details>
+
 ### `metrics.thermal`
+
+<details>
+<summary>펼치기</summary>
 
 세션 **시작 직전**과 **종료 직후**에 찍은 `dumpsys thermalservice` 두 스냅샷의 차이입니다.
 **추가 adb 호출이 없습니다** — 이 원문은 도구가 처음부터 매 세션 찍어 왔고, M3 은 이미
@@ -1309,7 +1492,12 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 - 에뮬레이터에서는 값이 **합성**입니다. Android 에뮬레이터의 thermal HAL 은 예제 구현이라
   상수를 돌려줍니다 (존 1개, `test temperature sensor`, 30.8°C 고정).
 
+</details>
+
 ### `metrics.network`
+
+<details>
+<summary>펼치기</summary>
 
 세션 전/후 `dumpsys netstats` 의 `mAppUidStatsMap` 표에서 대상 앱 uid 행의 차이입니다.
 **Android 14(sdk 34) 이상에서만 나옵니다** — 그 아래에서는 같은 내용이 다른 명령에 있고
@@ -1376,7 +1564,12 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 - 누적 원값은 싣지 않습니다. 감사가 필요하면 `raw/netstats_{before,after}.txt` 원문이
   `artifacts.raw` 에 등재되어 있습니다.
 
+</details>
+
 ### `diagnose`
+
+<details>
+<summary>펼치기</summary>
 
 **진단 세션(`start --diagnose`)에만 있는 블록입니다.** 평소 세션에는 키가 없고, 그 "없음" 이 곧
 "진단 세션이 아님" 입니다. `session.options.diagnose` 도 진단 세션에만 `true` 로 실립니다 —
@@ -1560,7 +1753,12 @@ ftrace 기록을 다 믿을 수 없는 경우는 코드 둘로 갈립니다 — 
 세션이라고 다른 파일을 만들지 않습니다. `perftracker extract <run>` 이 기기 없이 같은 블록을 다시
 냅니다 — 같은 원본이면 바이트까지 같습니다. 시간축 그림은 이 블록에 없습니다. 원본을 Perfetto UI 로 여세요.
 
+</details>
+
 ### `measurement_overhead`
+
+<details>
+<summary>펼치기</summary>
 
 ```json
 {
@@ -1614,7 +1812,12 @@ ftrace 기록을 다 믿을 수 없는 경우는 코드 둘로 갈립니다 — 
   > slice 를 남기는 앱 프로세스 자신의 몫이고, 이 세 필드는 트레이싱 프로세스만 셉니다. 두 종류를
   > 섞어 비교하려면 `session.options.diagnose` 로 먼저 가르세요.
 
+</details>
+
 ### `references`
+
+<details>
+<summary>펼치기</summary>
 
 ```json
 [
@@ -1637,12 +1840,13 @@ ftrace 기록을 다 믿을 수 없는 경우는 코드 둘로 갈립니다 — 
 ADPF 의 headroom 휴리스틱(0.85 / 0.95 / 1.0)은 출처가 있지만 **이 도구가 산출하지 않는 값**의
 기준선이라 실으면 소비자를 오도합니다.
 
+</details>
+
 ---
 
 ## 개발
 
-**여기서부터는 저장소에서 직접 작업하는 사람용입니다.** npm 으로 받아 쓰는 데는
-필요 없습니다 — 소스는 [https://github.com/KimHance/PerfTracker](https://github.com/KimHance/PerfTracker) 에 있습니다.
+저장소에서 직접 고치는 사람용입니다. npm 으로 받아 쓰는 데는 필요 없습니다.
 
 ```bash
 git clone https://github.com/KimHance/PerfTracker.git && cd PerfTracker
@@ -1668,6 +1872,9 @@ npm run test:device   # 온-디바이스 스펙 (기기가 꽂혀 있어야 함)
 `metrics[collector.id]` 를 채우는 것은 그 배열을 순회해서 일어납니다.
 
 ### 온-디바이스 테스트를 다른 기기에서 돌리기
+
+<details>
+<summary>펼치기</summary>
 
 **이것을 먼저 읽지 않으면 새 기기에서 `npm run test:device` 가 실패합니다.**
 
@@ -1726,6 +1933,8 @@ PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지명> npm run tes
 - 온-디바이스 스펙은 `npm test` 에서 제외되어 있습니다 (`vitest.config.ts`).
   기기 없이도 `npm test` 는 그대로 통과해야 합니다.
 
+</details>
+
 ## 검증 환경
 
 | 항목 | M0+M1 | M2 | M3 | 진단 세션 | 컴파일 상태 |
@@ -1733,11 +1942,12 @@ PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지명> npm run tes
 | 실기기 (SM-S901N, Android 16 / sdk 36) | ✅ | ✅ | ✅ | ✅ | ✅ |
 | 에뮬레이터 (sdk_gphone64_arm64, API 35, 4코어) | — | ✅ | ✅ | — | — |
 
-버전마다 무엇이 바뀌었고 실기기 · 에뮬레이터에서 무엇을 어떻게 확인했는지는 [`CHANGELOG.md`](https://github.com/KimHance/PerfTracker/blob/main/CHANGELOG.md) 에 있습니다.
-
-아래 두 절은 기기에 따라 실제로 겪을 수 있는 일입니다.
+버전마다 실기기 · 에뮬레이터에서 무엇을 확인했는지는 [CHANGELOG](https://github.com/KimHance/PerfTracker/blob/main/CHANGELOG.md) 에 있습니다. 아래 두 절은 기기에 따라 겪을 수 있는 일입니다.
 
 ### `--launch` 인데 시작 시간이 안 나오는 경우
+
+<details>
+<summary>펼치기</summary>
 
 `metrics.startup` 이 `partial` + `launch_wait_timed_out` 으로 나오고 값이 없을 수 있습니다.
 **이 에뮬레이터에서는 11회 중 4회가 그랬습니다 (약 3분의 1).**
@@ -1764,7 +1974,12 @@ Complete
 > 그 둘입니다 — 온-디바이스 스펙은 두 갈래를 다 허용하므로 통과 자체는 근거가 안 됩니다).
 > 즉 이 사유는 앱·기기의 콜드 스타트 속도에 달린 것이지 도구의 결함이 아닙니다.
 
+</details>
+
 ### 트레이스가 앱을 다른 이름으로 아는 경우 (`zygote64` / `<pre-initialized>`)
+
+<details>
+<summary>펼치기</summary>
 
 `--launch` 로 앱을 트레이스 도중에 콜드 스타트시키면, 새로 fork 된 프로세스의 이름이
 트레이스에 **`zygote64` 로 고정되는 경우가 있습니다.** `linux.process_stats` 는 프로세스를
@@ -1796,9 +2011,16 @@ perftracker 는 `am start -W` 직후(측정 창이 열리기 **전**) `pidof` �
 것이 됩니다. 그래서 대표 하나만 `app` 에 싣고 나머지는 `app.other_processes` 에 각자 pid 를
 달고 남깁니다.
 
+</details>
+
 ---
 
 ## 시계열 (`timeline`)
+
+`memory` · `cpu` · `log` 세 지표에 1초 단위 추이가 함께 실립니다.
+
+<details>
+<summary>펼치기</summary>
 
 `memory` · `cpu` · `log` 세 지표에 **1초 단위 추이**가 함께 실립니다.
 집계값(평균·최대·백분위)만으로는 구분되지 않는 것을 보려는 값입니다:
@@ -1826,3 +2048,6 @@ perftracker 는 `am start -W` 직후(측정 창이 열리기 **전**) `pidof` �
   시계열은 0 초 구간의 **마지막** 표본을 기준점으로 쓰기 때문입니다. 초당 표본이 하나뿐이면
   둘은 같아집니다 (실측: 콜드 스타트 세션에서 34,000ms vs 34,650ms).
 - **`log` 시계열은 앱 프로세스의 것**입니다. 기기 전역이 아닙니다.
+
+</details>
+
