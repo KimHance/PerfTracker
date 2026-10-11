@@ -14,10 +14,10 @@ adb 로 기기에 붙어 Perfetto 트레이스와 측정 전후 기기 상태를
 
 ## 빠른 시작
 
-Node 20.19 이상과 adb 가 필요합니다. 폰은 USB 디버깅만 켜 두면 됩니다.
+Node 20.19 이상과 adb 가 필요합니다.
 
 ```bash
-npx perftracker doctor                                  # 이 기기에서 뭘 잴 수 있는지
+npx perftracker doctor                                  # 측정 가능한 지표 확인
 npx perftracker start --app YouTube --name "홈 스크롤" --launch
 #   … 폰에서 앱을 조작 …
 npx perftracker status                                  # 경과 확인 (기기에 안 닿음)
@@ -26,9 +26,9 @@ npx perftracker stop --report                           # result.json + 보고�
 
 브라우저로 하고 싶으면 `npx perftracker open`. 측정 중에 있었던 일은 `npx perftracker mark "광고 재생"` 으로 적어 둡니다.
 
-## 무엇을 재는가 — 지표 8개
+## 지표 8개
 
-| 지표 | 귀속 범위 | 무엇인가 | 어디서 나오는가 |
+| 지표 | 귀속 범위 | 내용 | 출처 |
 | --- | --- | --- | --- |
 | [`startup`](docs/result-json.md#metricsstartup) | 앱 | 콜드 스타트 시간 (`--launch` 세션만) | `am start -W` — **유일하게 트레이스를 안 읽는 지표** |
 | [`cpu`](docs/result-json.md#metricscpu) | **앱 + 기기 전역** | 앱 프로세스의 CPU 시간, 기기 전체 사용률·코어별·주파수 | perfetto `linux.sys_stats` + `linux.process_stats` |

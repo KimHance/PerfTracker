@@ -1081,7 +1081,7 @@ GUI 도 같이 갑니다. 다이얼로그가 `기록 2건 + 목록에 없는 미
 
 registry 순서는 `hwuiCollector` 바로 뒤에 `frameCollector` 다 — 지표 7 → **8개**.
 `packages/core/test/schema/readme.test.ts` 의 `'접은 지표는 표에 없다'` 단언은 지워졌다
-(frame 이 다시 등록됐으므로 그 단언은 이제 거짓이다). README 「무엇을 재는가」 표와
+(frame 이 다시 등록됐으므로 그 단언은 이제 거짓이다). README 「지표 8개」 표와
 `metrics.frame` 절, §7 의 버전 표를 함께 갱신했다(sdk 31 하한이 다시 생겼다).
 
 ### ✅ 타임라인 서브탭과 시간별 프레임 차트 (GUI, 2026-08-31)

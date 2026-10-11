@@ -102,7 +102,7 @@ describe('README 의 지표 목록', () => {
   const ids = COLLECTORS.map((c) => c.id)
 
   it('개수를 코드와 대조한다', () => {
-    const m = /## 무엇을 재는가 — 지표 (\d+)개/.exec(README)
+    const m = /## 지표 (\d+)개/.exec(README)
     expect(m, 'README 에서 지표 개수 문장을 찾지 못했다 — 문구를 바꿨다면 이 테스트도 함께 고칠 것').not.toBeNull()
     expect(Number(m![1])).toBe(ids.length)
   })

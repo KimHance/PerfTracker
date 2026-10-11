@@ -389,7 +389,7 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 
 **sdk 31(Android 12) 이상이 필요합니다.** 그 미만에서는 `status` 가 `unsupported`,
 `reason_code` 가 `sdk_too_low` 입니다 — `hwui` 는 그 기기에서도 그대로 나옵니다
-(위 [「어느 안드로이드에서 되는가」](usage.md#어느-안드로이드에서-되는가) 참고).
+([「지원 버전」](usage.md#지원-버전) 참고).
 
 ```json
 {
