@@ -1,7 +1,8 @@
 import type { AdbClient } from '../adb/client.js'
 import { shellQuote } from '../adb/shell.js'
+import { type DexoptRead, dexoptUnavailable, parseDexoptState } from './dexopt.js'
 
-export interface AppDetail {
+export interface PackageDetail {
   versionName: string | null
   installSource: string | null
   /** `flags=[ ... ]` 에서 읽는다. 그 줄을 못 찾으면 `false` 가 아니라 `null` 이다. */
@@ -12,7 +13,13 @@ export interface AppDetail {
   primaryCpuAbi: string | null
 }
 
-const EMPTY: AppDetail = {
+/** `getAppDetail` 의 몫 — 빌드 속성 일곱에 시작 컴파일 상태(BP-1)를 더한다. 같은 출력 하나에서 나온다. */
+export interface AppDetail extends PackageDetail {
+  /** `Dexopt state` 절. 못 읽으면 `lines` 가 null 이고 `reason` 이 이유다 (BP-2). */
+  compileState: DexoptRead
+}
+
+const EMPTY: PackageDetail = {
   versionName: null,
   installSource: null,
   debuggable: null,
@@ -63,7 +70,7 @@ export function parseApplicationFlags(text: string): Set<string> | null {
   return new Set(m[1]!.trim().split(/\s+/).filter(Boolean))
 }
 
-export function parsePackageDetail(text: string): AppDetail {
+export function parsePackageDetail(text: string): PackageDetail {
   const flags = parseApplicationFlags(text)
 
   return {
@@ -82,11 +89,13 @@ export function parsePackageDetail(text: string): AppDetail {
 /**
  * 선택된 앱 하나에 대해서만 호출한다 (목록 전체에 돌리면 느리다).
  *
- * **일곱 필드가 이 한 번의 출력에서 나온다.** 필드를 늘릴 때 명령을 늘리지 않는 것이 요점이다 —
+ * **일곱 필드와 시작 컴파일 상태가 이 한 번의 출력에서 나온다.** 필드를 늘릴 때 명령을 늘리지 않는 것이 요점이다 —
  * `start` 전에 기기로 나가는 왕복 하나하나가 세션 시작 지연이고, 그 지연은 콜드 스타트를
  * 재는 세션에서 앱이 그만큼 늦게 뜬다는 뜻이다.
  */
 export async function getAppDetail(adb: AdbClient, pkg: string): Promise<AppDetail> {
   const r = await adb.raw(['shell', `dumpsys package ${shellQuote(pkg)}`])
-  return r.code === 0 ? parsePackageDetail(r.stdout) : EMPTY
+  return r.code === 0
+    ? { ...parsePackageDetail(r.stdout), compileState: parseDexoptState(r.stdout, pkg) }
+    : { ...EMPTY, compileState: dexoptUnavailable('start', 'command_failed', r.code) }
 }

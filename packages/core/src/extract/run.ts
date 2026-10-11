@@ -2,6 +2,7 @@ import { TOOL_VERSION } from '../version.js'
 import { access, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ProcessRunner } from '../adb/process.js'
+import { compileStateFields, dexoptUnavailable } from '../app/dexopt.js'
 import { findPackageUid } from '../app/list.js'
 import { COLLECTORS } from '../collectors/registry.js'
 import { parseSnapshotRawPath, type SnapshotPair, snapshotText } from '../collectors/snapshots.js'
@@ -113,6 +114,20 @@ function resolveAppUid(manifest: CaptureManifest, capture: CaptureFacts): number
   const packages = capture.snapshots['packages']
   const text = packages?.before ?? packages?.after
   return text != null ? findPackageUid(text, manifest.target_app.package) : null
+}
+
+/**
+ * 끝 컴파일 상태 (BP-2). `stop` 이 capture.json 에 쓴 것이 정본이고 extract 는 옮기기만 한다.
+ *
+ * 시작 상태는 있는데 끝 상태 키가 없으면 — 아직 `stop` 하지 않았거나, 끝 상태를 읽기 전의 도구가 멈춘
+ * run 이다 — 끝 칸을 **null + `dexopt_state_unavailable`** 로 채운다. 키를 빼 두면 "이 기록이 없던
+ * 시절의 파일" 과 구분되지 않고, `[]` 를 쓰면 "dex 가 없었다" 는 없던 사실이 된다.
+ * 시작 키조차 없는 옛 run 은 손대지 않는다 (키 없음 = 이 기록 이전).
+ */
+function compileStateEnd(manifest: CaptureManifest, state: SessionState): Partial<Result['target_app']> {
+  const app = manifest.target_app
+  if (!('compile_state_start' in app) || 'compile_state_end' in app) return {}
+  return compileStateFields('end', dexoptUnavailable('end', state === 'running' ? 'session_running' : 'not_recorded'))
 }
 
 /**
@@ -360,7 +375,7 @@ export async function extractRun(
       trace_span_ms: traceWindow.spanMs,
       trace_start_offset_ms: traceWindow.startOffsetMs,
       // 다시 만든다 — session.json 의 객체를 그대로 넘기면 거기 무엇이 붙어 있든 따라 나간다.
-      // 진단 여부는 진단 세션에만 싣는다 (평소 세션의 키는 1.1.0 과 같다 — DM-6).
+      // 진단 여부는 진단 세션에만 싣는다 (평소 세션에 진단 키 0 — DM-6).
       options:
         session.options.diagnose === true
           ? { launch: session.options.launch, diagnose: true }
@@ -385,7 +400,12 @@ export async function extractRun(
     },
     // uid 는 캡처가 못 적었어도 회수해 둔 원문에 답이 있으면 그것을 싣는다 —
     // "나중에 더 나은 근거가 생기면 값을 갱신한다" 는 이 코드베이스의 관행이다.
-    target_app: { ...manifest.target_app, uid: appUid, pid: manifest.target_app.pid ?? capture.appPid },
+    target_app: {
+      ...manifest.target_app,
+      uid: appUid,
+      pid: manifest.target_app.pid ?? capture.appPid,
+      ...compileStateEnd(manifest, sessionState),
+    },
     metrics: metrics as Result['metrics'],
     ...(diagnose !== null ? { diagnose } : {}),
     measurement_overhead: {

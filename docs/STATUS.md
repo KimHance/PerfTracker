@@ -1121,8 +1121,8 @@ registry 순서는 `hwuiCollector` 바로 뒤에 `frameCollector` 다 — 지표
 
 **진단 세션(`start --diagnose`)의 `result.json` 에만** `session.options.diagnose: true` 와 최상위
 `diagnose` 블록이 실립니다 — 켠 atrace 범위 · 앱 slice 열림 · slice 수 · ftrace 손실 · 원본 크기 ·
-접은 이름별 표(갈래 셋 × 횟수 · 합 · 최대). 평소 세션의 `result.json` 은 키 하나 다르지 않습니다.
-자리와 읽는 법은 README `diagnose` 절이 정본입니다.
+접은 이름별 표(갈래 셋 × 횟수 · 합 · 최대). 평소 세션의 `result.json` 에는 진단 키가 하나도 없습니다
+(컴파일 상태 키는 모든 세션에 실립니다 — 아래 절). 자리와 읽는 법은 README `diagnose` 절이 정본입니다.
 
 - **`schema_version` 1.2.0.** 출시된 1.1.0 계약을 넓히므로 minor 를 올렸습니다 (0.2.0 의 frame 확장은
   1.1.0 그대로 나갔습니다 — 위 「`within_16_67ms_ratio` 제거」 절). reason_code 는 셋이 늘어 39개입니다 —
@@ -1134,6 +1134,24 @@ registry 순서는 `hwuiCollector` 바로 뒤에 `frameCollector` 다 — 지표
   대상 앱 slice 62,803 · 90,645 · 접기 전 이름 4,921 · 7,036 → 접은 뒤 1,082 · 920행.
 - **확인하지 못한 것:** 10분 진단 세션 원본(이름 10⁴ 대)에서 쿼리 시간 · 출력 크기, sdk ≤30 기기의
   열림 `null` 경로(합성 시험만). 실기기 확인은 기능 문서 DM-16 이 맡습니다.
+
+### ✅ 시작 · 끝 컴파일 상태 — `target_app.compile_state_*` (2026-10-11, 기능 문서 baseline-profile BP-1 ~ BP-3)
+
+**모든 세션**의 `target_app` 에 `dumpsys package` 의 `Dexopt state` 원문이 dex 줄마다 시작 · 끝 둘로 실립니다
+(`status` = compiler filter · `reason` · `location` · `[primary-abi]`). 같은 기기 · 같은 YouTube 를 상태만
+바꿔 띄우면 TotalTime 중앙값이 471 · 618 · 665 ms 로 갈렸는데 `result.json` 에 그 상태가 없었습니다.
+자리와 읽는 법은 README 「`target_app` 의 컴파일 상태」 가 정본입니다.
+
+- **기기 명령:** 시작 상태는 대상 앱 해석이 이미 돌리던 `dumpsys package` 출력에서 읽어 **왕복 0**, 끝 상태는
+  `stop` 의 명령 목록 맨 끝(트레이서 정지 · 원본 회수 · 종료 스냅샷 · 기기 시계 뒤)에 **한 줄**. 측정 창 안 0 그대로.
+- **schema 1.2.0 그대로** (미출시) — 그러나 **평소 세션 산출물도 키가 바뀌었습니다.** `target_app` 이 닫힌
+  객체라 캐시한 1.1.0 스키마는 평소 산출물도 거부합니다 (기능 문서 결정 7 · 진단 모드 결정 18 과 다른 길).
+  reason_code 는 넷이 늘어 43개입니다 — `dexopt_state_section_missing` · `_package_missing` · `_unparsable`
+  (줄 꼴을 모르면 추측하지 않고 null) · `_unavailable`(기기 끊김 · stop 전 extract). 넷 다 메트릭에는 안 실립니다.
+- 세션 중 base.apk 줄의 `status` · `reason` 이 바뀌면 경고 `compile_state_changed` 하나. README 에 경고 코드
+  목록(「`warnings`」)이 처음 생겼고, 코드의 `{ code, message }` 자리와 시험이 대조합니다.
+- 파서는 실기기 원문 셋(SM-S901N · sdk 36 — `dumpsys-package-dexopt-{youtube,restored,reset}.txt`)으로 시험합니다.
+  **확인하지 못한 것:** sdk 30–35 실기기의 `Dexopt state` 꼴 (기능 문서 열린 질문 1) — 꼴이 다르면 null + 코드로 납니다.
 
 ### 그 밖의 후보 (우선순위 낮음)
 

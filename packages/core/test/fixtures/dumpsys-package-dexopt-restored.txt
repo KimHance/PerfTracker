@@ -1,0 +1,20 @@
+Dexopt state:
+  [com.google.android.youtube]
+    path: /data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/base.apk
+      arm64: [status=speed-profile] [reason=cmdline] [primary-abi]
+        [location is /data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/oat/arm64/base.odex]
+    known secondary dex files:
+      /data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/pcam.jar
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/oat/arm64/pcam.vdex]
+        class loader context: PCL[];PCL[/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/pcam.jar
+        arm64: [status=run-from-apk] [reason=unknown] [primary-abi]
+          [location is error]
+        class loader context: =UnsupportedClassLoaderContext=
+      /data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/pcam.jar
+        arm64: [status=run-from-apk] [reason=unknown] [primary-abi]
+          [location is error]
+        class loader context: =UnsupportedClassLoaderContext=
+
+SPEG state:

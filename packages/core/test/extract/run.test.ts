@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { SCHEMA_HELP, type NetworkData, type ThermalData } from '../../src/schema/result.js'
+import { SCHEMA_HELP, type NetworkData, type TargetApp, type ThermalData } from '../../src/schema/result.js'
+import { compileStateFields, parseDexoptState } from '../../src/app/dexopt.js'
 import { CPU_TIMES_SQL } from '../../src/collectors/cpu/index.js'
 import { SessionStateError } from '../../src/errors.js'
 import { BUFFER_STATS_SQL, extractRun, readSnapshots } from '../../src/extract/run.js'
@@ -90,6 +91,8 @@ async function makeRun(
     diagnose?: boolean
     /** `capture.json` 의 `target_app.debuggable`. 주지 않으면 그 키가 없는 옛 매니페스트다. */
     debuggable?: boolean | null
+    /** `capture.json` 의 `target_app` 에 더할 칸 (컴파일 상태 등). 주지 않으면 그 키들이 없는 옛 매니페스트다. */
+    targetApp?: Partial<TargetApp>
   } = {},
 ): Promise<string> {
   const runDir = mkdtempSync(join(tmpdir(), 'pt-extract-'))
@@ -176,6 +179,7 @@ async function makeRun(
       launcher_activity: 'com.naver.webtoon.splash.SplashActivity',
       pid: null,
       ...(overrides.debuggable !== undefined ? { debuggable: overrides.debuggable } : {}),
+      ...overrides.targetApp,
     },
     env: {
       sdkInt: overrides.sdkInt ?? 36,
@@ -877,7 +881,7 @@ describe('진단 세션의 result.json', () => {
     expect(written['diagnose']).toEqual(result.diagnose)
   })
 
-  it('DM-6 평소 result.json 키 그대로 — 최상위 · session.options 키가 1.1.0 과 같고 "diagnose" 키가 0', async () => {
+  it('DM-6 평소 result.json 진단 키 0 — 최상위 · session.options 에 진단 키가 없다 ("diagnose" 0)', async () => {
     const runDir = await makeRun()
     const trace = join(runDir, 'trace.perfetto-trace')
 
@@ -916,5 +920,56 @@ describe('진단 세션의 result.json', () => {
     // 진단 세션이라고 원본 말고 다른 파일을 만들지 않는다 — 늘어난 것은 result.json 하나다.
     expect(afterFirst).toEqual([...before, 'result.json'].sort())
     expect(readdirSync(runDir).sort()).toEqual(afterFirst)
+  })
+})
+
+/**
+ * 컴파일 상태 (기능 문서 baseline-profile BP-1 · BP-2). 정본은 capture.json 이고 extract 는 옮기기만 한다 —
+ * 기기에 묻지 않는다. 끝 상태가 아직 없으면 그 칸을 null + 코드로 채운다.
+ */
+describe('extractRun — target_app 컴파일 상태', () => {
+  const YT_FIXTURE = (name: string): string =>
+    fixture(name).replaceAll('[com.google.android.youtube]', `[${PKG}]`)
+  const start = compileStateFields('start', parseDexoptState(YT_FIXTURE('dumpsys-package-dexopt-youtube.txt'), PKG))
+  const end = compileStateFields('end', parseDexoptState(YT_FIXTURE('dumpsys-package-dexopt-restored.txt'), PKG))
+
+  it('BP-1 extract 가 시작 · 끝 상태를 capture.json 에서 그대로 옮긴다', async () => {
+    const runDir = await makeRun({ trace: null, targetApp: { ...start, ...end } })
+    const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: new FakeProcessRunner() })
+
+    expect(result.target_app).toMatchObject({ ...start, ...end })
+    expect(result.target_app.compile_state_start).toHaveLength(4)
+    expect(result.target_app.compile_state_end?.[0]?.reason).toBe('cmdline')
+  })
+
+  it('BP-2 extract 는 끝 상태 null — stop 전 세션은 null + dexopt_state_unavailable (session_running)', async () => {
+    const runDir = await makeRun({ trace: null, state: 'running', endedAt: null, targetApp: start })
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+      home: mkdtempSync(join(tmpdir(), 'pt-home-')),
+    })
+
+    expect(result.target_app.compile_state_start).toHaveLength(4)
+    expect(result.target_app.compile_state_end).toBeNull()
+    expect(result.target_app.compile_state_end_reason_code).toBe('dexopt_state_unavailable')
+    expect(result.target_app.compile_state_end_reason).toContain('stop')
+  })
+
+  it('BP-2 extract 는 끝 상태 null — 끝 상태를 기록하지 않은 도구가 멈춘 run 은 not_recorded', async () => {
+    const runDir = await makeRun({ trace: null, targetApp: start })
+    const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: new FakeProcessRunner() })
+
+    expect(result.target_app.compile_state_end).toBeNull()
+    expect(result.target_app.compile_state_end_reason_code).toBe('dexopt_state_unavailable')
+    expect(result.target_app.compile_state_end_reason).toContain('기록 없음')
+  })
+
+  it('BP-1 옛 run (시작 키 없음) 은 컴파일 상태 키를 만들지 않는다 — 키 없음 = 이 기록 이전', async () => {
+    const runDir = await makeRun({ trace: null })
+    await extractRun(runDir, { traceProcessorPath: process.execPath, runner: new FakeProcessRunner() })
+
+    const text = readFileSync(join(runDir, 'result.json'), 'utf8')
+    expect(text).not.toContain('compile_state')
   })
 })

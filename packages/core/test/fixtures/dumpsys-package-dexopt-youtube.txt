@@ -1,0 +1,67 @@
+Packages:
+  Package [com.google.android.youtube] (ecadb51):
+    appId=10257
+    pkg=Package{726abc7 com.google.android.youtube}
+    codePath=/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==
+    resourcePath=/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==
+    legacyNativeLibraryDir=/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/lib
+    extractNativeLibs=false
+    primaryCpuAbi=arm64-v8a
+    secondaryCpuAbi=null
+    cpuAbiOverride=null
+    versionCode=1561301413 minSdk=32 targetSdk=37
+    minExtensionVersions=[]
+    versionName=21.40.161
+    hiddenApiEnforcementPolicy=2
+    usesNonSdkApi=false
+    splits=[base, config.arm64_v8a, config.ko, config.xxhdpi]
+    apkSigningVersion=3
+    flags=[ SYSTEM HAS_CODE ALLOW_CLEAR_USER_DATA UPDATED_SYSTEM_APP ALLOW_BACKUP KILL_AFTER_RESTORE RESTORE_ANY_VERSION LARGE_HEAP ]
+    privateFlags=[ PRIVATE_FLAG_ACTIVITIES_RESIZE_MODE_RESIZEABLE_VIA_SDK_VERSION ALLOW_AUDIO_PLAYBACK_CAPTURE HAS_DOMAIN_URLS PARTIALLY_DIRECT_BOOT_AWARE PRODUCT PRIVATE_FLAG_ALLOW_NATIVE_HEAP_POINTER_TAGGING ]
+    forceQueryable=false
+    pageSizeCompat=0
+Dexopt state:
+  [com.google.android.youtube]
+    path: /data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/base.apk
+      arm64: [status=speed-profile] [reason=profile-utilization] [primary-abi]
+        [location is /data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/oat/arm64/base.odex]
+    known secondary dex files:
+      /data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/pcam.jar
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/oat/arm64/pcam.vdex]
+        class loader context: PCL[];PCL[/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/pcam.jar
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/oat/arm64/pcam.vdex]
+        class loader context: =UnsupportedClassLoaderContext=
+      /data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/pcam.jar
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/oat/arm64/pcam.vdex]
+        class loader context: =UnsupportedClassLoaderContext=
+
+SPEG state:
+
+Profile utilization state:
+  Current state:
+    Version: 2.1.1
+    Start reason: boot-after-ota
+    Start time: Fri Oct 09 03:10:28 GMT+09:00 2026 ts=1791483028921
+    Finish time: Fri Oct 09 03:42:51 GMT+09:00 2026 ts=1791484971691
+    Took time 1942sec
+Compiler stats:
+  [com.google.android.youtube]
+     base.apk - 17030
+
+HeimdAllFS state:
+  [com.google.android.youtube]
+    path: /data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/base.apk
+    Compressed? False
+    path: /data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/split_config.arm64_v8a.apk
+    Compressed? False
+    path: /data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/split_config.ko.apk
+    Compressed? False
+    path: /data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/split_config.xxhdpi.apk
+    Compressed? False
+  [ Summary ]
+    # of packages: 1 / # of packages in DATA: 1 (4)
+    Compressed apks info - sum of orig size: 35636 / sum of compr size : 35636

@@ -13,7 +13,7 @@
 | `src/extract/` | 트레이스 재파싱 → `result.json` 조립 · **진단 블록**(`diagnose.ts` — 진단 세션에만) |
 | `src/schema/` | `result.json` 의 zod 스키마 · `reason_code` · `references` |
 | `src/device/` | 기기 목록 · 정적 스펙 · 전/후 상태 스냅샷 · `probeDevice` |
-| `src/app/` | 앱 목록 · 라벨 해석(`resources.arsc` 직접 파싱) · 대상 특정 · 빌드 속성 |
+| `src/app/` | 앱 목록 · 라벨 해석(`resources.arsc` 직접 파싱) · 대상 특정 · 빌드 속성 · **컴파일 상태**(`dexopt.ts` — `Dexopt state` 절 파서 · 끝 상태 읽기 · 바뀜 경고) |
 | `src/perfetto/` | TraceConfig 조립 · `--detach` 세션 · `trace_processor` |
 | `src/device/clock.ts` | 기기 시계 − 호스트 시계. 마킹과 시계열의 0초를 잇는다 |
 | `src/host/` | **기기가 아닌 이 컴퓨터.** 이 패키지에서 `AdbClient` 를 안 받는 유일한 수집 지점 |
@@ -43,7 +43,8 @@
   start 고지 · 화면 · extract 가 전부 그것을 부른다. sdk 경계를 다른 파일에 다시 쓰지 않는다.
 - **출시된 계약을 넓히면 `schema_version` 의 minor 를 올린다.** 1.1.0 은 npm 0.1.0 ~ 0.2.1 로 나갔고
   진단 블록이 1.2.0 이다. 규칙표는 `src/schema/result.ts` 상단에 있다. **진단 세션의 키(`diagnose` ·
-  `session.options.diagnose`)는 진단 세션에만 싣는다** — 평소 세션 `result.json` 의 키는 1.1.0 과 같다.
+  `session.options.diagnose`)는 진단 세션에만 싣는다.** 컴파일 상태(`target_app.compile_state_*`)는 모든 세션에
+  싣는다 — 그래서 평소 세션 산출물도 1.1.0 스키마가 거부한다 (`target_app` 이 닫힌 객체 · baseline-profile 결정 7).
 
 ## 자주 틀리는 자리
 
@@ -55,7 +56,7 @@
   이 아니라 런처 질의(`app/list.ts` 의 `LAUNCHER_QUERY`)다. 실기기 실측으로 두 집합은 84 대
   82인데 **겹치는 것이 58개**뿐이었다 — 유튜브·크롬·카메라는 선탑재라 `-3` 에서 빠지고,
   `*.test`(androidTest APK)는 `-3` 에 있는데 열리지 않는다. 재고 싶은 앱이 목록에 없었다.
-- **필드를 늘릴 때 명령을 늘리지 않는다.** `app/detail.ts` 의 일곱 필드는 전부 한 번의
+- **필드를 늘릴 때 명령을 늘리지 않는다.** `app/detail.ts` 의 일곱 필드와 시작 컴파일 상태는 전부 한 번의
   `dumpsys package` 출력에서 나오고, 화면 방향·크기 구간은 이미 읽은 해상도에서 **파생**한다.
   `start` 전 왕복 하나가 곧 콜드 스타트가 그만큼 늦게 시작된다는 뜻이다.
 - **화면이 하나라는 보장이 없다.** `dumpsys display` 는 폴더블·외부 모니터·DeX·미러링이면

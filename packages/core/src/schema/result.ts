@@ -3,9 +3,11 @@ import { METRIC_REASON_CODES, type MetricReasonCode } from './reasons.js'
 
 // 1.2.0 — 진단 세션(기능 문서 diagnostic-mode)의 자리. 최상위 `diagnose` 블록과
 // `session.options.diagnose` 를 optional 로, reason_code 셋(`app_slices_open_unknown` · `ftrace_not_recorded` ·
-// `ftrace_setup_errors`)을 더했다.
-// 전부 아래 표의 minor 항목이다. **둘 다 진단 세션에만 실린다** — 평소 세션의 result.json 은
-// 1.1.0 과 키가 같고, 진단 키가 없는 1.1.0 문서는 이 스키마를 그대로 통과한다.
+// `ftrace_setup_errors`)을 더했다. **둘 다 진단 세션에만 실린다.**
+// 같은 1.2.0 에 컴파일 상태(기능 문서 baseline-profile BP-1)를 더했다 — `target_app.compile_state_*`
+// optional 여섯 칸과 reason_code 넷(`dexopt_state_*`). 이쪽은 **모든 세션**에 실린다 (결정 7). `target_app` 이
+// 닫힌 객체라 캐시해 둔 1.1.0 스키마는 평소 세션 산출물도 거부한다.
+// 전부 아래 표의 minor 항목이고, 이 키들이 없는 1.1.0 문서는 이 스키마를 그대로 통과한다.
 //
 // 1.1.0 — M2 가 metrics 에 startup / cpu / memory / log 를, M3 가 thermal / network 를
 // optional 로 더했다. 1.0.0 문서(frame 하나만 있는)는 여전히 이 스키마를 통과한다.
@@ -1237,6 +1239,75 @@ export const DeviceStateSchema = z.object({
 })
 export type DeviceState = z.infer<typeof DeviceStateSchema>
 
+/**
+ * `dumpsys package <pkg>` 의 `Dexopt state` 절 한 줄 — dex 하나 × ABI 하나 (기능 문서 baseline-profile BP-1).
+ * 값은 전부 원문 문자열 그대로다 (결정 2) — enum 으로 좁히지 않는다.
+ */
+export const DexoptLineSchema = z.object({
+  path: z
+    .string()
+    .describe('dex 파일 경로 원문. 비보조 dex 는 `path:` 줄의 값(설치 폴더의 `base.apk` 등), 보조 dex 는 그 줄 자체.'),
+  secondary_dex: z
+    .boolean()
+    .describe('`known secondary dex files:` 아래의 줄이면 true — 앱이 실행 중에 스스로 불러온 dex 다.'),
+  abi: z.string().describe('그 줄 머리의 ABI 원문 (`arm64` 등). 한 dex 에 ABI 줄이 여럿일 수 있다.'),
+  status: z
+    .string()
+    .describe(
+      '`[status=…]` 원문 — **compiler filter** 다 (`speed-profile` · `verify` · `speed` · `run-from-apk` …). ' +
+        '진단 블록 컴파일 상태 slice 의 `status`(oat 파일 상태 · 그 slice 의 compiler filter 는 `filter`)와 ' +
+        '**같은 낱말 다른 뜻**이다 (결정 14). 이 도구는 값에 좋고 나쁨을 매기지 않는다.',
+    ),
+  reason: z
+    .string()
+    .describe(
+      '`[reason=…]` 원문 — 그 컴파일을 일으킨 까닭 (`install-dm` · `bg-dexopt` · `cmdline` · 문서에 없는 ' +
+        '`profile-utilization` · `vdex-dm` · `unknown` 이 실측됐다).',
+    ),
+  primary_abi: z.boolean().describe('그 줄에 `[primary-abi]` 표시가 있으면 true, 줄에 없으면 false.'),
+  location: z
+    .string()
+    .nullable()
+    .describe(
+      '`[location is …]` 의 `…` 원문 그대로 — odex · vdex 경로이거나 `error` 이거나 공백 든 문장' +
+        '(`primary.vdex mapped directly in memory from …/base.dm`)이다. 기기가 그 줄을 찍지 않았으면 null.',
+    ),
+})
+export type DexoptLine = z.infer<typeof DexoptLineSchema>
+
+/** 시작 · 끝 컴파일 상태의 설명. 두 칸이 같은 말을 하되 시점만 다르다. */
+function compileStateDescription(phase: 'start' | 'end'): string {
+  const when =
+    phase === 'start'
+      ? '세션 **시작** 상태 — `--compile` 없는 세션은 대상 앱을 해석한 `dumpsys package` 출력(측정 전)에서 읽는다. '
+      : '세션 **끝** 상태 — `stop` 이 측정 창을 닫고 트레이스를 회수한 뒤 `dumpsys package` 한 번으로 읽는다. '
+  return (
+    when +
+    '`Dexopt state` 절의 dex 줄 전부를 기기 순서대로 싣는다 (base.apk 줄 · 보조 dex 줄 — 줄 수를 줄이지 않는다). ' +
+    '**null 은 읽지 못했다는 뜻이고 `[]` 는 쓰지 않는다** — 이유는 짝 칸 `_reason_code` 가 말한다. ' +
+    '이 키가 아예 없는 문서는 이 기록이 생기기 전(baseline-profile 이전)에 산출된 것이다. ' +
+    '세션 중 base.apk 줄의 status · reason 이 달라지면 warnings 에 compile_state_changed 가 실린다. ' +
+    '이 도구는 상태를 비교하거나 판정하지 않는다.'
+  )
+}
+
+const compileStateReasonCode = (phase: 'start' | 'end') =>
+  z
+    .enum(METRIC_REASON_CODES)
+    .nullable()
+    .optional()
+    .describe(
+      `compile_state_${phase} 가 null 인 이유 (dexopt_state_* 코드). 값이 있으면 null. ` +
+        '이 키가 없는 문서는 이 기록이 생기기 전에 산출된 것이다.',
+    )
+
+const compileStateReason = (phase: 'start' | 'end') =>
+  z
+    .string()
+    .nullable()
+    .optional()
+    .describe(`compile_state_${phase}_reason_code 의 사람용 문장. 매칭에는 코드를 쓴다.`)
+
 export const TargetAppSchema = z.object({
   package: z.string(),
   label: z.string(),
@@ -1327,6 +1398,18 @@ export const TargetAppSchema = z.object({
         '(device.static.abis)의 부분집합이며, 64비트 기기에서 32비트로 도는 앱이 여기서 갈린다. ' +
         'APK 에 네이티브 코드가 없으면 기기가 `null` 을 찍고 이 값도 null 이다.',
     ),
+
+  /**
+   * 컴파일 상태 (기능 문서 baseline-profile BP-1 · BP-2) — **모든 세션**에 싣는다 (결정 7).
+   * 시작 상태는 위 다섯과 같은 `dumpsys package` 출력에서 오고(왕복 0), 끝 상태는 `stop` 이 한 줄 더 읽는다.
+   * 칸이 null 이면 짝 `_reason_code` · `_reason` 이 이유를 말한다 (진단 블록 `app_slices_open` 과 같은 꼴).
+   */
+  compile_state_start: z.array(DexoptLineSchema).nullable().optional().describe(compileStateDescription('start')),
+  compile_state_start_reason_code: compileStateReasonCode('start'),
+  compile_state_start_reason: compileStateReason('start'),
+  compile_state_end: z.array(DexoptLineSchema).nullable().optional().describe(compileStateDescription('end')),
+  compile_state_end_reason_code: compileStateReasonCode('end'),
+  compile_state_end_reason: compileStateReason('end'),
 })
 export type TargetApp = z.infer<typeof TargetAppSchema>
 
@@ -1547,8 +1630,33 @@ export const ReferenceSchema = z.object({
 })
 export type Reference = z.infer<typeof ReferenceSchema>
 
+/**
+ * 이 버전이 내는 경고 코드 전부. README 「`warnings`」 표와 코드의 `{ code, message }` 자리를 시험이
+ * 이 목록과 양방향으로 대조한다 (`test/schema/readme-compile-state.test.ts`).
+ *
+ * **스키마는 enum 으로 좁히지 않는다** — 옛 run 의 capture.json 에는 지금 없는 코드
+ * (`app_launch_unverified`)가 남아 있고, extract 는 그것을 그대로 옮긴다. 좁히면 옛 run 이 거부된다.
+ */
+export const WARNING_CODES = [
+  'charging_during_session',
+  'power_save_mode_on',
+  'launcher_activity_ambiguous',
+  'app_launch_time_unmeasured',
+  'trace_session_lost',
+  'session_still_running',
+  'compile_state_changed',
+] as const
+
 /** 평가가 아니라 관측된 사건만 담는다. */
-export const WarningSchema = z.object({ code: z.string(), message: z.string() })
+export const WarningSchema = z.object({
+  code: z
+    .string()
+    .describe(
+      `경고의 기계 키. 이 버전이 내는 값은 ${WARNING_CODES.join(', ')} 이다. ` +
+        '옛 run 을 extract 하면 그때의 코드가 그대로 옮겨질 수 있어 닫힌 enum 이 아니다.',
+    ),
+  message: z.string(),
+})
 export type Warning = z.infer<typeof WarningSchema>
 
 export const ArtifactsSchema = z.object({

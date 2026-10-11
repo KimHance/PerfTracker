@@ -267,6 +267,32 @@ export const METRIC_REASON_CODES = [
    * detail: setup_errors, ftrace_cpu_stats
    */
   'ftrace_setup_errors',
+  /**
+   * **`target_app` 컴파일 상태 전용** — 메트릭에는 실리지 않고 `target_app.compile_state_{start,end}_reason_code`
+   * 에만 온다 (기능 문서 baseline-profile BP-2).
+   *
+   * `dumpsys package <pkg>` 출력에 `Dexopt state:` 절이 없다. 그 안드로이드 버전 · 벤더 출력에 절이
+   * 아예 없을 수 있다 (실측 꼴은 sdk 36 하나 — 열린 질문 1).
+   */
+  'dexopt_state_section_missing',
+  /**
+   * **`target_app` 컴파일 상태 전용.** `Dexopt state:` 절은 있는데 대상 패키지의 `[<pkg>]` 줄이 없다.
+   * detail: package
+   */
+  'dexopt_state_package_missing',
+  /**
+   * **`target_app` 컴파일 상태 전용.** 절도 패키지 줄도 있는데 dex 줄의 꼴을 모른다 — **형식을 추측해
+   * 채우지 않는다** (결정 12). 모르는 줄이 하나라도 있거나 dex 줄이 하나도 없으면 이 코드다.
+   * `snapshot_unparsable` 과 같은 정신이다.
+   * detail: line (모르는 첫 줄 원문 · dex 줄이 하나도 없었으면 null)
+   */
+  'dexopt_state_unparsable',
+  /**
+   * **`target_app` 컴파일 상태 전용.** 그 시점의 `dumpsys package` 출력이 없다 — 명령이 실패했거나
+   * (기기 끊김), 아직 `stop` 하지 않은 세션을 `extract` 했거나, 끝 상태를 기록하지 않은 도구가 멈춘 run 이다.
+   * detail: phase('start' | 'end'), cause('command_failed' | 'session_running' | 'not_recorded'), (있으면) exit_code
+   */
+  'dexopt_state_unavailable',
 ] as const
 
 export type MetricReasonCode = (typeof METRIC_REASON_CODES)[number]
@@ -471,6 +497,22 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
   ftrace_not_recorded: () => DIAGNOSE_COPY.reasonFtraceNoStats,
   ftrace_setup_errors: (d) =>
     fillCopy(DIAGNOSE_COPY.reasonFtraceSetupErrors, d['setup_errors'] != null ? { count: String(d['setup_errors']) } : {}),
+  // baseline-profile 의 새 문구도 단어형이다 (BP-6 · DM-15 규칙) — 평가 낱말 · 권유 0.
+  dexopt_state_section_missing: () =>
+    'dumpsys package 출력에 Dexopt state 절 없음 — 이 기기 · 안드로이드 버전의 출력 꼴이 다를 수 있음 · 꼴을 추측해 채우지 않음',
+  dexopt_state_package_missing: (d) =>
+    `Dexopt state 절에 ${String(d['package'])} 줄 없음 — 꼴을 추측해 채우지 않음`,
+  dexopt_state_unparsable: (d) =>
+    d['line'] != null
+      ? `Dexopt state 절에 꼴을 모르는 줄 있음 (${JSON.stringify(String(d['line']).trim())}) — 꼴을 추측해 채우지 않음`
+      : 'Dexopt state 절에 대상 패키지의 dex 줄 없음 — 꼴을 추측해 채우지 않음',
+  dexopt_state_unavailable: (d) => {
+    const when = d['phase'] === 'start' ? '세션 시작' : '세션 끝'
+    if (d['cause'] === 'session_running') return `아직 stop 하지 않은 세션 — ${when} 컴파일 상태를 읽지 않음`
+    if (d['cause'] === 'not_recorded') return `이 run 에 ${when} 컴파일 상태 기록 없음 — 그것을 읽기 전의 도구가 멈춘 run`
+    const code = d['exit_code'] != null ? ` (종료 코드 ${String(d['exit_code'])})` : ''
+    return `${when} dumpsys package 출력을 받지 못함${code} — 기기 연결이 끊겼을 수 있음`
+  },
 }
 
 /** 코드 → 한국어 문장. 모르는 코드는 조용히 비우지 않고 코드 자체를 남긴다. */
