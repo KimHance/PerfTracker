@@ -428,8 +428,9 @@ npx perftracker status                       # Diagnose 줄
 npx perftracker stop                         # 평소와 같습니다 — 경로와 보고서 명령만
 ```
 
-- **기록하는 것** — atrace 카테고리 `am` · `wm` · `view` 와 대상 앱 하나의 앱 slice 입니다.
-  gfx · input · sched 는 켜지 않습니다.
+- **기록하는 것** — atrace 카테고리 `am` · `wm` · `view` · `dalvik` 와 대상 앱 하나의 앱 slice 입니다.
+  `dalvik` 은 ART 가 남기는 slice(dex 를 열 때의 컴파일 상태 · JIT 컴파일 · 클래스 이름)이고, 그 가운데 컴파일
+  상태와 JIT 수가 진단 블록의 [ART 칸 둘](#diagnose)로 실립니다. gfx · input · sched 는 켜지 않습니다.
 - **최대 10분입니다** (평소 세션은 30분). `status` 의 최대 시간 넘음 안내도 진단 세션은 10분 기준입니다.
 - **평소 세션과 수치를 나란히 놓을 수 없습니다.** slice 하나를 남기는 비용은 앱 프로세스
   자신에게 청구되고 `measurement_overhead` 에 잡히지 않습니다. 그래서 진단 세션은 눈에 띄게
@@ -441,7 +442,7 @@ npx perftracker stop                         # 평소와 같습니다 — 경로
   debuggable 앱만 열리고, 그 밖의 앱이면 세션은 열되 `start` 가 `앱 slice 열림 모름 — …`
   줄을 냅니다. **실측은 sdk 35(에뮬레이터) · 36(SM-S901N) 뿐입니다** — sdk 31–34 와
   sdk 30 이하는 안드로이드 문서(`profileable` 요소) 근거이고 실기기로 확인하지 않았습니다.
-  프레임워크 slice(`am` · `wm` · `view`)는 그대로 실립니다. `doctor` 의
+  프레임워크 slice(`am` · `wm` · `view` · `dalvik`)는 그대로 실립니다. `doctor` 의
   `diagnose: app slice` 줄이 기기 단위로 같은 판정을 미리 보여 줍니다 (✗ 여도 종료 코드 0).
 - `stop` · `extract` 의 출력은 평소와 같습니다 — slice 요약을 찍지 않습니다. slice 는
   `result.json` 에 실리고(아래 「`result.json` 읽는 법」), 시간축으로 보려면 run 디렉토리의
@@ -704,13 +705,15 @@ speed-profile 471 · verify 618 · speed 665 ms). 두 세션의 수치가 다를
   CI 매칭은 반드시 이걸로 하세요. (예: `sdk_too_low`, `no_log_entries`,
   `trace_missing`, `data_source_not_registered`, `query_failed`)
 
-  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **43개**입니다
+  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **45개**입니다
   > (`1.0.0` 은 6개, `1.1.0` 의 마지막 판인 npm 0.2.1 은 36개였습니다). 그중 `process_name_stale_in_trace` 는 `1.0.0` 부터 있던
-  > `metrics.hwui` 에도 실립니다. `1.2.0` 에 더한 일곱은 메트릭에는 실리지 않습니다 — 셋은 [`diagnose`](#diagnose)
+  > `metrics.hwui` 에도 실립니다. `1.2.0` 에 더한 아홉은 메트릭에는 실리지 않습니다 — 셋은 [`diagnose`](#diagnose)
   > 블록에만 옵니다(`app_slices_open_unknown` 은 `app_slices_open_reason_code` 에,
   > `ftrace_not_recorded` · `ftrace_setup_errors` 는 블록 `reason_code` 에). 넷(`dexopt_state_section_missing` ·
   > `dexopt_state_package_missing` · `dexopt_state_unparsable` · `dexopt_state_unavailable`)은
-  > [`target_app` 의 컴파일 상태](#target_app-의-컴파일-상태) 칸의 `_reason_code` 에만 옵니다. 이 숫자는 테스트가
+  > [`target_app` 의 컴파일 상태](#target_app-의-컴파일-상태) 칸의 `_reason_code` 에만 옵니다. 둘(`dalvik_not_recorded` ·
+  > `compile_state_slice_unparsable`)은 진단 블록 ART 칸(`target_process_compile_state_slices` ·
+  > `target_process_jit_slices`)의 `_reason_code` 에만 옵니다. 이 숫자는 테스트가
   > `METRIC_REASON_CODES` 와 대조해 고정하므로 코드보다 낡을 수 없습니다.
 - `reason` — 사람이 읽는 한국어 문장. 다듬힐 수 있으니 매칭에 쓰지 마세요.
 - `data` — 메트릭별 본문. 수집되지 않았으면 `null`
@@ -1296,15 +1299,16 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 
 **진단 세션(`start --diagnose`)에만 있는 블록입니다.** 평소 세션에는 키가 없고, 그 "없음" 이 곧
 "진단 세션이 아님" 입니다. `session.options.diagnose` 도 진단 세션에만 `true` 로 실립니다 —
-`false` 로 실리는 일은 없습니다. 진단 세션은 atrace(카테고리 `am` · `wm` · `view` + 대상 앱 하나의
-앱 slice)를 켜고 최대 10분 돕니다.
+`false` 로 실리는 일은 없습니다. 진단 세션은 atrace(카테고리 `am` · `wm` · `view` · `dalvik` + 대상 앱 하나의
+앱 slice)를 켜고 최대 10분 돕니다. `dalvik` 은 2026-10-11(baseline-profile)에 더했습니다 — 그 전 진단 run 의
+`atrace_categories` 에는 없고, 그런 run 을 `extract` 로 다시 내면 ART 칸 둘이 `null` + `dalvik_not_recorded` 입니다.
 
 > **진단 세션의 수치는 평소 세션과 나란히 놓을 수 없습니다.** atrace slice 를 남기는 비용은 앱
 > 프로세스 자신에게 청구되고 `measurement_overhead` 에 잡히지 않습니다 ([아래](#measurement_overhead)).
 
 ```json
 {
-  "atrace_categories": ["am", "wm", "view"],
+  "atrace_categories": ["am", "wm", "view", "dalvik"],
   "atrace_apps": ["com.google.android.youtube"],
   "status": "collected",
   "reason_code": null,
@@ -1312,25 +1316,41 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   "app_slices_open": true,
   "app_slices_open_reason_code": null,
   "app_slices_open_reason": null,
-  "trace_slices": 75800,
-  "target_process_slices": 62803,
+  "trace_slices": 147462,
+  "target_process_slices": 134423,
   "target_process_slices_unfinished": 2,
   "ftrace_overrun_events": 0,
-  "trace_bytes": 6783480,
-  "target_process_slice_names_unfolded": 4921,
+  "trace_bytes": 12844952,
+  "target_process_slice_names_unfolded": 15388,
   "target_process_slice_names": [
     { "name": "Choreographer#doFrame *",
-      "main_thread": { "count": 550, "sum_ms": 3035.019, "max_ms": 75.286 },
-      "other_threads": { "count": 7, "sum_ms": 1.362, "max_ms": 0.553 },
+      "main_thread": { "count": 1058, "sum_ms": 2390.124, "max_ms": 77.696 },
+      "other_threads": { "count": 16, "sum_ms": 2.837, "max_ms": 0.777 },
+      "async_tracks": null },
+    { "name": "L*;",
+      "main_thread": { "count": 1903, "sum_ms": 48.239, "max_ms": 2.1 },
+      "other_threads": { "count": 3767, "sum_ms": 185.436, "max_ms": 5.504 },
       "async_tracks": null },
     { "name": "bindApplication",
-      "main_thread": { "count": 1, "sum_ms": 67.307, "max_ms": 67.307 },
+      "main_thread": { "count": 1, "sum_ms": 56.169, "max_ms": 56.169 },
       "other_threads": null, "async_tracks": null }
-  ]
+  ],
+  "target_process_compile_state_slices": [
+    { "location": "/data/app/~~j3NK…/com.google.android.youtube-_ZCw…/oat/arm64/base.odex",
+      "status": "up-to-date", "filter": "speed-profile", "reason": "profile-utilization" },
+    { "location": "primary.vdex mapped directly in memory from /data/app/~~KFTc…/com.google.android.gms-tENA…/split_DynamiteLoader_installtime.dm",
+      "status": "up-to-date", "filter": "verify", "reason": "vdex-dm" }
+  ],
+  "target_process_compile_state_slices_reason_code": null,
+  "target_process_compile_state_slices_reason": null,
+  "target_process_jit_slices": 54,
+  "target_process_jit_slices_reason_code": null,
+  "target_process_jit_slices_reason": null
 }
 ```
 
-(SM-S901N · Android 16 · YouTube 15초 원본을 이 블록의 쿼리로 다시 센 값입니다. 표는 1,082행 가운데 둘만 옮겼습니다.)
+(SM-S901N · Android 16 · YouTube 21.40.161 15초 원본 — `dalvik` 을 켠 회 — 을 이 블록의 쿼리로 다시 센 값입니다.
+표는 1,521행 가운데 셋만, 컴파일 상태는 6줄 가운데 둘만 옮겼고 경로의 해시는 줄였습니다.)
 
 | 필드 | 무엇 | `null` 이면 |
 | --- | --- | --- |
@@ -1346,6 +1366,10 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 | `trace_bytes` | 원본(`artifacts.trace`) 크기 (바이트) | 원본이 없음 |
 | `target_process_slice_names_unfolded` | 접기 전 고유 이름 수 (표 행 수 이상) | `target_process_slices` 와 같음 |
 | `target_process_slice_names` | 접은 이름별 표 (아래) | 같음 — `[]` 는 "프로세스는 찾았고 slice 가 0개" |
+| `target_process_compile_state_slices` | **ART 칸 (1)** — 대상 앱 프로세스의 컴파일 상태 slice 목록 (아래) | `dalvik` 을 안 켠 원본 · 꼴을 모르는 `location=` slice · 표가 `null` 인 이유와 같음 — `[]` 는 "켰고 찾았는데 0줄" |
+| `target_process_compile_state_slices_reason_code` · `target_process_compile_state_slices_reason` | 목록이 `null` 인 이유 | 목록이 있음 |
+| `target_process_jit_slices` | **ART 칸 (2)** — 대상 앱 프로세스의 JIT 컴파일 slice 수 | `dalvik` 을 안 켠 원본 · 표가 `null` 인 이유와 같음 — `0` 은 "켰고 찾았는데 0개" |
+| `target_process_jit_slices_reason_code` · `target_process_jit_slices_reason` | 수가 `null` 인 이유 | 수가 있음 |
 
 표의 한 행:
 
@@ -1364,13 +1388,17 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 - **대상 앱 프로세스는 `metrics` 와 같은 규칙으로 하나입니다.** 트레이스의 이름이 낡았으면 캡처 때 받아 둔
   pid 로 찾고 `partial` + `process_name_stale_in_trace` 입니다 — 값은 다 있습니다
   ([아래](#트레이스가-앱을-다른-이름으로-아는-경우-zygote64--pre-initialized)).
-- **표는 프레임워크 slice(am · wm · view)와 앱 slice 를 가르지 않습니다.** atrace 마커에 가를 태그가
+- **표는 프레임워크 slice(am · wm · view · dalvik)와 앱 slice 를 가르지 않습니다.** atrace 마커에 가를 태그가
   없습니다. 앱 slice 가 실릴 수 있었는지는 `app_slices_open` 이 따로 말합니다.
 - **이름 접기** — 숫자가 하나라도 든 영문 · 숫자 토큰(연속한 `[A-Za-z0-9]`)을 `*` 하나로 바꿉니다.
   `Choreographer#doFrame 136993` → `Choreographer#doFrame *` · `tk-trace-id: 1001yo7d2xmcq` →
   `tk-trace-id: *` · `VRI[Shell$HomeActivity]@a1b2c3` → `VRI[Shell$HomeActivity]@*`. 숫자가 없는 토큰은
-  단어와 가를 수 없어 그대로입니다 — `tk-trace-id: rlcyp` → `tk-trace-id: rlcyp`. 위 원본에서
-  4,921 → 1,082행이었습니다.
+  단어와 가를 수 없어 그대로입니다 — `tk-trace-id: rlcyp` → `tk-trace-id: rlcyp`.
+  **이름 전체가 클래스 디스크립터**(`L` 로 시작해 `;` 로 끝나고 공백 없음)면 한 행 `L*;` 로 접습니다 —
+  `Lfvb;` → `L*;` · `Lcom/google/Foo$1;` → `L*;`. `dalvik` 이 남기는 이 이름은 숫자 없는 난독화 이름이
+  대부분이라 위 규칙으로는 안 접힙니다. 공백이 든 이름은 디스크립터가 아닙니다 — `Lock contention on a monitor lock` →
+  `Lock contention on a monitor lock`. 위 원본에서 15,388 → 1,521행이었습니다 (디스크립터 규칙 없이는 약 6,900행 ·
+  컴파일을 초기화한 verify 상태의 원본은 약 2만 7천 행).
   원문 이름은 원본 트레이스에 그대로 있습니다.
 - **행을 자르지 않고 이름도 자르지 않습니다.** 순서는 이름의 UTF-16 코드 단위 순 하나입니다 (호스트
   로캘과 무관 — `Z` 가 `a` 보다 앞). 순위 · 상위 N 은 없습니다 — 무엇이 길었는지 고르는 일은 읽는 쪽의 몫입니다.
@@ -1385,16 +1413,48 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   꽉 차서)를 CPU 마다 더한 값입니다. `measurement_overhead.trace_buffer_overrun` 은 perfetto 버퍼만 보므로 이 손실을
   못 잡습니다 — 0 이 아니면 slice 가 그만큼 빠졌습니다.
 
+**ART 칸 둘** — `dalvik` 이 남긴 slice 가운데 둘을 표 밖에 따로 싣습니다. 둘 다 표와 **같은 원문 이름**(대상 앱
+프로세스 · atrace slice 만 · frametimeline 제외)에서 뽑으므로 같은 원본을 trace_processor 로 다시 세면 같은 값이
+나옵니다.
+
+- **`target_process_compile_state_slices`** — ART 가 dex 를 열 때 남기는
+  `location=<…> status=<…> filter=<…> reason=<…>` 이름의 slice 를 네 칸으로 가른 목록입니다. 같은 네 값은 한 줄로
+  (갈래 · 횟수와 무관하게) 싣고, 순서는 원문 이름의 UTF-16 코드 단위 순입니다. `location` 에는 공백이 들 수
+  있어(`primary.vdex mapped directly in memory from …`) 마지막 ` status=` · ` filter=` · ` reason=` 자리로 가릅니다.
+  대상 앱이 연 다른 패키지의 dex(WebView · GMS 모듈)도 그 프로세스 안의 일이라 함께 실립니다.
+- **`target_process_jit_slices`** — 이름이 `JIT compiling` 으로 시작하는 slice 의 수입니다. 표의 그 이름들 `count`
+  합과 같고, 끝나지 않은 slice 도 셉니다. 실측(SM-S901N · YouTube 15초)에서 speed-profile 39 · 52 · 54, verify 297,
+  speed 0 이었습니다. 이 도구는 이 수에 많고 적음을 매기지 않습니다.
+- **`status` 가 둘입니다.** 이 목록의 `status` 는 **oat 파일 상태**(`up-to-date` · `no-dex-code` …)이고
+  compiler filter 는 `filter` 칸입니다. [`target_app` 의 컴파일 상태](#target_app-의-컴파일-상태) 의 `status` 는
+  compiler filter 입니다 — 같은 낱말 다른 뜻이고, 이름은 기기 원문이라 바꾸지 않았습니다.
+- **못 재면 `null` 이고 이유가 붙습니다** — 블록 `status` 와 따로 갑니다.
+  `dalvik_not_recorded` 는 세션 기록(`atrace_categories`)에 `dalvik` 이 없거나 그 기록이 없는 원본입니다 (이 칸이
+  생기기 전 진단 run 을 `extract` 로 다시 낸 경우) — 표 · 수는 잰 그대로이고 블록은 `collected` 일 수 있습니다.
+  `compile_state_slice_unparsable` 은 `location=` 으로 시작하는데 네 칸으로 갈리지 않는 이름이 있는 경우로, 목록만
+  `null` 입니다 (**꼴을 추측해 채우지 않습니다**). 표를 못 만든 경우(대상 앱 프로세스를 못 찾음 · ftrace 가 원본에
+  안 남음 · 원본 없음 · 쿼리 실패 · 미등록)는 두 칸이 `null` 이고 이유 코드는 블록 `reason_code` 와 같습니다.
+- `dalvik` slice 가 앱 프로세스에 실리는지는 sdk 36 한 기기에서만 확인했습니다.
+
+컴파일 상태 slice 한 줄:
+
+| 필드 | 무엇 |
+| --- | --- |
+| `location` | `location=` 뒤 원문 — odex · vdex 경로, `none`, 공백 든 문장까지 그대로 |
+| `status` | `status=` — **oat 파일 상태** (`up-to-date` · `no-dex-code` …). compiler filter 가 아닙니다 |
+| `filter` | `filter=` — compiler filter (`speed-profile` · `verify` · `speed` · `unknown` …) |
+| `reason` | `reason=` — 그 컴파일을 일으킨 까닭 (`profile-utilization` · `install-dm` · `vdex-dm` · `unknown` …) |
+
 | `status` | `reason_code` | `null` 이 되는 칸 |
 | --- | --- | --- |
 | `collected` | `null` | 없음 |
-| `partial` | `process_not_in_trace` | `target_process_slices` · `target_process_slices_unfinished` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
+| `partial` | `process_not_in_trace` | `target_process_slices` · `target_process_slices_unfinished` · `target_process_slice_names_unfolded` · `target_process_slice_names` · `target_process_compile_state_slices` · `target_process_jit_slices` |
 | `partial` | `process_name_stale_in_trace` | 없음 |
-| `partial` | `ftrace_not_recorded` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
+| `partial` | `ftrace_not_recorded` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` · `target_process_compile_state_slices` · `target_process_jit_slices` |
 | `partial` | `ftrace_setup_errors` | 없음 |
-| `unsupported` | `data_source_not_registered` · `data_source: linux.ftrace` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
-| `failed` | `trace_missing` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `trace_bytes` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
-| `failed` | `query_failed` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` |
+| `unsupported` | `data_source_not_registered` · `data_source: linux.ftrace` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` · `target_process_compile_state_slices` · `target_process_jit_slices` |
+| `failed` | `trace_missing` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `trace_bytes` · `target_process_slice_names_unfolded` · `target_process_slice_names` · `target_process_compile_state_slices` · `target_process_jit_slices` |
+| `failed` | `query_failed` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` · `target_process_compile_state_slices` · `target_process_jit_slices` |
 
 ftrace 기록을 다 믿을 수 없는 경우는 코드 둘로 갈립니다 — 값이 있고 없음이 정반대라 `reason_code` 로 가르세요.
 

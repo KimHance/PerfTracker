@@ -16,10 +16,10 @@ export const DIAGNOSE_CLI_COPY = {
   helpDiagnose: '진단 세션 — atrace slice 기록 · 최대 10분',
   /**
    * `start` · `status` 라벨 줄 — 진단 세션에만. 라벨은 기존 줄처럼 영어 10칸 고정이다.
-   * 값 자리가 없는 고정 문구라, 범위(`am · wm · view`)와 시간(`10분`)이 core 상수와 같은지는
+   * 값 자리가 없는 고정 문구라, 범위(`am · wm · view · dalvik`)와 시간(`10분`)이 core 상수와 같은지는
    * 시험이 대조한다.
    */
-  labelLine: 'Diagnose  atrace am · wm · view + 앱 slice · 최대 10분',
+  labelLine: 'Diagnose  atrace am · wm · view · dalvik + 앱 slice · 최대 10분',
   /** `runs` 행 꼬리 태그 — 진단 세션 기록에만. 기존 꼬리(`경고 N · …`) 맨 끝에 붙는다. */
   runsTag: '진단',
 } as const

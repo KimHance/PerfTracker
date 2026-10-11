@@ -1153,6 +1153,27 @@ registry 순서는 `hwuiCollector` 바로 뒤에 `frameCollector` 다 — 지표
 - 파서는 실기기 원문 셋(SM-S901N · sdk 36 — `dumpsys-package-dexopt-{youtube,restored,reset}.txt`)으로 시험합니다.
   **확인하지 못한 것:** sdk 30–35 실기기의 `Dexopt state` 꼴 (기능 문서 열린 질문 1) — 꼴이 다르면 null + 코드로 납니다.
 
+### ✅ 진단 세션의 ART 칸 — `dalvik` · 컴파일 상태 slice · JIT 수 (2026-10-11, 기능 문서 baseline-profile BP-7 · diagnostic-mode DM-3 · DM-4 · DM-7)
+
+진단 세션 config 의 atrace 카테고리가 `am` · `wm` · `view` · `dalvik` 넷이 됐습니다 (옵션 없이 늘 — 진단 모드 결정 36).
+진단 블록에 대상 앱 프로세스의 **컴파일 상태 slice 목록**(`target_process_compile_state_slices` — `location` ·
+`status`(oat 파일 상태) · `filter`(compiler filter) · `reason`)과 **JIT slice 수**(`target_process_jit_slices`)가
+실립니다. 자리와 읽는 법은 README `diagnose` 절이 정본입니다.
+
+- **새 쿼리 없음** — 둘 다 slice 표가 이미 읽는 (원문 이름 × 갈래) 행에서 뽑습니다. 표의 `JIT compiling …` 행
+  count 합과 JIT 수가 어긋날 수 없습니다.
+- **못 재면 `null` + 코드, 블록 `status` 는 그대로.** reason_code 가 둘 늘어 45개입니다 — `dalvik_not_recorded`
+  (세션 기록에 `dalvik` 이 없는 원본 — 이 기능 전 진단 run 을 `extract` 한 경우) · `compile_state_slice_unparsable`
+  (`location=` 인데 네 칸으로 안 갈림 — 추측하지 않음). 표를 못 만든 경우는 블록과 같은 코드입니다.
+- **slice 표에서 클래스 디스크립터(`L…;`)를 한 행 `L*;` 로 접습니다** (진단 모드 결정 37). 실기기 원본 다섯
+  (SM-S901N · YouTube 21.40.161 15초 · research raw-baseline)에서 접은 표가 1,278 – 1,610행 — 이 규칙 없이는
+  6,227 – 27,335행이었습니다.
+- 그 다섯 원본에 블록 쿼리를 다시 돌려 이름 glob 으로 직접 센 값과 맞췄습니다 — JIT 39 · 52 · 54 · 297 · 0,
+  컴파일 상태 각 6줄. dalvik 을 안 켠 원본은 두 칸이 `null` + `dalvik_not_recorded`.
+- 문구 넷(cli `Diagnose` 라벨 줄 63칸 · gui 04 옵션 행 설명 · gui HANDOFF 옵션 표 · 디자인 문서 `## 문구`)에 `dalvik`.
+- **아직 없는 것:** 보고서 진단 탭의 ART 칸 자리 (baseline-profile BP-8 · bp-gui-report). **확인하지 못한 것:**
+  sdk ≤35 · 비디버그 앱에서 `dalvik` slice 가 앱 프로세스에 실리는지 (기능 문서 열린 질문 10 — 실측 sdk 36 하나).
+
 ### 그 밖의 후보 (우선순위 낮음)
 
 - **Power** — 배터리 델타는 **구조적으로 불가능**합니다. adb 는 USB 연결을 전제하고 USB 는

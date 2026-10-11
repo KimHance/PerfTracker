@@ -204,7 +204,7 @@ metrics.memory.data.system_timeline
 - 미수집 블록이 있는 탭에는 개수 배지(monospace 9.5px, `--color-neutral-200`). 세는 것은 값 자리에 `수집 안 함` · `값 없음` 을 그린 블록뿐입니다 — 재 봤더니 없음(`[]`)으로 `크래시 없음` · `ANR 없음` · `경고 없음` 을 그린 블록은 세지 않습니다(RR-8). 셈은 카드가 그린 글자를 그대로 읽습니다(`blocks.ts` 의 `tabBadgeCount`)
 - **요약** 탭 = `summary` `render` `cpu` `memory` `log` `context` 섹션
 - **기기** 탭 = `device` 섹션
-- **진단** 탭 = `diagnose` 섹션(머리 `atrace slice`) — 카드 넷: `기록 범위`(`atrace_categories` · `atrace_apps` · `app_slices_open`) · `slice 수`(`trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `target_process_slice_names_unfolded` · `ftrace_overrun_events`) · `원본`(`artifacts.trace` · `diagnose.trace_bytes`) 각 span 4 + `slice 이름별` 표 span 12. 라벨은 **필드 경로 그대로**입니다(logcat 카드와 같은 이유). 표가 `null` 이면 탭 개수 배지에 1 이 섭니다.
+- **진단** 탭 = `diagnose` 섹션(머리 `atrace slice`) — 카드 넷: `기록 범위`(`atrace_categories` · `atrace_apps` · `app_slices_open`) · `slice 수`(`trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `target_process_slice_names_unfolded` · `ftrace_overrun_events` · `target_process_compile_state_slices` · `target_process_jit_slices` — ART 칸 둘은 `why` 짝으로 `null` 이면 코드) · `원본`(`artifacts.trace` · `diagnose.trace_bytes`) 각 span 4 + `slice 이름별` 표 span 12. 라벨은 **필드 경로 그대로**입니다(logcat 카드와 같은 이유). 표가 `null` 이면 탭 개수 배지에 1 이 섭니다.
 - 탭 전환 시 `window.scrollTo(0, 0)`
 
 ### 헤더

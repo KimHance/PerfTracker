@@ -293,6 +293,24 @@ export const METRIC_REASON_CODES = [
    * detail: phase('start' | 'end'), cause('command_failed' | 'session_running' | 'not_recorded'), (있으면) exit_code
    */
   'dexopt_state_unavailable',
+  /**
+   * **진단 블록 ART 칸 전용** — `diagnose.target_process_compile_state_slices_reason_code` ·
+   * `diagnose.target_process_jit_slices_reason_code` 에만 온다 (기능 문서 baseline-profile BP-7).
+   *
+   * 세션 기록(`session.json`)의 켠 카테고리에 `dalvik` 이 없거나 그 기록이 없다 — 이 기능 전 진단 run 을
+   * `extract` 로 다시 낸 경우다. 컴파일 상태 slice · JIT slice 는 `dalvik` 이 켜져야 남으므로 0개는
+   * "없었다" 가 아니다. **블록 `status` 는 이것 때문에 바뀌지 않는다** (표 · 수는 잰 그대로).
+   * detail: atrace_categories (기록된 값 · 없으면 null)
+   */
+  'dalvik_not_recorded',
+  /**
+   * **진단 블록 ART 칸 전용** — `diagnose.target_process_compile_state_slices_reason_code` 에만 온다
+   * (BP-7). 이름이 `location=` 으로 시작하는 slice 가 `location=… status=… filter=… reason=…` 꼴로
+   * 갈리지 않는다 — **꼴을 추측해 채우지 않는다** (`dexopt_state_unparsable` 과 같은 정신).
+   * 갈리지 않는 한 줄을 빼고 내면 목록이 빠진 줄을 "없었다" 로 말한다.
+   * detail: name (갈리지 않은 첫 이름 원문)
+   */
+  'compile_state_slice_unparsable',
 ] as const
 
 export type MetricReasonCode = (typeof METRIC_REASON_CODES)[number]
@@ -513,6 +531,14 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
     const code = d['exit_code'] != null ? ` (종료 코드 ${String(d['exit_code'])})` : ''
     return `${when} dumpsys package 출력을 받지 못함${code} — 기기 연결이 끊겼을 수 있음`
   },
+  dalvik_not_recorded: (d) => {
+    const cats = Array.isArray(d['atrace_categories']) ? (d['atrace_categories'] as unknown[]).map(String) : null
+    return cats === null
+      ? '세션 기록에 켠 atrace 카테고리 없음 — dalvik 을 켰는지 모름 · 컴파일 상태 · JIT slice 수 모름'
+      : `세션 기록의 atrace 카테고리에 dalvik 없음 (${cats.join(' · ')}) — 컴파일 상태 · JIT slice 수 모름`
+  },
+  compile_state_slice_unparsable: (d) =>
+    `꼴을 모르는 location= slice 있음 (${JSON.stringify(String(d['name']))}) — 꼴을 추측해 채우지 않음`,
 }
 
 /** 코드 → 한국어 문장. 모르는 코드는 조용히 비우지 않고 코드 자체를 남긴다. */

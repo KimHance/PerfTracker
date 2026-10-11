@@ -5,7 +5,7 @@
 | 기능 | diagnostic-mode |
 | 기능 문서 | docs/spec/diagnostic-mode.md (1c475d4) |
 | 등급 | 화면 |
-| 마지막 변경 | 2026-10-08 · ⑨ 승격 — `## 정한 것` · D33 runs 행 86칸 |
+| 마지막 변경 | 2026-10-11 · baseline-profile — `## 문구` 범위 두 줄에 `dalvik` (DM-3 · 결정 36) |
 
 측정 화면 · 보고서 · CLI 의 **지금 자리에 한 칸씩**. 새 화면은 보고서 진단 탭 하나(R-c). `slice`(D9) · `--diagnose`(D8) · 최대 10분(D11) · 후보 하나(D22).
 
@@ -149,9 +149,9 @@
 | core | 새 reason (블록 partial · ftrace 통계 0행) | `ftrace 기록 없음 · 원본에 ftrace 통계 0행 · slice 수 모름` | `ftrace_not_recorded` — 보고서 카드 제목 title | `실패` |
 | core | 새 reason (블록 partial · ftrace 설정 오류) | `ftrace 설정 오류 {count}건 · slice 수 잰 그대로 · 빠진 이벤트 모름` | `ftrace_setup_errors` — `{count}` 오류 수 · 수 · 표는 잰 그대로 | `실패` |
 | cli | `start --help` 의 `--diagnose` 설명 | `진단 세션 — atrace slice 기록 · 최대 10분` | `default` 없이 66칸 | `측정한다` 꼴 |
-| cli | `start` · `status` 라벨 줄 | `Diagnose  atrace am · wm · view + 앱 slice · 최대 10분` | 진단 세션 표시 · 54칸 | `Mode` · `구간` |
+| cli | `start` · `status` 라벨 줄 | `Diagnose  atrace am · wm · view · dalvik + 앱 slice · 최대 10분` | 진단 세션 표시 · 63칸 | `Mode` · `구간` |
 | cli | `runs` 행 꼬리 태그 | `진단` | 진단 세션 기록 | `diag` · `atrace` |
-| gui | 04 옵션 행 설명 (`--diagnose`) | `atrace slice 기록 (am · wm · view + 대상 앱) · 최대 10분` | 무엇을 · 얼마나 | `디버그` |
+| gui | 04 옵션 행 설명 (`--diagnose`) | `atrace slice 기록 (am · wm · view · dalvik + 대상 앱) · 최대 10분` | 무엇을 · 얼마나 | `디버그` |
 | gui | 탭 배지 (진단 세션 측정 중) | `진단 {elapsed}` | 진단 세션 탭 · 경과 | `DIAG` |
 | gui | running 킥커 꼬리 (`측정 중 · ` 뒤) | `진단` | 진단 세션 | — |
 | gui | running 각주 둘째 줄 | `진단 · slice 비용 앱 프로세스 몫 · 평소 세션과 비교 불가 · 최대 10분` | DM-12 두 사실 + 최대 시간 | 평가 |
@@ -262,3 +262,4 @@
 | 2026-10-08 | diagnostic-mode | 처음 — 제약 · 시안 v1 후보 1 (24장 + CLI 8블록) · `## 문구` 정본 34줄 |
 | 2026-10-08 | diagnostic-mode | 고침 1 — reason 자리 · 상태 행 뺌 · 원본 라벨 · 정렬 뒤 맨 위 · 구현 찍는 길 · D25 다 그림 · 보고서 사진 12장 다시 |
 | 2026-10-08 | diagnostic-mode | ⑨ 승격 — `## 정한 것` 15줄 · 고른 후보 1 · D33 runs 행 86칸 (`## 넘침` · `check_cli.py`) · `## 문구` 36줄 (D36 core 2줄) |
+| 2026-10-11 | baseline-profile | `## 문구` 범위 두 줄(cli `start` · `status` 라벨 줄 54 → 63칸 · gui 04 옵션 행 설명)에 `dalvik` — DM-3 · 기능 문서 결정 36 · 낱말 하나 더하는 기계적 변경 (bp-core-art) |

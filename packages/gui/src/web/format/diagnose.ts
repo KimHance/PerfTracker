@@ -15,7 +15,7 @@
  */
 export const DIAGNOSE_MEASURE_COPY = {
   /** 04 세션 옵션 행 설명 (`--diagnose`). 무엇을 · 얼마나. */
-  optionDesc: 'atrace slice 기록 (am · wm · view + 대상 앱) · 최대 10분',
+  optionDesc: 'atrace slice 기록 (am · wm · view · dalvik + 대상 앱) · 최대 10분',
   /** 탭 배지 — 진단 세션 측정 중. `{elapsed}` = 경과 `mm:ss`. */
   tabBadge: '진단 {elapsed}',
   /** running 킥커 꼬리 — 기존 `측정 중` 뒤에 ` · ` 로 붙는다. */

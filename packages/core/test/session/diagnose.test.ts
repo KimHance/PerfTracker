@@ -38,9 +38,9 @@ describe('appSliceOpen — 조건 표 (DM-10 판정)', () => {
     expect(appSliceOpen(29, false)).toEqual({ open: null, debuggable: false })
   })
 
-  it('DM-3 범위 — 카테고리 am · wm · view 와 대상 앱 하나', () => {
+  it('DM-3 범위 — 카테고리 am · wm · view · dalvik 과 대상 앱 하나', () => {
     expect(diagnoseScope('com.google.android.youtube')).toEqual({
-      categories: ['am', 'wm', 'view'],
+      categories: ['am', 'wm', 'view', 'dalvik'],
       apps: ['com.google.android.youtube'],
     })
   })
