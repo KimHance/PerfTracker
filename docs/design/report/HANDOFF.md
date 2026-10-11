@@ -107,7 +107,7 @@ maxT = max( 모든 series 의 max t_s, 모든 mark 의 초, ceil(duration_ms/100
 
 ---
 
-## 2. 블록 8종
+## 2. 블록 9종
 
 | kind | 데이터 모양 | 쓰이는 곳 |
 | --- | --- | --- |
@@ -119,6 +119,7 @@ maxT = max( 모든 series 의 max t_s, 모든 mark 의 초, ceil(duration_ms/100
 | `stat` | 단일 값 — 게이지 + 아래 줄 (큰 숫자 없음 · 값이 없으면 `값 없음` + 코드) | 앱 시작 카드 (숫자는 요약 타일 · RR-4 결정 10) |
 | `frametimeline` | `[경과 ms, 앱 ms, 표시 ms, 마감 ms]` 의 배열 | 시간별 프레임 (렌더 섹션 타임라인 서브탭) |
 | `slicetable` | `[{name, <갈래>: {count, sum_ms, max_ms} \| null, …}]` | 진단 탭의 slice 이름별 표 (**진단 세션에만**) |
+| `dexstates` | dex 줄 배열 `[{path, abi, primary_abi, secondary_dex, public_dex, status, reason, location}]` × 때(바꾸기 전 · 시작 · 끝) / slice 배열 `[{location, status, filter, reason}]` | 맥락 `컴파일 상태 (전 → 후)` · 진단 탭 `컴파일 상태 slice` (baseline-profile BP-8) |
 
 ### 블록 선언
 
@@ -162,6 +163,7 @@ metrics.memory.data.system_timeline
 - **stat** — `fmt`, `unit`, `sub: [{l, p, f}]`
 - **frametimeline** — `path` 하나 (`metrics.frame.data`)
 - **slicetable** — `nameField` `nameLabel`, `groups: [{field, label}]`(갈래 셋), `stats: [{field, label, fmt}]`(횟수 · 합 ms · 최대 ms), `rowsUnit`(`{n}` 자리에 행 수)
+- **dexstates** — `rows: 'when'`(컴파일 카드): `path`(시작 배열 — 키가 없으면 카드째 `수집 안 함`) · `record`(바꾼 기록 경로 · 칸 셋 · 없을 때 `바꾸지 않음`) · `times: [{word, label, path, code, reason, onlyIf?}]`(때 순서) · `cols` · `lineFields`(머리 행 2 필드 이름 넷) / `rows: 'slice'`(진단): `path` · `why: {code, reason}`(그 칸의 이유 짝 — 블록 껍데기가 아님) · `headField` · `cols` · `emptyLabel`
 
 블록 공통으로 둘이 더 있습니다.
 
@@ -203,9 +205,9 @@ metrics.memory.data.system_timeline
 
 - 탭 버튼: `padding:8px var(--space-4)`, 14px, `border-radius:0 99px 99px 0`, 선택 시 `border-left:2px solid var(--color-accent)` + `background:var(--color-accent-100)` + `color:var(--color-accent-800)`
 - 미수집 블록이 있는 탭에는 개수 배지(monospace 12px, `--color-neutral-800` 글자 · `--color-neutral-200` 바탕). 세는 것은 값 자리에 `수집 안 함` · `값 없음` 을 그린 블록뿐입니다 — 재 봤더니 없음(`[]`)으로 `크래시 없음` · `ANR 없음` · `경고 없음` · 차트의 `표본 없음` · `프레임 없음` · `항목 없음` 을 그린 블록과 요약 타일은 세지 않습니다(RR-8 · 결정 12 · B22). 셈은 카드가 그린 글자를 그대로 읽습니다(`blocks.ts` 의 `tabBadgeCount`)
-- **요약** 탭 = `지표`(타일 8 — 블록 아님) `startup` `render` `cpu` `memory` `log` `context` 섹션
+- **요약** 탭 = `지표`(타일 8 — 블록 아님) `startup` `render` `cpu` `memory` `log` `context` 섹션 — `context` 끝에 `컴파일 상태 (전 → 후)` span 12 (아래 「dex 줄 표」)
 - **기기** 탭 = `device` 섹션
-- **진단** 탭 = `diagnose` 섹션(머리 `atrace slice`) — 카드 넷: `기록 범위`(`atrace_categories` · `atrace_apps` · `app_slices_open`) · `slice 수`(`trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `target_process_slice_names_unfolded` · `ftrace_overrun_events` · `target_process_compile_state_slices` · `target_process_jit_slices` — ART 칸 둘은 `why` 짝으로 `null` 이면 코드) · `원본`(`artifacts.trace` · `diagnose.trace_bytes`) 각 span 4 + `slice 이름별` 표 span 12. 라벨은 **우리말 단어 줄 + 필드 경로 줄**입니다(RR-6 — 경로 줄은 글자 그대로 · ART 칸 둘은 경로 한 줄). 카드 단위 칸은 비웁니다(`diagnose` 는 뜻 없는 글자였습니다). 표가 `null` 이면 탭 개수 배지에 1 이 섭니다.
+- **진단** 탭 = `diagnose` 섹션(머리 `atrace slice`) — 카드 다섯: `기록 범위`(`atrace_categories` · `atrace_apps` · `app_slices_open`) · `slice 수`(`trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `target_process_slice_names_unfolded` · `ftrace_overrun_events` · 끝 행 `JIT 컴파일 slice`/`target_process_jit_slices` — `why` 짝으로 `null` 이면 코드) · `원본`(`artifacts.trace` · `diagnose.trace_bytes`) 각 span 4 + `컴파일 상태 slice`(`target_process_compile_state_slices` · dexstates) span 12 + `slice 이름별` 표 span 12. 라벨은 **우리말 단어 줄 + 필드 경로 줄**입니다(RR-6 — 경로 줄은 글자 그대로). 카드 단위 칸은 비웁니다(`diagnose` 는 뜻 없는 글자였습니다). 켠 카테고리에 `dalvik` 이 있습니다(BP-7). 표 · 컴파일 상태 slice 가 둘 다 `null`(대상 앱 없음 · 원본 없음)이면 탭 개수 배지에 2 가 섭니다 — 그린 `값 없음` 카드 수 그대로입니다(plan B30).
 - 탭 전환 시 `window.scrollTo(0, 0)`
 
 ### 헤더
@@ -213,8 +215,8 @@ metrics.memory.data.system_timeline
 - 세션 id: monospace 12px, `letter-spacing:.14em`, uppercase, `--color-accent-700`
 - 이름: `--font-heading` 600, `clamp(26px,3.4vw,34px)`
 - 상태 pill: monospace 12px uppercase, `padding:3px 10px; border-radius:99px`. `running` 이면 `background:var(--color-accent); color:var(--color-bg)`, 그 외 `--color-neutral-200`
-- **진단 pill** (진단 세션에만): 상태 pill 바로 옆 `진단`. 같은 글꼴 · 크기 · 모양에 **바탕 없이** `--color-neutral-700` 글자 + `--color-divider` 1px 안쪽 테두리 — 상태 pill 과 모양으로만 갈리고 색에 뜻을 싣지 않습니다. `옵션` 메타 칸은 그대로(`--launch` · `attach`)입니다
-- 메타 줄(값 13px `--color-neutral-700` · 라벨 12px `--color-neutral-600`, wrap): 앱 `{label} · {package} · {version_name}` / 기기 `{model} · {serial} · Android {release} (sdk {sdk_int})` / 시작 `YYYY-MM-DD HH:MM:SS` / 길이 `{duration_ms} ms` 또는 `측정 중` / 옵션 `--launch` 또는 `attach`
+- **진단 pill** (진단 세션에만): 상태 pill 바로 옆 `진단`. 같은 글꼴 · 크기 · 모양에 **바탕 없이** `--color-neutral-700` 글자 + `--color-divider` 1px 안쪽 테두리 — 상태 pill 과 모양으로만 갈리고 색에 뜻을 싣지 않습니다. `옵션` 메타 칸은 진단 때문에 바뀌지 않습니다(`--launch` · `attach`)
+- 메타 줄(값 13px `--color-neutral-700` · 라벨 12px `--color-neutral-600`, wrap): 앱 `{label} · {package} · {version_name}` / 기기 `{model} · {serial} · Android {release} (sdk {sdk_int})` / 시작 `YYYY-MM-DD HH:MM:SS` / 길이 `{duration_ms} ms` 또는 `측정 중` / 옵션 `--launch` 또는 `attach` — `--compile` 세션(`session.options.compile`)이면 뒤에 `--compile {value}` (`--launch --compile speed` · baseline-profile BP-8)
 
 ### 플래그 줄
 
@@ -331,10 +333,24 @@ viewBox `측정된 컨테이너 폭 × 190`, 여백 `{l:44, r:10, t:18, b:30}`. 
 
 ### pairs — 진단 탭
 
-- 진단 블록의 `status` 는 네 카드 모두에 같은 규칙으로 닿습니다 — `unsupported` · `skipped` · `failed` 면 카드 배지, `reason` 문장은 카드 제목(과 배지)의 `title`. `partial` 은 배지 없이 제목 `title` 만, `collected` 는 아무것도 없습니다 (④ 관례를 진단 블록까지 넓힘).
+- 진단 블록의 `status` 는 다섯 카드 모두에 같은 규칙으로 닿습니다 — `unsupported` · `skipped` · `failed` 면 카드 배지, `reason` 문장은 카드 제목(과 배지)의 `title`. `partial` 은 배지 없이 제목 `title` 만, `collected` 는 아무것도 없습니다 (④ 관례를 진단 블록까지 넓힘).
 - `app_slices_open` 은 블록 `status` 와 따로 갑니다. `null` 이면 그 행만 `값 없음` + `app_slices_open_reason_code`(`.rp-none-code`), 문장은 행 `title`. 값이 있으면 코드도 `title` 도 없습니다.
 - 그 밖의 `null` 칸은 `값 없음` 만 냅니다. 코드는 열림 행과 표 자리에만 붙습니다.
 - `측정 비용` 카드(요약 탭 · 맥락)는 진단 세션에만 단위 칸에 `앱 프로세스 몫 미포함` 을 둡니다.
+
+### dex 줄 표 (`dexstates` · baseline-profile BP-8)
+
+**요약 · 맥락 끝 `컴파일 상태 (전 → 후)`** span 12 — 측정 조건이라 요약 타일에 없습니다(결정 16).
+
+- 위 기록 칸(키/값 표 · 라벨 두 줄): `--compile` 세션이면 `바꾼 값`/`value` · `보낸 명령`/`command`(원문 등폭 · 구분자 뒤 `<wbr>` · `-` 로 시작하는 깃발 토큰은 `nowrap` 으로 그 안에서 끊지 않음 · plan B40) · `걸린 시간`/`elapsed_ms`, 아니면 `바꾼 기록`/`session.compile` → `바꾸지 않음`(사실 · 배지에 안 셈 · 결정 15). 그 뒤 **배열이 `null` 인 때**마다 한 행 — `바꾸기 전`/`compile_state_before` · `시작`/`compile_state_start` · `끝`/`compile_state_end` → `값 없음` + 그 `_reason_code`, 문장은 행 `title`. 그 때 행은 모든 dex 줄에서 뺍니다(줄마다 되풀이 0).
+- 아래 표(`.rp-dex .rp-dex-when`) — 머리 `때`(72px) · `컴파일 필터`/`status` · `컴파일 이유`/`reason`. dex 줄(키 = `path` + `abi`)마다 머리 행 1 = `path` 원문(등폭 13px) · 머리 행 2 = 필드 이름 그대로 `abi` · `primary_abi` · `secondary_dex` · `public_dex`(이름 등폭 12px `--color-neutral-600` · 값 등폭 13px `--color-neutral-800` · 참 `예` 거짓 `아니오` 같은 모양) → 위치 행 → 때 행(`바꾸기 전` · `시작` · `끝` — 값 칸 `nowrap`). 위치는 그 줄이 있는 때의 `location` 이 **글자 그대로 모두 같으면**(null 은 null 끼리) 머리 행 바로 아래 한 번 · 한 줄 라벨 `파일 위치 location {원문}`, 하나라도 다르면 때 행마다 그 아래 `파일 위치`/`location` 두 줄 라벨로 (등폭 12px `--color-neutral-600` · `null` 이면 `값 없음` · plan B42). 다른 칸만 골라 보이지 않습니다.
+- 줄 순서 = 때 순서로 훑어 **처음 나온 자리**(기기 순서 · 끝에만 있는 줄은 뒤). 그 때 배열에 그 줄이 없으면 그 때 행이 `줄 없음`(위치 행 없음 · `null` 이 아님 · 배지에 안 셈).
+- 시작 키가 없으면(옛 파일) 카드 본문 `수집 안 함 — target_app.compile_state_start 없음`(배지에 셈). 시작 · 끝이 둘 다 `null` 이면 표 없이 기록 칸만 — 그 카드가 그린 것이 `값 없음` 뿐이라 배지에 셉니다.
+- **칠하지 않습니다** — 상태 문자열 · 불 값 · 때가 모두 같은 색 · 굵기 · 등폭이고 바뀐 칸 · 다른 칸을 가르지 않습니다(결정 6). 바뀐 사실은 `경고` 카드의 `compile_state_changed` 행(core 문구)이 말합니다.
+
+**진단 `컴파일 상태 slice`** span 12 — `slice 이름별` 위. 때 칸 없음 · 행 순서 = 원문 순. 머리 행 1 = `location` 원문 · 머리 행 2 = `oat 파일 상태` `status` {값}(이 `status` 는 oat 파일 상태 — 컴파일 필터는 `filter` · 결정 14) · 값 행 칸 둘 `컴파일 필터`/`filter` · `컴파일 이유`/`reason`. `null` 이면 본문 `값 없음` + `target_process_compile_state_slices_reason_code`(블록 껍데기가 아닌 그 칸의 짝 — dalvik 안 켠 원본은 블록이 collected), 문장은 제목 `title` · 배지에 셈. `[]` 면 `컴파일 상태 slice 없음`(배지에 안 셈).
+
+두 카드 모두 상자 스크롤이 없습니다 — 경로 · 위치는 칸 전부를 쓰는 행에서 줄바꿈하고 값 칸(19자 `profile-utilization` 까지)은 `nowrap` 으로 390 에서 카드 안에 듭니다.
 
 ### slice 표 (`slicetable`)
 

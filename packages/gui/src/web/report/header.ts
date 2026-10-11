@@ -1,4 +1,5 @@
-import { DIAGNOSE_REPORT_COPY } from './diagnose-copy.js'
+import { COMPILE_REPORT_COPY } from './compile-copy.js'
+import { DIAGNOSE_REPORT_COPY, fillReportCopy } from './diagnose-copy.js'
 import { fmtValue, fmtWhen } from './format.js'
 import { KNOWN_METRICS, MANIFEST, NOT_DRAWN_METRICS, SCHEMA_MAJOR, type TabId, TABS } from './manifest.js'
 import { READABILITY_COPY } from './readability-copy.js'
@@ -56,6 +57,19 @@ export interface HeaderVm {
   ignored: string[]
 }
 
+/**
+ * 머리 `옵션` 칸 — `--launch` 또는 `attach`, `--compile` 세션이면 뒤에 `--compile <값>` (baseline-profile BP-8 ·
+ * 결정 16). 기준은 `session.options.compile` 이 문자열인가 하나 — 바꾼 기록(`session.compile`)의 유무로 가르지
+ * 않는다 (옵션은 사람이 준 것 · 기록은 기기가 한 것).
+ */
+function optionsLine(res: unknown): string {
+  const head = readPath(res, 'session.options.launch') === true ? '--launch' : 'attach'
+  const compile = readPath(res, 'session.options.compile')
+  return typeof compile === 'string'
+    ? `${head} ${fillReportCopy(COMPILE_REPORT_COPY.headOption, { value: compile })}`
+    : head
+}
+
 export function buildHeader(res: unknown): HeaderVm {
   const metricsObj = readPath(res, 'metrics')
   const presentKeys =
@@ -102,7 +116,7 @@ export function buildHeader(res: unknown): HeaderVm {
     // 측정 중이면 길이가 없다. 0 이 아니고, "세션 길이" 라고 부르지도 않는다. 라벨은 우리말 — 영어 필드
     // 이름(`duration`)을 머리에 쓰지 않는다 (RR-6 · HANDOFF 와 같은 `길이`).
     { k: READABILITY_COPY.headDuration, v: running ? '측정 중' : fmtValue(dur, 'ms0') },
-    { k: '옵션', v: readPath(res, 'session.options.launch') === true ? '--launch' : 'attach' },
+    { k: '옵션', v: optionsLine(res) },
   ]
 
   return {

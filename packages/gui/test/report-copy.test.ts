@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { COPY_ADVICE_WORDS, COPY_EVAL_WORDS, copyViolations } from '@perftracker/core'
 import { describe, expect, it } from 'vitest'
+import { COMPILE_REPORT_COPY } from '../src/web/report/compile-copy.js'
 import { DIAGNOSE_REPORT_COPY, fillReportCopy } from '../src/web/report/diagnose-copy.js'
 import { MANIFEST } from '../src/web/report/manifest.js'
 import { LABEL_WORDS, READABILITY_COPY } from '../src/web/report/readability-copy.js'
@@ -175,14 +176,63 @@ describe('RR-6 단어 표 ↔ 코드', () => {
 
     // 매니페스트 — 단어를 단 키는 모두 표의 짝이고, 표의 짝은 모두 어느 키엔가 달려 있다.
     const keyed = new Map<string, string>()
+    // 컴파일 상태(baseline-profile)가 단 단어는 그 디자인 문서의 표가 정본이다 — 아래 `BP-6 문구 표 ↔ 코드 (gui)`.
+    const compileWords = new Set<string>(Object.values(COMPILE_REPORT_COPY))
     for (const b of MANIFEST) {
       if (b.kind !== 'pairs') continue
       for (const k of b.keys ?? []) {
-        if (k.w === undefined) continue
+        if (k.w === undefined || compileWords.has(k.w)) continue
         expect(fromTable.get(k.l), `${b.title} · ${k.l}`).toBe(k.w)
         keyed.set(k.l, k.w)
       }
     }
     expect([...keyed.entries()].sort()).toEqual([...fromTable.entries()].sort())
+  })
+})
+
+/* ══════════════════ baseline-profile — 문구 표 ↔ 코드 (BP-6 · BP-8) ══════════════════ */
+
+/**
+ * 컴파일 상태가 보고서에 새로 내는 낱말. 정본은 `docs/design/baseline-profile.md` `## 문구` 표의 **gui 줄**이고
+ * 한 칸에 낱말이 여럿일 수 있다 (`` `바꾼 값` · `보낸 명령` · `걸린 시간` ``) — 백틱 하나하나가 낱말이다. 같은
+ * 낱말이 자리마다 되풀이되므로(`시작` · `컴파일 필터`) 모음끼리는 집합으로 대조한다.
+ */
+const BP_DESIGN = readFileSync(
+  fileURLToPath(new URL('../../../docs/design/baseline-profile.md', import.meta.url)),
+  'utf8',
+)
+const BP_GUI_ROWS = ((): { place: string; words: string[] }[] => {
+  const at = BP_DESIGN.search(/^## 문구\s*$/m)
+  expect(at).toBeGreaterThan(0)
+  const rest = BP_DESIGN.slice(at)
+  const section = rest.slice(0, rest.indexOf('\n## ', 1))
+  return section
+    .split('\n')
+    .filter((l) => l.startsWith('| gui |'))
+    .map((l) => {
+      const cells = l.split(/(?<!\\)\|/).slice(1, -1).map((c) => c.trim())
+      return { place: cells[1]!, words: [...cells[2]!.matchAll(/`([^`]+)`/g)].map((m) => m[1]!) }
+    })
+})()
+
+describe('BP-6 문구 표 ↔ 코드 (gui)', () => {
+  it('BP-6 문구 표 ↔ 코드 — 표의 gui 낱말과 COMPILE_REPORT_COPY 가 양방향으로 같다', () => {
+    const table = [...new Set(BP_GUI_ROWS.flatMap((r) => r.words))].sort()
+    const code = [...new Set<string>(Object.values(COMPILE_REPORT_COPY))].sort()
+    expect(table.filter((t) => !code.includes(t)), '표에만 있음').toEqual([])
+    expect(code.filter((c) => !table.includes(c)), '코드에만 있음').toEqual([])
+    // 표가 실제로 읽혔다 — gui 줄 13 · 낱말 23 (빈 배열끼리 같다고 통과하지 않게).
+    expect(BP_GUI_ROWS.length).toBe(13)
+    expect(table.length).toBe(23)
+  })
+
+  it('BP-6 문구 표 ↔ 코드 — 새 낱말이 단어 꼴이고 판정 낱말이 없다 (DM-15 · 결정 6)', () => {
+    const all = Object.values(COMPILE_REPORT_COPY).map(String)
+    expect(all.map((c) => ({ c, v: copyViolations(c) })).filter((x) => x.v.length > 0)).toEqual([])
+    // 표의 `안 쓰는 말` 칸 — 화면 낱말에 없다.
+    const banned = ['프로파일 적용', '최적화', 'JIT 많음', '나빠짐', '이전', '이후']
+    for (const w of banned) expect(all.filter((c) => c.includes(w)), w).toEqual([])
+    // 깨 본다 — 평가 낱말이 붙으면 걸린다.
+    for (const w of COPY_EVAL_WORDS) expect(copyViolations(`${COMPILE_REPORT_COPY.jitWord} ${w}`), w).toContain(`평가:${w}`)
   })
 })

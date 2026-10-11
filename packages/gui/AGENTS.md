@@ -41,11 +41,12 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
 
 ## 보고서는 팩토리다
 
-`src/web/report/` 는 지표마다 컴포넌트를 만들지 않는다. 데이터 모양이 여덟 가지뿐이고
-(`stat` `distribution` `series` `bars` `delta` `pairs` `frametimeline` `slicetable`), **각 지표가
+`src/web/report/` 는 지표마다 컴포넌트를 만들지 않는다. 데이터 모양이 아홉 가지뿐이고
+(`stat` `distribution` `series` `bars` `delta` `pairs` `frametimeline` `slicetable` `dexstates`), **각 지표가
 `manifest.ts` 에서 자기 모양과 데이터 위치를 선언**하면 렌더러는 모양만 안다.
 `slicetable` 은 진단 세션의 slice 이름별 표다 — 이름 한 줄에 갈래 셋 × 수 셋, 정렬은 보는 사람이
-열 머리를 누를 때만 (아래 「진단 탭」).
+열 머리를 누를 때만 (아래 「진단 탭」). `dexstates` 는 dex 줄마다 머리 행 + 값 행인 표다 — 요약 탭 맥락 끝
+`컴파일 상태 (전 → 후)`(때 셋 · 위 기록 칸)와 진단 탭 `컴파일 상태 slice` 가 같은 종류다 (baseline-profile BP-8).
 
     지표가 늘어난다  →  manifest.ts 에 한 줄
     새 모양이 나온다 →  그때만 kind 를 하나 늘린다
@@ -61,6 +62,7 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
 | `axis.ts` `blocks.ts` `header.ts` `slices.ts` | 기하 계산 · 결측 판정 · 표 행 모델 · 정렬 (**순수 함수**) | React · DOM · 이벤트 |
 | `diagnose-copy.ts` | 진단 모드가 보고서에 새로 내는 문구 — 정본은 디자인 문서 `## 문구` 표 | 나머지 전부 |
 | `readability-copy.ts` | 보고서 가독성이 새로 내는 문구 · 경로 라벨의 단어 — 정본은 `docs/design/report-readability.md` `## 문구` | 나머지 전부 |
+| `compile-copy.ts` | 컴파일 상태가 보고서에 새로 내는 낱말 — 정본은 `docs/design/baseline-profile.md` `## 문구` gui 줄 | 나머지 전부 |
 | `*.tsx` | 그리기만 | 계산. 좌표는 받아서 쓴다 |
 
 화면은 `?report=<run id>` 로 뜬다 (`web/main.tsx`). 라우터를 들이지 않은 것은 경로가 둘뿐이기
@@ -242,6 +244,11 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
 - **앱 slice 열림은 블록 `status` 와 따로 간다** (README). 그래서 그 행만 자기 이유를 단다 — 값이
   `null` 이면 `값 없음` 옆에 코드, 문장은 행 툴팁 (`PairsBlock.keys[].why`). 그 밖의 `null` 칸은
   `값 없음` 만 낸다.
+- **컴파일 상태 slice · JIT 수도 블록 `status` 와 따로 간다** (baseline-profile BP-7 · BP-8). dalvik 을 안 켠
+  원본은 블록이 collected 인데 두 칸만 `null` 이다 — 그래서 `컴파일 상태 slice` 카드(dexstates)는 `값 없음` 옆
+  코드 · 제목 title 을 블록 껍데기가 아니라 그 칸의 짝(`_reason_code` · `_reason`)에서 읽고(`NoneVm.code` ·
+  `title`), JIT 행은 `why` 짝이다. 레일 배지는 그린 `값 없음` 카드 수 그대로라 대상 앱이 없으면 2 (표 · 컴파일
+  상태 slice · plan B30).
 - **slice 표는 판정하지 않는다.** 행을 자르지 않고(1만 행도 다 그린다 — 창 안 행만 그리지 않는다),
   이름을 자르지 않고(줄바꿈), 처음 순서는 이름의 **코드 단위** 순이다(`localeCompare` 가 아니다).
   행마다 색 · 굵기 · 아이콘이 같다 — 행 뷰모델에 이름과 칸 말고는 없다. 순서는 보는 사람이 열 머리를

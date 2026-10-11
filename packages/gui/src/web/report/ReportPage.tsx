@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { INLINE_REPORT_GLOBAL, type ReportDocument } from '../../contract/api.js'
 import { computeMaxT, readMarks } from './axis.js'
-import { blockState, buildBlock, buildTiles, cardUnit, type NoneVm, tabBadgeCount } from './blocks.js'
+import {
+  blockState,
+  buildBlock,
+  buildTiles,
+  cardState,
+  cardUnit,
+  type DexStatesVm,
+  type NoneVm,
+  tabBadgeCount,
+} from './blocks.js'
 import { BlockCard, NoneBody } from './BlockCard.jsx'
 import {
   BarsBody,
@@ -16,6 +25,7 @@ import {
   type Tip,
   useWidth,
 } from './Charts.jsx'
+import { DexStatesBody } from './DexStates.jsx'
 import { clock } from './format.js'
 import { buildHeader, isDiagnoseSession, tabsFor } from './header.js'
 import { type Block, MANIFEST, SECTIONS, type TabId } from './manifest.js'
@@ -43,12 +53,16 @@ function inlineReport(): ReportDocument | null {
  * 초를 가리키고, 마커를 짚어도 같은 값이 움직인다 — "CPU 가 튄 그 순간 메모리는" 을 눈을
  * 옮기지 않고 읽으라는 것이 이 화면의 요점이다.
  */
-export function ReportPage({ runId }: { runId: string }) {
+export function ReportPage({ runId, initialTab = 'summary' }: {
+  runId: string
+  /** 처음 켜진 탭 — 화면은 늘 `summary` 다. 시험이 진단 탭을 첫 그림으로 그릴 때만 준다. */
+  initialTab?: TabId
+}) {
   // 심겨 있으면 첫 그림부터 그 문서다 — 불러오는 중 화면을 거치지 않는다. 시험도 같은 길로 화면 전체를 그린다
   // (`test/report.test.ts` 의 `react-dom/server` — 레일 배지 · 타일을 렌더 결과로 본다).
   const [doc, setDoc] = useState<ReportDocument | null>(inlineReport)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<TabId>('summary')
+  const [tab, setTab] = useState<TabId>(initialTab)
   const [sub, setSub] = useState<Record<string, string>>({})
   const [hoverT, setHoverT] = useState<number | null>(null)
   const [hotBucket, setHotBucket] = useState<number | null>(null)
@@ -222,8 +236,11 @@ export function ReportPage({ runId }: { runId: string }) {
               </div>
             )}
             <div className="rp-grid">
-              {s.items.map(({ key, block, metric, vm }) => {
+              {s.items.map(({ key, block, metric: shell, vm }) => {
                 const isNone = (vm as NoneVm).none === true
+                // 값에 딸린 이유 짝이 있는 빈 자리(진단 컴파일 상태 slice)는 그 문장이 제목 title · 그 코드가 값 자리
+                // 코드다 — 배지는 블록 껍데기 그대로 (`cardState`).
+                const metric = cardState(shell, vm)
                 const stat = block.kind === 'stat'
                 return (
                   <BlockCard
@@ -396,6 +413,7 @@ function Body({
     case 'pairs': return <PairsBody vm={vm as Parameters<typeof PairsBody>[0]['vm']} />
     case 'stat': return <StatBody vm={vm as Parameters<typeof StatBody>[0]['vm']} title={block.title} />
     case 'slicetable': return <SliceTable vm={vm as SliceTableVm} />
+    case 'dexstates': return <DexStatesBody vm={vm as DexStatesVm} />
     default: {
       // **exhaustiveness 체크.** `case` 하나가 빠지면(예: `frametimeline` 삭제) `block` 이
       // `never` 로 안 좁혀져 컴파일이 깨진다 — 안 그러면 그 카드는 테스트를 다 통과한 채
