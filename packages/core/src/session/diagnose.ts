@@ -77,7 +77,7 @@ export function appSliceOpen(sdkInt: number, debuggable: boolean | null | undefi
 
 /**
  * `start --diagnose` 의 고지 줄. 조건 표의 "모름" 칸일 때만 문구가 있고, 열리면 `null` 이다.
- * **세션은 막지 않는다** — 프레임워크 slice(am · wm · view)는 그대로 실린다.
+ * **세션은 막지 않는다** — 프레임워크 slice(am · wm · view · dalvik)는 그대로 실린다.
  */
 export function diagnoseNotice(sdkInt: number, debuggable: boolean | null | undefined): string | null {
   const verdict = appSliceOpen(sdkInt, debuggable)

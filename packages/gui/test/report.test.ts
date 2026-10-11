@@ -1592,6 +1592,41 @@ function diagnosePlaces(doc: unknown): Map<string, string[]> {
   return places
 }
 
+/**
+ * plan B27 — 진단 블록 컴파일 상태 slice(객체 배열)를 기존 `list` 칸이 그린다. 객체 항목은 `키=값` 을 공백으로
+ * 이은 한 줄(기기 slice 원문 꼴)이고, 문자열 항목은 그대로다. `[object Object]` 가 찍히는 길이 없어야 한다.
+ */
+describe('BP-7 컴파일 상태 칸 — list 의 객체 항목', () => {
+  it('BP-7 컴파일 상태 칸 — 객체 항목은 키=값 한 줄(객체 순서) · 문자열 항목은 그대로', () => {
+    expect(fmtValue([{ location: '/a b/base.odex', status: 'up-to-date', filter: 'speed', reason: 'cmdline' }] as never, 'list'))
+      .toBe('location=/a b/base.odex status=up-to-date filter=speed reason=cmdline')
+    expect(fmtValue([{ b: 2, a: 1 }, { c: null }] as never, 'list')).toBe('b=2 a=1, c=null')
+    expect(fmtValue(['tag1', 'tag2'] as never, 'list')).toBe('tag1, tag2')
+    expect(fmtValue([] as never, 'list')).toBe('없음')
+  })
+
+  it('BP-7 컴파일 상태 칸 — 진단 탭 어느 상태에서도 [object Object] 가 찍히지 않고, 값이 있으면 원문 꼴 줄이다', () => {
+    for (const s of DIAG_STATES) {
+      const doc = diagDoc(s)
+      for (const b of DIAG_BLOCKS) {
+        if (b.kind !== 'pairs') continue
+        const vm = buildPairs(b, doc)
+        if ((vm as NoneVm).none === true) continue
+        for (const row of (vm as PairsVm).rows) expect(row.value, `${s} / ${row.label}`).not.toContain('[object Object]')
+      }
+    }
+    const counts = DIAG_BLOCKS.find(
+      (b): b is PairsBlock => b.kind === 'pairs' && (b.keys ?? []).some((k) => k.p === 'target_process_compile_state_slices'),
+    )!
+    const row = (buildPairs(counts, diagDoc('collected')) as PairsVm).rows.find(
+      (r) => r.label === 'target_process_compile_state_slices',
+    )!
+    expect(row.value).toBe(
+      COMPILE_STATES.map((c) => `location=${c.location} status=${c.status} filter=${c.filter} reason=${c.reason}`).join(', '),
+    )
+  })
+})
+
 describe('DM-13 진단 탭 전 필드', () => {
   /** 스키마가 블록에 필드를 늘리면 여기서 먼저 깨진다 — 그 필드의 자리를 정하기 전엔 통과하지 않는다. */
   it('DM-13 진단 탭 전 필드 — 블록 필드 목록이 core 스키마와 같다 (시험 문서가 전부를 싣는다)', () => {
