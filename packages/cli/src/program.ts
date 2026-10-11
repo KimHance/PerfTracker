@@ -1,6 +1,7 @@
 import { CLI_VERSION } from './version.js'
 import { Command } from 'commander'
 import {
+  checkCompileOption,
   hasBlockingFailure,
   listDeviceSummaries,
   listRuns,
@@ -20,6 +21,7 @@ import { runStart, type StartCliOptions } from './commands/start.js'
 import { runStatus, statusData } from './commands/status.js'
 import { runStop } from './commands/stop.js'
 import { createContext } from './context.js'
+import { COMPILE_CLI_COPY } from './copy/compile.js'
 import { DIAGNOSE_CLI_COPY } from './copy/diagnose.js'
 
 /**
@@ -105,7 +107,15 @@ export function buildProgram(): Command {
      * (`docs/design/diagnostic-mode.md` `## 문구`)과 달라진다. 안 주면 `undefined` 이고 평소 세션이다.
      */
     .option('--diagnose', DIAGNOSE_CLI_COPY.helpDiagnose)
+    /**
+     * 기기 컴파일 상태를 바꾸고 잰다 (기능 문서 baseline-profile BP-4). **`--launch` 와만 받는다** (결정 8) —
+     * 도움말은 80칸이라 그 조건을 싣지 않고, 거부 줄 · README 「명령 전체」 · cli AGENTS 가 말한다
+     * (디자인 문서 `## 정한 것` 4). 기본값이 없는 이유는 `--diagnose` 와 같다.
+     */
+    .option('--compile <값>', COMPILE_CLI_COPY.helpCompile)
     .action(async (opts: StartCliOptions & { device?: string }) => {
+      // `--compile` 거부는 adb 를 찾거나 기기 목록을 묻기 **전**에 (BP-4 — 기기 명령 0 · 기기가 없어도 같은 거부).
+      checkCompileOption({ launch: opts.launch, compile: opts.compile })
       const ctx = await createContext({ ...program.opts(), device: opts.device })
       console.log(await runStart(ctx, opts))
     })

@@ -2,6 +2,7 @@ import { CLI_VERSION } from '../version.js'
 import { dirname, resolve } from 'node:path'
 import { extractRun, readActiveSession, SessionStateError, stopSession } from '@perftracker/core'
 import type { CliContext } from '../context.js'
+import { revertLines } from './compile.js'
 import { writeStandaloneReport } from './report.js'
 
 export async function runStop(
@@ -46,7 +47,12 @@ export async function runStop(
     }
   }
 
-  return formatStopResult({ runDir, id: session.id, state, reportPath })
+  // `--compile` 세션이면 되돌림 줄 (BP-5 · plan B9) — 바꾸기 전 상태는 세션 기록에 있다. 기기 명령은 그대로.
+  const revert =
+    session.compile === undefined
+      ? undefined
+      : revertLines(session.compile.compile_state_before, session.serial, session.packageName)
+  return formatStopResult({ runDir, id: session.id, state, reportPath, ...(revert ? { revert } : {}) })
 }
 
 /**
@@ -63,6 +69,8 @@ export function formatStopResult(input: {
   state: 'completed' | 'aborted'
   /** `--report` 로 이미 만든 보고서. 없으면 그 자리에 **만드는 법**이 온다. */
   reportPath: string | null
+  /** `--compile` 세션의 되돌림 줄 (BP-5). 없으면 출력이 이 기능 전과 같다. */
+  revert?: readonly string[]
 }): string {
   const lines = input.state === 'aborted' ? ['세션이 중단된 상태로 종료되었습니다.'] : []
   lines.push(`→ ${input.runDir}/result.json`)
@@ -71,6 +79,8 @@ export function formatStopResult(input: {
       ? `  ${reportCommand(input.id, input.runDir)} 로 보고서를 엽니다`
       : `→ ${input.reportPath}`,
   )
+  // 요약이 아니라 다음에 칠 명령이다 — 값을 찍지 않는다는 규칙 밖 (기능 문서 baseline-profile `### 안 바뀔 것`).
+  if (input.revert !== undefined) lines.push('', ...input.revert)
   return lines.join('\n')
 }
 

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import {
   APP_SLICE_MIN_SDK,
+  COMPILE_VALUES,
   DEFAULT_MAX_DURATION_MS,
   DIAGNOSE_ATRACE_CATEGORIES,
   DIAGNOSE_MAX_DURATION_MS,
@@ -103,9 +104,38 @@ describe('DM-1 README 옵션 대조', () => {
   })
 
   it('DM-1 README 옵션 대조 — start 옵션이 실제로 등록돼 있어야 이 시험이 의미를 갖는다', () => {
-    // 지금 7개 (--app --name --device --launch --out --force --diagnose). 트리가 비면 위 단언은 빈 배열끼리 통과한다.
+    // 지금 8개 (--app --name --device --launch --out --force --diagnose --compile). 트리가 비면 위 단언은 빈 배열끼리 통과한다.
     expect(startOptions()).toContain('--diagnose')
-    expect(startOptions().length).toBeGreaterThanOrEqual(7)
+    expect(startOptions()).toContain('--compile')
+    expect(startOptions().length).toBeGreaterThanOrEqual(8)
+  })
+})
+
+/**
+ * **`--compile` 의 조건은 도움말이 아니라 문서가 말한다** (BP-4 · 결정 8 · 디자인 문서 `## 정한 것` 4). `--help` 설명은
+ * 80칸이라 `--launch 와만` 을 싣지 않으므로, README 「명령 전체」 와 `packages/cli/AGENTS.md` 가 그 조건을 적어야 한다 —
+ * 둘 다 빠지면 거부 줄을 보기 전까지 아무도 모른다.
+ */
+describe('BP-4 README 옵션 대조', () => {
+  const AGENTS = readFileSync(fileURLToPath(new URL('../AGENTS.md', import.meta.url)), 'utf8')
+  const LAUNCH_ONLY = '`--compile` 은 `--launch` 와만'
+
+  it('BP-4 README 옵션 대조 — --compile 은 「명령 전체」 절 안에 받는 값 셋과 함께 있다', () => {
+    const all = section('명령 전체')
+    expect(mentions(all, '--compile')).toBe(true)
+    expect(all).toContain(`--compile <${COMPILE_VALUES.join('|')}>`)
+  })
+
+  it('BP-4 README 옵션 대조 — --launch 와만 받는다는 조건이 「명령 전체」 · cli AGENTS 에 있다', () => {
+    expect(section('명령 전체')).toContain(LAUNCH_ONLY)
+    expect(AGENTS).toContain(LAUNCH_ONLY)
+  })
+
+  it('BP-4 README 옵션 대조 — 도움말 설명에는 그 조건이 없다 (그래서 문서가 말해야 한다)', () => {
+    const start = buildProgram().commands.find((c) => c.name() === 'start')
+    const help = start?.options.find((o) => o.long === '--compile')?.description ?? ''
+    expect(help).not.toBe('')
+    expect(help).not.toContain('--launch')
   })
 })
 

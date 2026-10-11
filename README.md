@@ -407,7 +407,7 @@ npx perftracker open -p 7333   # 포트를 고정하고 싶으면
 | `perftracker devices` | 연결된 기기와 스펙 요약 | 필요 |
 | `perftracker apps` | **열 수 있는** 앱을 런처 이름으로 (런처에 아이콘이 뜨는 것) | 필요 |
 | `perftracker schema` | `result.json` 의 JSON Schema 를 출력 | 불필요 |
-| `perftracker start` | 측정 시작 (`--diagnose` 면 진단 세션) | 필요 |
+| `perftracker start` | 측정 시작 (`--diagnose` 면 진단 세션 · `--launch --compile <값>` 이면 컴파일 상태를 바꾼 뒤) | 필요 |
 | `perftracker mark <라벨>` | 측정 중인 세션에 마킹 | **접촉 안 함** |
 | `perftracker status` | 진행 중인 세션 | **접촉 안 함** |
 | `perftracker stop` | 종료 · 트레이스 회수 · `result.json` 생성 (`--report` 면 HTML 까지) | 필요 |
@@ -452,6 +452,45 @@ npx perftracker stop                         # 평소와 같습니다 — 경로
 - `stop` · `extract` 의 출력은 평소와 같습니다 — slice 요약을 찍지 않습니다. slice 는
   `result.json` 에 실리고(아래 「`result.json` 읽는 법」), 시간축으로 보려면 run 디렉토리의
   `trace.perfetto-trace` 를 [Perfetto UI](https://ui.perfetto.dev) 로 엽니다.
+
+### 컴파일 상태를 맞춰 재기 (`--compile`)
+
+같은 앱이라도 컴파일 상태(`speed-profile` · `verify` · `speed` …)에 따라 콜드 스타트 · 스크롤 수치가 달라집니다.
+상태를 맞춰 다시 재려면 `--compile <reset|speed-profile|speed>` 를 줍니다. **`--compile` 은 `--launch` 와만 받습니다** —
+`--launch` 없이 주거나 셋 밖의 값을 주면 기기에 명령을 하나도 보내지 않고 거부합니다. 이미 떠 있는 앱은 옛 컴파일
+결과로 돌 수 있기 때문입니다. (`--help` 의 설명 줄은 80칸이라 이 조건을 싣지 않습니다.)
+
+```bash
+npx perftracker start --app com.google.android.youtube --launch --compile speed
+npx perftracker status                       # Compile 줄
+npx perftracker stop                         # 경로 · 보고서 명령 + 되돌림 줄
+```
+
+- **기기를 영구히 바꿉니다** — 세션이 끝나도 남습니다. 보낸 명령 · 바꾸기 전 상태 · 걸린 시간은
+  [`session.compile`](#sessioncompile--바꾼-기록) 에 남습니다.
+- `start` · `status` 에 `Compile   speed · base.apk speed-profile → speed · 67,500 ms` 줄이 붙습니다 — base.apk 줄의
+  바꾸기 전 → 뒤 `status`(compiler filter)와 상태를 바꾸는 데 걸린 시간입니다. 읽지 못한 쪽은 `모름` 입니다.
+  `status` 는 기기에 묻지 않고 run 디렉토리의 기록(`capture.json`)을 읽습니다.
+- **도구는 되돌리지 않고, 되돌림 명령 줄을 냅니다.** `start` 와 `stop` 출력에 — 상태 바꾸기가 실패했거나 바꾼 뒤
+  세션 시작이 실패해 오류로 끝날 때도 — 호스트에서 그대로 쳐서 도는 줄이 붙습니다:
+
+  ```
+  되돌림 · 실행 뒤 reason = cmdline · 기기가 다시 바꿀 수 있음
+    adb -s R5CT0000001 shell cmd package compile -m speed-profile -f com.google.android.youtube
+    adb -s R5CT0000001 shell cmd package compile -m verify -f --secondary-dex com.google.android.youtube
+  ```
+
+  바꾸기 전 base.apk 줄의 `status` 로 `-m` 을 채우고, 보조 dex 가 있고 그 `status` 가 모두 같으면 `--secondary-dex`
+  줄이 하나 더 붙습니다(서로 다르면 그 사실 한 줄). `-m` 이 받는 값은 sdk 36 기기 도움말 실측의 `speed` ·
+  `speed-profile` · `verify` 셋이라, 바꾸기 전 `status` 가 그 밖이거나 읽지 못했으면 명령 대신 그 사실 한 줄이
+  나옵니다. 대상 앱만 다루고, 명령 줄은 자르지 않아 80칸을 넘습니다. 되돌려도 처음과 똑같아지지 않는 이유는
+  [`session.compile` 의 한계](#sessioncompile--바꾼-기록)에 있습니다.
+- `stop` 이 `result.json` 산출에 실패해 오류로 끝나거나 화면(`open`)에서 세션을 멈추면 되돌림 줄이 나오지
+  않습니다 — 그때는 run 디렉토리 `session.json` 의 `compile.compile_state_before` 가 바꾸기 전 상태입니다.
+- `status --json` 은 `compile`(`value` · `baseStatusBefore` · `baseStatusAfter` · `elapsedMs`)을, `runs --json` 은
+  행마다 같은 꼴의 `compile` 을 **`--compile` 세션에만** 싣습니다 — 평소 세션의 JSON 은 키가 이 옵션 이전과
+  같습니다. 모르는 칸은 `null` 이고, `runs` 의 `baseStatusAfter` 는 `result.json` 이 있는 기록에서만 읽습니다.
+- `--compile` 없는 세션의 `start` · `stop` · `status` 출력은 이 옵션 이전과 같습니다.
 
 ### 기록 관리 (`runs`)
 
@@ -685,8 +724,9 @@ speed-profile 471 · verify 618 · speed 665 ms). 두 세션의 수치가 다를
   넘으면 run 디렉토리도 `result.json` 도 생기지 않습니다. 실패 뒤의 상태는 다시 읽지 않으므로 **기기가 어디까지
   바꿨는지는 모릅니다** — 한도에 걸려 호스트가 adb 를 끊어도 기기는 계속 컴파일하고 있을 수 있습니다.
 - **상태는 바꿨는데 그 뒤에서 실패하면** (run 디렉토리 · 시작 스냅샷 · Perfetto 세션 시작 · 앱 실행 등) 세션은
-  열리지 않지만 **기기 컴파일 상태는 이미 바뀌어 있습니다.** 그 오류는 원래 문장 그대로 나오고, 도구는 기기에
-  더 묻지 않습니다 (바뀐 뒤 상태를 다시 읽지도 되돌리지도 않습니다).
+  열리지 않지만 **기기 컴파일 상태는 이미 바뀌어 있습니다.** 그 오류는 원래 문장 그대로 나오고 그 아래에
+  [되돌림 명령 줄](#컴파일-상태를-맞춰-재기---compile)이 붙습니다. 도구는 기기에 더 묻지 않습니다 (바뀐 뒤 상태를
+  다시 읽지도 되돌리지도 않습니다).
 - **한계 — 이 도구는 자동으로 되돌리지 않습니다.** 그리고 되돌려도 처음과 똑같아지지 않습니다:
   - 되돌려도 `reason` 은 `cmdline` 으로 남습니다 (실측 `profile-utilization` → `cmdline`).
   - `reset` 이 지운 로컬 프로파일은 되살리지 못합니다.

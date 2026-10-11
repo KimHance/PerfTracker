@@ -1181,7 +1181,7 @@ registry 순서는 `hwuiCollector` 바로 뒤에 `frameCollector` 다 — 지표
 `startSession` 이 `compile`(`reset` · `speed-profile` · `speed`)을 받으면 측정 창을 열기 전에 기기 컴파일 상태를
 바꾸고, `result.json` 의 `session.compile` 에 바꾼 기록(값 · 보낸 명령 원문 · 바꾸기 전 상태 · 걸린 ms)을 남깁니다.
 자리와 읽는 법 · 한계는 README 「`session.compile` — 바꾼 기록」 이 정본입니다. CLI 옵션 · 출력 줄 · 되돌림 줄은
-bp-cli 단위 몫입니다.
+아래 「CLI 쪽」 입니다.
 
 - **기기 명령:** 설정 검증 뒤 · run 디렉토리 · 시작 스냅샷 · perfetto · force-stop **앞**에 `cmd package compile …`
   한 줄과, 성공하면 바로 뒤 `dumpsys package <pkg>` 한 줄 — 그 출력이 시작 상태(바꾼 뒤)입니다. 평소 세션의 명령
@@ -1198,6 +1198,25 @@ bp-cli 단위 몫입니다.
   객체라 캐시한 1.1.0 스키마는 그 세션의 산출물을 거부합니다. 새 reason_code 없음.
 - **확인하지 못한 것:** 실기기에서 이 경로 전체(기능 문서 BP-9 · device 단위) · sdk ≤33 의 `cmd package compile`
   출력 꼴 (열린 질문 10 — 실패 판정은 종료 코드 · 줄 머리 `Failure` · 한도 셋뿐).
+
+### ✅ 컴파일 상태를 맞춰 재기 — `start --compile` 의 CLI 쪽 (2026-10-11, 기능 문서 baseline-profile BP-4 · BP-5 · BP-6)
+
+`perftracker start --launch --compile <reset|speed-profile|speed>` 가 생겼습니다. 쓰는 법 · 줄 꼴은 README 「명령 전체」
+의 「컴파일 상태를 맞춰 재기」 가 정본이고, 새 문구는 `docs/design/baseline-profile.md` `## 문구` 표가 정본입니다.
+
+- **거부는 기기 명령 0** — `--launch` 없음 · 셋 밖의 값은 `runStart` 가 옛 세션 정리 · 앱 해석보다 먼저 core 의
+  `checkCompileOption` 으로 거부합니다. `--help` 설명은 80칸이라 `--launch` 와만이라는 조건을 싣지 않고, README ·
+  `packages/cli/AGENTS.md` 가 말합니다 (시험이 둘을 대조).
+- **표시는 `--compile` 세션에만** — `start` · `status` 의 `Compile` 줄(바꾸기 전 → 뒤 base.apk `status` · 걸린 ms),
+  `start` · `stop` 의 되돌림 줄, `status --json` 의 `compile`, `runs --json` 행의 `compile`(core `RunSummary` 에 칸을
+  더함 · plan B33). 평소 세션의 출력 · JSON 은 이 옵션 이전과 같습니다.
+- **되돌림 줄은 호스트 꼴 한 줄** (`adb -s <serial> shell cmd package compile -m <status> -f <pkg>` · 보조 dex 가 모두
+  같으면 `--secondary-dex` 한 줄 더) — 80칸 밖 · 자르지 않음 · 자동으로 실행하지 않음. 바꾸기 전 `status` 가
+  `-m` 이 받는 셋(`speed` · `speed-profile` · `verify`, sdk 36 도움말 실측) 밖이거나 모르면 그 사실 한 줄.
+  compile 실패(`CompileFailedError`) · compile 뒤 실패(`CompileAppliedError`)에도 상태 줄 · 되돌림 줄이 붙습니다.
+- **확인하지 못한 것:** 실기기에서 줄을 그대로 쳐서 도는지(기능 문서 BP-9 (e) · device 단위) · `stop` 이
+  `result.json` 산출에 실패할 때 · 화면이 세션을 멈출 때는 되돌림 줄이 안 나옵니다 (기능 문서 열린 질문 11) ·
+  보조 dex `status` 가 모두 같지만 `-m` 밖인 경우는 줄을 내지 않습니다(문구 표에 그 문장이 없음).
 
 ### 그 밖의 후보 (우선순위 낮음)
 
