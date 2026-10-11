@@ -18,7 +18,7 @@ import { METRIC_REASON_CODES, type MetricReasonCode } from './reasons.js'
 // 1.1.0 은 npm 0.1.0(2026-08-20) ~ 0.2.1 로 출시됐다. 개발 중에는 "미출시 버전 안의 확장은 버전
 // 사유가 아니다" 로 판단해 1.1.0 안에서 계약을 여러 번 넓혔고, 출시 뒤에도 0.2.0(2026-08-31)이
 // 같은 1.1.0 으로 metrics.frame 과 reason_code no_frames 를 더했다 (0.1.0 때 스키마는 reason_code
-// 35개 · metrics.frame 없음, 0.2.0 은 36개 — git 2ee8198 · 4a68127). 그래서 `1.1.0` 이라는 같은
+// 35개 · metrics.frame 없음, 0.2.0 은 36개 — git bc1ce9b · fb27818). 그래서 `1.1.0` 이라는 같은
 // 숫자가 넓이가 다른 계약 여럿을 가리킨다 (README 「스키마를 다시 꺼내야 하는 때」).
 // 1.2.0 부터는 출시된 계약을 넓히면 아래 표대로 버전을 올린다.
 //

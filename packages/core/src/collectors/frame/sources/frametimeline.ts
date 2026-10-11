@@ -22,7 +22,7 @@ export interface FrameProcessCandidate extends AppProcessCandidate {
  * **후보 목록.** frame 은 프레임을 낸 프로세스만 후보로 삼으므로
  * `collectors/appProcess.ts` 의 공용 쿼리(`appProcessSql`) 대신
  * `actual_frame_timeline_slice` 를 조인한 자기 쿼리를 쓴다. 접기 전 코드
- * (`e38075b^:packages/core/src/collectors/frame/sources/frametimeline.ts`) 의 것을 그대로 가져왔다.
+ * (`da7fe26^:packages/core/src/collectors/frame/sources/frametimeline.ts`) 의 것을 그대로 가져왔다.
  */
 export const FRAME_PROCESS_SQL =
   "select json_group_array(json_object('upid', upid, 'pid', pid, 'name', name, 'frames', frames)) as j " +

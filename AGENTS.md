@@ -79,4 +79,4 @@
 - **`gh` CLI 를 쓰지 않는다.** git CLI 나 GitHub REST API 를 쓴다.
 
 판단 이력과 그 근거는 기능 문서 `### 결정` · `DECISIONS-TO-REVISIT.md`, 버전별 변경은 `CHANGELOG.md`, 진행 상태는 `docs/STATUS.md`.
-초기(M0 ~ M3) 개발 기록은 git 히스토리에만 있다.
+초기(M0 ~ M3) 개발 기록은 공개 전에 히스토리째 지웠다.

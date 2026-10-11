@@ -42,7 +42,7 @@ python3 -I labs/report-readability-design/v1/check_shots.py …/before   # 지�
 | 고침 4 (`FIX-4.md` · plan B31) | `session.compile.before` → `compile_state_before` (+ 짝) | 모양 같음 · 사진 안 다시 찍음 |
 | 고침 5 (`FIX-5.md` · ⑨ 승격 · plan B37 · B40 · B42) | 구현 뒤 결정을 손으로 (edit_file · 생성 0) — 위치가 때마다 같으면 머리 아래 한 번 · 보낸 명령 깃발 토큰 `.rp-nobr` · 온도 `zones` `[]` → `항목 없음` · 핸드오프 사진 두 폴더를 **구현 실렌더**로 (`design_handoff_report-readability` 6장 · `design_handoff_baseline-profile` 6장 — MCP `write_file` 이 utf8 만이라 같은 브라우저 세션의 `WriteFiles` 로 올림 · 서버가 C2PA `caBX` 덩이를 붙여 바이트는 다르고 픽셀 같음) | 16/16 그대로 · compile-1440 위치 한 번 (`shots/` 다시 찍음) |
 
-## RR-9 — 실기기 보고서 (2026-10-11 · ffca69c)
+## RR-9 — 실기기 보고서 (2026-10-11 · 969ea9a)
 
 SM-S901N · serial `R5CT0000001` · sdk 36 · YouTube 21.40.161 — 평소 `bfaf14` (18,324 ms) · 진단 `6c997f` (13,453 ms). 재료는 기기 접촉 없이 run 디렉토리 그대로 (레포 밖).
 `perftracker report <id> -o <rr9> --file <스크래치>/….html --no-browser` → 탭마다 클릭 → `measure.js` + 타일 · 배지 · 미수집 카드 셈 (`.rp-card` 안 `.rp-none` 이 `값 없음` · `수집 안 함` 으로 시작) · 기준은 `check_shots.py` 의 `problems()` 그대로.

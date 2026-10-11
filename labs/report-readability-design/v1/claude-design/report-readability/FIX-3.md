@@ -1,6 +1,6 @@
 # Report Readability.dc.html — 고침 3 (디자인 검토 조건부 11 · core 실제 필드)
 
-`states.js` 가 바뀌었다 — **core 실제 이름 · 모양**이다 (레포 KimHance/baseline-profile 20688ab). 시안이 읽는 자리를 거기에 맞추고 아래를 고친다. 나머지는 그대로.
+`states.js` 가 바뀌었다 — **core 실제 이름 · 모양**이다 (레포 KimHance/baseline-profile d0150d5). 시안이 읽는 자리를 거기에 맞추고 아래를 고친다. 나머지는 그대로.
 
 1. **필드 이름 · 모양**
    - `target_app.compile_state_start` · `compile_state_end` = **dex 줄 배열 바로** (`{dex:[…]}` 아님). 한 줄 = `{path, secondary_dex, public_dex, abi, status, reason, primary_abi, location}` (`location` null 가능). 짝 `compile_state_start_reason_code` · `_reason` · `compile_state_end_reason_code` · `_reason`.

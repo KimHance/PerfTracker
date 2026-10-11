@@ -1,7 +1,7 @@
 # 핸드오프 — Baseline Profile · 컴파일 상태 (v1 · 구현 끝)
 
 시안: `Report Readability.dc.html` 의 `summary` · `compile` · `end-null` · `legacy` · `diag` · `diag-noapp` 상태 (고침 5 — `report-readability/FIX-5.md`). 정본: 레포 `docs/design/baseline-profile.md` (`## 정한 것`).
-CLI 출력 6블록: `cli-blocks.txt` (레포 `labs/baseline-profile-design/v1/` 생성기 · 검사). **구현 끝** — 레포 `packages/gui` (bp-gui-report 21dbe9e · 검수 고침 4d578ea) · `packages/cli` (bp-cli).
+CLI 출력 6블록: `cli-blocks.txt` (레포 `labs/baseline-profile-design/v1/` 생성기 · 검사). **구현 끝** — 레포 `packages/gui` (bp-gui-report 04725f6 · 검수 고침 78aa3d4) · `packages/cli` (bp-cli).
 
 ## 새 블록 `dexstates`
 - **요약 · 맥락 끝** `컴파일 상태 (전 → 후)` · span 12.
@@ -16,11 +16,11 @@ CLI 출력 6블록: `cli-blocks.txt` (레포 `labs/baseline-profile-design/v1/` 
 - **진단 탭** `컴파일 상태 slice` · span 12 — `slice 이름별` 위. 머리 행 1 = `location` 원문 · 머리 행 2 = `oat 파일 상태` / `status` 값 · 값 행 칸 둘 `컴파일 필터`/`filter` · `컴파일 이유`/`reason`. 가로 스크롤 상자 없음. `[]` → `컴파일 상태 slice 없음`. null → `값 없음` + `_reason_code` (diag-noapp `process_not_in_trace` · 진단 배지 2 — B30).
 - `slice 수` 끝 행 `JIT 컴파일 slice`/`target_process_jit_slices`.
 
-## 필드 (core `schema/result.ts` · `session.compile` 은 bp-core-compile 0ef33ad)
+## 필드 (core `schema/result.ts` · `session.compile` 은 bp-core-compile ca6dd81)
 `session.options.compile` · `session.compile{value,command,elapsed_ms,compile_state_before(+_reason_code · _reason)}` · `target_app.compile_state_start|end` = dex 줄 배열 바로 `[{path,secondary_dex,public_dex,abi,status,reason,primary_abi,location}]` (null = 못 읽음) + `compile_state_start|end_reason_code` · `_reason` · `diagnose.target_process_compile_state_slices[{location,status,filter,reason}]` + `_reason_code` · `_reason` · `diagnose.target_process_jit_slices` + `_reason_code` · `_reason`.
 
 ## 사진 — 구현 실렌더 (시안 캡처 아님)
-`screenshots/` — 레포 `labs/report-readability-design/v1/samples/` 표본을 `perftracker report` 로 낸 파일의 카드 (bp-gui-report 검수 고침 4d578ea 뒤 · 2026-10-11).
+`screenshots/` — 레포 `labs/report-readability-design/v1/samples/` 표본을 `perftracker report` 로 낸 파일의 카드 (bp-gui-report 검수 고침 78aa3d4 뒤 · 2026-10-11).
 
 | 파일 | 무엇 |
 |---|---|

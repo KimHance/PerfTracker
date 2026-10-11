@@ -3,7 +3,7 @@
 | 항목 | 값 |
 |---|---|
 | 기능 | baseline-profile |
-| 기능 문서 | docs/spec/baseline-profile.md (701a79f) |
+| 기능 문서 | docs/spec/baseline-profile.md (428e42d) |
 | 등급 | 화면 (보고서 카드 · 진단 칸 · CLI 줄) |
 | 마지막 변경 | 2026-10-11 · ⑨ 승격 — `## 정한 것` 12 · 시안 고침 5 (B40 · B42) · 핸드오프 사진 = 구현 실렌더 · RR-9 실기기 |
 
@@ -27,7 +27,7 @@
 | 데이터 | `target_app.compile_state_start` · `_end` = **dex × ABI 한 줄 = 한 항목의 배열** (칸 여덟 · `location` null 가능) · null = 못 읽음 · `[]` 안 씀 · 짝 `_reason_code` · `_reason` · 경로 ~150자 · `location` 이 문장 · `error` | core `schema/result.ts` DexoptLineSchema · plan B23 |
 | 데이터 | 이유 코드 넷 `dexopt_state_section_missing` · `_package_missing` · `_unparsable` · `_unavailable` | `schema/reasons.ts` · plan B24 |
 | 데이터 | 진단 `target_process_compile_state_slices`(배열) · `target_process_jit_slices` + 각 `_reason_code` · `_reason` · 코드 `dalvik_not_recorded` · `compile_state_slice_unparsable` · `process_not_in_trace` | `CompileStateSliceSchema` · plan B29 |
-| 데이터 | 바꾼 기록 `session.compile` (`--compile` 세션에만) — `value` · `command` · `elapsed_ms` · `compile_state_before`(같은 dex 줄 배열 · null 가능) + `_reason_code` · `_reason` | BP-4 · bp-core-compile 0ef33ad · plan B31 |
+| 데이터 | 바꾼 기록 `session.compile` (`--compile` 세션에만) — `value` · `command` · `elapsed_ms` · `compile_state_before`(같은 dex 줄 배열 · null 가능) + `_reason_code` · `_reason` | BP-4 · bp-core-compile ca6dd81 · plan B31 |
 | 그릴 것 | 블록 종류 8개에 안 맞음 → **새 종류 `dexstates`** 하나로 둘 다 · 블록 수 9 | feas-design #3 |
 | 그릴 것 | 상태 문자열 · 불 값은 등폭 · 같은 색 · 굵기 · 기기 원문 순 · ✓ · 아이콘 · 강조 0 · 타일 밖 | BP-8 · 결정 6 |
 | 그릴 것 | `status` 두 뜻을 라벨로 가름 — 앱 컴파일 상태 `status` = `컴파일 필터` · 진단 slice `status` = `oat 파일 상태` (`filter` 가 컴파일 필터) | 결정 14 |
@@ -213,14 +213,14 @@ report-readability `## 상태` 의 행을 같이 쓴다 (6상태 × 2) · CLI 6�
 |---|---|---|---|
 | 보고서 6상태 × 1440 · 390 | 없음 | `shoot.mjs` · `check_shots.py` | `labs/report-readability-design/v1/shots/` · `README.md` |
 | CLI 6블록 | 없음 | `check_cli.py` (`--break`) | `## 문구` 끝 줄 |
-| 구현 bp-gui-report (`dexstates` · 머리 `--compile` · 진단 ART 칸) 7상태 + device × 1440 · 390 | 없음 | `report.test.ts` (`BP-8 …` · `B30 …` · DM-13 블록 수 9) · `report-copy.test.ts` (`BP-6 문구 표 ↔ 코드 (gui)`) | 2026-10-11 · `samples/` → `perftracker report --file` 실렌더 · **16/16: 12px 미만 0% · 4.5:1 미만 0% · 390 넘침 0 · 카드 안 가로 스크롤 0** · 레일 summary 0 · missing 요약 4 · compile 0 · end-null 0 · legacy 요약 1 · diag 0 · diag-noapp 진단 2 (시안과 같음) · 검수 고침 4d578ea 뒤 390 `보낸 명령` 은 `-m speed -f` 가 붙음 (B40) · 위치 한 번 (B42) — 사진은 Claude Design `design_handoff_baseline-profile/screenshots/` |
-| **RR-9 실기기** YouTube 평소 · 진단 (SM-S901N · sdk 36 · ffca69c) | 없음 | `measure.js` · `check_shots.py` `problems()` | 2026-10-11 · 요약 컴파일 카드 dex 4줄 · `바꾸지 않음` · 위치 한 번 · 진단 `컴파일 상태 slice` 6줄 · `JIT 컴파일 slice` 41 · 카테고리 `am · wm · view · dalvik` · 10/10 걸림 0 (report-readability `## 확인`) — `--compile` 세션이 아니라 보낸 명령 · 바꾼 기록 · 바뀜 경고는 실기기에서 못 봄 |
+| 구현 bp-gui-report (`dexstates` · 머리 `--compile` · 진단 ART 칸) 7상태 + device × 1440 · 390 | 없음 | `report.test.ts` (`BP-8 …` · `B30 …` · DM-13 블록 수 9) · `report-copy.test.ts` (`BP-6 문구 표 ↔ 코드 (gui)`) | 2026-10-11 · `samples/` → `perftracker report --file` 실렌더 · **16/16: 12px 미만 0% · 4.5:1 미만 0% · 390 넘침 0 · 카드 안 가로 스크롤 0** · 레일 summary 0 · missing 요약 4 · compile 0 · end-null 0 · legacy 요약 1 · diag 0 · diag-noapp 진단 2 (시안과 같음) · 검수 고침 78aa3d4 뒤 390 `보낸 명령` 은 `-m speed -f` 가 붙음 (B40) · 위치 한 번 (B42) — 사진은 Claude Design `design_handoff_baseline-profile/screenshots/` |
+| **RR-9 실기기** YouTube 평소 · 진단 (SM-S901N · sdk 36 · 969ea9a) | 없음 | `measure.js` · `check_shots.py` `problems()` | 2026-10-11 · 요약 컴파일 카드 dex 4줄 · `바꾸지 않음` · 위치 한 번 · 진단 `컴파일 상태 slice` 6줄 · `JIT 컴파일 slice` 41 · 카테고리 `am · wm · view · dalvik` · 10/10 걸림 0 (report-readability `## 확인`) — `--compile` 세션이 아니라 보낸 명령 · 바꾼 기록 · 바뀜 경고는 실기기에서 못 봄 |
 
 시험은 패키지가 한다 — `BP-6 문구 표 ↔ 코드` (core · cli · gui) · `BP-5 되돌림 줄 — start · stop · 호스트 꼴` · `BP-8 새 필드 전부 보임`.
 
 ## HANDOFF 와 어긋남
 
-없음 — bp-gui-report · bp-cli 가 옮김 (`docs/design/report/HANDOFF.md` 블록 9종 · 머리 `--compile` · 맥락 카드 · 진단 카드 다섯 · B40 · B42 / README 「명령 전체」 · `packages/cli/AGENTS.md` 의 `--compile` · `--launch` 와만). 단위별 옛 표는 git 이력 (ffca69c).
+없음 — bp-gui-report · bp-cli 가 옮김 (`docs/design/report/HANDOFF.md` 블록 9종 · 머리 `--compile` · 맥락 카드 · 진단 카드 다섯 · B40 · B42 / README 「명령 전체」 · `packages/cli/AGENTS.md` 의 `--compile` · `--launch` 와만). 단위별 옛 표는 git 이력 (969ea9a).
 
 ## 열린 질문
 
@@ -234,8 +234,8 @@ report-readability `## 상태` 의 행을 같이 쓴다 (6상태 × 2) · CLI 6�
 
 | 날짜 · run | 검토 | 누가 | 판정 | 왕복 |
 |---|---|---|---|---|
-| 2026-10-11 · baseline-profile | 실현성 (4985424) · 재검토 (fa572d9) | 디자인 · 개발 | 조건부 10 · 12 → 조건부 1 | 1 · 2 |
-| 2026-10-11 · baseline-profile | 부합 · 구현 가능 (b8c2490) | 디자인 | 조건부 11 → 고침 1 | 1 |
+| 2026-10-11 · baseline-profile | 실현성 (246e79f) · 재검토 (510ed77) | 디자인 · 개발 | 조건부 10 · 12 → 조건부 1 | 1 · 2 |
+| 2026-10-11 · baseline-profile | 부합 · 구현 가능 (be96052) | 디자인 | 조건부 11 → 고침 1 | 1 |
 
 ## 바뀐 기록
 

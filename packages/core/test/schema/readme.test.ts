@@ -444,7 +444,7 @@ describe('BP-7 status 두 뜻', () => {
 describe('DM-6 README 1.1.0 역사', () => {
   /**
    * 코드 검수 #4. 1.1.0 은 npm 0.1.0(2026-08-20 · reason_code 35개 · metrics.frame 없음) 뒤 0.2.0
-   * (2026-08-31)이 같은 1.1.0 으로 metrics.frame 과 no_frames 를 더했다 (git 2ee8198 · 4a68127).
+   * (2026-08-31)이 같은 1.1.0 으로 metrics.frame 과 no_frames 를 더했다 (git bc1ce9b · fb27818).
    * "출시 전에만 넓혔다" · "출시 뒤 첫 확장" 은 그 사실과 다르다.
    */
   it('DM-6 1.1.0 역사 — 0.2.0 이 같은 1.1.0 으로 frame · no_frames 를 더한 사실이 있고, "첫 확장" 단정이 없다', () => {

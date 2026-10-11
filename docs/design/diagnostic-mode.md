@@ -3,7 +3,7 @@
 | 항목 | 값 |
 |---|---|
 | 기능 | diagnostic-mode |
-| 기능 문서 | docs/spec/diagnostic-mode.md (1c475d4) |
+| 기능 문서 | docs/spec/diagnostic-mode.md (a3e329c) |
 | 등급 | 화면 |
 | 마지막 변경 | 2026-10-11 · baseline-profile — `## 문구` 범위 두 줄에 `dalvik` (DM-3 · 결정 36) |
 
@@ -252,8 +252,8 @@
 
 | 날짜 · run | 검토 | 누가 | 판정 | 왕복 |
 |---|---|---|---|---|
-| 2026-10-08 · diagnostic-mode | 부합 (a61dab8) | 기획 | 조건부 1 — reason 자리 (고침 1) · #2 후속 D18 | 1 |
-| 2026-10-08 · diagnostic-mode | 구현 가능 (a61dab8) | 개발 | 조건부 4 (고침 1) · 사람 1 → D25 다 그림 | 1 |
+| 2026-10-08 · diagnostic-mode | 부합 (1ede47f) | 기획 | 조건부 1 — reason 자리 (고침 1) · #2 후속 D18 | 1 |
+| 2026-10-08 · diagnostic-mode | 구현 가능 (1ede47f) | 개발 | 조건부 4 (고침 1) · 사람 1 → D25 다 그림 | 1 |
 
 ## 바뀐 기록
 

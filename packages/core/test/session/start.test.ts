@@ -555,7 +555,7 @@ describe('startSession — --force 는 기기 쪽 세션도 정리한다 (I3)', 
  */
 describe('startSession — 진단 세션', () => {
   /**
-   * 이 옵션이 생기기 **전** 코드(HEAD a61dab8)가 fake 기기(sdk 36)에 보낸 config 원문.
+   * 이 옵션이 생기기 **전** 코드(HEAD 1ede47f)가 fake 기기(sdk 36)에 보낸 config 원문.
    * 지금 코드에서 다시 만들어 비교하면 같은 코드끼리 비교하는 셈이라 아무것도 지키지 못한다.
    */
   const NORMAL_CONFIG_BEFORE =

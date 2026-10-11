@@ -5,8 +5,8 @@
 `device-report-diagnose.html` 에 실린 것). 그것을 **줄이고 고쳐** 상태마다 표본을 짓는다:
 slice 표는 앞 40행 · 시계열은 그대로 · 새 필드(컴파일 상태 · 바꾼 기록 · ART 칸)는 실측 원문 꼴로 지은 값.
 
-필드 이름 · 모양은 core 실제 (KimHance/baseline-profile 20688ab — `schema/result.ts` DexoptLineSchema · CompileStateSliceSchema ·
-`schema/reasons.ts`) 그대로다. `session.compile` 은 bp-core-compile 0ef33ad (plan B31) 의 꼴.
+필드 이름 · 모양은 core 실제 (KimHance/baseline-profile d0150d5 — `schema/result.ts` DexoptLineSchema · CompileStateSliceSchema ·
+`schema/reasons.ts`) 그대로다. `session.compile` 은 bp-core-compile ca6dd81 (plan B31) 의 꼴.
 
   python3 -I labs/report-readability-design/v1/gen_samples.py <실기기 result.json> [<runs 디렉토리>]
   → labs/report-readability-design/v1/samples/<상태>.json  (+ <runs>/<상태>/result.json — 지금 코드 실렌더용)

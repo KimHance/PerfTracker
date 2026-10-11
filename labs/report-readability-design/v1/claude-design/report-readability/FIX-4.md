@@ -1,6 +1,6 @@
 # Report Readability.dc.html — 고침 4 (`session.compile` 이름 · plan B31)
 
-bp-core-compile (0ef33ad) 이 바꾼 기록 자리를 정했다. `states.js` 의 `compile` 상태가 이 꼴로 바뀌었다:
+bp-core-compile (ca6dd81) 이 바꾼 기록 자리를 정했다. `states.js` 의 `compile` 상태가 이 꼴로 바뀌었다:
 
 ```js
 session.compile = { value, command, elapsed_ms, compile_state_before, compile_state_before_reason_code, compile_state_before_reason }
