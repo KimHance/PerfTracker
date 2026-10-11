@@ -104,6 +104,11 @@ npx perftracker doctor        # 설치 없이 바로 — 이 기기에서 뭘 �
 시작하므로, 기다리지 않으면 그 사이에 뜬 앱의 `bindApplication` slice 가 빠집니다 (실기기에서
 기다리지 않은 회 0개 · 기다린 회 1개). adb 호출은 그대로 한 번이고, 평소 세션에는 붙지 않습니다.
 
+`--compile` 은 반대로 **기기를 일부러 바꿉니다** — 앱의 컴파일 상태를 맞춰 재려고 사람이 켜는 옵션이고, 그 변경은
+세션이 끝나도 남습니다. 그래서 측정 창 **밖**, 트레이스 · 시작 스냅샷보다 앞에서 끝내고, 바꾼 사실을
+`result.json` 의 [`session.compile`](#sessioncompile--바꾼-기록) 에 남깁니다. `--compile` 을 주지 않은 세션은
+컴파일 상태를 바꾸는 명령을 하나도 보내지 않습니다.
+
 이건 "그러려고 노력한다" 가 아니라 구조입니다. 세션이 살아 있는 동안 모든 adb 접근 경로에
 래치(`MeasurementWindow`)가 걸리고, 기기를 만지려는 명령은 예외로 막힙니다.
 세션 중에 `perftracker apps` 를 실행하면 이렇게 됩니다:
@@ -516,7 +521,8 @@ npx perftracker schema > result.schema.json
 
 > **`1.2.0` 은 진단 세션의 자리와 컴파일 상태를 더한 minor 입니다.** 진단 세션(`start --diagnose`)에만
 > `session.options.diagnose` 와 [`diagnose`](#diagnose) 블록이 실리고, **모든 세션**의 `target_app` 에
-> [컴파일 상태](#target_app-의-컴파일-상태)(`compile_state_*`)가 실립니다. 그래서 **평소 세션의
+> [컴파일 상태](#target_app-의-컴파일-상태)(`compile_state_*`)가 실립니다. `start --compile` 세션에만
+> [바꾼 기록](#sessioncompile--바꾼-기록)(`session.compile`)이 실립니다. 그래서 **평소 세션의
 > `result.json` 도 `1.1.0` 과 키가 다릅니다** — `target_app` 이 닫힌 객체라 캐시해 둔 `1.1.0` 스키마는
 > 평소 세션 산출물도 거부합니다. `1.1.0` 은 npm 0.1.0 ~ 0.2.1 로 나간 버전인데, 개발 중에도 출시 뒤에도 같은
 > `1.1.0` 안에서 계약이 넓어졌습니다 — 0.2.0 이 `metrics.frame` 과 reason_code `no_frames` 를
@@ -530,7 +536,7 @@ npx perftracker schema > result.schema.json
 | `schema_version` | 이 파일 형식의 버전 |
 | `schema_help` | 이 파일을 해석하기 전에 읽을 곳 (값은 늘 같습니다 — 데이터가 아니라 안내) |
 | `tool` | 도구 이름·버전과 **이것을 돌린 컴퓨터**(`host.os` / `arch` / `node`) |
-| `session` | id, 이름, `state`, 시작/종료 시각, 길이, **시간축 기준 두 개**(아래 참고), `options`(`launch` · 진단 세션이면 `diagnose: true`) |
+| `session` | id, 이름, `state`, 시작/종료 시각, 길이, **시간축 기준 두 개**(아래 참고), `options`(`launch` · 진단 세션이면 `diagnose: true`), **`--compile` 세션이면 바꾼 기록** `compile`([아래](#sessioncompile--바꾼-기록)) |
 | `device` | 기기 스펙(`static`)과 세션 전후 상태(`state_before` / `state_after`) |
 | `target_app` | 패키지, 라벨, 버전, 렌더 프로세스와 pid, **빌드 속성**(`debuggable` / `large_heap` / `min_sdk` / `target_sdk` / `primary_cpu_abi`), **시작 · 끝 컴파일 상태**(`compile_state_start` / `compile_state_end` — [아래](#target_app-의-컴파일-상태)) |
 | `metrics` | 메트릭들. 키가 곧 수집기 id (`hwui` / `startup` / `cpu` / `memory` / `log` / `thermal` / `network`) |
@@ -602,7 +608,9 @@ speed-profile 471 · verify 618 · speed 665 ms). 두 세션의 수치가 다를
 있게 **측정 조건의 사실**로 남깁니다. 이 도구는 상태를 비교하거나 좋고 나쁨을 말하지 않습니다.
 
 - **시작 상태**(`compile_state_start`)는 대상 앱을 해석할 때 이미 돌리던 `dumpsys package <pkg>` 출력에서
-  함께 읽습니다 — **기기 왕복이 늘지 않습니다.**
+  함께 읽습니다 — **기기 왕복이 늘지 않습니다.** `start --compile` 세션만은 다릅니다: 그 출력은 상태를 바꾸기
+  **전**이라, 바꾸는 명령 바로 뒤에 `dumpsys package <pkg>` 를 한 번 더 읽은 출력이 시작 상태(= 바꾼 뒤 상태)입니다.
+  바꾸기 전 상태는 [`session.compile`](#sessioncompile--바꾼-기록) 에 있습니다.
 - **끝 상태**(`compile_state_end`)는 `stop` 이 측정 창을 닫고 트레이스를 회수한 **뒤** `dumpsys package <pkg>`
   한 번으로 읽습니다. 측정 창 안의 기기 접촉은 그대로 0 입니다.
 - 값은 그 출력의 `Dexopt state` 절 **원문 그대로**입니다. dex 줄마다 하나씩, base.apk 줄과 보조 dex 줄을
@@ -652,6 +660,40 @@ speed-profile 471 · verify 618 · speed 665 ms). 두 세션의 수치가 다를
   실립니다 — 백그라운드 dexopt · Play 업데이트 · 제조사 작업이 세션 중에 컴파일했다는 관측된 사건입니다.
   어느 쪽이든 `null` 이면 경고는 없습니다.
 - 이 키들이 **아예 없는** `result.json` 은 이 기록이 생기기 전에 산출된 것입니다.
+
+### `session.compile` — 바꾼 기록
+
+`start --launch --compile <reset|speed-profile|speed>` 로 연 세션에만 있습니다 — 측정 창을 열기 전에 이 도구가
+**기기의 컴파일 상태를 바꿨다**는 기록입니다. 키가 없으면 그 세션은 상태를 바꾸지 않았습니다(`cmd package compile`
+0). 상태를 맞춰 다시 재려고 쓰는 옵션이고, 상태별 세션을 나란히 놓고 비교하는 것은 읽는 쪽의 몫입니다.
+
+| 필드 | 무엇 |
+| --- | --- |
+| `value` | `--compile` 에 준 값 — `reset` · `speed-profile` · `speed` 중 하나 (기기 낱말 그대로) |
+| `command` | 기기로 보낸 셸 명령 원문 — `reset` 은 `cmd package compile --reset '<pkg>'`, 그 밖은 `cmd package compile -m <값> -f '<pkg>'` |
+| `elapsed_ms` | 그 명령이 걸린 시간 — 호스트가 잰 adb 호출 왕복 (실측 SM-S901N · YouTube: `reset` 200 · `speed-profile` 18,640 · `speed` 67,500) |
+| `compile_state_before` | **바꾸기 전** 상태 — 대상 앱을 해석한 `dumpsys package` 출력의 dex 줄 전부. 꼴은 [`compile_state_start`](#target_app-의-컴파일-상태) 와 같습니다 |
+| `compile_state_before_reason_code` · `compile_state_before_reason` | 바꾸기 전 상태가 `null` 인 이유와 그 문장 (`dexopt_state_*` — 위와 같은 넷) |
+
+바꾼 **뒤** 상태는 여기 없습니다 — `target_app.compile_state_start` 가 그것입니다.
+
+- **순서:** 상태를 바꾸는 명령은 설정 검증 뒤, run 디렉토리 · 시작 스냅샷 · Perfetto 세션 · `am force-stop`
+  **앞**에 나갑니다. 컴파일의 발열이 시작 상태(`device.state_before` 의 배터리 온도 · thermal)에 섞이지 않고,
+  측정 창 안의 기기 접촉은 그대로 0 입니다. `--launch` 없이는 받지 않습니다 — 이미 떠 있는 앱은 옛 컴파일
+  결과로 돌 수 있어, 시작 상태와 실제로 돈 코드가 다를 수 있기 때문입니다.
+- **실패하면 세션을 열지 않습니다.** 종료 코드가 0 이 아니거나 · 출력에 `Failure` 가 있거나 · 10분 한도를
+  넘으면 run 디렉토리도 `result.json` 도 생기지 않습니다. 실패 뒤의 상태는 다시 읽지 않으므로 **기기가 어디까지
+  바꿨는지는 모릅니다** — 한도에 걸려 호스트가 adb 를 끊어도 기기는 계속 컴파일하고 있을 수 있습니다.
+- **상태는 바꿨는데 그 뒤에서 실패하면** (run 디렉토리 · 시작 스냅샷 · Perfetto 세션 시작 · 앱 실행 등) 세션은
+  열리지 않지만 **기기 컴파일 상태는 이미 바뀌어 있습니다.** 그 오류는 원래 문장 그대로 나오고, 도구는 기기에
+  더 묻지 않습니다 (바뀐 뒤 상태를 다시 읽지도 되돌리지도 않습니다).
+- **한계 — 이 도구는 자동으로 되돌리지 않습니다.** 그리고 되돌려도 처음과 똑같아지지 않습니다:
+  - 되돌려도 `reason` 은 `cmdline` 으로 남습니다 (실측 `profile-utilization` → `cmdline`).
+  - `reset` 이 지운 로컬 프로파일은 되살리지 못합니다.
+  - 이후 백그라운드 dexopt 가 상태를 다시 바꿀 수 있습니다.
+  - 상태를 바꾸는 명령은 실측한 꼴 그대로이고 범위 옵션(`--primary-dex` 등)을 붙이지 않습니다 — 그래서 기기가
+    대상 앱의 **의존 패키지 · split · 보조 dex 까지** 바꿀 수 있습니다 (실측: `reset` 뒤 보조 dex 셋 중 둘이
+    `verify` → `run-from-apk`). 기록과 되돌림은 대상 앱만 다룹니다.
 
 ### `warnings`
 
@@ -727,7 +769,8 @@ speed-profile 471 · verify 618 · speed 665 ms). 두 세션의 수치가 다를
 - **`1.2.0` 산출물은 평소 세션의 것도 `1.1.0` 스키마가 거부합니다.** `target_app` 이
   `additionalProperties: false` 라 모든 세션에 실리는 컴파일 상태(`compile_state_start` 등)가 거기
   걸립니다. 진단 세션의 것은 하나 더 — 최상위 객체와 `session.options` 도 닫혀 있어
-  `diagnose` 키와 `options.diagnose` 가 걸립니다.
+  `diagnose` 키와 `options.diagnose` 가 걸립니다. `start --compile` 세션의 것도 하나 더 — `session` 이 닫혀
+  있어 `session.compile` 이 걸립니다.
 
 **`1.1.0` 끼리는 그 신호가 없습니다.** `1.1.0` 은 개발 중에도, 출시 뒤에도 계약이 넓어질 때 버전을
 올리지 않았습니다. npm 0.1.0(2026-08-20)의 스키마는 reason_code 35개에 `metrics.frame` 이 없었고,

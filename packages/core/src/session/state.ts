@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { AmStartResult } from '../collectors/types.js'
+import type { SessionCompile } from '../schema/result.js'
 import { perfTrackerHome } from './paths.js'
 
 export interface ActiveSession {
@@ -35,6 +36,12 @@ export interface ActiveSession {
     atraceApps: string[]
     notice: string | null
   }
+  /**
+   * **`start --compile` 세션에만 있다** (기능 문서 baseline-profile BP-4) — 측정 창을 열기 전에 기기 컴파일
+   * 상태를 바꾼 기록. extract 가 `result.json` 의 `session.compile` 로 옮기므로 그 꼴(snake_case) 그대로 둔다.
+   * 없음 = 상태를 바꾸지 않은 세션 또는 이 필드가 없던 시절의 세션.
+   */
+  compile?: SessionCompile
   startup: AmStartResult | null
   /**
    * `am start -W` 직후 `pidof` 가 알려 준 앱 프로세스의 pid. `--launch` 없이 시작했거나

@@ -9,7 +9,7 @@
 | `src/index.ts` | 공개 배럴. **구체 프로세스 실행기는 일부러 내보내지 않는다** |
 | `src/adb/` | `AdbClient` 와 측정 창 래치. 기기로 가는 모든 길목 |
 | `src/collectors/` | 지표 8개 ([AGENTS.md](src/collectors/AGENTS.md)) |
-| `src/session/` | `start` / `stop` / 활성 세션 포인터 / 마킹 / **기록 목록**(`runs.ts`) / **진단 세션**(`diagnose.ts` — 앱 slice 열림 판정 · atrace 대기) |
+| `src/session/` | `start` / `stop` / 활성 세션 포인터 / 마킹 / **기록 목록**(`runs.ts`) / **진단 세션**(`diagnose.ts` — 앱 slice 열림 판정 · atrace 대기) / **컴파일 상태 바꾸기**(`start.ts` 의 `compile` — 창 열기 전) |
 | `src/extract/` | 트레이스 재파싱 → `result.json` 조립 · **진단 블록**(`diagnose.ts` — 진단 세션에만) |
 | `src/schema/` | `result.json` 의 zod 스키마 · `reason_code` · `references` |
 | `src/device/` | 기기 목록 · 정적 스펙 · 전/후 상태 스냅샷 · `probeDevice` |
@@ -37,6 +37,10 @@
   하나 밖이면 거부한다. atrace slice 의 비용은 커널 ftrace 와 달리 **slice 를 남기는 앱 프로세스
   자신**에게 청구되고 `measurement_overhead` 에 안 잡힌다 — 평소 세션의 수치와 섞이면 안 되는 이유다.
   평소 세션의 config · 기기 명령 목록은 진단 모드 이전과 글자 하나 다르지 않다 (`start.test.ts` 가 원문을 고정).
+- **기기 상태를 바꾸는 명령은 `start --compile` 하나다** (`startSession` 의 `compile` · baseline-profile BP-4).
+  설정 검증 뒤 · run 디렉토리 · 시작 스냅샷 · perfetto · force-stop 앞에서만 나가고, 그 옵션이 없는 세션의 명령
+  목록은 그대로다 (`start.test.ts` 가 두 목록을 고정). 거부(`checkCompileOption`)는 기기 명령 0 이고, 오래 걸리는
+  기기 호출은 `timeoutMs` 를 명시한다 — 기본 60초는 실측 67.5초 컴파일을 끊는다.
 - **config 는 기기에 아무 일도 시키기 전에 만든다.** `startSession` 은 probe 바로 뒤에 config 를 조립해
   검증한다 — 거부될 config 로 시작 스냅샷 · force-stop · perfetto 가 먼저 나가면 앱만 죽은 채로 남는다.
 - **앱 slice 가 열리나는 `session/diagnose.ts` 의 `appSliceOpen` 하나가 정한다.** doctor 의 기기 줄 ·
