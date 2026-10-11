@@ -110,6 +110,25 @@ const TEXT_COLORS: TextColor[] = REPORT.flatMap((rule) => {
   return out
 })
 
+/** 본문 층의 그릇 — 표 · slice 표 · 전/후 표 · 값 없음 · 막대 줄 · 앱 시작 아래 줄 · 머리 메타 값. */
+const BODY = ['.rp-table', '.rp-slice', '.rp-delta', '.rp-none', '.rp-bar-row', '.rp-stat-title', '.rp-stat-sub', '.rp-meta']
+const inBody = (selector: string): boolean =>
+  BODY.some((c) => new RegExp(`${c.replace('.', '\\.')}(?![\\w-])`).test(selector))
+
+/**
+ * 선택자 특정도 (id, class, type). `:where()` 는 0, `:not()` · `:is()` 는 안의 것을 센다 — 이 파일이 쓰는 꼴만.
+ */
+function specificity(selector: string): [number, number, number] {
+  let s = selector.replace(/:where\((?:[^()]|\([^()]*\))*\)/g, '')
+  s = s.replace(/:(?:not|is)\(((?:[^()]|\([^()]*\))*)\)/g, ' $1')
+  const ids = (s.match(/#[\w-]+/g) ?? []).length
+  const classes = (s.match(/\.[\w-]+|\[[^\]]*\]|:(?!:)[\w-]+/g) ?? []).length
+  const types = (s.replace(/\.[\w-]+|\[[^\]]*\]|::?[\w-]+|#[\w-]+/g, ' ').match(/[a-z][\w-]*/gi) ?? []).length
+  return [ids, classes, types]
+}
+const beats = (a: [number, number, number], b: [number, number, number]): boolean =>
+  a[0] !== b[0] ? a[0] > b[0] : a[1] !== b[1] ? a[1] > b[1] : a[2] > b[2]
+
 describe('보고서 글자 바닥 — report.css', () => {
   it('RR-1 보고서 스타일시트 font-size 바닥', () => {
     const sizes = REPORT.filter((r) => r.decls.has('font-size'))
@@ -124,14 +143,17 @@ describe('보고서 글자 바닥 — report.css', () => {
     expect(shorthand).toEqual([])
 
     // 표 · 카드 본문 · 값 · 라벨 단어 줄은 13px 이상 (결정 8 · 디자인 문서 `## 크기` 본문 층).
-    const BODY = [
-      '.rp-table', '.rp-slice .rp-slice-name', '.rp-table td.rp-path', '.rp-none', '.rp-bar-row',
-      '.rp-stat-title', '.rp-stat-sub', '.rp-meta',
-    ]
-    expect(BODY.map((s) => [s, sizeOf(s)]).filter(([, px]) => !((px as number) >= 13))).toEqual([])
+    // 그릇만 보면 셀(`.rp-table td`) · 자손 규칙이 12px 로 내려도 초록이다 — 본문 그릇 클래스가 선택자
+    // 어디에든 들어간 규칙의 font-size 를 전부 본다 (`.rp-meta-item` 같은 다른 클래스는 안 걸림).
+    const body = REPORT.filter((r) => r.decls.has('font-size') && r.selectors.some(inBody))
+    expect(body.length).toBeGreaterThanOrEqual(8)
+    const lowBody = body
+      .map((r) => ({ at: sel(r), px: minPx(r.decls.get('font-size')!) }))
+      .filter((s) => !(s.px >= 13))
+    expect(lowBody).toEqual([])
 
-    // 시계열 눈금은 viewBox 300 단위 — 카드가 viewBox 보다 좁지 않아 12 단위면 렌더 12px 이상.
-    // 렌더 크기는 수동 글자 측정으로 본다 (결정 13).
+    // 시계열 눈금은 viewBox 300 단위 — 카드 폭만큼 커져 RR-1 측정 폭에서 렌더 1440 ≈ 14.8 · 390 ≈ 13.1.
+    // ≈ 362px 미만 창(360 ≈ 11.9)은 측정 폭 밖이다. 렌더 크기는 수동 글자 측정으로 본다 (결정 13).
     expect(sizeOf('.rp-series .rp-tick')).toBeGreaterThanOrEqual(12)
   })
 
@@ -181,6 +203,22 @@ describe('보고서 글자 바닥 — report.css', () => {
     // 토큰 값 그대로 · 보고서가 글자에 쓰는 토큰만 고른다 (결정 11). 500 은 bg 4.27 · surface 3.82.
     const dim = TEXT_COLORS.filter(({ value }) => /--color-neutral-[1-5]00\b/.test(value)).map(({ rule }) => sel(rule))
     expect(dim).toEqual([])
+  })
+
+  it('RR-1 키/값 표 라벨 열 규칙은 표 자기 클래스 규칙에 진다 (특정도)', () => {
+    // 라벨 열 45% · 위 정렬은 키/값 표 기본값이다. 진단 dex 표(시안 `.rp-dex thead th { width:auto;
+    // vertical-align:bottom }`)처럼 표가 자기 클래스로 정하면 그쪽이 이겨야 한다 — 뒤 단위가 시안 규칙을
+    // 그대로 옮겨도 머리 칸이 45% 로 늘어나지 않게.
+    const owners = REPORT.filter((r) => r.decls.get('width') === '45%').flatMap((r) => r.selectors)
+    expect(owners.length).toBeGreaterThan(0)
+    for (const o of owners) {
+      expect(o.endsWith('th'), o).toBe(true)
+      expect(beats(specificity(o), specificity('.rp-dex thead th')), o).toBe(false)
+      expect(beats(specificity(o), specificity('.rp-dex th')), o).toBe(false)
+    }
+    // 계산기 자체 — 고쳐지기 전 꼴은 이겼다.
+    expect(specificity('.rp-table:not(.rp-delta):not(.rp-slice) th')).toEqual([0, 3, 1])
+    expect(specificity('.rp-dex thead th')).toEqual([0, 1, 2])
   })
 
   it('RR-3 위계 크기 순서', () => {

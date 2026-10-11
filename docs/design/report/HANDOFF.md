@@ -213,7 +213,7 @@ metrics.memory.data.system_timeline
 - 이름: `--font-heading` 600, `clamp(26px,3.4vw,34px)`
 - 상태 pill: monospace 12px uppercase, `padding:3px 10px; border-radius:99px`. `running` 이면 `background:var(--color-accent); color:var(--color-bg)`, 그 외 `--color-neutral-200`
 - **진단 pill** (진단 세션에만): 상태 pill 바로 옆 `진단`. 같은 글꼴 · 크기 · 모양에 **바탕 없이** `--color-neutral-700` 글자 + `--color-divider` 1px 안쪽 테두리 — 상태 pill 과 모양으로만 갈리고 색에 뜻을 싣지 않습니다. `옵션` 메타 칸은 그대로(`--launch` · `attach`)입니다
-- 메타 줄(값 13px `--color-neutral-800` · 라벨 12px `--color-neutral-600`, wrap): 앱 `{label} · {package} · {version_name}` / 기기 `{model} · {serial} · Android {release} (sdk {sdk_int})` / 시작 `YYYY-MM-DD HH:MM:SS` / 길이 `{duration_ms} ms` 또는 `측정 중` / 옵션 `--launch` 또는 `attach`
+- 메타 줄(값 13px `--color-neutral-700` · 라벨 12px `--color-neutral-600`, wrap): 앱 `{label} · {package} · {version_name}` / 기기 `{model} · {serial} · Android {release} (sdk {sdk_int})` / 시작 `YYYY-MM-DD HH:MM:SS` / 길이 `{duration_ms} ms` 또는 `측정 중` / 옵션 `--launch` 또는 `attach`
 
 ### 플래그 줄
 
@@ -258,7 +258,7 @@ pill (`font-size:11.5px; padding:3px 10px; border-radius:99px; border:1px solid`
 
 ### 시계열 (`series`)
 
-viewBox `300 × 138`, 여백 `{l:40, r:10, t:12, b:30}`, `width:100%`. 눈금은 viewBox 12 단위 — 카드 폭만큼 커져 렌더 13 ~ 16px (390 ≈ 1.1배 · 1440 ≈ 1.3배). 왼쪽 여백보다 긴 눈금(`3,000`)은 잘리지 않게 SVG 밖 카드 여백으로 흘러 나갑니다(`overflow:visible`).
+viewBox `300 × 138`, 여백 `{l:40, r:10, t:12, b:30}`, `width:100%`. 눈금은 viewBox 12 단위 — 카드 폭만큼 커져 렌더 1440 ≈ 14.8px · 390 ≈ 13.1px. 카드가 viewBox 보다 좁은 ≈ 362px 미만 창에서는 12px 아래입니다(360 ≈ 11.9 — RR-1 측정 폭 1440 · 390 밖). 왼쪽 여백보다 긴 눈금(`3,000`)은 잘리지 않게 SVG 밖 카드 여백으로 흘러 나갑니다(`overflow:visible`).
 
 - 가로 격자 3줄(min / 중간 / max) `--color-divider` 0.6px
 - 좌·하 축선 `--color-neutral-400` 0.8px + x 눈금 마크
@@ -279,7 +279,7 @@ viewBox `측정된 컨테이너 폭 × 190`, 여백 `{l:44, r:10, t:18, b:30}`. 
   - 라벨 간격 `labelEvery = ceil(버킷수 / max(4, floor((W-54)/62)))` — 넓으면 촘촘히, 좁으면 드물게
   - **눈금은 칸의 시작이 아니라 끝입니다**(`5ms 15ms 25ms…`). 시작값을 쓰면 첫 칸 아래에 `0ms` 가 서는데 프레임 대부분이 그 칸에 있어 "0ms 에 끝난 프레임이 480장" 으로 읽힙니다. 데이터 쪽도 같은 규칙입니다 — 프레임워크의 `6ms=155` 는 `[5, 6)` 이고 첫 칸 `5ms` 는 `[0, 5)` 입니다. 상한 없는 칸만 `700ms+`.
 - **버킷은 접지 않고 전부 보여줍니다**(101칸). 접기 로직은 남아 있지만 `breakAfterEmptyBuckets: Infinity` 로 꺼져 있습니다.
-- 눈금 12px (1배). viewBox 폭은 최소 360 이라 그보다 좁은 카드(창 ≈ 422px 미만)에서는 줄어 그려지므로 그 폭에서만 14 단위 — 390 에서 렌더 ≈ 12.7px.
+- 눈금 12px (1배). viewBox 폭은 최소 360 이라 그보다 좁은 카드(창 ≈ 422px 미만)에서는 줄어 그려지므로 그 폭에서만 14 단위 — 390 에서 렌더 ≈ 12.7px · 375 ≈ 12.1px (360 ≈ 11.5 — 측정 폭 밖).
 - 세로축: 0 부터 최대 count 까지 `niceMax(max/4)` 간격 눈금 + 격자
 - 백분위: `percentiles` 의 p50/p90/p95/p99 를 큰 숫자로 위에 표기하고, 차트에는 **점선만** 얹습니다(라벨은 겹쳐서 뺐습니다). x 위치는 그 값을 포함하는 버킷의 슬롯입니다.
 - 그 줄 오른쪽 끝에 `share` 타일 하나(`JANK 10.1%`)를 세로선(`.rp-pct-sep`)으로 갈라 세웁니다. **백분위와 같은 지표에서 옵니다** — 출처가 갈리면 옆에 선 숫자끼리 모집단이 달라집니다. 분자·분모를 못 읽으면 타일이 아예 서지 않습니다.
@@ -379,7 +379,7 @@ viewBox `측정된 컨테이너 폭 × 190`, 여백 `{l:44, r:10, t:18, b:30}`. 
 | 표 값 | `.rp-table td` | — | `--color-neutral-800` |
 | slice 이름 | `.rp-slice .rp-slice-name` | 13px | `--color-neutral-800` |
 | 값 없음 | `.rp-none` | 13px | `--color-neutral-700` |
-| 머리 메타 값 | `.rp-meta` | 13px | `--color-neutral-800` |
+| 머리 메타 값 | `.rp-meta` | 13px | `--color-neutral-700` |
 | 머리 메타 라벨 | `.rp-meta-item i` | 12px | `--color-neutral-600` |
 | 카드 단위 | `.rp-card-unit` | 12px | `--color-neutral-600` |
 | 상태 배지 | `.rp-badge` | 12px | `--color-neutral-800` |

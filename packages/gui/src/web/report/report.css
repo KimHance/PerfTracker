@@ -97,7 +97,7 @@
 
 .rp-meta {
   display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4);
-  margin-top: var(--space-3); font-size: 13px; color: var(--color-neutral-800);
+  margin-top: var(--space-3); font-size: 13px; color: var(--color-neutral-700);
 }
 .rp-meta-item i { font-style: normal; font-size: 12px; color: var(--color-neutral-600); margin-right: 6px; }
 
@@ -207,8 +207,9 @@
 .rp-axis { stroke: var(--color-neutral-400); stroke-width: 0.8; }
 /*
  * SVG 안의 글자는 viewBox 배율만큼 커진다. 분포는 컨테이너 폭을 그대로 viewBox 로 쓰므로
- * 1배지만, **시계열은 viewBox 가 300 고정**이라 카드 폭만큼 커진다 (390 ≈ 1.1배 · 1440 ≈ 1.3배).
- * 줄이지 않는다 — 12 단위면 가장 좁은 카드에서도 렌더 12px 이상이다 (RR-1 · 결정 13: 렌더 상자로 잰다).
+ * 1배지만, **시계열은 viewBox 가 300 고정**이라 카드 폭만큼 커진다 (390 ≈ 1.1배 · 1440 ≈ 1.2배).
+ * 줄이지 않는다 — 12 단위면 RR-1 이 재는 폭에서 렌더 12px 이상이다 (390 ≈ 13.1 · 1440 ≈ 14.8 · 결정 13:
+ * 렌더 상자로 잰다). 카드가 viewBox 보다 좁아지는 ≈ 362px 미만 창에서는 12 아래다 (360 ≈ 11.9 — 측정 폭 밖).
  */
 .rp-tick {
   fill: var(--color-neutral-700); font-size: 12px;
@@ -219,7 +220,8 @@
 /*
  * 분포 viewBox 는 최소 360 이다 (`blocks.ts` 의 `Math.max(360, width)`) — 그보다 좁은 카드(≈ 422px 미만 창)에서는
  * 줄어 그려져 12 단위 눈금이 390 에서 10.9px 가 된다. 그 폭에서만 단위를 키워 렌더 12px 이상을 지킨다
- * (390 ≈ 12.7 · 375 ≈ 12.1). viewBox 가 잰 폭을 그대로 쓰게 되면 이 규칙은 지운다.
+ * (390 ≈ 12.7 · 375 ≈ 12.1). 그보다 좁으면 다시 12 아래다 (360 ≈ 11.5 — RR-1 측정 폭 1440 · 390 밖).
+ * viewBox 가 잰 폭을 그대로 쓰게 되면 이 규칙은 지운다.
  */
 @media (max-width: 422px) { .rp-dist .rp-tick { font-size: 14px; } }
 
@@ -310,14 +312,15 @@
  * 긴 값(dex 경로)이 한 줄이면 표가 카드 밖으로 밀어 페이지가 옆으로 넘친다 (1440 · 390 넘침 0 그대로).
  * `anywhere` 는 다른 줄바꿈 기회(공백 · `<wbr>`)가 없을 때만 토막 안에서 끊는다. 키/값 표는 라벨 열에
  * 45% 를 잡아 둔다 — 안 잡으면 긴 값이 폭을 다 가져가 라벨이 한 글자씩 선다. 전/후 · slice 표는 열 폭을
- * 따로 정하므로 빼놓는다.
+ * 따로 정하므로 빼놓는다. **특정도는 `th` 하나(0,0,1)** — `:where()` 로 낮춰, 다른 표(진단 dex 표 같은)가
+ * 자기 클래스로 `width` · `vertical-align` 을 정하면 그쪽이 이긴다.
  */
 .rp-table th {
   text-align: left; font-weight: 400; color: var(--color-neutral-700);
   padding: 4px var(--space-3) 4px 0; border-bottom: 1px solid var(--color-divider);
   white-space: normal; overflow-wrap: anywhere;
 }
-.rp-table:not(.rp-delta):not(.rp-slice) th { width: 45%; vertical-align: top; }
+:where(.rp-table:not(.rp-delta):not(.rp-slice)) th { width: 45%; vertical-align: top; }
 .rp-table td {
   padding: 4px 0; border-bottom: 1px solid var(--color-divider);
   text-align: right; color: var(--color-neutral-800); overflow-wrap: anywhere;
