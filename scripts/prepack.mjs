@@ -50,6 +50,6 @@ if (basename(pkgDir) === 'cli') {
   const readme = join(pkgDir, 'README.md')
   const text = readFileSync(readme, 'utf8')
     .replaceAll('](docs/media/', `](https://cdn.jsdelivr.net/npm/perftracker@${version}/media/`)
-    .replace(/\]\(((?:docs\/[^)#]+|CHANGELOG)\.md)/g, '](https://github.com/KimHance/PerfTracker/blob/main/$1')
+    .replace(/\]\(((?:docs\/[^)#]+|CHANGELOG)\.md|LICENSE)/g, '](https://github.com/KimHance/PerfTracker/blob/main/$1')
   writeFileSync(readme, text)
 }

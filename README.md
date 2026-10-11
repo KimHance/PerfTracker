@@ -76,3 +76,7 @@ Android 11(sdk 30)부터 됩니다. `network` 은 Android 14, `frame` 은 Androi
 - [자세한 사용법](docs/usage.md) — 설치 · 명령별 옵션 · 진단 세션 · `--compile` · 문제가 생겼을 때 · 개발
 - [`result.json` 읽는 법](docs/result-json.md) — 필드 하나하나 · 스키마 버전
 - [CHANGELOG](CHANGELOG.md) — 버전별 변경과 실기기 검증 기록
+
+## 라이선스
+
+[MIT](LICENSE)
