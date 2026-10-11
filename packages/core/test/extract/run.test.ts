@@ -3,7 +3,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { SCHEMA_HELP, type NetworkData, type TargetApp, type ThermalData } from '../../src/schema/result.js'
+import {
+  ResultSchema,
+  SCHEMA_HELP,
+  type NetworkData,
+  type SessionCompile,
+  type TargetApp,
+  type ThermalData,
+} from '../../src/schema/result.js'
 import { compileStateFields, parseDexoptState } from '../../src/app/dexopt.js'
 import { CPU_TIMES_SQL } from '../../src/collectors/cpu/index.js'
 import { SessionStateError } from '../../src/errors.js'
@@ -93,6 +100,8 @@ async function makeRun(
     debuggable?: boolean | null
     /** `capture.json` 의 `target_app` 에 더할 칸 (컴파일 상태 등). 주지 않으면 그 키들이 없는 옛 매니페스트다. */
     targetApp?: Partial<TargetApp>
+    /** session.json 의 바꾼 기록 (`start --compile`). 주지 않으면 키가 없다. */
+    compile?: SessionCompile
   } = {},
 ): Promise<string> {
   const runDir = mkdtempSync(join(tmpdir(), 'pt-extract-'))
@@ -135,6 +144,7 @@ async function makeRun(
       startup:
         (overrides.launch ?? true) ? { totalTimeMs: 1842, launchState: 'COLD' } : null,
       ...(overrides.appPid !== undefined ? { appPid: overrides.appPid } : {}),
+      ...(overrides.compile !== undefined ? { compile: overrides.compile } : {}),
     },
     {
       ...(endedAt !== null ? { endedAt } : {}),
@@ -971,5 +981,60 @@ describe('extractRun — target_app 컴파일 상태', () => {
 
     const text = readFileSync(join(runDir, 'result.json'), 'utf8')
     expect(text).not.toContain('compile_state')
+  })
+})
+
+/** 바꾼 기록 (기능 문서 baseline-profile BP-4) — session.json 의 것을 result.json `session.compile` 로 옮기기만 한다. */
+describe('--compile 세션의 result.json', () => {
+  const YT = 'com.google.android.youtube'
+  const before = parseDexoptState(fixture('dumpsys-package-dexopt-youtube.txt'), YT).lines
+  const RECORD: SessionCompile = {
+    value: 'speed',
+    command: `cmd package compile -m speed -f '${YT}'`,
+    elapsed_ms: 67_500,
+    compile_state_before: before,
+    compile_state_before_reason_code: null,
+    compile_state_before_reason: null,
+  }
+
+  it('BP-4 바꾼 기록 — session.compile 에 값 · 보낸 명령 원문 · 바꾸기 전 상태 · 걸린 ms 가 그대로 실리고 스키마를 통과한다', async () => {
+    const runDir = await makeRun({ compile: RECORD })
+    const trace = join(runDir, 'trace.perfetto-trace')
+
+    const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: runner(trace) })
+
+    expect(result.session.compile).toEqual(RECORD)
+    expect(result.session.compile?.compile_state_before?.[0]).toMatchObject({ status: 'speed-profile', reason: 'profile-utilization' })
+    const written = JSON.parse(readFileSync(join(runDir, 'result.json'), 'utf8')) as Record<string, any>
+    expect(written['session'].compile).toEqual(RECORD)
+    expect(ResultSchema.safeParse(written).success).toBe(true)
+    // 켠 옵션 표시(options)는 그대로 — 값은 기록 쪽 한 자리에만 있다.
+    expect(written['session'].options).toEqual({ launch: true })
+  })
+
+  it('BP-4 바꾼 기록 — session.json 에 붙은 모르는 칸은 따라 나가지 않는다', async () => {
+    const runDir = await makeRun({ compile: { ...RECORD, extra: 'x' } as SessionCompile })
+    const trace = join(runDir, 'trace.perfetto-trace')
+
+    const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: runner(trace) })
+
+    expect(result.session.compile).toEqual(RECORD)
+  })
+
+  it('BP-4 --compile 없으면 기록 키 0 — result.json session 에 compile 키가 없다', async () => {
+    const runDir = await makeRun()
+    const trace = join(runDir, 'trace.perfetto-trace')
+
+    await extractRun(runDir, { traceProcessorPath: process.execPath, runner: runner(trace) })
+
+    const written = JSON.parse(readFileSync(join(runDir, 'result.json'), 'utf8')) as Record<string, any>
+    expect('compile' in written['session']).toBe(false)
+  })
+
+  it('BP-4 바꾼 기록 — 스키마는 받는 값 셋 밖을 거부한다', () => {
+    const shape = ResultSchema.shape.session.shape.compile
+    expect(shape.safeParse(RECORD).success).toBe(true)
+    expect(shape.safeParse({ ...RECORD, value: 'verify' }).success).toBe(false)
+    expect(shape.safeParse(undefined).success).toBe(true)
   })
 })

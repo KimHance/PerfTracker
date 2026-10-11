@@ -380,6 +380,19 @@ export async function extractRun(
         session.options.diagnose === true
           ? { launch: session.options.launch, diagnose: true }
           : { launch: session.options.launch },
+      // 바꾼 기록은 `--compile` 세션에만 (BP-4) — 없으면 키도 없다. 위와 같은 이유로 칸을 골라 다시 만든다.
+      ...(session.compile !== undefined
+        ? {
+            compile: {
+              value: session.compile.value,
+              command: session.compile.command,
+              elapsed_ms: session.compile.elapsed_ms,
+              compile_state_before: session.compile.compile_state_before,
+              compile_state_before_reason_code: session.compile.compile_state_before_reason_code,
+              compile_state_before_reason: session.compile.compile_state_before_reason,
+            },
+          }
+        : {}),
       // 사람이 적은 것을 도구가 시간순으로 옮기기만 한다 — 내용은 해석하지 않는다.
       // 값이 없으면 빈 배열이다: "아무도 적지 않았다" 는 확인된 사실이다.
       marks: sortedMarks(session).map((m) => ({ offset_ms: m.offsetMs, label: m.label })),

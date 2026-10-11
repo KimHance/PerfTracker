@@ -10,6 +10,7 @@ import { METRIC_REASON_CODES, type MetricReasonCode } from './reasons.js'
 // 같은 1.2.0 에 진단 블록 ART 칸 둘(BP-7 — `diagnose.target_process_compile_state_slices` ·
 // `target_process_jit_slices` 와 각 `_reason_code` · `_reason`)을 optional 로, reason_code 둘
 // (`dalvik_not_recorded` · `compile_state_slice_unparsable`)을 더했다. 진단 세션에만 실린다.
+// 같은 1.2.0 에 바꾼 기록(BP-4 — `session.compile`)을 optional 로 더했다. `start --compile` 세션에만 실린다.
 // 전부 아래 표의 minor 항목이고, 이 키들이 없는 1.1.0 문서는 이 스키마를 그대로 통과한다.
 //
 // 1.1.0 — M2 가 metrics 에 startup / cpu / memory / log 를, M3 가 thermal / network 를
@@ -1452,6 +1453,56 @@ export type Mark = z.infer<typeof MarkSchema>
  * 센다. 그 사실이 진단 여부 필드와 오버헤드 필드 양쪽에 있어야 한다 — 한쪽만 읽는 소비자가 있다.
  * 같은 문장을 네 자리에 손으로 옮기면 한 곳만 고쳐지는 날이 오므로 상수 하나로 둔다.
  */
+/**
+ * `start --compile` 이 받는 값 (기능 문서 baseline-profile BP-4 · plan B10) — 기기 낱말 그대로, 실측한 셋뿐이다
+ * (결정 3 — `-m verify` 등 실측 안 한 모드는 결과를 모른다). 보낸 명령과 기록 문자열이 같다.
+ */
+export const COMPILE_VALUES = ['reset', 'speed-profile', 'speed'] as const
+export type CompileValue = (typeof COMPILE_VALUES)[number]
+
+/**
+ * 바꾼 기록 (BP-4) — **`--compile` 세션에만 있다.** 없으면 그 세션은 기기 컴파일 상태를 바꾸지 않았다
+ * (`--compile` 없는 세션은 `cmd package compile` 0). 바꾼 **뒤** 상태는 여기 없다 — `target_app.compile_state_start`
+ * 가 그것이다 (compile 바로 뒤 다시 읽은 `dumpsys package`).
+ */
+export const SessionCompileSchema = z
+  .object({
+    value: z
+      .enum(COMPILE_VALUES)
+      .describe('`--compile` 에 준 값 — `reset` · `speed-profile` · `speed` 중 하나 (기기 낱말 그대로).'),
+    command: z
+      .string()
+      .describe(
+        '기기로 보낸 셸 명령 원문 — `cmd package compile --reset <pkg>` 또는 `cmd package compile -m <값> -f <pkg>`. ' +
+          '범위 옵션(`--primary-dex` 등)은 붙이지 않는다 — 기기가 의존 패키지 · split · 보조 dex 까지 바꿀 수 있다.',
+      ),
+    elapsed_ms: z
+      .number()
+      .int()
+      .describe('그 명령이 걸린 시간(ms) — 호스트가 잰 adb 호출 왕복이다 (실측 reset 200 · speed-profile 18,640 · speed 67,500).'),
+    compile_state_before: z
+      .array(DexoptLineSchema)
+      .nullable()
+      .describe(
+        '**바꾸기 전** 상태 — 대상 앱을 해석한 `dumpsys package` 출력(그 명령보다 앞)에서 읽은 dex 줄 전부. ' +
+          '꼴은 `target_app.compile_state_start` 와 같다. null 은 읽지 못했다는 뜻이고 이유는 짝 `_reason_code` 가 말한다.',
+      ),
+    compile_state_before_reason_code: z
+      .enum(METRIC_REASON_CODES)
+      .nullable()
+      .describe('compile_state_before 가 null 인 이유 (dexopt_state_* 코드). 값이 있으면 null.'),
+    compile_state_before_reason: z
+      .string()
+      .nullable()
+      .describe('compile_state_before_reason_code 의 사람용 문장. 매칭에는 코드를 쓴다.'),
+  })
+  .describe(
+    '`start --compile` 이 측정 창을 열기 전에 기기 컴파일 상태를 바꾼 기록. `--compile` 세션에만 있고, ' +
+      '키가 없으면 그 세션은 상태를 바꾸지 않았다(또는 이 기록이 생기기 전의 문서다). ' +
+      '이 도구는 자동으로 되돌리지 않는다 — 되돌려도 `reason` 은 `cmdline` 으로 남는다.',
+  )
+export type SessionCompile = z.infer<typeof SessionCompileSchema>
+
 const DIAGNOSE_OVERHEAD_CAVEAT =
   '**진단 세션(session.options.diagnose: true)은 atrace slice 비용이 앱 프로세스에 청구되어 ' +
   'measurement_overhead.tracing_processes_* 에 안 잡힌다 — 평소 세션과 수치를 나란히 놓을 수 없다.** ' +
@@ -1528,6 +1579,8 @@ export const SessionInfoSchema = z.object({
           DIAGNOSE_OVERHEAD_CAVEAT,
       ),
   }),
+  /** 바꾼 기록 — `--compile` 세션에만 키가 있다 (BP-4). 평소 · 진단 세션은 키 0. */
+  compile: SessionCompileSchema.optional(),
   /**
    * `[]` 는 **"아무도 아무것도 적지 않았다"** 는 사실이다 (규칙 3 의 예외가 아니라 그 자체다).
    * CLI 로 잰 세션은 마킹을 남길 방법이 없으므로 항상 비어 있고, GUI 세션만 값을 가진다.

@@ -2,6 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { AdbClient } from '../adb/client.js'
 import { shellQuote } from '../adb/shell.js'
+import { compileStateFields, type DexoptRead, dexoptUnavailable, parseDexoptState } from '../app/dexopt.js'
 import {
   collectSnapshotSpecs,
   collectTraceConfigBlocks,
@@ -13,7 +14,7 @@ import type { AmStartResult } from '../collectors/types.js'
 import { probeDevice } from '../device/probe.js'
 import { collectDeviceStatic } from '../device/spec.js'
 import { collectDeviceState, runSnapshots } from '../device/state.js'
-import { SessionStateError } from '../errors.js'
+import { CompileFailedError, SessionStateError } from '../errors.js'
 import { buildTraceConfig, DEFAULT_MAX_DURATION_MS, DIAGNOSE_MAX_DURATION_MS } from '../perfetto/config.js'
 import {
   isSessionDetached,
@@ -23,7 +24,14 @@ import {
   stopDetachedSession,
 } from '../perfetto/session.js'
 import { renderReason } from '../schema/reasons.js'
-import type { DeviceState, TargetApp, Warning } from '../schema/result.js'
+import {
+  COMPILE_VALUES,
+  type CompileValue,
+  type DeviceState,
+  type SessionCompile,
+  type TargetApp,
+  type Warning,
+} from '../schema/result.js'
 import { ATRACE_READY_WAIT, diagnoseNotice, diagnoseScope } from './diagnose.js'
 import { CAPTURE_MANIFEST_VERSION, writeCaptureManifest } from './manifest.js'
 import { runDirName } from './paths.js'
@@ -194,6 +202,88 @@ export async function beginStart(
   await clearActiveSession(ctx.serial, opts.home)
 }
 
+/**
+ * 상태 바꾸는 명령의 시간 한도 — 10분 (기능 문서 baseline-profile 결정 10). adb 호출 기본 한도 60초는
+ * 실측 67.5초(speed · SM-S901N · YouTube)를 끊는다 — 끊어도 기기는 계속 컴파일하는데 세션만 실패로 끝난다.
+ */
+export const COMPILE_TIMEOUT_MS = 10 * 60_000
+
+const isCompileValue = (value: string): value is CompileValue => (COMPILE_VALUES as readonly string[]).includes(value)
+
+/**
+ * `--compile` 의 입구 검사 (BP-4 · 결정 8) — **기기를 건드리지 않는다.** 안 줬으면 null, 받는 값이면 그 값,
+ * 아니면 던진다. `startSession` 이 맨 앞에서 스스로 부르고(CLI 검사와 별개의 방어), cli 는 앱 해석(기기 접촉)
+ * 전에 같은 함수를 불러 거부를 기기 명령 0 으로 끝낸다.
+ *
+ * `--launch` 와만 받는 이유: 이미 떠 있는 앱은 옛 odex 로 돌 수 있어, 바꾼 뒤 상태(시작 상태)와 실제로 돈
+ * 코드가 다를 수 있다 (plan B20).
+ */
+export function checkCompileOption(opts: { launch: boolean; compile?: string }): CompileValue | null {
+  if (opts.compile === undefined) return null
+  if (!isCompileValue(opts.compile)) {
+    throw new SessionStateError(
+      `--compile ${opts.compile} · 받는 값 ${COMPILE_VALUES.join(' · ')} · 기기 명령 0`,
+    )
+  }
+  if (!opts.launch) throw new SessionStateError('--compile 은 --launch 와만 · 기기 명령 0')
+  return opts.compile
+}
+
+/**
+ * 상태 바꾸는 명령 — **실측한 꼴 그대로**다 (결정 9 · plan B19). `--primary-dex` 같은 범위 옵션을 붙이지 않는다:
+ * 실측 안 한 옵션은 결과를 모른다. 그래서 기기가 의존 패키지 · split · 보조 dex 까지 바꿀 수 있다 (README 한계).
+ */
+export function compileCommand(value: CompileValue, pkg: string): string {
+  return value === 'reset'
+    ? `cmd package compile --reset ${shellQuote(pkg)}`
+    : `cmd package compile -m ${value} -f ${shellQuote(pkg)}`
+}
+
+/** 바꾸기 전 상태 = 대상 앱 해석이 읽은 시작 칸 그대로 (BP-4). 그 칸이 없는 `TargetApp` 이면 기록 없음. */
+function stateBefore(app: TargetApp): Pick<
+  SessionCompile,
+  'compile_state_before' | 'compile_state_before_reason_code' | 'compile_state_before_reason'
+> {
+  const fields =
+    'compile_state_start' in app ? app : compileStateFields('start', dexoptUnavailable('start', 'not_recorded'))
+  return {
+    compile_state_before: fields.compile_state_start ?? null,
+    compile_state_before_reason_code: fields.compile_state_start_reason_code ?? null,
+    compile_state_before_reason: fields.compile_state_start_reason ?? null,
+  }
+}
+
+/**
+ * 기기 컴파일 상태를 바꾸고 바로 다시 읽는다 (BP-4). 측정 창 · run 디렉토리 · 시작 스냅샷보다 **앞**이다.
+ *
+ * 실패(종료 코드 ≠ 0 · 출력 `Failure` · 한도 넘음)면 `CompileFailedError` — **실패 뒤 상태는 읽지 않는다**
+ * (실패 경로에 기기 명령을 더하지 않는다). 성공하면 `dumpsys package` 한 줄로 다시 읽은 출력이 시작 상태다
+ * — 대상 앱 해석의 출력은 바꾸기 **전**이라 그대로 두면 시작 상태 자리에 거짓이 실린다.
+ */
+async function changeCompileState(
+  adb: AdbClient,
+  app: TargetApp,
+  value: CompileValue,
+): Promise<{ app: TargetApp; record: SessionCompile }> {
+  const command = compileCommand(value, app.package)
+  const t0 = Date.now()
+  const r = await adb.raw(['shell', command], { timeoutMs: COMPILE_TIMEOUT_MS })
+  const elapsedMs = Date.now() - t0
+  const timedOut = r.timedOut === true
+  if (timedOut || r.code !== 0 || /^Failure/m.test(r.stdout) || /^Failure/m.test(r.stderr)) {
+    const output = [r.stdout, r.stderr].filter((t) => t.trim() !== '').join('\n')
+    throw new CompileFailedError(value, command, timedOut ? null : r.code, timedOut, output, elapsedMs)
+  }
+
+  const d = await adb.raw(['shell', `dumpsys package ${shellQuote(app.package)}`])
+  const after: DexoptRead =
+    d.code === 0 ? parseDexoptState(d.stdout, app.package) : dexoptUnavailable('start', 'command_failed', d.code)
+  return {
+    app: { ...app, ...compileStateFields('start', after) },
+    record: { value, command, elapsed_ms: elapsedMs, ...stateBefore(app) },
+  }
+}
+
 export interface StartOptions {
   name?: string
   launch: boolean
@@ -207,6 +297,12 @@ export interface StartOptions {
    * 글자 하나 다르지 않다 (DM-1).
    */
   diagnose?: boolean
+  /**
+   * 측정 창을 열기 전에 기기 컴파일 상태를 바꾼다 (`--compile` · BP-4) — `reset` · `speed-profile` · `speed`.
+   * `launch` 와 함께일 때만 받고, 허용 밖 값과 함께 **기기 명령 0** 으로 거부한다 (`checkCompileOption`).
+   * 없으면 `cmd package compile` 0 · 기기 명령 목록이 이 옵션이 없던 때와 같다.
+   */
+  compile?: string
 }
 
 export async function startSession(
@@ -214,6 +310,8 @@ export async function startSession(
   app: TargetApp,
   opts: StartOptions,
 ): Promise<ActiveSession> {
+  // `--compile` 거부는 무엇보다 먼저 — `beginStart --force` 의 옛 세션 정리조차 기기 명령이다.
+  const compile = checkCompileOption(opts)
   await beginStart(ctx, { force: opts.force, ...(opts.home !== undefined ? { home: opts.home } : {}) })
 
   const probe = await probeDevice(ctx.adb)
@@ -256,6 +354,12 @@ export async function startSession(
     durationMs: maxDurationMs,
     ...(diagnose ? { diagnose: { packageName: app.package } } : {}),
   })
+
+  // 0') 컴파일 상태 바꾸기 (BP-4 · 결정 11) — 설정 검증 **뒤**(거부될 config 로 기기를 바꾸지 않음),
+  //     run 디렉토리 · 시작 스냅샷 · perfetto · force-stop **앞**. 67.5초 컴파일의 발열이 시작 상태(배터리 온도 ·
+  //     thermal)에 섞이지 않고, 실패하면 빈 run 디렉토리가 남지 않는다.
+  const compiled = compile !== null ? await changeCompileState(ctx.adb, app, compile) : null
+  const target = compiled?.app ?? app
 
   const name = opts.name ?? app.label
   const id = newSessionId()
@@ -329,6 +433,8 @@ export async function startSession(
     // 진단 키는 진단 세션에만 싣는다 (plan D12) — 평소 세션의 session.json · `status --json` 은
     // 이 옵션이 없던 때와 키가 같다.
     options: diagnose ? { launch: opts.launch, diagnose: true } : { launch: opts.launch },
+    // 바꾼 기록도 `--compile` 세션에만 (BP-4) — 평소 세션은 키 0.
+    ...(compiled !== null ? { compile: compiled.record } : {}),
     ...(atrace !== null
       ? {
           diagnose: {
@@ -350,7 +456,7 @@ export async function startSession(
       state_before: before.state,
       state_after: null,
     },
-    target_app: app,
+    target_app: target,
     env,
     warnings: buildWarnings(before.state, {
       launchTimeUnmeasured: opts.launch && startup?.totalTimeMs == null,

@@ -1176,6 +1176,26 @@ registry 순서는 `hwuiCollector` 바로 뒤에 `frameCollector` 다 — 지표
   baseline-profile BP-8 · bp-gui-report 가 디자인 문서대로 다듬습니다. **확인하지 못한 것:**
   sdk ≤35 · 비디버그 앱에서 `dalvik` slice 가 앱 프로세스에 실리는지 (기능 문서 열린 질문 10 — 실측 sdk 36 하나).
 
+### ✅ 컴파일 상태를 맞춰 재기 — `start --compile` 의 core 쪽 (2026-10-11, 기능 문서 baseline-profile BP-4)
+
+`startSession` 이 `compile`(`reset` · `speed-profile` · `speed`)을 받으면 측정 창을 열기 전에 기기 컴파일 상태를
+바꾸고, `result.json` 의 `session.compile` 에 바꾼 기록(값 · 보낸 명령 원문 · 바꾸기 전 상태 · 걸린 ms)을 남깁니다.
+자리와 읽는 법 · 한계는 README 「`session.compile` — 바꾼 기록」 이 정본입니다. CLI 옵션 · 출력 줄 · 되돌림 줄은
+bp-cli 단위 몫입니다.
+
+- **기기 명령:** 설정 검증 뒤 · run 디렉토리 · 시작 스냅샷 · perfetto · force-stop **앞**에 `cmd package compile …`
+  한 줄과, 성공하면 바로 뒤 `dumpsys package <pkg>` 한 줄 — 그 출력이 시작 상태(바꾼 뒤)입니다. 평소 세션의 명령
+  목록은 그대로이고 `start.test.ts` 가 두 목록을 함께 고정합니다. 측정 창 안 0 그대로.
+- **거부는 기기 명령 0** — `--launch` 없음 · 받는 값 셋 밖은 `startSession` 맨 앞(`--force` 의 옛 세션 정리보다도
+  먼저)에서 거부합니다. cli 가 앱 해석 전에 부를 수 있게 같은 검사를 `checkCompileOption` 으로 내보냅니다.
+- **시간 한도 10분** — adb 호출 기본 한도 60초가 실측 67.5초(speed)를 끊던 것. runner 가 한도로 죽인 것을
+  `timedOut` 으로 따로 알려 종료 코드와 가릅니다. 실패(종료 코드 ≠ 0 · `Failure` · 한도)면 `CompileFailedError` —
+  세션을 열지 않고 실패 뒤 상태는 읽지 않습니다.
+- **schema 1.2.0 그대로** — `session.compile` 은 optional 이고 `--compile` 세션에만 실립니다. `session` 이 닫힌
+  객체라 캐시한 1.1.0 스키마는 그 세션의 산출물을 거부합니다. 새 reason_code 없음.
+- **확인하지 못한 것:** 실기기에서 이 경로 전체(기능 문서 BP-9 · device 단위) · sdk ≤33 의 `cmd package compile`
+  출력 꼴 (열린 질문 10 — 실패 판정은 종료 코드 · 줄 머리 `Failure` · 한도 셋뿐).
+
 ### 그 밖의 후보 (우선순위 낮음)
 
 - **Power** — 배터리 델타는 **구조적으로 불가능**합니다. adb 는 USB 연결을 전제하고 USB 는

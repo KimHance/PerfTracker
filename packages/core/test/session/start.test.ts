@@ -1,11 +1,21 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { MeasurementWindowViolationError, PerfettoSessionError, SessionStateError } from '../../src/errors.js'
+import { compileStateFields, parseDexoptState } from '../../src/app/dexopt.js'
+import {
+  CompileFailedError,
+  MeasurementWindowViolationError,
+  PerfettoSessionError,
+  SessionStateError,
+} from '../../src/errors.js'
 import type { CaptureManifest } from '../../src/session/manifest.js'
 import {
   AM_START_PIDOF_MARKER,
   buildWarnings,
+  checkCompileOption,
+  COMPILE_TIMEOUT_MS,
+  compileCommand,
   parseAmStart,
   parsePidof,
   splitAmStartPidof,
@@ -739,5 +749,280 @@ describe('startSession — 진단 세션', () => {
       const session = await diagStart({ runner: sdk(30), app: { debuggable: false } }).result
       expect(session.diagnose).toBeUndefined()
     })
+  })
+})
+
+/**
+ * `--compile` (기능 문서 baseline-profile BP-4 core 쪽). 기기 원문은 실측 픽스처 — 바꾸기 전은 YouTube 해석 출력
+ * (`speed-profile` / `profile-utilization`), 바꾼 뒤는 `--reset` 직후 출력(`verify` / `vdex-dm`)이다.
+ */
+describe('startSession — --compile (BP-4)', () => {
+  const YT = 'com.google.android.youtube'
+  const fixture = (n: string): string =>
+    readFileSync(fileURLToPath(new URL(`../fixtures/${n}`, import.meta.url)), 'utf8')
+  const BEFORE = fixture('dumpsys-package-dexopt-youtube.txt')
+  const AFTER = fixture('dumpsys-package-dexopt-reset.txt')
+  const DUMPSYS = `-s ${SERIAL} shell dumpsys package '${YT}'`
+  /** 대상 앱 해석이 낸 것과 같은 `target_app` — 시작 칸이 바꾸기 전 출력에서 온다. */
+  const ytApp = {
+    package: YT,
+    launcher_activity: 'com.google.android.apps.youtube.app.watchwhile.MainActivity',
+    ...compileStateFields('start', parseDexoptState(BEFORE, YT)),
+  }
+
+  function compileDevice(
+    compile: { stdout?: string; stderr?: string; code?: number; timedOut?: true } = { stdout: 'Success\n' },
+    dumpsys: { stdout?: string; code?: number } = { stdout: AFTER },
+  ) {
+    return startableDevice((r) => r.onMatch(/shell cmd package compile /, compile).on(DUMPSYS, dumpsys))
+  }
+
+  function compileStart(
+    opts: {
+      compile?: string
+      /** true 면 `compile` 키 자체를 넘기지 않는다 — 평소 세션. */
+      noCompile?: true
+      launch?: boolean
+      diagnose?: boolean
+      force?: boolean
+      runner?: ReturnType<typeof startableDevice>
+      app?: Parameters<typeof targetApp>[0]
+      home?: string
+    } = {},
+  ) {
+    const dirs = tempDirs()
+    const home = opts.home ?? dirs.home
+    const runner = opts.runner ?? compileDevice()
+    const adb = clientFor(runner)
+    const result = startSession({ adb, serial: SERIAL }, targetApp(opts.app ?? ytApp), {
+      launch: opts.launch ?? true,
+      outDir: dirs.out,
+      force: opts.force ?? false,
+      now: NOW,
+      home,
+      ...(opts.diagnose !== undefined ? { diagnose: opts.diagnose } : {}),
+      ...(opts.noCompile === true ? {} : { compile: opts.compile ?? 'speed' }),
+    })
+    return { adb, runner, dirs, home, result }
+  }
+
+  const manifestOf = (runDir: string): CaptureManifest =>
+    JSON.parse(readFileSync(join(runDir, 'capture.json'), 'utf8')) as CaptureManifest
+
+  const PROBE = [
+    `-s ${SERIAL} shell which perfetto`,
+    `-s ${SERIAL} shell perfetto --query`,
+    `-s ${SERIAL} shell getprop ro.build.version.sdk`,
+  ]
+
+  it('BP-4 명령 꼴 그대로 — reset 은 --reset · 그 밖은 -m <값> -f · 범위 옵션 없음', () => {
+    expect(compileCommand('reset', YT)).toBe(`cmd package compile --reset '${YT}'`)
+    expect(compileCommand('speed-profile', YT)).toBe(`cmd package compile -m speed-profile -f '${YT}'`)
+    expect(compileCommand('speed', YT)).toBe(`cmd package compile -m speed -f '${YT}'`)
+    for (const v of ['reset', 'speed-profile', 'speed'] as const) {
+      expect(compileCommand(v, YT)).not.toMatch(/--primary-dex|--secondary-dex|--include-dependencies|--split/)
+    }
+  })
+
+  /**
+   * 평소 세션 목록(위 「기기로 나가는 명령 전체가 이 목록과 정확히 같다」)에 **probe 바로 뒤 두 줄**만 끼고
+   * 그 밖 줄 · 순서는 같다. compile 은 설정 검증(probe 뒤 config 조립) 뒤, 기기 스펙 · 시작 스냅샷 · force-stop ·
+   * perfetto 앞이다.
+   */
+  it('BP-4 compile 은 DM-4 뒤 · 시작 스냅샷 · perfetto · force-stop 전 — 명령 목록에 probe 뒤 두 줄만 낀다', async () => {
+    const normal = start({ launch: true, app: ytApp })
+    const normalSession = await normal.result
+    const plain = normal.runner.commands.map((c) => c.replaceAll(normalSession.id, '<id>'))
+
+    const h = compileStart({ compile: 'speed' })
+    const session = await h.result
+    const commands = h.runner.commands.map((c) => c.replaceAll(session.id, '<id>'))
+
+    expect(commands).toEqual([
+      ...PROBE,
+      `-s ${SERIAL} shell cmd package compile -m speed -f '${YT}'`,
+      DUMPSYS,
+      ...plain.slice(PROBE.length),
+    ])
+    expect(plain.slice(0, PROBE.length)).toEqual(PROBE)
+    const at = (needle: string) => commands.findIndex((c) => c.includes(needle))
+    expect(at('cmd package compile')).toBeLessThan(at('getprop $p'))
+    expect(at('cmd package compile')).toBeLessThan(at('dumpsys battery'))
+    expect(at('cmd package compile')).toBeLessThan(at('am force-stop'))
+    expect(at('cmd package compile')).toBeLessThan(at('--detach=perftracker_'))
+  })
+
+  it('BP-4 compile 은 DM-4 뒤 — 설정 검증이 거부하면 compile 도 0 · 나간 것은 probe 뿐', async () => {
+    const h = compileStart({ compile: 'speed', diagnose: true, app: { ...ytApp, package: 'com.google.*' } })
+
+    await expect(h.result).rejects.toBeInstanceOf(PerfettoSessionError)
+    expect(h.runner.commands).toEqual(PROBE)
+    expect(readdirSync(h.dirs.out)).toEqual([])
+  })
+
+  it('BP-4 --launch 없으면 거부 — 기기 명령 0 · run 디렉토리 0', async () => {
+    const h = compileStart({ compile: 'speed', launch: false })
+
+    await expect(h.result).rejects.toThrow(new SessionStateError('--compile 은 --launch 와만 · 기기 명령 0'))
+    expect(h.runner.commands).toEqual([])
+    expect(readdirSync(h.dirs.out)).toEqual([])
+    expect(await readActiveSession(SERIAL, h.home)).toBeNull()
+  })
+
+  it('BP-4 --launch 없으면 거부 — --force 의 옛 세션 정리(기기 명령)보다도 먼저', async () => {
+    const dirs = tempDirs()
+    const old = await start({ home: dirs.home }).result
+    await writeActiveSession(old, dirs.home)
+
+    const h = compileStart({ compile: 'reset', launch: false, force: true, home: dirs.home })
+
+    await expect(h.result).rejects.toBeInstanceOf(SessionStateError)
+    expect(h.runner.commands).toEqual([])
+    expect((await readActiveSession(SERIAL, dirs.home))?.id).toBe(old.id)
+  })
+
+  it('BP-4 허용 밖 값 거부 — 기기 명령 0 · 받는 값 셋을 말한다', async () => {
+    for (const value of ['verify', 'SPEED', '', 'speed -f --secondary-dex', 'speed-profile ']) {
+      const h = compileStart({ compile: value })
+
+      await expect(h.result).rejects.toThrow(
+        new SessionStateError(`--compile ${value} · 받는 값 reset · speed-profile · speed · 기기 명령 0`),
+      )
+      expect(h.runner.commands).toEqual([])
+      expect(readdirSync(h.dirs.out)).toEqual([])
+    }
+  })
+
+  it('BP-4 허용 밖 값 거부 — 입구 검사는 기기 없이 값 · --launch 를 본다 (cli 가 앱 해석 전에 부른다)', () => {
+    expect(checkCompileOption({ launch: true })).toBeNull()
+    expect(checkCompileOption({ launch: false })).toBeNull()
+    expect(checkCompileOption({ launch: true, compile: 'reset' })).toBe('reset')
+    expect(checkCompileOption({ launch: true, compile: 'speed-profile' })).toBe('speed-profile')
+    expect(checkCompileOption({ launch: true, compile: 'speed' })).toBe('speed')
+    expect(() => checkCompileOption({ launch: true, compile: 'verify' })).toThrow(SessionStateError)
+    expect(() => checkCompileOption({ launch: false, compile: 'speed' })).toThrow(SessionStateError)
+  })
+
+  it('BP-4 compile 시간 한도 — compile 호출에만 10분을 넘기고 다른 호출은 기본 한도 그대로', async () => {
+    const h = compileStart({ compile: 'speed' })
+    await h.result
+
+    expect(COMPILE_TIMEOUT_MS).toBe(600_000)
+    // 실측 67.5초(speed)보다 길어야 한다 — 기본 60초면 기기는 계속 컴파일하는데 세션만 실패로 끝난다.
+    expect(COMPILE_TIMEOUT_MS).toBeGreaterThan(67_500)
+    const limited = h.runner.calls.filter((c) => c.timeoutMs !== undefined)
+    expect(limited.map((c) => [c.args.join(' '), c.timeoutMs])).toEqual([
+      [`-s ${SERIAL} shell cmd package compile -m speed -f '${YT}'`, 600_000],
+    ])
+  })
+
+  describe('BP-4 실패하면 세션 안 엶 · run 디렉토리 0', () => {
+    const cases = [
+      { name: '종료 코드 ≠ 0', reply: { code: 255, stderr: 'cmd: Failure calling service package\n' }, exit: 255, timedOut: false },
+      { name: '종료 코드 0 · 출력 Failure', reply: { stdout: 'Failure: package com.google.android.youtube could not be compiled\n' }, exit: 0, timedOut: false },
+      { name: '한도 넘음', reply: { code: 1, timedOut: true as const }, exit: null, timedOut: true },
+    ]
+    for (const c of cases) {
+      it(`BP-4 실패하면 세션 안 엶 · run 디렉토리 0 — ${c.name}`, async () => {
+        const h = compileStart({ compile: 'speed', runner: compileDevice(c.reply) })
+
+        const err = await h.result.then(
+          () => null,
+          (e: unknown) => e,
+        )
+        expect(err).toBeInstanceOf(CompileFailedError)
+        const f = err as CompileFailedError
+        expect(f.value).toBe('speed')
+        expect(f.command).toBe(`cmd package compile -m speed -f '${YT}'`)
+        expect(f.exitCode).toBe(c.exit)
+        expect(f.timedOut).toBe(c.timedOut)
+        expect(f.message.split('\n')[0]).toBe(
+          c.timedOut ? '컴파일 한도 10분 넘음 · 세션 안 엶' : `컴파일 실패 · 세션 안 엶 · exit ${String(c.exit)}`,
+        )
+        // probe 와 compile 뿐 — 실패 뒤 상태 읽기(dumpsys) · 스펙 · 스냅샷 · force-stop · perfetto 0.
+        expect(h.runner.commands).toEqual([...PROBE, `-s ${SERIAL} shell cmd package compile -m speed -f '${YT}'`])
+        expect(readdirSync(h.dirs.out)).toEqual([])
+        expect(await readActiveSession(SERIAL, h.home)).toBeNull()
+        expect(h.adb.window.isOpen).toBe(false)
+      })
+    }
+
+    it('BP-4 실패하면 세션 안 엶 — 출력 Success 는 실패가 아니다 (Failure 는 줄 머리에서만)', async () => {
+      const h = compileStart({ compile: 'speed', runner: compileDevice({ stdout: 'Success\n' }) })
+      await expect(h.result).resolves.toBeDefined()
+    })
+  })
+
+  it('BP-4 바꾼 뒤 상태는 다시 읽은 dumpsys — compile 바로 다음 줄 · 시작 상태가 그 출력', async () => {
+    const h = compileStart({ compile: 'reset' })
+    const session = await h.result
+
+    const compileAt = h.runner.commands.indexOf(`-s ${SERIAL} shell cmd package compile --reset '${YT}'`)
+    expect(compileAt).toBe(PROBE.length)
+    expect(h.runner.commands[compileAt + 1]).toBe(DUMPSYS)
+    expect(h.runner.commands.filter((c) => c === DUMPSYS)).toHaveLength(1)
+
+    const app = manifestOf(session.runDir).target_app
+    expect(app.compile_state_start).toEqual(parseDexoptState(AFTER, YT).lines)
+    expect(app.compile_state_start?.[0]).toMatchObject({ status: 'verify', reason: 'vdex-dm' })
+    expect(app.compile_state_start_reason_code).toBeNull()
+    expect(app.compile_state_start_reason).toBeNull()
+    // 바꾸기 전 값(대상 앱 해석의 출력)이 시작 자리에 남지 않는다.
+    expect(app.compile_state_start).not.toEqual(ytApp.compile_state_start)
+  })
+
+  it('BP-4 바꾼 뒤 상태는 다시 읽은 dumpsys — 그 줄이 실패하면 시작 상태는 null + 코드 · 세션은 열린다', async () => {
+    const h = compileStart({ compile: 'speed', runner: compileDevice({ stdout: 'Success\n' }, { code: 1 }) })
+    const session = await h.result
+
+    const app = manifestOf(session.runDir).target_app
+    expect(app.compile_state_start).toBeNull()
+    expect(app.compile_state_start_reason_code).toBe('dexopt_state_unavailable')
+    expect(app.compile_state_start_reason).toBe('세션 시작 dumpsys package 출력을 받지 못함 (종료 코드 1) — 기기 연결이 끊겼을 수 있음')
+  })
+
+  it('BP-4 바꾼 기록 — 값 · 보낸 명령 원문 · 바꾸기 전 상태 · 걸린 ms 가 세션 기록에 실린다', async () => {
+    const h = compileStart({ compile: 'speed-profile' })
+    const session = await h.result
+
+    expect(session.compile).toEqual({
+      value: 'speed-profile',
+      command: `cmd package compile -m speed-profile -f '${YT}'`,
+      elapsed_ms: expect.any(Number) as number,
+      compile_state_before: ytApp.compile_state_start,
+      compile_state_before_reason_code: null,
+      compile_state_before_reason: null,
+    })
+    expect(Number.isInteger(session.compile?.elapsed_ms)).toBe(true)
+    expect(session.compile?.elapsed_ms).toBeGreaterThanOrEqual(0)
+    // 바꾸기 전 = 대상 앱 해석의 출력 그대로 (실측 speed-profile / profile-utilization).
+    expect(session.compile?.compile_state_before?.[0]).toMatchObject({ status: 'speed-profile', reason: 'profile-utilization' })
+    // 보낸 명령 원문은 실제로 기기로 나간 문자열과 같다.
+    expect(h.runner.commands).toContain(`-s ${SERIAL} shell ${session.compile?.command ?? ''}`)
+
+    const stored = JSON.parse(readFileSync(join(session.runDir, 'session.json'), 'utf8')) as Record<string, unknown>
+    expect(stored['compile']).toEqual(session.compile)
+    expect((await readActiveSession(SERIAL, h.home))?.compile).toEqual(session.compile)
+  })
+
+  it('BP-4 바꾼 기록 — 바꾸기 전 상태를 못 읽었던 앱이면 그 null 과 코드를 그대로 옮긴다', async () => {
+    const unread = { ...ytApp, ...compileStateFields('start', parseDexoptState('Packages:\n', YT)) }
+    const session = await compileStart({ compile: 'speed', app: unread }).result
+
+    expect(session.compile?.compile_state_before).toBeNull()
+    expect(session.compile?.compile_state_before_reason_code).toBe('dexopt_state_section_missing')
+    expect(session.compile?.compile_state_before_reason).toBe(unread.compile_state_start_reason)
+  })
+
+  it('BP-4 --compile 없으면 기록 키 0 — cmd package compile 0 · target_app 은 해석한 그대로', async () => {
+    const h = compileStart({ noCompile: true })
+    const session = await h.result
+
+    expect('compile' in session).toBe(false)
+    const stored = JSON.parse(readFileSync(join(session.runDir, 'session.json'), 'utf8')) as Record<string, unknown>
+    expect('compile' in stored).toBe(false)
+    expect(h.runner.commands.some((c) => c.includes('cmd package compile'))).toBe(false)
+    expect(h.runner.commands).not.toContain(DUMPSYS)
+    expect(manifestOf(session.runDir).target_app).toEqual(targetApp(ytApp))
   })
 })
