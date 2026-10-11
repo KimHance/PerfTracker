@@ -1,0 +1,450 @@
+{
+ "summary-1440": {
+  "chars": 2234,
+  "under12_pct": 85.1,
+  "under45_pct": 12.3,
+  "min_px": 10,
+  "min_ratio": 3.82,
+  "layers": {
+   "tile_value": 21,
+   "section": 10.5,
+   "card_title": 12.5,
+   "body": 11.5
+  },
+  "overflow_x": 0,
+  "hits": [
+   "11.0px 9.53 rp-sid mono «rr0000»",
+   "10.0px 6.68 rp-state «completed»",
+   "12.5px 4.27 I «앱»",
+   "12.5px 4.27 I «기기»",
+   "12.5px 4.27 I «시작»",
+   "12.5px 4.27 I «duration»",
+   "12.5px 4.27 I «옵션»",
+   "10.5px 6.13 SPAN «앱시작»",
+   "11.0px 5.48 rp-stat-title «앱시작»",
+   "10.0px 5.48 SPAN «0»",
+   "10.0px 5.48 SPAN «기준5,000ms»",
+   "10.5px 5.48 rp-stat-sub num «상태COLD·wait830ms»"
+  ]
+ },
+ "missing-1440": {
+  "chars": 2144,
+  "under12_pct": 84.4,
+  "under45_pct": 15.1,
+  "min_px": 9.5,
+  "min_ratio": 3.82,
+  "layers": {
+   "tile_value": 21,
+   "section": 10.5,
+   "card_title": 12.5,
+   "body": 11.5
+  },
+  "overflow_x": 0,
+  "hits": [
+   "11.0px 9.53 rp-sid mono «rr0001»",
+   "10.0px 6.68 rp-state «completed»",
+   "12.5px 4.27 I «앱»",
+   "12.5px 4.27 I «기기»",
+   "12.5px 4.27 I «시작»",
+   "12.5px 4.27 I «duration»",
+   "12.5px 4.27 I «옵션»",
+   "10.5px 6.13 SPAN «앱시작»",
+   "11.0px 5.48 rp-stat-title «앱시작»",
+   "10.0px 5.48 SPAN «0»",
+   "10.0px 5.48 SPAN «기준5,000ms»",
+   "10.5px 5.48 rp-stat-sub num «상태COLD·wait830ms»"
+  ]
+ },
+ "compile-1440": {
+  "chars": 2307,
+  "under12_pct": 85.1,
+  "under45_pct": 11.9,
+  "min_px": 10,
+  "min_ratio": 3.82,
+  "layers": {
+   "tile_value": 21,
+   "section": 10.5,
+   "card_title": 12.5,
+   "body": 11.5
+  },
+  "overflow_x": 0,
+  "hits": [
+   "11.0px 9.53 rp-sid mono «rr0002»",
+   "10.0px 6.68 rp-state «completed»",
+   "12.5px 4.27 I «앱»",
+   "12.5px 4.27 I «기기»",
+   "12.5px 4.27 I «시작»",
+   "12.5px 4.27 I «duration»",
+   "12.5px 4.27 I «옵션»",
+   "10.5px 6.13 SPAN «앱시작»",
+   "11.0px 5.48 rp-stat-title «앱시작»",
+   "10.0px 5.48 SPAN «0»",
+   "10.0px 5.48 SPAN «기준5,000ms»",
+   "10.5px 5.48 rp-stat-sub num «상태COLD·wait830ms»"
+  ]
+ },
+ "end-null-1440": {
+  "chars": 2239,
+  "under12_pct": 84.9,
+  "under45_pct": 12.3,
+  "min_px": 10,
+  "min_ratio": 3.82,
+  "layers": {
+   "tile_value": 21,
+   "section": 10.5,
+   "card_title": 12.5,
+   "body": 11.5
+  },
+  "overflow_x": 0,
+  "hits": [
+   "11.0px 9.53 rp-sid mono «rr0003»",
+   "10.0px 6.68 rp-state «completed»",
+   "12.5px 4.27 I «앱»",
+   "12.5px 4.27 I «기기»",
+   "12.5px 4.27 I «시작»",
+   "12.5px 4.27 I «duration»",
+   "12.5px 4.27 I «옵션»",
+   "10.5px 6.13 SPAN «앱시작»",
+   "11.0px 5.48 rp-stat-title «앱시작»",
+   "10.0px 5.48 SPAN «0»",
+   "10.0px 5.48 SPAN «기준5,000ms»",
+   "10.5px 5.48 rp-stat-sub num «상태COLD·wait830ms»"
+  ]
+ },
+ "legacy-1440": {
+  "chars": 2236,
+  "under12_pct": 85,
+  "under45_pct": 12.3,
+  "min_px": 10,
+  "min_ratio": 3.82,
+  "layers": {
+   "tile_value": 21,
+   "section": 10.5,
+   "card_title": 12.5,
+   "body": 11.5
+  },
+  "overflow_x": 0,
+  "hits": [
+   "11.0px 9.53 rp-sid mono «rr0004»",
+   "10.0px 6.68 rp-state «completed»",
+   "12.5px 4.27 I «앱»",
+   "12.5px 4.27 I «기기»",
+   "12.5px 4.27 I «시작»",
+   "12.5px 4.27 I «duration»",
+   "12.5px 4.27 I «옵션»",
+   "10.5px 6.13 SPAN «앱시작»",
+   "11.0px 5.48 rp-stat-title «앱시작»",
+   "10.0px 5.48 SPAN «0»",
+   "10.0px 5.48 SPAN «기준5,000ms»",
+   "10.5px 5.48 rp-stat-sub num «상태COLD·wait830ms»"
+  ]
+ },
+ "device-1440": {
+  "chars": 771,
+  "under12_pct": 79.6,
+  "under45_pct": 10,
+  "min_px": 10,
+  "min_ratio": 3.82,
+  "layers": {
+   "tile_value": null,
+   "section": 10.5,
+   "card_title": 12.5,
+   "body": 11.5
+  },
+  "overflow_x": 0,
+  "hits": [
+   "11.0px 9.53 rp-sid mono «rr0000»",
+   "10.0px 6.68 rp-state «completed»",
+   "12.5px 4.27 I «앱»",
+   "12.5px 4.27 I «기기»",
+   "12.5px 4.27 I «시작»",
+   "12.5px 4.27 I «duration»",
+   "12.5px 4.27 I «옵션»",
+   "10.5px 6.13 SPAN «기기·앱»",
+   "11.5px 5.48 TH «제조사»",
+   "11.5px 10.13 num «samsung»",
+   "11.5px 5.48 TH «모델»",
+   "11.5px 10.13 num «SM-S901N»"
+  ]
+ },
+ "diag-1440": {
+  "chars": 2920,
+  "under12_pct": 94.5,
+  "under45_pct": 3.5,
+  "min_px": 10,
+  "min_ratio": 3.82,
+  "layers": {
+   "tile_value": null,
+   "section": 10.5,
+   "card_title": 12.5,
+   "body": 11.5
+  },
+  "overflow_x": 0,
+  "hits": [
+   "11.0px 9.53 rp-sid mono «rr0006»",
+   "10.0px 6.68 rp-state «completed»",
+   "10.0px 8.47 rp-state rp-state-diagnose «진단»",
+   "12.5px 4.27 I «앱»",
+   "12.5px 4.27 I «기기»",
+   "12.5px 4.27 I «시작»",
+   "12.5px 4.27 I «duration»",
+   "12.5px 4.27 I «옵션»",
+   "10.5px 6.13 SPAN «atraceslice»",
+   "10.0px 3.82 rp-card-unit «diagnose»",
+   "11.5px 5.48 TH «atrace_categories»",
+   "11.5px 10.13 num «am·wm·view·dalvik»"
+  ]
+ },
+ "diag-noapp-1440": {
+  "chars": 581,
+  "under12_pct": 71.1,
+  "under45_pct": 18.9,
+  "min_px": 10,
+  "min_ratio": 3.82,
+  "layers": {
+   "tile_value": null,
+   "section": 10.5,
+   "card_title": 12.5,
+   "body": 11.5
+  },
+  "overflow_x": 0,
+  "hits": [
+   "11.0px 9.53 rp-sid mono «rr0007»",
+   "10.0px 6.68 rp-state «completed»",
+   "10.0px 8.47 rp-state rp-state-diagnose «진단»",
+   "12.5px 4.27 I «앱»",
+   "12.5px 4.27 I «기기»",
+   "12.5px 4.27 I «시작»",
+   "12.5px 4.27 I «duration»",
+   "12.5px 4.27 I «옵션»",
+   "10.5px 6.13 SPAN «atraceslice»",
+   "10.0px 3.82 rp-card-unit «diagnose»",
+   "11.5px 5.48 TH «atrace_categories»",
+   "11.5px 10.13 num «am·wm·view·dalvik»"
+  ]
+ },
+ "summary-390": {
+  "chars": 2191,
+  "under12_pct": 84.8,
+  "under45_pct": 12.6,
+  "min_px": 9.3,
+  "min_ratio": 3.82,
+  "layers": {
+   "tile_value": 17,
+   "section": 10.5,
+   "card_title": 12.5,
+   "body": 11.5
+  },
+  "overflow_x": 0,
+  "hits": [
+   "11.0px 9.53 rp-sid mono «rr0000»",
+   "10.0px 6.68 rp-state «completed»",
+   "12.5px 4.27 I «앱»",
+   "12.5px 4.27 I «기기»",
+   "12.5px 4.27 I «시작»",
+   "12.5px 4.27 I «duration»",
+   "12.5px 4.27 I «옵션»",
+   "10.5px 6.13 SPAN «앱시작»",
+   "11.0px 5.48 rp-stat-title «앱시작»",
+   "10.0px 5.48 SPAN «0»",
+   "10.0px 5.48 SPAN «기준5,000ms»",
+   "10.5px 5.48 rp-stat-sub num «상태COLD·wait830ms»"
+  ]
+ },
+ "missing-390": {
+  "chars": 2101,
+  "under12_pct": 84.1,
+  "under45_pct": 15.4,
+  "min_px": 9.3,
+  "min_ratio": 3.82,
+  "layers": {
+   "tile_value": 17,
+   "section": 10.5,
+   "card_title": 12.5,
+   "body": 11.5
+  },
+  "overflow_x": 0,
+  "hits": [
+   "11.0px 9.53 rp-sid mono «rr0001»",
+   "10.0px 6.68 rp-state «completed»",
+   "12.5px 4.27 I «앱»",
+   "12.5px 4.27 I «기기»",
+   "12.5px 4.27 I «시작»",
+   "12.5px 4.27 I «duration»",
+   "12.5px 4.27 I «옵션»",
+   "10.5px 6.13 SPAN «앱시작»",
+   "11.0px 5.48 rp-stat-title «앱시작»",
+   "10.0px 5.48 SPAN «0»",
+   "10.0px 5.48 SPAN «기준5,000ms»",
+   "10.5px 5.48 rp-stat-sub num «상태COLD·wait830ms»"
+  ]
+ },
+ "compile-390": {
+  "chars": 2264,
+  "under12_pct": 84.8,
+  "under45_pct": 12.1,
+  "min_px": 9.3,
+  "min_ratio": 3.82,
+  "layers": {
+   "tile_value": 17,
+   "section": 10.5,
+   "card_title": 12.5,
+   "body": 11.5
+  },
+  "overflow_x": 0,
+  "hits": [
+   "11.0px 9.53 rp-sid mono «rr0002»",
+   "10.0px 6.68 rp-state «completed»",
+   "12.5px 4.27 I «앱»",
+   "12.5px 4.27 I «기기»",
+   "12.5px 4.27 I «시작»",
+   "12.5px 4.27 I «duration»",
+   "12.5px 4.27 I «옵션»",
+   "10.5px 6.13 SPAN «앱시작»",
+   "11.0px 5.48 rp-stat-title «앱시작»",
+   "10.0px 5.48 SPAN «0»",
+   "10.0px 5.48 SPAN «기준5,000ms»",
+   "10.5px 5.48 rp-stat-sub num «상태COLD·wait830ms»"
+  ]
+ },
+ "end-null-390": {
+  "chars": 2196,
+  "under12_pct": 84.6,
+  "under45_pct": 12.5,
+  "min_px": 9.3,
+  "min_ratio": 3.82,
+  "layers": {
+   "tile_value": 17,
+   "section": 10.5,
+   "card_title": 12.5,
+   "body": 11.5
+  },
+  "overflow_x": 0,
+  "hits": [
+   "11.0px 9.53 rp-sid mono «rr0003»",
+   "10.0px 6.68 rp-state «completed»",
+   "12.5px 4.27 I «앱»",
+   "12.5px 4.27 I «기기»",
+   "12.5px 4.27 I «시작»",
+   "12.5px 4.27 I «duration»",
+   "12.5px 4.27 I «옵션»",
+   "10.5px 6.13 SPAN «앱시작»",
+   "11.0px 5.48 rp-stat-title «앱시작»",
+   "10.0px 5.48 SPAN «0»",
+   "10.0px 5.48 SPAN «기준5,000ms»",
+   "10.5px 5.48 rp-stat-sub num «상태COLD·wait830ms»"
+  ]
+ },
+ "legacy-390": {
+  "chars": 2193,
+  "under12_pct": 84.7,
+  "under45_pct": 12.5,
+  "min_px": 9.3,
+  "min_ratio": 3.82,
+  "layers": {
+   "tile_value": 17,
+   "section": 10.5,
+   "card_title": 12.5,
+   "body": 11.5
+  },
+  "overflow_x": 0,
+  "hits": [
+   "11.0px 9.53 rp-sid mono «rr0004»",
+   "10.0px 6.68 rp-state «completed»",
+   "12.5px 4.27 I «앱»",
+   "12.5px 4.27 I «기기»",
+   "12.5px 4.27 I «시작»",
+   "12.5px 4.27 I «duration»",
+   "12.5px 4.27 I «옵션»",
+   "10.5px 6.13 SPAN «앱시작»",
+   "11.0px 5.48 rp-stat-title «앱시작»",
+   "10.0px 5.48 SPAN «0»",
+   "10.0px 5.48 SPAN «기준5,000ms»",
+   "10.5px 5.48 rp-stat-sub num «상태COLD·wait830ms»"
+  ]
+ },
+ "device-390": {
+  "chars": 771,
+  "under12_pct": 79.6,
+  "under45_pct": 10,
+  "min_px": 10,
+  "min_ratio": 3.82,
+  "layers": {
+   "tile_value": null,
+   "section": 10.5,
+   "card_title": 12.5,
+   "body": 11.5
+  },
+  "overflow_x": 0,
+  "hits": [
+   "11.0px 9.53 rp-sid mono «rr0000»",
+   "10.0px 6.68 rp-state «completed»",
+   "12.5px 4.27 I «앱»",
+   "12.5px 4.27 I «기기»",
+   "12.5px 4.27 I «시작»",
+   "12.5px 4.27 I «duration»",
+   "12.5px 4.27 I «옵션»",
+   "10.5px 6.13 SPAN «기기·앱»",
+   "11.5px 5.48 TH «제조사»",
+   "11.5px 10.13 num «samsung»",
+   "11.5px 5.48 TH «모델»",
+   "11.5px 10.13 num «SM-S901N»"
+  ]
+ },
+ "diag-390": {
+  "chars": 2920,
+  "under12_pct": 94.5,
+  "under45_pct": 3.5,
+  "min_px": 10,
+  "min_ratio": 3.82,
+  "layers": {
+   "tile_value": null,
+   "section": 10.5,
+   "card_title": 12.5,
+   "body": 11.5
+  },
+  "overflow_x": 0,
+  "hits": [
+   "11.0px 9.53 rp-sid mono «rr0006»",
+   "10.0px 6.68 rp-state «completed»",
+   "10.0px 8.47 rp-state rp-state-diagnose «진단»",
+   "12.5px 4.27 I «앱»",
+   "12.5px 4.27 I «기기»",
+   "12.5px 4.27 I «시작»",
+   "12.5px 4.27 I «duration»",
+   "12.5px 4.27 I «옵션»",
+   "10.5px 6.13 SPAN «atraceslice»",
+   "10.0px 3.82 rp-card-unit «diagnose»",
+   "11.5px 5.48 TH «atrace_categories»",
+   "11.5px 10.13 num «am·wm·view·dalvik»"
+  ]
+ },
+ "diag-noapp-390": {
+  "chars": 581,
+  "under12_pct": 71.1,
+  "under45_pct": 18.9,
+  "min_px": 10,
+  "min_ratio": 3.82,
+  "layers": {
+   "tile_value": null,
+   "section": 10.5,
+   "card_title": 12.5,
+   "body": 11.5
+  },
+  "overflow_x": 0,
+  "hits": [
+   "11.0px 9.53 rp-sid mono «rr0007»",
+   "10.0px 6.68 rp-state «completed»",
+   "10.0px 8.47 rp-state rp-state-diagnose «진단»",
+   "12.5px 4.27 I «앱»",
+   "12.5px 4.27 I «기기»",
+   "12.5px 4.27 I «시작»",
+   "12.5px 4.27 I «duration»",
+   "12.5px 4.27 I «옵션»",
+   "10.5px 6.13 SPAN «atraceslice»",
+   "10.0px 3.82 rp-card-unit «diagnose»",
+   "11.5px 5.48 TH «atrace_categories»",
+   "11.5px 10.13 num «am·wm·view·dalvik»"
+  ]
+ }
+}

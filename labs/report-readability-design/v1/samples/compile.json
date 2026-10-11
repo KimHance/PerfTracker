@@ -1,0 +1,6966 @@
+{
+ "schema_version": "1.2.0",
+ "schema_help": "필드의 뜻과 함정(특히 null 과 0 의 차이)은 `perftracker schema` 가 내는 JSON Schema 에 있습니다. 값을 해석하기 전에 그것부터 읽으세요.",
+ "tool": {
+  "name": "perftracker",
+  "version": "0.2.1",
+  "host": {
+   "os": "darwin",
+   "arch": "arm64",
+   "node": "25.2.1"
+  }
+ },
+ "session": {
+  "id": "rr0002",
+  "name": "youtube-compile-speed",
+  "state": "completed",
+  "started_at": "2026-10-07T22:00:22.980Z",
+  "ended_at": "2026-10-07T22:00:41.561Z",
+  "duration_ms": 18581,
+  "trace_span_ms": 16471,
+  "trace_start_offset_ms": 2207,
+  "options": {
+   "launch": true,
+   "compile": "speed"
+  },
+  "marks": [],
+  "compile": {
+   "value": "speed",
+   "command": "cmd package compile -m speed -f com.google.android.youtube",
+   "before": {
+    "dex": [
+     {
+      "path": "/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/base.apk",
+      "abi": "arm64",
+      "status": "speed-profile",
+      "reason": "profile-utilization",
+      "location": "/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/oat/arm64/base.odex",
+      "primary_abi": true
+     },
+     {
+      "path": "/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/pcam.jar",
+      "abi": "arm64",
+      "status": "verify",
+      "reason": "vdex",
+      "location": "/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/oat/arm64/pcam.vdex",
+      "primary_abi": true
+     },
+     {
+      "path": "/data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/pcam.jar",
+      "abi": "arm64",
+      "status": "verify",
+      "reason": "vdex",
+      "location": "/data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/oat/arm64/pcam.vdex",
+      "primary_abi": true
+     },
+     {
+      "path": "/data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/pcam.jar",
+      "abi": "arm64",
+      "status": "verify",
+      "reason": "vdex",
+      "location": "/data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/oat/arm64/pcam.vdex",
+      "primary_abi": true
+     }
+    ]
+   },
+   "elapsed_ms": 67500
+  }
+ },
+ "device": {
+  "serial": "R5CT0000001",
+  "static": {
+   "manufacturer": "samsung",
+   "model": "SM-S901N",
+   "android_release": "16",
+   "sdk_int": 36,
+   "build_fingerprint": "samsung/r0qksx/r0q:16/BP2A.250605.031.A3/S901NKSS9GZE5:user/release-keys",
+   "abis": [
+    "arm64-v8a",
+    "armeabi-v7a",
+    "armeabi"
+   ],
+   "soc_model": "SM8450",
+   "soc_manufacturer": "QTI",
+   "cpu": {
+    "core_count": 8,
+    "clusters": [
+     {
+      "cpus": [
+       0,
+       1,
+       2,
+       3
+      ],
+      "max_freq_khz": 1785600
+     },
+     {
+      "cpus": [
+       4,
+       5,
+       6
+      ],
+      "max_freq_khz": 2496000
+     },
+     {
+      "cpus": [
+       7
+      ],
+      "max_freq_khz": 2995200
+     }
+    ]
+   },
+   "memory_total_kb": 7394216,
+   "display": {
+    "width_px": 1080,
+    "height_px": 2340,
+    "density_dpi": 480,
+    "active_refresh_rate_hz": 30,
+    "supported_refresh_rates_hz": [
+     10,
+     24,
+     30,
+     48,
+     60,
+     96,
+     120
+    ],
+    "orientation": "portrait",
+    "size_class": "normal",
+    "opengl_es_version": "196610"
+   }
+  },
+  "state_before": {
+   "captured_at": "2026-10-07T22:00:22.980Z",
+   "battery_level": 97,
+   "battery_temp_c": 31.6,
+   "charging": false,
+   "connection": "usb",
+   "screen_brightness": 43,
+   "power_save_mode": false,
+   "network": "wifi",
+   "mem_available_kb": 2508120,
+   "animator_duration_scale": 1,
+   "thermal_zones": [
+    {
+     "name": "AP",
+     "celsius": 32.9,
+     "type": 0,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "BAT",
+     "celsius": 31.6,
+     "type": 2,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "PATHM",
+     "celsius": 34.3,
+     "type": 5,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "SKIN",
+     "celsius": 31.8,
+     "type": 3,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "SUBBAT",
+     "celsius": 0,
+     "type": 2,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "SUBBATRAW",
+     "celsius": 0,
+     "type": 2,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "USB",
+     "celsius": 31.3,
+     "type": 4,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "PA1THM",
+     "celsius": 27,
+     "type": 5,
+     "status": 0,
+     "source": "cached"
+    }
+   ]
+  },
+  "state_after": {
+   "captured_at": "2026-10-07T22:00:41.561Z",
+   "battery_level": 97,
+   "battery_temp_c": 31.6,
+   "charging": false,
+   "connection": "usb",
+   "screen_brightness": 43,
+   "power_save_mode": false,
+   "network": "wifi",
+   "mem_available_kb": 2775316,
+   "animator_duration_scale": 1,
+   "thermal_zones": [
+    {
+     "name": "AP",
+     "celsius": 40.6,
+     "type": 0,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "BAT",
+     "celsius": 31.6,
+     "type": 2,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "PATHM",
+     "celsius": 35.9,
+     "type": 5,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "SKIN",
+     "celsius": 32.7,
+     "type": 3,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "SUBBAT",
+     "celsius": 0,
+     "type": 2,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "SUBBATRAW",
+     "celsius": 0,
+     "type": 2,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "USB",
+     "celsius": 31.3,
+     "type": 4,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "PA1THM",
+     "celsius": 27,
+     "type": 5,
+     "status": 0,
+     "source": "cached"
+    }
+   ]
+  }
+ },
+ "target_app": {
+  "package": "com.google.android.youtube",
+  "label": "YouTube",
+  "label_source": "apk_resources",
+  "version_name": "21.29.366",
+  "version_code": 1561186612,
+  "uid": 10257,
+  "install_source": "com.android.vending",
+  "launcher_activity": "com.google.android.youtube.app.honeycomb.Shell$HomeActivity",
+  "launcher_activity_candidates": null,
+  "pid": 25978,
+  "debuggable": false,
+  "large_heap": true,
+  "min_sdk": 32,
+  "target_sdk": 37,
+  "primary_cpu_abi": "arm64-v8a",
+  "compile_state_start": {
+   "dex": [
+    {
+     "path": "/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/base.apk",
+     "abi": "arm64",
+     "status": "speed",
+     "reason": "cmdline",
+     "location": "/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/oat/arm64/base.odex",
+     "primary_abi": true
+    },
+    {
+     "path": "/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/pcam.jar",
+     "abi": "arm64",
+     "status": "verify",
+     "reason": "vdex",
+     "location": "/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/oat/arm64/pcam.vdex",
+     "primary_abi": true
+    },
+    {
+     "path": "/data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/pcam.jar",
+     "abi": "arm64",
+     "status": "verify",
+     "reason": "vdex",
+     "location": "/data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/oat/arm64/pcam.vdex",
+     "primary_abi": true
+    },
+    {
+     "path": "/data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/pcam.jar",
+     "abi": "arm64",
+     "status": "verify",
+     "reason": "vdex",
+     "location": "/data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/oat/arm64/pcam.vdex",
+     "primary_abi": true
+    }
+   ]
+  },
+  "compile_state_end": {
+   "dex": [
+    {
+     "path": "/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/base.apk",
+     "abi": "arm64",
+     "status": "speed",
+     "reason": "bg-dexopt",
+     "location": "/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/oat/arm64/base.odex",
+     "primary_abi": true
+    },
+    {
+     "path": "/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/pcam.jar",
+     "abi": "arm64",
+     "status": "verify",
+     "reason": "vdex",
+     "location": "/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/oat/arm64/pcam.vdex",
+     "primary_abi": true
+    },
+    {
+     "path": "/data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/pcam.jar",
+     "abi": "arm64",
+     "status": "verify",
+     "reason": "vdex",
+     "location": "/data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/oat/arm64/pcam.vdex",
+     "primary_abi": true
+    },
+    {
+     "path": "/data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/pcam.jar",
+     "abi": "arm64",
+     "status": "verify",
+     "reason": "vdex",
+     "location": "/data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/oat/arm64/pcam.vdex",
+     "primary_abi": true
+    }
+   ]
+  }
+ },
+ "metrics": {
+  "startup": {
+   "status": "collected",
+   "source": "am start -W: TotalTime / LaunchState",
+   "reason_code": null,
+   "reason": null,
+   "data": {
+    "total_time_ms": 828,
+    "launch_state": "COLD",
+    "status": "ok",
+    "wait_time_ms": 830
+   }
+  },
+  "cpu": {
+   "status": "collected",
+   "source": "perfetto: linux.process_stats runtime.* (앱) + linux.sys_stats cpu.times.* · ftrace power/cpu_frequency (기기 전역)",
+   "reason_code": null,
+   "reason": null,
+   "data": {
+    "device_sampled_ms": 16077,
+    "device_samples": 18,
+    "device_total_busy_pct": 35.21,
+    "device_per_core": [
+     {
+      "cpu": 0,
+      "busy_pct": 42.42
+     },
+     {
+      "cpu": 1,
+      "busy_pct": 36.97
+     },
+     {
+      "cpu": 2,
+      "busy_pct": 37.17
+     },
+     {
+      "cpu": 3,
+      "busy_pct": 36.06
+     },
+     {
+      "cpu": 4,
+      "busy_pct": 40.9
+     },
+     {
+      "cpu": 5,
+      "busy_pct": 36.8
+     },
+     {
+      "cpu": 6,
+      "busy_pct": 35.47
+     },
+     {
+      "cpu": 7,
+      "busy_pct": 16.33
+     }
+    ],
+    "device_frequency": [
+     {
+      "cpu": 0,
+      "samples": 1219,
+      "min_khz": 729600,
+      "max_khz": 1785600,
+      "avg_khz": 1234013.5
+     },
+     {
+      "cpu": 1,
+      "samples": 1219,
+      "min_khz": 729600,
+      "max_khz": 1785600,
+      "avg_khz": 1234013.5
+     },
+     {
+      "cpu": 2,
+      "samples": 1219,
+      "min_khz": 729600,
+      "max_khz": 1785600,
+      "avg_khz": 1234013.5
+     },
+     {
+      "cpu": 3,
+      "samples": 1219,
+      "min_khz": 729600,
+      "max_khz": 1785600,
+      "avg_khz": 1234013.5
+     },
+     {
+      "cpu": 4,
+      "samples": 3153,
+      "min_khz": 633600,
+      "max_khz": 2496000,
+      "avg_khz": 1510010.3
+     },
+     {
+      "cpu": 5,
+      "samples": 3153,
+      "min_khz": 633600,
+      "max_khz": 2496000,
+      "avg_khz": 1510010.3
+     },
+     {
+      "cpu": 6,
+      "samples": 3153,
+      "min_khz": 633600,
+      "max_khz": 2496000,
+      "avg_khz": 1510010.3
+     },
+     {
+      "cpu": 7,
+      "samples": 1723,
+      "min_khz": 806400,
+      "max_khz": 2995200,
+      "avg_khz": 1974190.1
+     }
+    ],
+    "device_timeline": [
+     {
+      "t_s": 1,
+      "busy_pct": 78.02
+     },
+     {
+      "t_s": 2,
+      "busy_pct": 15.15
+     },
+     {
+      "t_s": 3,
+      "busy_pct": 30.62
+     },
+     {
+      "t_s": 4,
+      "busy_pct": 38.97
+     },
+     {
+      "t_s": 5,
+      "busy_pct": 49.33
+     },
+     {
+      "t_s": 6,
+      "busy_pct": 50.58
+     },
+     {
+      "t_s": 7,
+      "busy_pct": 32.47
+     },
+     {
+      "t_s": 8,
+      "busy_pct": 36.62
+     },
+     {
+      "t_s": 9,
+      "busy_pct": 35.93
+     },
+     {
+      "t_s": 10,
+      "busy_pct": 35.71
+     },
+     {
+      "t_s": 11,
+      "busy_pct": 36.72
+     },
+     {
+      "t_s": 12,
+      "busy_pct": 37.12
+     },
+     {
+      "t_s": 13,
+      "busy_pct": 21.13
+     },
+     {
+      "t_s": 14,
+      "busy_pct": 20.48
+     },
+     {
+      "t_s": 15,
+      "busy_pct": 20.38
+     },
+     {
+      "t_s": 16,
+      "busy_pct": 20.36
+     }
+    ],
+    "app": {
+     "process": "com.google.android.youtube",
+     "pid": 25978,
+     "samples": 17,
+     "sampled_ms": 15999,
+     "user_ms": 12080,
+     "kernel_ms": 4920,
+     "total_ms": 17000,
+     "share_of_device_cpu_pct": 13.56,
+     "other_processes": [],
+     "timeline": [
+      {
+       "t_s": 1,
+       "app_cpu_ms": 2400
+      },
+      {
+       "t_s": 2,
+       "app_cpu_ms": 220
+      },
+      {
+       "t_s": 3,
+       "app_cpu_ms": 1240
+      },
+      {
+       "t_s": 4,
+       "app_cpu_ms": 1010
+      },
+      {
+       "t_s": 5,
+       "app_cpu_ms": 1570
+      },
+      {
+       "t_s": 6,
+       "app_cpu_ms": 1750
+      },
+      {
+       "t_s": 7,
+       "app_cpu_ms": 1060
+      },
+      {
+       "t_s": 8,
+       "app_cpu_ms": 1230
+      },
+      {
+       "t_s": 9,
+       "app_cpu_ms": 1260
+      },
+      {
+       "t_s": 10,
+       "app_cpu_ms": 1000
+      },
+      {
+       "t_s": 11,
+       "app_cpu_ms": 1370
+      },
+      {
+       "t_s": 12,
+       "app_cpu_ms": 1120
+      },
+      {
+       "t_s": 13,
+       "app_cpu_ms": 410
+      },
+      {
+       "t_s": 14,
+       "app_cpu_ms": 450
+      },
+      {
+       "t_s": 15,
+       "app_cpu_ms": 460
+      },
+      {
+       "t_s": 16,
+       "app_cpu_ms": 450
+      }
+     ]
+    }
+   }
+  },
+  "memory": {
+   "status": "collected",
+   "source": "perfetto: linux.process_stats mem.rss + linux.sys_stats meminfo",
+   "reason_code": null,
+   "reason": null,
+   "data": {
+    "process": "com.google.android.youtube",
+    "pid": 25978,
+    "samples": 17,
+    "rss": {
+     "min_kb": 84360,
+     "max_kb": 431912,
+     "avg_kb": 372443
+    },
+    "rss_anon": {
+     "min_kb": 43864,
+     "max_kb": 236652,
+     "avg_kb": 194295
+    },
+    "rss_file": {
+     "min_kb": 39664,
+     "max_kb": 190192,
+     "avg_kb": 174317
+    },
+    "timeline": [
+     {
+      "t_s": 0,
+      "rss_kb": 84360
+     },
+     {
+      "t_s": 1,
+      "rss_kb": 311368
+     },
+     {
+      "t_s": 2,
+      "rss_kb": 312264
+     },
+     {
+      "t_s": 3,
+      "rss_kb": 348856
+     },
+     {
+      "t_s": 4,
+      "rss_kb": 365688
+     },
+     {
+      "t_s": 5,
+      "rss_kb": 384980
+     },
+     {
+      "t_s": 6,
+      "rss_kb": 382616
+     },
+     {
+      "t_s": 7,
+      "rss_kb": 390424
+     },
+     {
+      "t_s": 8,
+      "rss_kb": 402840
+     },
+     {
+      "t_s": 9,
+      "rss_kb": 389528
+     },
+     {
+      "t_s": 10,
+      "rss_kb": 394488
+     },
+     {
+      "t_s": 11,
+      "rss_kb": 413388
+     },
+     {
+      "t_s": 12,
+      "rss_kb": 428360
+     },
+     {
+      "t_s": 13,
+      "rss_kb": 428064
+     },
+     {
+      "t_s": 14,
+      "rss_kb": 431052
+     },
+     {
+      "t_s": 15,
+      "rss_kb": 431340
+     },
+     {
+      "t_s": 16,
+      "rss_kb": 431912
+     }
+    ],
+    "rss_watermark_peak_kb": 432584,
+    "system": {
+     "mem_total_kb": 7394216,
+     "mem_available": {
+      "min_kb": 2656364,
+      "max_kb": 2980920,
+      "avg_kb": 2743982
+     },
+     "mem_free": {
+      "min_kb": 213676,
+      "max_kb": 469248,
+      "avg_kb": 339288
+     },
+     "cached": {
+      "min_kb": 2433932,
+      "max_kb": 2515976,
+      "avg_kb": 2482069
+     },
+     "swap_total_kb": 8388604,
+     "swap_free": {
+      "min_kb": 6103904,
+      "max_kb": 6138208,
+      "avg_kb": 6128267
+     }
+    },
+    "system_timeline": [
+     {
+      "t_s": 0,
+      "mem_available_kb": 2980920,
+      "mem_free_kb": 415804
+     },
+     {
+      "t_s": 1,
+      "mem_available_kb": 2682136,
+      "mem_free_kb": 213676
+     },
+     {
+      "t_s": 2,
+      "mem_available_kb": 2684400,
+      "mem_free_kb": 280292
+     },
+     {
+      "t_s": 3,
+      "mem_available_kb": 2656364,
+      "mem_free_kb": 246936
+     },
+     {
+      "t_s": 4,
+      "mem_available_kb": 2681324,
+      "mem_free_kb": 270660
+     },
+     {
+      "t_s": 5,
+      "mem_available_kb": 2780312,
+      "mem_free_kb": 367748
+     },
+     {
+      "t_s": 6,
+      "mem_available_kb": 2786328,
+      "mem_free_kb": 371752
+     },
+     {
+      "t_s": 7,
+      "mem_available_kb": 2778524,
+      "mem_free_kb": 364952
+     },
+     {
+      "t_s": 8,
+      "mem_available_kb": 2762956,
+      "mem_free_kb": 350852
+     },
+     {
+      "t_s": 9,
+      "mem_available_kb": 2773296,
+      "mem_free_kb": 357452
+     },
+     {
+      "t_s": 10,
+      "mem_available_kb": 2762416,
+      "mem_free_kb": 346000
+     },
+     {
+      "t_s": 11,
+      "mem_available_kb": 2778560,
+      "mem_free_kb": 359140
+     },
+     {
+      "t_s": 12,
+      "mem_available_kb": 2687636,
+      "mem_free_kb": 337352
+     },
+     {
+      "t_s": 13,
+      "mem_available_kb": 2686208,
+      "mem_free_kb": 334840
+     },
+     {
+      "t_s": 14,
+      "mem_available_kb": 2691304,
+      "mem_free_kb": 338892
+     },
+     {
+      "t_s": 15,
+      "mem_available_kb": 2704560,
+      "mem_free_kb": 341400
+     },
+     {
+      "t_s": 16,
+      "mem_available_kb": 2703900,
+      "mem_free_kb": 340196
+     }
+    ]
+   }
+  },
+  "log": {
+   "status": "collected",
+   "source": "perfetto: android.log (min_prio=PRIO_WARN) + linux.process_stats (앱 프로세스 특정)",
+   "reason_code": null,
+   "reason": null,
+   "data": {
+    "min_prio": "PRIO_WARN",
+    "app": {
+     "process": "com.google.android.youtube",
+     "pid": 25978,
+     "total": 547,
+     "by_priority": {
+      "warn": 399,
+      "error": 148,
+      "fatal": 0
+     },
+     "timeline": [
+      {
+       "t_s": 0,
+       "count": 64,
+       "error": 11
+      },
+      {
+       "t_s": 1,
+       "count": 4,
+       "error": 0
+      },
+      {
+       "t_s": 2,
+       "count": 14,
+       "error": 1
+      },
+      {
+       "t_s": 3,
+       "count": 50,
+       "error": 25
+      },
+      {
+       "t_s": 4,
+       "count": 147,
+       "error": 13
+      },
+      {
+       "t_s": 5,
+       "count": 23,
+       "error": 18
+      },
+      {
+       "t_s": 6,
+       "count": 154,
+       "error": 12
+      },
+      {
+       "t_s": 7,
+       "count": 23,
+       "error": 21
+      },
+      {
+       "t_s": 8,
+       "count": 4,
+       "error": 0
+      },
+      {
+       "t_s": 9,
+       "count": 3,
+       "error": 1
+      },
+      {
+       "t_s": 10,
+       "count": 2,
+       "error": 0
+      },
+      {
+       "t_s": 11,
+       "count": 37,
+       "error": 24
+      },
+      {
+       "t_s": 12,
+       "count": 7,
+       "error": 7
+      },
+      {
+       "t_s": 13,
+       "count": 1,
+       "error": 1
+      },
+      {
+       "t_s": 14,
+       "count": 5,
+       "error": 5
+      },
+      {
+       "t_s": 15,
+       "count": 5,
+       "error": 5
+      },
+      {
+       "t_s": 16,
+       "count": 4,
+       "error": 4
+      }
+     ]
+    },
+    "device_total": 899,
+    "device_by_priority": {
+     "warn": 475,
+     "error": 424,
+     "fatal": 0
+    },
+    "device_crashes": [],
+    "device_anrs": []
+   }
+  },
+  "thermal": {
+   "status": "collected",
+   "source": "dumpsys thermalservice: 세션 시작 직전 / 종료 직후 스냅샷의 센서별 온도 차이. 기기 전역이며 대상 앱의 온도가 아니다. 전/후 두 점이므로 구간 중 최고 온도는 포함하지 않는다.",
+   "reason_code": null,
+   "reason": null,
+   "data": {
+    "zones": [
+     {
+      "name": "AP",
+      "type": 0,
+      "before_c": 32.9,
+      "after_c": 40.6,
+      "delta_c": 7.7,
+      "status_before": 0,
+      "status_after": 0,
+      "source": "hal"
+     },
+     {
+      "name": "BAT",
+      "type": 2,
+      "before_c": 31.6,
+      "after_c": 31.6,
+      "delta_c": 0,
+      "status_before": 0,
+      "status_after": 0,
+      "source": "hal"
+     },
+     {
+      "name": "PATHM",
+      "type": 5,
+      "before_c": 34.3,
+      "after_c": 35.9,
+      "delta_c": 1.6,
+      "status_before": 0,
+      "status_after": 0,
+      "source": "hal"
+     },
+     {
+      "name": "SKIN",
+      "type": 3,
+      "before_c": 31.8,
+      "after_c": 32.7,
+      "delta_c": 0.9,
+      "status_before": 0,
+      "status_after": 0,
+      "source": "hal"
+     },
+     {
+      "name": "SUBBAT",
+      "type": 2,
+      "before_c": 0,
+      "after_c": 0,
+      "delta_c": 0,
+      "status_before": 0,
+      "status_after": 0,
+      "source": "hal"
+     },
+     {
+      "name": "SUBBATRAW",
+      "type": 2,
+      "before_c": 0,
+      "after_c": 0,
+      "delta_c": 0,
+      "status_before": 0,
+      "status_after": 0,
+      "source": "hal"
+     },
+     {
+      "name": "USB",
+      "type": 4,
+      "before_c": 31.3,
+      "after_c": 31.3,
+      "delta_c": 0,
+      "status_before": 0,
+      "status_after": 0,
+      "source": "hal"
+     },
+     {
+      "name": "PA1THM",
+      "type": 5,
+      "before_c": 27,
+      "after_c": 27,
+      "delta_c": 0,
+      "status_before": 0,
+      "status_after": 0,
+      "source": "cached"
+     }
+    ],
+    "device_status_before": 0,
+    "device_status_after": 0,
+    "status_override_before": false,
+    "status_override_after": false,
+    "hal_ready_before": true,
+    "hal_ready_after": true,
+    "headroom_thresholds": [
+     null,
+     0.8666667,
+     0.93333334,
+     1,
+     1.1333333,
+     1.4333333,
+     2.4333334
+    ]
+   }
+  },
+  "network": {
+   "status": "collected",
+   "source": "dumpsys netstats: mAppUidStatsMap 의 세션 전/후 델타 (uid 단위, IP 계층 바이트, loopback 포함 전 인터페이스 합계, wifi/mobile 분리 없음, 큰 패킷은 GSO 추정)",
+   "reason_code": null,
+   "reason": null,
+   "data": {
+    "uid": 10257,
+    "rx_bytes": 14285620,
+    "tx_bytes": 485061,
+    "rx_packets": 11967,
+    "tx_packets": 2326,
+    "shared_uid_packages": [
+     "com.google.android.youtube"
+    ]
+   }
+  },
+  "hwui": {
+   "status": "partial",
+   "source": "dumpsys gfxinfo (세션 전후 델타)",
+   "reason_code": "hwui_counters_since_process_start",
+   "reason": "com.google.android.youtube 의 HWUI 수치는 세션 전후 차이가 아니라 **프로세스 시작 이후 누적**입니다 — 세션 중 프로세스가 새로 떴습니다(--launch 세션은 항상 그렇습니다). 그 프로세스가 세션 안에서 시작했으므로 세션값과 같지만, 앱이 여러 번 죽었다면 마지막 시작 이후만 담습니다.",
+   "data": {
+    "total_frames": 907,
+    "janky_frames": 45,
+    "missed_vsync": 12,
+    "high_input_latency": 1576,
+    "slow_ui_thread": 34,
+    "slow_bitmap_uploads": 4,
+    "slow_draw_commands": 21,
+    "deadline_missed": 45,
+    "histogram": [
+     {
+      "from_ms": 0,
+      "to_ms": 5,
+      "count": 135
+     },
+     {
+      "from_ms": 5,
+      "to_ms": 6,
+      "count": 304
+     },
+     {
+      "from_ms": 6,
+      "to_ms": 7,
+      "count": 206
+     },
+     {
+      "from_ms": 7,
+      "to_ms": 8,
+      "count": 94
+     },
+     {
+      "from_ms": 8,
+      "to_ms": 9,
+      "count": 40
+     },
+     {
+      "from_ms": 9,
+      "to_ms": 10,
+      "count": 29
+     },
+     {
+      "from_ms": 10,
+      "to_ms": 11,
+      "count": 16
+     },
+     {
+      "from_ms": 11,
+      "to_ms": 12,
+      "count": 11
+     },
+     {
+      "from_ms": 12,
+      "to_ms": 13,
+      "count": 13
+     },
+     {
+      "from_ms": 13,
+      "to_ms": 14,
+      "count": 7
+     },
+     {
+      "from_ms": 14,
+      "to_ms": 15,
+      "count": 3
+     },
+     {
+      "from_ms": 15,
+      "to_ms": 16,
+      "count": 8
+     },
+     {
+      "from_ms": 16,
+      "to_ms": 17,
+      "count": 4
+     },
+     {
+      "from_ms": 17,
+      "to_ms": 18,
+      "count": 3
+     },
+     {
+      "from_ms": 18,
+      "to_ms": 19,
+      "count": 1
+     },
+     {
+      "from_ms": 19,
+      "to_ms": 20,
+      "count": 5
+     },
+     {
+      "from_ms": 20,
+      "to_ms": 21,
+      "count": 4
+     },
+     {
+      "from_ms": 21,
+      "to_ms": 22,
+      "count": 2
+     },
+     {
+      "from_ms": 22,
+      "to_ms": 23,
+      "count": 3
+     },
+     {
+      "from_ms": 23,
+      "to_ms": 24,
+      "count": 4
+     },
+     {
+      "from_ms": 24,
+      "to_ms": 25,
+      "count": 2
+     },
+     {
+      "from_ms": 25,
+      "to_ms": 26,
+      "count": 4
+     },
+     {
+      "from_ms": 26,
+      "to_ms": 27,
+      "count": 0
+     },
+     {
+      "from_ms": 27,
+      "to_ms": 28,
+      "count": 0
+     },
+     {
+      "from_ms": 28,
+      "to_ms": 29,
+      "count": 0
+     },
+     {
+      "from_ms": 29,
+      "to_ms": 30,
+      "count": 0
+     },
+     {
+      "from_ms": 30,
+      "to_ms": 31,
+      "count": 0
+     },
+     {
+      "from_ms": 31,
+      "to_ms": 32,
+      "count": 0
+     },
+     {
+      "from_ms": 32,
+      "to_ms": 34,
+      "count": 2
+     },
+     {
+      "from_ms": 34,
+      "to_ms": 36,
+      "count": 0
+     },
+     {
+      "from_ms": 36,
+      "to_ms": 38,
+      "count": 2
+     },
+     {
+      "from_ms": 38,
+      "to_ms": 40,
+      "count": 0
+     },
+     {
+      "from_ms": 40,
+      "to_ms": 42,
+      "count": 1
+     },
+     {
+      "from_ms": 42,
+      "to_ms": 44,
+      "count": 0
+     },
+     {
+      "from_ms": 44,
+      "to_ms": 46,
+      "count": 0
+     },
+     {
+      "from_ms": 46,
+      "to_ms": 48,
+      "count": 1
+     },
+     {
+      "from_ms": 48,
+      "to_ms": 53,
+      "count": 0
+     },
+     {
+      "from_ms": 53,
+      "to_ms": 57,
+      "count": 2
+     },
+     {
+      "from_ms": 57,
+      "to_ms": 61,
+      "count": 0
+     },
+     {
+      "from_ms": 61,
+      "to_ms": 65,
+      "count": 0
+     },
+     {
+      "from_ms": 65,
+      "to_ms": 69,
+      "count": 0
+     },
+     {
+      "from_ms": 69,
+      "to_ms": 73,
+      "count": 0
+     },
+     {
+      "from_ms": 73,
+      "to_ms": 77,
+      "count": 0
+     },
+     {
+      "from_ms": 77,
+      "to_ms": 81,
+      "count": 0
+     },
+     {
+      "from_ms": 81,
+      "to_ms": 85,
+      "count": 0
+     },
+     {
+      "from_ms": 85,
+      "to_ms": 89,
+      "count": 0
+     },
+     {
+      "from_ms": 89,
+      "to_ms": 93,
+      "count": 0
+     },
+     {
+      "from_ms": 93,
+      "to_ms": 97,
+      "count": 0
+     },
+     {
+      "from_ms": 97,
+      "to_ms": 101,
+      "count": 0
+     },
+     {
+      "from_ms": 101,
+      "to_ms": 105,
+      "count": 0
+     },
+     {
+      "from_ms": 105,
+      "to_ms": 109,
+      "count": 0
+     },
+     {
+      "from_ms": 109,
+      "to_ms": 113,
+      "count": 0
+     },
+     {
+      "from_ms": 113,
+      "to_ms": 117,
+      "count": 0
+     },
+     {
+      "from_ms": 117,
+      "to_ms": 121,
+      "count": 0
+     },
+     {
+      "from_ms": 121,
+      "to_ms": 125,
+      "count": 0
+     },
+     {
+      "from_ms": 125,
+      "to_ms": 129,
+      "count": 0
+     },
+     {
+      "from_ms": 129,
+      "to_ms": 133,
+      "count": 0
+     },
+     {
+      "from_ms": 133,
+      "to_ms": 150,
+      "count": 1
+     },
+     {
+      "from_ms": 150,
+      "to_ms": 200,
+      "count": 0
+     },
+     {
+      "from_ms": 200,
+      "to_ms": 250,
+      "count": 0
+     },
+     {
+      "from_ms": 250,
+      "to_ms": 300,
+      "count": 0
+     },
+     {
+      "from_ms": 300,
+      "to_ms": 350,
+      "count": 0
+     },
+     {
+      "from_ms": 350,
+      "to_ms": 400,
+      "count": 0
+     },
+     {
+      "from_ms": 400,
+      "to_ms": 450,
+      "count": 0
+     },
+     {
+      "from_ms": 450,
+      "to_ms": 500,
+      "count": 0
+     },
+     {
+      "from_ms": 500,
+      "to_ms": 550,
+      "count": 0
+     },
+     {
+      "from_ms": 550,
+      "to_ms": 600,
+      "count": 0
+     },
+     {
+      "from_ms": 600,
+      "to_ms": 650,
+      "count": 0
+     },
+     {
+      "from_ms": 650,
+      "to_ms": 700,
+      "count": 0
+     },
+     {
+      "from_ms": 700,
+      "to_ms": null,
+      "count": 0
+     }
+    ],
+    "percentiles": {
+     "p50": 7,
+     "p90": 11,
+     "p95": 16,
+     "p99": 26
+    }
+   }
+  },
+  "frame": {
+   "status": "collected",
+   "source": "perfetto: actual/expected_frame_timeline_slice",
+   "reason_code": null,
+   "reason": null,
+   "data": {
+    "samples": [
+     [
+      1028,
+      46.62125,
+      8.148958,
+      8.333333
+     ],
+     [
+      1076,
+      2.74849,
+      8.086197,
+      8.333333
+     ],
+     [
+      1093,
+      41.976719,
+      8.109323,
+      8.333333
+     ],
+     [
+      1109,
+      31.362396,
+      8.105676,
+      8.333333
+     ],
+     [
+      1136,
+      6.536093,
+      8.08927,
+      8.333333
+     ],
+     [
+      1147,
+      5.409844,
+      8.10776,
+      8.333333
+     ],
+     [
+      1152,
+      20.370573,
+      8.064583,
+      8.333333
+     ],
+     [
+      1170,
+      5.181094,
+      8.102864,
+      8.333333
+     ],
+     [
+      1178,
+      3.60526,
+      8.051666,
+      8.333333
+     ],
+     [
+      1186,
+      3.79026,
+      8.124114,
+      8.333333
+     ],
+     [
+      1195,
+      2.663646,
+      8.097187,
+      8.333333
+     ],
+     [
+      1203,
+      2.803594,
+      8.095677,
+      8.333333
+     ],
+     [
+      1211,
+      4.841667,
+      8.101406,
+      8.333333
+     ],
+     [
+      1220,
+      4.185052,
+      8.105365,
+      8.333333
+     ],
+     [
+      1228,
+      3.792709,
+      8.114686,
+      8.333333
+     ],
+     [
+      1236,
+      3.192291,
+      8.122396,
+      8.333333
+     ],
+     [
+      1245,
+      2.538073,
+      8.13177,
+      8.333333
+     ],
+     [
+      1253,
+      3.239636,
+      8.114218,
+      8.333333
+     ],
+     [
+      1262,
+      3.679532,
+      8.121562,
+      8.333333
+     ],
+     [
+      1270,
+      3.711563,
+      8.120365,
+      8.333333
+     ],
+     [
+      1278,
+      3.386823,
+      8.116198,
+      8.333333
+     ],
+     [
+      1287,
+      2.864583,
+      8.099166,
+      8.333333
+     ],
+     [
+      1295,
+      3.521302,
+      8.086875,
+      8.333333
+     ],
+     [
+      1303,
+      3.987552,
+      8.114739,
+      8.333333
+     ],
+     [
+      1312,
+      3.451302,
+      8.128542,
+      8.333333
+     ],
+     [
+      1320,
+      3.280261,
+      8.107968,
+      8.333333
+     ],
+     [
+      1328,
+      2.831354,
+      8.127343,
+      8.333333
+     ],
+     [
+      1337,
+      3.515625,
+      8.076146,
+      8.333333
+     ],
+     [
+      1345,
+      2.897656,
+      8.124426,
+      8.333333
+     ],
+     [
+      1353,
+      3.421563,
+      8.104583,
+      8.333333
+     ],
+     [
+      1362,
+      3.411927,
+      8.111198,
+      8.333333
+     ],
+     [
+      1370,
+      4.62776,
+      8.104218,
+      8.333333
+     ],
+     [
+      1378,
+      2.914635,
+      8.118593,
+      8.333333
+     ],
+     [
+      1404,
+      3.313802,
+      8.084271,
+      8.333333
+     ],
+     [
+      1437,
+      3.769687,
+      8.090468,
+      8.333333
+     ],
+     [
+      1470,
+      5.621562,
+      8.061197,
+      8.333333
+     ],
+     [
+      1505,
+      2.759375,
+      8.127865,
+      8.333333
+     ],
+     [
+      1539,
+      3.200261,
+      8.070364,
+      8.333333
+     ],
+     [
+      1572,
+      3.018385,
+      8.059739,
+      8.333333
+     ],
+     [
+      1606,
+      4.594531,
+      7.874947,
+      8.333333
+     ],
+     [
+      1639,
+      4.685677,
+      7.765781,
+      8.333333
+     ],
+     [
+      1672,
+      4.558646,
+      7.966717,
+      8.333333
+     ],
+     [
+      1705,
+      4.155469,
+      7.92526,
+      8.333333
+     ],
+     [
+      1739,
+      4.114063,
+      7.88828,
+      8.333333
+     ],
+     [
+      1774,
+      4.523646,
+      7.789687,
+      8.333333
+     ],
+     [
+      1807,
+      4.345521,
+      7.800989,
+      8.333333
+     ],
+     [
+      1840,
+      3.98052,
+      7.598854,
+      8.333333
+     ],
+     [
+      1873,
+      3.881459,
+      7.984113,
+      8.333333
+     ],
+     [
+      1907,
+      4.166511,
+      7.797083,
+      8.333333
+     ],
+     [
+      1940,
+      3.512864,
+      7.873385,
+      8.333333
+     ],
+     [
+      1974,
+      3.789115,
+      7.92526,
+      8.333333
+     ],
+     [
+      2007,
+      3.074583,
+      7.905207,
+      8.333333
+     ],
+     [
+      2041,
+      3.641562,
+      7.882708,
+      8.333333
+     ],
+     [
+      2074,
+      9.005468,
+      16.210781,
+      8.333333
+     ],
+     [
+      2515,
+      57.882083,
+      8.650311,
+      41.666664
+     ],
+     [
+      2642,
+      17.436406,
+      8.222395,
+      8.333333
+     ],
+     [
+      2656,
+      8.098177,
+      8.044583,
+      8.333333
+     ],
+     [
+      2682,
+      7.170989,
+      7.675469,
+      8.333333
+     ],
+     [
+      2691,
+      6.74875,
+      8.005416,
+      8.333333
+     ],
+     [
+      2780,
+      19.192812,
+      16.341146,
+      8.333333
+     ],
+     [
+      3528,
+      38.312604,
+      16.635416,
+      41.666664
+     ],
+     [
+      3736,
+      14.458073,
+      7.93375,
+      8.333333
+     ],
+     [
+      3911,
+      22.444271,
+      33.335312,
+      33.333332
+     ],
+     [
+      3945,
+      21.09125,
+      33.502135,
+      33.333332
+     ],
+     [
+      3977,
+      9.763437,
+      25.070052,
+      33.333332
+     ],
+     [
+      4053,
+      20.508385,
+      8.160468,
+      8.333333
+     ],
+     [
+      4070,
+      12.99901,
+      8.103801,
+      8.333333
+     ],
+     [
+      4078,
+      9.643229,
+      8.317968,
+      8.333333
+     ],
+     [
+      4086,
+      10.385886,
+      8.267083,
+      8.333333
+     ],
+     [
+      4094,
+      11.025677,
+      8.032864,
+      8.333333
+     ],
+     [
+      4103,
+      12.221354,
+      8.037604,
+      8.333333
+     ],
+     [
+      4111,
+      17.619322,
+      8.028072,
+      8.333333
+     ],
+     [
+      4123,
+      17.07526,
+      8.001042,
+      8.333333
+     ],
+     [
+      4135,
+      17.836771,
+      7.952761,
+      8.333333
+     ],
+     [
+      4147,
+      20.859115,
+      15.946562,
+      8.333333
+     ],
+     [
+      4178,
+      15.005729,
+      8.00651,
+      8.333333
+     ],
+     [
+      4196,
+      14.509583,
+      8.057708,
+      8.333333
+     ],
+     [
+      4214,
+      13.633386,
+      8.035521,
+      8.333333
+     ],
+     [
+      4227,
+      4.783333,
+      8.047499,
+      8.333333
+     ],
+     [
+      4229,
+      5.427344,
+      7.971405,
+      8.333333
+     ],
+     [
+      4237,
+      6.09474,
+      7.960468,
+      8.333333
+     ],
+     [
+      4245,
+      7.309688,
+      7.945572,
+      8.333333
+     ],
+     [
+      4254,
+      6.755938,
+      7.975833,
+      8.333333
+     ],
+     [
+      4262,
+      6.634011,
+      7.975728,
+      8.333333
+     ],
+     [
+      4270,
+      7.667292,
+      7.93375,
+      8.333333
+     ],
+     [
+      4279,
+      12.350938,
+      7.943229,
+      8.333333
+     ],
+     [
+      4288,
+      11.416458,
+      7.969635,
+      8.333333
+     ],
+     [
+      4296,
+      5.649167,
+      7.94552,
+      8.333333
+     ],
+     [
+      4304,
+      21.965729,
+      8.013229,
+      8.333333
+     ],
+     [
+      4319,
+      17.965677,
+      7.993749,
+      8.333333
+     ],
+     [
+      4332,
+      14.02323,
+      7.980207,
+      8.333333
+     ],
+     [
+      4338,
+      9.931667,
+      8.05349,
+      8.333333
+     ],
+     [
+      4346,
+      6.563802,
+      8.058333,
+      8.333333
+     ],
+     [
+      4354,
+      7.953021,
+      8.067447,
+      8.333333
+     ],
+     [
+      4362,
+      8.168177,
+      8.064426,
+      8.333333
+     ],
+     [
+      4370,
+      8.487656,
+      8.03927,
+      8.333333
+     ],
+     [
+      4379,
+      17.266719,
+      8.051198,
+      8.333333
+     ],
+     [
+      4388,
+      17.424688,
+      8.03849,
+      8.333333
+     ],
+     [
+      4398,
+      21.522083,
+      8.052551,
+      8.333333
+     ],
+     [
+      4417,
+      12.780677,
+      7.850729,
+      8.333333
+     ],
+     [
+      4441,
+      22.794271,
+      8.018906,
+      8.333333
+     ],
+     [
+      4461,
+      6.913958,
+      8.067342,
+      8.333333
+     ],
+     [
+      4467,
+      8.332708,
+      8.052603,
+      8.333333
+     ],
+     [
+      4486,
+      8.055365,
+      7.976666,
+      8.333333
+     ],
+     [
+      4492,
+      5.46724,
+      8.01276,
+      8.333333
+     ],
+     [
+      4496,
+      6.295312,
+      7.952811,
+      8.333333
+     ],
+     [
+      4505,
+      4.402083,
+      8.050625,
+      8.333333
+     ],
+     [
+      4513,
+      9.095781,
+      8.01703,
+      8.333333
+     ],
+     [
+      4521,
+      5.825417,
+      7.951093,
+      8.333333
+     ],
+     [
+      4531,
+      7.595469,
+      7.944948,
+      8.333333
+     ],
+     [
+      4538,
+      6.530156,
+      7.964374,
+      8.333333
+     ],
+     [
+      4546,
+      6.68323,
+      7.965625,
+      8.333333
+     ],
+     [
+      4554,
+      4.841667,
+      7.941457,
+      8.333333
+     ],
+     [
+      4563,
+      4.513229,
+      7.959584,
+      8.333333
+     ],
+     [
+      4572,
+      6.363541,
+      8.02578,
+      8.333333
+     ],
+     [
+      4579,
+      5.172604,
+      7.949323,
+      8.333333
+     ],
+     [
+      4588,
+      5.346198,
+      8.021874,
+      8.333333
+     ],
+     [
+      4596,
+      14.433177,
+      7.994479,
+      8.333333
+     ],
+     [
+      4608,
+      4.902604,
+      7.951823,
+      8.333333
+     ],
+     [
+      4613,
+      7.132239,
+      7.95,
+      8.333333
+     ],
+     [
+      4621,
+      6.445781,
+      7.912031,
+      8.333333
+     ],
+     [
+      4630,
+      6.275677,
+      7.941562,
+      8.333333
+     ],
+     [
+      4638,
+      6.168437,
+      7.96578,
+      8.333333
+     ],
+     [
+      4646,
+      6.949219,
+      7.863645,
+      8.333333
+     ],
+     [
+      4655,
+      6.866354,
+      7.863281,
+      8.333333
+     ],
+     [
+      4663,
+      5.720781,
+      7.974167,
+      8.333333
+     ],
+     [
+      4671,
+      6.066719,
+      7.989219,
+      8.333333
+     ],
+     [
+      4680,
+      5.964323,
+      7.979479,
+      8.333333
+     ],
+     [
+      4689,
+      9.189739,
+      8.001041,
+      8.333333
+     ],
+     [
+      4701,
+      8.489688,
+      8.057395,
+      8.333333
+     ],
+     [
+      4706,
+      6.245052,
+      7.938489,
+      8.333333
+     ],
+     [
+      4713,
+      5.05099,
+      7.760156,
+      8.333333
+     ],
+     [
+      4722,
+      5.833125,
+      7.84224,
+      8.333333
+     ],
+     [
+      4730,
+      7.160417,
+      7.990311,
+      8.333333
+     ],
+     [
+      4738,
+      7.019219,
+      7.960259,
+      8.333333
+     ],
+     [
+      4747,
+      4.640572,
+      7.863593,
+      8.333333
+     ],
+     [
+      4755,
+      12.625208,
+      7.965781,
+      8.333333
+     ],
+     [
+      4764,
+      8.083907,
+      7.906406,
+      8.333333
+     ],
+     [
+      4772,
+      5.56375,
+      7.887291,
+      8.333333
+     ],
+     [
+      4780,
+      6.972552,
+      7.91875,
+      8.333333
+     ],
+     [
+      4789,
+      6.286928,
+      7.90776,
+      8.333333
+     ],
+     [
+      4797,
+      6.253073,
+      7.958228,
+      8.333333
+     ],
+     [
+      4805,
+      6.529843,
+      7.836823,
+      8.333333
+     ],
+     [
+      4813,
+      6.637448,
+      7.957864,
+      8.333333
+     ],
+     [
+      4822,
+      6.262916,
+      7.892187,
+      8.333333
+     ],
+     [
+      4830,
+      7.248646,
+      7.734062,
+      8.333333
+     ],
+     [
+      4839,
+      6.456198,
+      7.930104,
+      8.333333
+     ],
+     [
+      4847,
+      6.656615,
+      7.868697,
+      8.333333
+     ],
+     [
+      4856,
+      9.098698,
+      7.80849,
+      8.333333
+     ],
+     [
+      4864,
+      6.287761,
+      7.968854,
+      8.333333
+     ],
+     [
+      4872,
+      5.825677,
+      7.951093,
+      8.333333
+     ],
+     [
+      4880,
+      6.499011,
+      7.906198,
+      8.333333
+     ],
+     [
+      4889,
+      6.447708,
+      7.912655,
+      8.333333
+     ],
+     [
+      4897,
+      7.56052,
+      7.950833,
+      8.333333
+     ],
+     [
+      4905,
+      6.698541,
+      7.985468,
+      8.333333
+     ],
+     [
+      4914,
+      7.369739,
+      7.846875,
+      8.333333
+     ],
+     [
+      4922,
+      8.372448,
+      7.995312,
+      8.333333
+     ],
+     [
+      4931,
+      6.948541,
+      7.915989,
+      8.333333
+     ],
+     [
+      4939,
+      5.133594,
+      7.863385,
+      8.333333
+     ],
+     [
+      4947,
+      4.810781,
+      8.014947,
+      8.333333
+     ],
+     [
+      4957,
+      6.732031,
+      7.962083,
+      8.333333
+     ],
+     [
+      4964,
+      5.816562,
+      7.878854,
+      8.333333
+     ],
+     [
+      4972,
+      6.027031,
+      7.921458,
+      8.333333
+     ],
+     [
+      4981,
+      6.111562,
+      7.915312,
+      8.333333
+     ],
+     [
+      4989,
+      8.266406,
+      7.884427,
+      8.333333
+     ],
+     [
+      4997,
+      7.415938,
+      7.887707,
+      8.333333
+     ],
+     [
+      5012,
+      8.170885,
+      7.941405,
+      8.333333
+     ],
+     [
+      5017,
+      5.353854,
+      7.884479,
+      8.333333
+     ],
+     [
+      5022,
+      5.151198,
+      7.871249,
+      8.333333
+     ],
+     [
+      5031,
+      5.140885,
+      7.787864,
+      8.333333
+     ],
+     [
+      5039,
+      6.147135,
+      7.938229,
+      8.333333
+     ],
+     [
+      5048,
+      5.772813,
+      7.929687,
+      8.333333
+     ],
+     [
+      5056,
+      6.871458,
+      7.906718,
+      8.333333
+     ],
+     [
+      5064,
+      5.975885,
+      7.917447,
+      8.333333
+     ],
+     [
+      5073,
+      6.203698,
+      7.878958,
+      8.333333
+     ],
+     [
+      5081,
+      6.727969,
+      7.929479,
+      8.333333
+     ],
+     [
+      5089,
+      6.340416,
+      7.948228,
+      8.333333
+     ],
+     [
+      5098,
+      6.246458,
+      7.828802,
+      8.333333
+     ],
+     [
+      5106,
+      6.200938,
+      7.927811,
+      8.333333
+     ],
+     [
+      5114,
+      8.08526,
+      7.805885,
+      8.333333
+     ],
+     [
+      5124,
+      8.095885,
+      7.969323,
+      8.333333
+     ],
+     [
+      5131,
+      5.78849,
+      7.985937,
+      8.333333
+     ],
+     [
+      5139,
+      5.36125,
+      7.962708,
+      8.333333
+     ],
+     [
+      5148,
+      4.918281,
+      7.834062,
+      8.333333
+     ],
+     [
+      5156,
+      8.183438,
+      7.91052,
+      8.333333
+     ],
+     [
+      5169,
+      7.180885,
+      7.934115,
+      8.333333
+     ],
+     [
+      5173,
+      5.639115,
+      7.966927,
+      8.333333
+     ],
+     [
+      5181,
+      5.180156,
+      7.901353,
+      8.333333
+     ],
+     [
+      5189,
+      6.33427,
+      7.947603,
+      8.333333
+     ],
+     [
+      5198,
+      6.476928,
+      7.926458,
+      8.333333
+     ],
+     [
+      5206,
+      5.891407,
+      7.813125,
+      8.333333
+     ],
+     [
+      5215,
+      5.878125,
+      7.866718,
+      8.333333
+     ],
+     [
+      5223,
+      6.989792,
+      7.871927,
+      8.333333
+     ],
+     [
+      5231,
+      8.276719,
+      7.951614,
+      8.333333
+     ],
+     [
+      5240,
+      6.460469,
+      7.954791,
+      8.333333
+     ],
+     [
+      5248,
+      6.345208,
+      7.908542,
+      8.333333
+     ],
+     [
+      5256,
+      5.991666,
+      7.938489,
+      8.333333
+     ],
+     [
+      5265,
+      6.248073,
+      7.926614,
+      8.333333
+     ],
+     [
+      5273,
+      6.049531,
+      8.083541,
+      8.333333
+     ],
+     [
+      5281,
+      5.793385,
+      8.00526,
+      8.333333
+     ],
+     [
+      5290,
+      5.581198,
+      8.011042,
+      8.333333
+     ],
+     [
+      5298,
+      4.766458,
+      7.999427,
+      8.333333
+     ],
+     [
+      5306,
+      5.272031,
+      7.908905,
+      8.333333
+     ],
+     [
+      5315,
+      4.915989,
+      7.875156,
+      8.333333
+     ],
+     [
+      5323,
+      5.877656,
+      7.953073,
+      8.333333
+     ],
+     [
+      5332,
+      6.806979,
+      7.954843,
+      8.333333
+     ],
+     [
+      5340,
+      6.281302,
+      7.903073,
+      8.333333
+     ],
+     [
+      5348,
+      6.274427,
+      8.013385,
+      8.333333
+     ],
+     [
+      5357,
+      6.379479,
+      7.934844,
+      8.333333
+     ],
+     [
+      5365,
+      6.323021,
+      8.019061,
+      8.333333
+     ],
+     [
+      5373,
+      7.529323,
+      8.056093,
+      8.333333
+     ],
+     [
+      5382,
+      5.955364,
+      7.991249,
+      8.333333
+     ],
+     [
+      5390,
+      6.121146,
+      8.023906,
+      8.333333
+     ],
+     [
+      5398,
+      6.391406,
+      7.950833,
+      8.333333
+     ],
+     [
+      5407,
+      6.112709,
+      8.00901,
+      8.333333
+     ],
+     [
+      5415,
+      5.919062,
+      8.041249,
+      8.333333
+     ],
+     [
+      5423,
+      6.109115,
+      8.019635,
+      8.333333
+     ],
+     [
+      5432,
+      5.485729,
+      16.354738,
+      8.333333
+     ],
+     [
+      5440,
+      5.501718,
+      13.12776,
+      8.333333
+     ],
+     [
+      5448,
+      15.286146,
+      16.336302,
+      8.333333
+     ],
+     [
+      5459,
+      9.214479,
+      16.263229,
+      8.333333
+     ],
+     [
+      5497,
+      16.448958,
+      7.957968,
+      8.333333
+     ],
+     [
+      5509,
+      12.086562,
+      8.02401,
+      8.333333
+     ],
+     [
+      5515,
+      19.610573,
+      7.957759,
+      8.333333
+     ],
+     [
+      5524,
+      15.665781,
+      7.956823,
+      8.333333
+     ],
+     [
+      5535,
+      9.404635,
+      7.999895,
+      8.333333
+     ],
+     [
+      5541,
+      6.759531,
+      8.021875,
+      8.333333
+     ],
+     [
+      5549,
+      8.545729,
+      7.995155,
+      8.333333
+     ],
+     [
+      5557,
+      8.361719,
+      7.990416,
+      8.333333
+     ],
+     [
+      5565,
+      8.799636,
+      7.930676,
+      8.333333
+     ],
+     [
+      5574,
+      8.527969,
+      7.935469,
+      8.333333
+     ],
+     [
+      5582,
+      8.653438,
+      7.983594,
+      8.333333
+     ],
+     [
+      5591,
+      8.355208,
+      7.944635,
+      8.333333
+     ],
+     [
+      5599,
+      8.473542,
+      7.932603,
+      8.333333
+     ],
+     [
+      5607,
+      8.468334,
+      7.931926,
+      8.333333
+     ],
+     [
+      5616,
+      8.438698,
+      7.974322,
+      8.333333
+     ],
+     [
+      5624,
+      8.439479,
+      7.98276,
+      8.333333
+     ],
+     [
+      5632,
+      8.634166,
+      7.946093,
+      8.333333
+     ],
+     [
+      5641,
+      8.612135,
+      7.97151,
+      8.333333
+     ],
+     [
+      5649,
+      8.570156,
+      7.92703,
+      8.333333
+     ],
+     [
+      5657,
+      8.465313,
+      7.949584,
+      8.333333
+     ],
+     [
+      5666,
+      8.510677,
+      7.89651,
+      8.333333
+     ],
+     [
+      5674,
+      8.521562,
+      7.942083,
+      8.333333
+     ],
+     [
+      5682,
+      8.420417,
+      7.928072,
+      8.333333
+     ],
+     [
+      5691,
+      8.209688,
+      7.957968,
+      8.333333
+     ],
+     [
+      5699,
+      8.548385,
+      7.929791,
+      8.333333
+     ],
+     [
+      5707,
+      8.506875,
+      7.903021,
+      8.333333
+     ],
+     [
+      5716,
+      8.664114,
+      7.978438,
+      8.333333
+     ],
+     [
+      5724,
+      8.465261,
+      7.881406,
+      8.333333
+     ],
+     [
+      5733,
+      8.543438,
+      7.973124,
+      8.333333
+     ],
+     [
+      5741,
+      8.239062,
+      7.857708,
+      8.333333
+     ],
+     [
+      5749,
+      8.370208,
+      7.930572,
+      8.333333
+     ],
+     [
+      5758,
+      8.560729,
+      8.039113,
+      8.333333
+     ],
+     [
+      5766,
+      8.245104,
+      7.920676,
+      8.333333
+     ],
+     [
+      5774,
+      8.3075,
+      8.001875,
+      8.333333
+     ],
+     [
+      5783,
+      8.41698,
+      7.932968,
+      8.333333
+     ],
+     [
+      5791,
+      8.263281,
+      7.921874,
+      8.333333
+     ],
+     [
+      5799,
+      23.969636,
+      7.988749,
+      8.333333
+     ],
+     [
+      5908,
+      3.954063,
+      16.40802,
+      8.333333
+     ],
+     [
+      5925,
+      10.50474,
+      8.008124,
+      8.333333
+     ],
+     [
+      5941,
+      13.412344,
+      7.982916,
+      8.333333
+     ],
+     [
+      5958,
+      9.60974,
+      8.002135,
+      8.333333
+     ],
+     [
+      5975,
+      8.173697,
+      7.96453,
+      8.333333
+     ],
+     [
+      5986,
+      10.02224,
+      8.031249,
+      8.333333
+     ],
+     [
+      6004,
+      15.474375,
+      7.968697,
+      8.333333
+     ],
+     [
+      6014,
+      9.329636,
+      8.001094,
+      8.333333
+     ],
+     [
+      6019,
+      7.656302,
+      7.771979,
+      8.333333
+     ],
+     [
+      6025,
+      10.318697,
+      7.97453,
+      8.333333
+     ],
+     [
+      6033,
+      8.315312,
+      7.906667,
+      8.333333
+     ],
+     [
+      6042,
+      8.355052,
+      8.018488,
+      8.333333
+     ],
+     [
+      6050,
+      8.179323,
+      8.015208,
+      8.333333
+     ],
+     [
+      6059,
+      8.51677,
+      7.963228,
+      8.333333
+     ],
+     [
+      6068,
+      9.746355,
+      7.990156,
+      8.333333
+     ],
+     [
+      6075,
+      9.896718,
+      8.121719,
+      8.333333
+     ],
+     [
+      6084,
+      9.234479,
+      8.030208,
+      8.333333
+     ],
+     [
+      6092,
+      9.546823,
+      7.865936,
+      8.333333
+     ],
+     [
+      6100,
+      9.593281,
+      7.985989,
+      8.333333
+     ],
+     [
+      6108,
+      13.432084,
+      8.014323,
+      8.333333
+     ],
+     [
+      6117,
+      9.70625,
+      7.852031,
+      8.333333
+     ],
+     [
+      6125,
+      11.948177,
+      8.003281,
+      8.333333
+     ],
+     [
+      6134,
+      9.484167,
+      7.777031,
+      8.333333
+     ],
+     [
+      6142,
+      13.688698,
+      7.922552,
+      8.333333
+     ],
+     [
+      6165,
+      7.513073,
+      7.922135,
+      8.333333
+     ],
+     [
+      6180,
+      7.682135,
+      7.976458,
+      8.333333
+     ],
+     [
+      6191,
+      6.120729,
+      8.049166,
+      8.333333
+     ],
+     [
+      6198,
+      8.562396,
+      8.028698,
+      8.333333
+     ],
+     [
+      6209,
+      7.035989,
+      8.017916,
+      8.333333
+     ],
+     [
+      6217,
+      8.076875,
+      7.987239,
+      8.333333
+     ],
+     [
+      6225,
+      6.19526,
+      7.905312,
+      8.333333
+     ],
+     [
+      6234,
+      6.100469,
+      8.002187,
+      8.333333
+     ],
+     [
+      6242,
+      5.564167,
+      7.856509,
+      8.333333
+     ],
+     [
+      6251,
+      6.399739,
+      7.777448,
+      8.333333
+     ],
+     [
+      6259,
+      7.273281,
+      7.715052,
+      8.333333
+     ],
+     [
+      6268,
+      9.910937,
+      8.035,
+      8.333333
+     ],
+     [
+      6276,
+      6.50776,
+      8.054687,
+      8.333333
+     ],
+     [
+      6284,
+      7.384271,
+      7.979375,
+      8.333333
+     ],
+     [
+      6292,
+      6.062916,
+      7.973593,
+      8.333333
+     ],
+     [
+      6301,
+      5.952291,
+      7.967447,
+      8.333333
+     ],
+     [
+      6309,
+      6.562657,
+      8.013957,
+      8.333333
+     ],
+     [
+      6319,
+      6.836875,
+      8.022603,
+      8.333333
+     ],
+     [
+      6326,
+      7.681198,
+      7.943957,
+      8.333333
+     ],
+     [
+      6334,
+      8.055468,
+      7.691353,
+      8.333333
+     ],
+     [
+      6343,
+      7.535782,
+      7.939427,
+      8.333333
+     ],
+     [
+      6351,
+      8.710729,
+      7.852082,
+      8.333333
+     ],
+     [
+      6359,
+      6.796875,
+      7.882135,
+      8.333333
+     ],
+     [
+      6368,
+      5.884843,
+      7.936719,
+      8.333333
+     ],
+     [
+      6376,
+      7.361146,
+      7.831667,
+      8.333333
+     ],
+     [
+      6384,
+      6.583333,
+      7.988958,
+      8.333333
+     ],
+     [
+      6393,
+      7.579636,
+      7.903438,
+      8.333333
+     ],
+     [
+      6401,
+      7.048333,
+      7.87328,
+      8.333333
+     ],
+     [
+      6409,
+      9.283073,
+      7.881457,
+      8.333333
+     ],
+     [
+      6418,
+      6.719271,
+      7.757135,
+      8.333333
+     ],
+     [
+      6426,
+      9.856875,
+      7.976146,
+      8.333333
+     ],
+     [
+      6443,
+      7.440469,
+      8.050313,
+      8.333333
+     ],
+     [
+      6452,
+      7.594583,
+      7.981614,
+      8.333333
+     ],
+     [
+      6459,
+      4.999688,
+      7.958072,
+      8.333333
+     ],
+     [
+      6468,
+      7.568594,
+      7.874948,
+      8.333333
+     ],
+     [
+      6476,
+      6.910573,
+      7.891926,
+      8.333333
+     ],
+     [
+      6485,
+      6.981667,
+      7.88052,
+      8.333333
+     ],
+     [
+      6501,
+      8.483646,
+      7.861145,
+      8.333333
+     ],
+     [
+      6510,
+      8.989428,
+      7.876406,
+      8.333333
+     ],
+     [
+      6521,
+      9.569063,
+      7.952083,
+      8.333333
+     ],
+     [
+      6527,
+      6.441615,
+      7.74651,
+      8.333333
+     ],
+     [
+      6535,
+      8.844323,
+      7.79625,
+      8.333333
+     ],
+     [
+      6543,
+      13.510417,
+      7.898802,
+      8.333333
+     ],
+     [
+      6552,
+      7.075313,
+      7.982603,
+      8.333333
+     ],
+     [
+      6560,
+      5.922656,
+      7.860104,
+      8.333333
+     ],
+     [
+      6568,
+      6.455052,
+      7.974479,
+      8.333333
+     ],
+     [
+      6577,
+      10.9675,
+      7.927759,
+      8.333333
+     ],
+     [
+      6585,
+      7.932188,
+      7.909583,
+      8.333333
+     ],
+     [
+      6593,
+      6.318021,
+      7.908385,
+      8.333333
+     ],
+     [
+      6602,
+      6.97125,
+      7.894114,
+      8.333333
+     ],
+     [
+      6610,
+      6.897656,
+      7.910208,
+      8.333333
+     ],
+     [
+      6618,
+      7.375052,
+      7.7825,
+      8.333333
+     ],
+     [
+      6627,
+      7.027604,
+      7.909218,
+      8.333333
+     ],
+     [
+      6635,
+      6.682656,
+      7.860416,
+      8.333333
+     ],
+     [
+      6643,
+      7.545469,
+      7.91625,
+      8.333333
+     ],
+     [
+      6652,
+      6.493334,
+      7.949895,
+      8.333333
+     ],
+     [
+      6660,
+      6.360313,
+      7.949791,
+      8.333333
+     ],
+     [
+      6668,
+      6.430469,
+      7.942031,
+      8.333333
+     ],
+     [
+      6677,
+      6.275886,
+      7.93302,
+      8.333333
+     ],
+     [
+      6685,
+      6.230208,
+      7.884739,
+      8.333333
+     ],
+     [
+      6694,
+      6.481563,
+      7.916874,
+      8.333333
+     ],
+     [
+      6702,
+      6.822916,
+      7.844375,
+      8.333333
+     ],
+     [
+      6710,
+      7.913489,
+      7.575625,
+      8.333333
+     ],
+     [
+      6719,
+      6.580156,
+      7.751301,
+      8.333333
+     ],
+     [
+      6727,
+      11.034584,
+      8.02578,
+      8.333333
+     ],
+     [
+      6736,
+      6.493698,
+      7.973542,
+      8.333333
+     ],
+     [
+      6744,
+      5.734114,
+      7.948645,
+      8.333333
+     ],
+     [
+      6752,
+      10.873385,
+      7.944479,
+      8.333333
+     ],
+     [
+      6760,
+      6.560052,
+      7.915312,
+      8.333333
+     ],
+     [
+      6769,
+      6.821198,
+      7.960989,
+      8.333333
+     ],
+     [
+      6777,
+      6.149948,
+      7.82349,
+      8.333333
+     ],
+     [
+      6785,
+      6.58875,
+      7.941875,
+      8.333333
+     ],
+     [
+      6794,
+      7.185677,
+      7.903228,
+      8.333333
+     ],
+     [
+      6802,
+      5.935468,
+      8.031666,
+      8.333333
+     ],
+     [
+      6811,
+      6.083698,
+      8.030416,
+      8.333333
+     ],
+     [
+      6819,
+      5.918541,
+      7.959739,
+      8.333333
+     ],
+     [
+      6827,
+      5.141354,
+      7.910155,
+      8.333333
+     ],
+     [
+      6836,
+      6.698177,
+      7.980573,
+      8.333333
+     ],
+     [
+      6844,
+      6.668333,
+      8.047864,
+      8.333333
+     ],
+     [
+      6852,
+      6.200417,
+      7.898333,
+      8.333333
+     ],
+     [
+      6860,
+      6.23125,
+      7.864063,
+      8.333333
+     ],
+     [
+      6869,
+      6.642968,
+      8.004427,
+      8.333333
+     ],
+     [
+      6877,
+      6.445781,
+      7.863645,
+      8.333333
+     ],
+     [
+      6886,
+      6.388594,
+      7.774218,
+      8.333333
+     ],
+     [
+      6894,
+      10.045052,
+      8.006458,
+      8.333333
+     ],
+     [
+      6903,
+      5.616771,
+      7.842864,
+      8.333333
+     ],
+     [
+      6911,
+      5.354167,
+      7.800469,
+      8.333333
+     ],
+     [
+      6919,
+      5.419063,
+      7.730521,
+      8.333333
+     ],
+     [
+      6928,
+      5.527344,
+      7.953906,
+      8.333333
+     ],
+     [
+      6936,
+      6.460417,
+      7.879479,
+      8.333333
+     ],
+     [
+      6944,
+      6.415678,
+      7.945884,
+      8.333333
+     ],
+     [
+      6953,
+      6.533282,
+      7.898698,
+      8.333333
+     ],
+     [
+      6961,
+      6.290782,
+      7.849426,
+      8.333333
+     ],
+     [
+      6969,
+      6.327865,
+      7.843229,
+      8.333333
+     ],
+     [
+      6978,
+      6.337916,
+      7.863854,
+      8.333333
+     ],
+     [
+      6986,
+      6.384532,
+      7.9025,
+      8.333333
+     ],
+     [
+      6994,
+      6.271354,
+      7.953437,
+      8.333333
+     ],
+     [
+      7003,
+      6.094792,
+      7.965364,
+      8.333333
+     ],
+     [
+      7011,
+      6.176407,
+      7.885989,
+      8.333333
+     ],
+     [
+      7021,
+      6.841562,
+      7.889374,
+      8.333333
+     ],
+     [
+      7028,
+      6.146354,
+      7.941875,
+      8.333333
+     ],
+     [
+      7036,
+      6.130104,
+      7.847082,
+      8.333333
+     ],
+     [
+      7044,
+      6.242552,
+      7.799478,
+      8.333333
+     ],
+     [
+      7053,
+      6.19177,
+      7.957552,
+      8.333333
+     ],
+     [
+      7061,
+      6.071823,
+      7.928906,
+      8.333333
+     ],
+     [
+      7069,
+      6.189948,
+      7.921614,
+      8.333333
+     ],
+     [
+      7078,
+      6.348229,
+      7.933594,
+      8.333333
+     ],
+     [
+      7086,
+      6.256823,
+      7.748802,
+      8.333333
+     ],
+     [
+      7095,
+      5.42125,
+      7.82125,
+      8.333333
+     ],
+     [
+      7103,
+      6.359532,
+      7.836875,
+      8.333333
+     ],
+     [
+      7111,
+      6.290469,
+      7.891614,
+      8.333333
+     ],
+     [
+      7120,
+      7.283125,
+      7.935729,
+      8.333333
+     ],
+     [
+      7128,
+      6.148906,
+      7.91776,
+      8.333333
+     ],
+     [
+      7136,
+      6.023646,
+      7.774115,
+      8.333333
+     ],
+     [
+      7145,
+      6.10901,
+      7.965833,
+      8.333333
+     ],
+     [
+      7153,
+      5.870938,
+      7.96776,
+      8.333333
+     ],
+     [
+      7162,
+      5.805677,
+      7.869375,
+      8.333333
+     ],
+     [
+      7170,
+      6.062031,
+      7.918281,
+      8.333333
+     ],
+     [
+      7178,
+      6.240365,
+      7.831822,
+      8.333333
+     ],
+     [
+      7187,
+      6.098333,
+      7.798124,
+      8.333333
+     ],
+     [
+      7195,
+      6.101197,
+      7.913229,
+      8.333333
+     ],
+     [
+      7203,
+      6.392448,
+      7.951042,
+      8.333333
+     ],
+     [
+      7212,
+      6.685573,
+      7.982864,
+      8.333333
+     ],
+     [
+      7220,
+      5.86625,
+      7.958906,
+      8.333333
+     ],
+     [
+      7228,
+      4.841354,
+      7.930261,
+      8.333333
+     ],
+     [
+      7237,
+      6.244583,
+      7.923646,
+      8.333333
+     ],
+     [
+      7245,
+      5.963646,
+      7.932552,
+      8.333333
+     ],
+     [
+      7253,
+      5.890156,
+      7.945416,
+      8.333333
+     ],
+     [
+      7262,
+      5.923333,
+      7.949218,
+      8.333333
+     ],
+     [
+      7270,
+      5.924531,
+      8.018697,
+      8.333333
+     ],
+     [
+      7278,
+      5.821354,
+      7.669375,
+      8.333333
+     ],
+     [
+      7287,
+      5.25625,
+      7.965729,
+      8.333333
+     ],
+     [
+      7295,
+      5.778021,
+      8.029686,
+      8.333333
+     ],
+     [
+      7303,
+      5.467136,
+      7.969427,
+      8.333333
+     ],
+     [
+      7312,
+      4.635364,
+      7.906926,
+      8.333333
+     ],
+     [
+      7320,
+      4.926146,
+      7.874062,
+      8.333333
+     ],
+     [
+      7329,
+      6.389271,
+      7.935156,
+      8.333333
+     ],
+     [
+      7337,
+      5.928386,
+      7.899375,
+      8.333333
+     ],
+     [
+      7345,
+      5.884375,
+      7.832864,
+      8.333333
+     ],
+     [
+      7354,
+      5.846198,
+      7.968541,
+      8.333333
+     ],
+     [
+      7362,
+      6.231927,
+      7.892447,
+      8.333333
+     ],
+     [
+      7370,
+      7.085313,
+      7.843177,
+      8.333333
+     ],
+     [
+      7379,
+      6.008646,
+      7.937396,
+      8.333333
+     ],
+     [
+      7387,
+      5.917812,
+      7.904999,
+      8.333333
+     ],
+     [
+      7395,
+      5.897395,
+      7.922135,
+      8.333333
+     ],
+     [
+      7404,
+      5.877188,
+      7.875624,
+      8.333333
+     ],
+     [
+      7412,
+      5.919323,
+      7.853593,
+      8.333333
+     ],
+     [
+      7421,
+      6.792291,
+      7.944739,
+      8.333333
+     ],
+     [
+      7429,
+      6.111406,
+      7.894844,
+      8.333333
+     ],
+     [
+      7437,
+      6.168021,
+      7.906719,
+      8.333333
+     ],
+     [
+      7446,
+      5.981146,
+      7.897552,
+      8.333333
+     ],
+     [
+      7454,
+      5.917239,
+      7.902291,
+      8.333333
+     ],
+     [
+      7462,
+      5.853385,
+      7.689947,
+      8.333333
+     ],
+     [
+      7471,
+      7.022604,
+      7.936197,
+      8.333333
+     ],
+     [
+      7479,
+      5.14927,
+      7.884687,
+      8.333333
+     ],
+     [
+      7487,
+      6.101302,
+      7.899063,
+      8.333333
+     ],
+     [
+      7496,
+      6.572916,
+      7.895729,
+      8.333333
+     ],
+     [
+      7504,
+      5.895781,
+      7.881041,
+      8.333333
+     ],
+     [
+      7512,
+      6.584895,
+      7.828905,
+      8.333333
+     ],
+     [
+      7521,
+      6.323333,
+      7.90901,
+      8.333333
+     ],
+     [
+      7529,
+      5.019323,
+      7.948333,
+      8.333333
+     ],
+     [
+      7537,
+      6.349114,
+      7.940417,
+      8.333333
+     ],
+     [
+      7546,
+      6.007604,
+      7.950156,
+      8.333333
+     ],
+     [
+      7554,
+      5.001875,
+      7.915207,
+      8.333333
+     ],
+     [
+      7563,
+      6.768489,
+      7.910728,
+      8.333333
+     ],
+     [
+      7571,
+      4.968959,
+      7.960624,
+      8.333333
+     ],
+     [
+      7579,
+      6.707761,
+      7.875677,
+      8.333333
+     ],
+     [
+      7588,
+      5.842656,
+      7.878698,
+      8.333333
+     ],
+     [
+      7596,
+      6.809479,
+      7.963906,
+      8.333333
+     ],
+     [
+      7604,
+      5.106041,
+      7.925312,
+      8.333333
+     ],
+     [
+      7613,
+      6.271303,
+      7.899269,
+      8.333333
+     ],
+     [
+      7621,
+      5.111198,
+      7.949687,
+      8.333333
+     ],
+     [
+      7629,
+      6.306302,
+      7.960417,
+      8.333333
+     ],
+     [
+      7638,
+      4.993281,
+      7.943073,
+      8.333333
+     ],
+     [
+      7646,
+      5.92901,
+      7.919166,
+      8.333333
+     ],
+     [
+      7654,
+      6.20927,
+      7.855155,
+      8.333333
+     ],
+     [
+      7663,
+      4.985312,
+      7.91354,
+      8.333333
+     ],
+     [
+      7671,
+      4.904791,
+      7.911041,
+      8.333333
+     ],
+     [
+      7679,
+      5.919271,
+      7.949375,
+      8.333333
+     ],
+     [
+      7688,
+      4.902553,
+      7.945937,
+      8.333333
+     ],
+     [
+      7696,
+      25.974688,
+      7.945886,
+      8.333333
+     ],
+     [
+      7821,
+      12.97375,
+      16.248854,
+      8.333333
+     ],
+     [
+      7830,
+      6.066302,
+      16.285989,
+      8.333333
+     ],
+     [
+      7838,
+      7.690156,
+      15.983124,
+      8.333333
+     ],
+     [
+      7847,
+      5.688281,
+      16.274635,
+      8.333333
+     ],
+     [
+      7855,
+      7.204427,
+      16.259478,
+      8.333333
+     ],
+     [
+      7863,
+      9.574843,
+      16.329791,
+      8.333333
+     ],
+     [
+      7885,
+      5.367917,
+      7.974374,
+      8.333333
+     ],
+     [
+      7896,
+      6.93875,
+      8.029426,
+      8.333333
+     ],
+     [
+      7905,
+      7.475469,
+      8.021562,
+      8.333333
+     ],
+     [
+      7913,
+      4.094584,
+      7.796145,
+      8.333333
+     ],
+     [
+      7922,
+      5.828334,
+      8.015416,
+      8.333333
+     ],
+     [
+      7930,
+      5.318073,
+      8.009635,
+      8.333333
+     ],
+     [
+      7938,
+      6.221718,
+      7.927865,
+      8.333333
+     ],
+     [
+      7947,
+      7.134271,
+      7.983385,
+      8.333333
+     ],
+     [
+      7955,
+      6.365365,
+      7.967916,
+      8.333333
+     ],
+     [
+      7964,
+      7.443958,
+      7.981093,
+      8.333333
+     ],
+     [
+      7972,
+      8.252083,
+      7.829427,
+      8.333333
+     ],
+     [
+      7981,
+      6.028958,
+      7.886093,
+      8.333333
+     ],
+     [
+      7989,
+      5.883333,
+      7.962968,
+      8.333333
+     ],
+     [
+      7997,
+      6.080105,
+      7.987656,
+      8.333333
+     ],
+     [
+      8005,
+      7.59026,
+      7.898646,
+      8.333333
+     ],
+     [
+      8014,
+      9.58849,
+      7.980884,
+      8.333333
+     ],
+     [
+      8030,
+      9.860677,
+      7.878281,
+      8.333333
+     ],
+     [
+      8039,
+      3.826458,
+      7.939479,
+      8.333333
+     ],
+     [
+      8047,
+      7.594218,
+      7.904322,
+      8.333333
+     ],
+     [
+      8055,
+      15.906406,
+      7.950259,
+      8.333333
+     ],
+     [
+      8069,
+      5.486302,
+      7.88552,
+      8.333333
+     ],
+     [
+      8072,
+      9.513021,
+      8.027135,
+      8.333333
+     ],
+     [
+      8080,
+      3.621302,
+      8.010729,
+      8.333333
+     ],
+     [
+      8089,
+      5.653177,
+      8.031874,
+      8.333333
+     ],
+     [
+      8097,
+      7.081927,
+      7.957916,
+      8.333333
+     ],
+     [
+      8105,
+      6.32099,
+      7.912864,
+      8.333333
+     ],
+     [
+      8114,
+      6.066197,
+      7.941301,
+      8.333333
+     ],
+     [
+      8122,
+      5.047083,
+      7.93099,
+      8.333333
+     ],
+     [
+      8131,
+      5.867813,
+      7.894948,
+      8.333333
+     ],
+     [
+      8139,
+      5.629167,
+      8.001302,
+      8.333333
+     ],
+     [
+      8147,
+      6.49125,
+      7.983541,
+      8.333333
+     ],
+     [
+      8159,
+      5.998229,
+      7.964635,
+      8.333333
+     ],
+     [
+      8164,
+      4.845729,
+      8.004114,
+      8.333333
+     ],
+     [
+      8172,
+      5.841563,
+      7.858489,
+      8.333333
+     ],
+     [
+      8181,
+      8.13099,
+      7.986823,
+      8.333333
+     ],
+     [
+      8192,
+      7.264896,
+      7.91802,
+      8.333333
+     ],
+     [
+      8197,
+      5.304948,
+      7.966666,
+      8.333333
+     ],
+     [
+      8206,
+      6.261614,
+      7.781875,
+      8.333333
+     ],
+     [
+      8214,
+      6.632552,
+      7.687239,
+      8.333333
+     ],
+     [
+      8223,
+      6.092031,
+      7.8875,
+      8.333333
+     ],
+     [
+      8231,
+      6.412865,
+      7.897499,
+      8.333333
+     ],
+     [
+      8239,
+      6.032813,
+      7.935209,
+      8.333333
+     ],
+     [
+      8248,
+      6.25776,
+      7.936458,
+      8.333333
+     ],
+     [
+      8257,
+      6.653594,
+      7.843228,
+      8.333333
+     ],
+     [
+      8264,
+      6.671614,
+      8.004687,
+      8.333333
+     ],
+     [
+      8273,
+      5.75526,
+      8.047603,
+      8.333333
+     ],
+     [
+      8281,
+      5.913385,
+      7.983697,
+      8.333333
+     ],
+     [
+      8289,
+      8.220469,
+      7.963593,
+      8.333333
+     ],
+     [
+      8298,
+      6.298073,
+      7.993437,
+      8.333333
+     ],
+     [
+      8306,
+      6.641719,
+      7.987968,
+      8.333333
+     ],
+     [
+      8314,
+      5.714636,
+      7.966719,
+      8.333333
+     ],
+     [
+      8323,
+      11.357396,
+      7.972812,
+      8.333333
+     ],
+     [
+      8331,
+      6.297656,
+      7.975573,
+      8.333333
+     ],
+     [
+      8339,
+      6.295365,
+      7.989687,
+      8.333333
+     ],
+     [
+      8348,
+      8.119792,
+      8.000416,
+      8.333333
+     ],
+     [
+      8356,
+      11.107969,
+      7.939115,
+      8.333333
+     ],
+     [
+      8364,
+      5.657968,
+      7.967865,
+      8.333333
+     ],
+     [
+      8373,
+      6.616198,
+      7.924427,
+      8.333333
+     ],
+     [
+      8381,
+      8.533229,
+      7.824427,
+      8.333333
+     ],
+     [
+      8390,
+      12.245104,
+      7.957032,
+      8.333333
+     ],
+     [
+      8398,
+      6.959114,
+      8.050468,
+      8.333333
+     ],
+     [
+      8406,
+      6.796406,
+      7.751302,
+      8.333333
+     ],
+     [
+      8415,
+      6.490417,
+      7.912656,
+      8.333333
+     ],
+     [
+      8423,
+      6.823959,
+      7.943072,
+      8.333333
+     ],
+     [
+      8431,
+      7.26375,
+      7.970312,
+      8.333333
+     ],
+     [
+      8440,
+      7.203802,
+      7.977031,
+      8.333333
+     ],
+     [
+      8448,
+      7.296823,
+      7.978489,
+      8.333333
+     ],
+     [
+      8456,
+      7.647396,
+      7.936302,
+      8.333333
+     ],
+     [
+      8465,
+      7.622917,
+      7.920781,
+      8.333333
+     ],
+     [
+      8473,
+      6.404427,
+      7.94974,
+      8.333333
+     ],
+     [
+      8481,
+      6.698385,
+      7.881509,
+      8.333333
+     ],
+     [
+      8490,
+      6.565364,
+      7.887916,
+      8.333333
+     ],
+     [
+      8498,
+      6.646771,
+      7.88677,
+      8.333333
+     ],
+     [
+      8507,
+      6.874843,
+      7.975937,
+      8.333333
+     ],
+     [
+      8515,
+      7.43349,
+      7.954009,
+      8.333333
+     ],
+     [
+      8523,
+      6.818906,
+      7.781198,
+      8.333333
+     ],
+     [
+      8532,
+      8.276459,
+      7.946249,
+      8.333333
+     ],
+     [
+      8540,
+      8.071666,
+      7.997917,
+      8.333333
+     ],
+     [
+      8548,
+      6.511875,
+      7.818385,
+      8.333333
+     ],
+     [
+      8557,
+      6.404532,
+      7.891718,
+      8.333333
+     ],
+     [
+      8565,
+      6.586666,
+      7.965521,
+      8.333333
+     ],
+     [
+      8574,
+      7.035573,
+      7.883021,
+      8.333333
+     ],
+     [
+      8582,
+      9.918594,
+      7.902813,
+      8.333333
+     ],
+     [
+      8590,
+      8.910521,
+      7.747239,
+      8.333333
+     ],
+     [
+      8599,
+      6.538386,
+      7.922812,
+      8.333333
+     ],
+     [
+      8607,
+      6.018386,
+      8.012135,
+      8.333333
+     ],
+     [
+      8615,
+      6.342083,
+      7.978645,
+      8.333333
+     ],
+     [
+      8623,
+      6.470209,
+      7.909843,
+      8.333333
+     ],
+     [
+      8632,
+      6.965417,
+      7.883906,
+      8.333333
+     ],
+     [
+      8640,
+      10.391614,
+      7.983072,
+      8.333333
+     ],
+     [
+      8658,
+      5.9275,
+      7.986301,
+      8.333333
+     ],
+     [
+      8665,
+      5.149583,
+      7.936615,
+      8.333333
+     ],
+     [
+      8675,
+      7.4425,
+      7.932031,
+      8.333333
+     ],
+     [
+      8682,
+      6.430989,
+      7.98328,
+      8.333333
+     ],
+     [
+      8690,
+      6.399896,
+      7.862082,
+      8.333333
+     ],
+     [
+      8699,
+      6.308854,
+      7.905052,
+      8.333333
+     ],
+     [
+      8707,
+      7.087813,
+      7.87099,
+      8.333333
+     ],
+     [
+      8716,
+      6.988177,
+      7.902083,
+      8.333333
+     ],
+     [
+      8724,
+      8.040886,
+      7.954323,
+      8.333333
+     ],
+     [
+      8732,
+      5.849739,
+      7.985208,
+      8.333333
+     ],
+     [
+      8740,
+      5.625469,
+      7.92828,
+      8.333333
+     ],
+     [
+      8749,
+      6.662396,
+      7.904062,
+      8.333333
+     ],
+     [
+      8757,
+      7.445209,
+      7.910572,
+      8.333333
+     ],
+     [
+      8766,
+      7.016459,
+      7.859271,
+      8.333333
+     ],
+     [
+      8774,
+      7.461667,
+      7.904479,
+      8.333333
+     ],
+     [
+      8782,
+      6.110469,
+      7.956407,
+      8.333333
+     ],
+     [
+      8791,
+      6.451198,
+      7.669323,
+      8.333333
+     ],
+     [
+      8799,
+      6.056042,
+      7.935677,
+      8.333333
+     ],
+     [
+      8807,
+      7.323958,
+      7.94625,
+      8.333333
+     ],
+     [
+      8816,
+      6.575104,
+      7.944531,
+      8.333333
+     ],
+     [
+      8824,
+      6.661303,
+      7.942344,
+      8.333333
+     ],
+     [
+      8832,
+      7.802343,
+      7.967187,
+      8.333333
+     ],
+     [
+      8841,
+      6.693958,
+      7.902916,
+      8.333333
+     ],
+     [
+      8849,
+      6.451718,
+      8.005833,
+      8.333333
+     ],
+     [
+      8857,
+      6.204636,
+      7.970937,
+      8.333333
+     ],
+     [
+      8866,
+      6.684063,
+      7.891874,
+      8.333333
+     ],
+     [
+      8874,
+      6.740781,
+      7.87125,
+      8.333333
+     ],
+     [
+      8883,
+      8.011875,
+      7.810781,
+      8.333333
+     ],
+     [
+      8891,
+      6.964739,
+      7.90349,
+      8.333333
+     ],
+     [
+      8899,
+      5.855625,
+      7.971562,
+      8.333333
+     ],
+     [
+      8908,
+      5.480417,
+      7.923073,
+      8.333333
+     ],
+     [
+      8916,
+      6.057083,
+      7.775884,
+      8.333333
+     ],
+     [
+      8925,
+      6.305312,
+      7.903802,
+      8.333333
+     ],
+     [
+      8933,
+      6.061198,
+      7.972603,
+      8.333333
+     ],
+     [
+      8941,
+      6.445521,
+      7.890989,
+      8.333333
+     ],
+     [
+      8949,
+      6.071823,
+      7.922187,
+      8.333333
+     ],
+     [
+      8958,
+      6.338073,
+      7.968177,
+      8.333333
+     ],
+     [
+      8966,
+      6.004896,
+      7.966094,
+      8.333333
+     ],
+     [
+      8974,
+      5.974375,
+      7.845311,
+      8.333333
+     ],
+     [
+      8983,
+      5.909063,
+      7.91526,
+      8.333333
+     ],
+     [
+      8991,
+      5.8425,
+      7.891406,
+      8.333333
+     ],
+     [
+      9000,
+      6.349947,
+      7.918958,
+      8.333333
+     ],
+     [
+      9008,
+      6.347396,
+      7.880728,
+      8.333333
+     ],
+     [
+      9016,
+      6.688489,
+      7.852344,
+      8.333333
+     ],
+     [
+      9025,
+      7.056302,
+      7.86526,
+      8.333333
+     ],
+     [
+      9033,
+      6.383125,
+      7.731823,
+      8.333333
+     ],
+     [
+      9042,
+      5.827552,
+      7.933333,
+      8.333333
+     ],
+     [
+      9050,
+      5.520364,
+      8.037916,
+      8.333333
+     ],
+     [
+      9058,
+      5.613646,
+      7.968437,
+      8.333333
+     ],
+     [
+      9066,
+      6.950208,
+      7.700832,
+      8.333333
+     ],
+     [
+      9075,
+      7.662605,
+      7.833125,
+      8.333333
+     ],
+     [
+      9083,
+      6.194583,
+      7.916666,
+      8.333333
+     ],
+     [
+      9092,
+      6.356822,
+      7.97026,
+      8.333333
+     ],
+     [
+      9100,
+      5.057916,
+      7.962551,
+      8.333333
+     ],
+     [
+      9108,
+      6.79599,
+      7.849165,
+      8.333333
+     ],
+     [
+      9117,
+      6.792448,
+      7.92328,
+      8.333333
+     ],
+     [
+      9125,
+      6.982656,
+      7.881355,
+      8.333333
+     ],
+     [
+      9133,
+      7.303385,
+      7.874114,
+      8.333333
+     ],
+     [
+      9142,
+      8.225833,
+      7.872708,
+      8.333333
+     ],
+     [
+      9150,
+      7.228385,
+      7.92526,
+      8.333333
+     ],
+     [
+      9158,
+      6.474427,
+      7.941666,
+      8.333333
+     ],
+     [
+      9167,
+      5.919583,
+      7.946145,
+      8.333333
+     ],
+     [
+      9175,
+      6.925937,
+      7.936197,
+      8.333333
+     ],
+     [
+      9183,
+      7.358281,
+      7.92776,
+      8.333333
+     ],
+     [
+      9192,
+      6.63849,
+      7.880208,
+      8.333333
+     ],
+     [
+      9200,
+      6.737552,
+      7.930625,
+      8.333333
+     ],
+     [
+      9208,
+      6.479479,
+      7.918489,
+      8.333333
+     ],
+     [
+      9217,
+      7.570989,
+      7.795051,
+      8.333333
+     ],
+     [
+      9225,
+      6.281875,
+      7.864635,
+      8.333333
+     ],
+     [
+      9234,
+      5.996093,
+      7.817448,
+      8.333333
+     ],
+     [
+      9242,
+      6.869896,
+      7.965625,
+      8.333333
+     ],
+     [
+      9250,
+      6.718125,
+      8.04854,
+      8.333333
+     ],
+     [
+      9258,
+      6.200208,
+      7.844114,
+      8.333333
+     ],
+     [
+      9267,
+      6.829635,
+      7.863385,
+      8.333333
+     ],
+     [
+      9275,
+      6.405261,
+      7.996562,
+      8.333333
+     ],
+     [
+      9284,
+      6.853125,
+      8.05026,
+      8.333333
+     ],
+     [
+      9292,
+      6.68526,
+      8.00203,
+      8.333333
+     ],
+     [
+      9300,
+      5.318907,
+      8.008541,
+      8.333333
+     ],
+     [
+      9309,
+      5.617135,
+      8.017656,
+      8.333333
+     ],
+     [
+      9317,
+      5.415938,
+      8.001354,
+      8.333333
+     ],
+     [
+      9325,
+      6.774219,
+      7.91151,
+      8.333333
+     ],
+     [
+      9334,
+      7.11099,
+      7.813489,
+      8.333333
+     ],
+     [
+      9342,
+      7.568438,
+      7.985311,
+      8.333333
+     ],
+     [
+      9351,
+      6.824062,
+      7.656874,
+      8.333333
+     ],
+     [
+      9359,
+      6.38651,
+      7.984791,
+      8.333333
+     ],
+     [
+      9367,
+      7.53375,
+      7.958489,
+      8.333333
+     ],
+     [
+      9376,
+      7.305417,
+      7.852969,
+      8.333333
+     ],
+     [
+      9384,
+      7.449323,
+      7.946614,
+      8.333333
+     ],
+     [
+      9392,
+      6.721093,
+      7.985677,
+      8.333333
+     ],
+     [
+      9401,
+      5.730104,
+      7.967552,
+      8.333333
+     ],
+     [
+      9409,
+      6.386406,
+      7.964427,
+      8.333333
+     ],
+     [
+      9417,
+      6.29375,
+      7.918334,
+      8.333333
+     ],
+     [
+      9426,
+      6.342865,
+      7.919791,
+      8.333333
+     ],
+     [
+      9434,
+      5.749114,
+      7.914375,
+      8.333333
+     ],
+     [
+      9442,
+      6.706667,
+      7.843594,
+      8.333333
+     ],
+     [
+      9451,
+      5.775469,
+      7.986457,
+      8.333333
+     ],
+     [
+      9459,
+      6.522969,
+      7.938176,
+      8.333333
+     ],
+     [
+      9467,
+      5.869479,
+      7.967082,
+      8.333333
+     ],
+     [
+      9476,
+      6.885,
+      7.966719,
+      8.333333
+     ],
+     [
+      9484,
+      5.903333,
+      7.938594,
+      8.333333
+     ],
+     [
+      9493,
+      6.874167,
+      7.755104,
+      8.333333
+     ],
+     [
+      9501,
+      6.191198,
+      8.017708,
+      8.333333
+     ],
+     [
+      9509,
+      6.747917,
+      7.907916,
+      8.333333
+     ],
+     [
+      9518,
+      5.993854,
+      7.788594,
+      8.333333
+     ],
+     [
+      9526,
+      6.659271,
+      7.934895,
+      8.333333
+     ],
+     [
+      9534,
+      7.676458,
+      7.90604,
+      8.333333
+     ],
+     [
+      9543,
+      6.129843,
+      7.740625,
+      8.333333
+     ],
+     [
+      9551,
+      6.147344,
+      7.929062,
+      8.333333
+     ],
+     [
+      9559,
+      5.36099,
+      7.970312,
+      8.333333
+     ],
+     [
+      9568,
+      5.104063,
+      7.970624,
+      8.333333
+     ],
+     [
+      9576,
+      11.368281,
+      7.900104,
+      8.333333
+     ],
+     [
+      9590,
+      7.070625,
+      7.880469,
+      8.333333
+     ],
+     [
+      9693,
+      4.668906,
+      16.350676,
+      8.333333
+     ],
+     [
+      9701,
+      7.530521,
+      16.350989,
+      8.333333
+     ],
+     [
+      9710,
+      8.313646,
+      16.387917,
+      8.333333
+     ],
+     [
+      9718,
+      12.863177,
+      7.962604,
+      8.333333
+     ],
+     [
+      9727,
+      5.882135,
+      7.937083,
+      8.333333
+     ],
+     [
+      9735,
+      8.628333,
+      7.962187,
+      8.333333
+     ],
+     [
+      9743,
+      7.425104,
+      7.919271,
+      8.333333
+     ],
+     [
+      9752,
+      8.044687,
+      7.942395,
+      8.333333
+     ],
+     [
+      9760,
+      7.42651,
+      7.914739,
+      8.333333
+     ],
+     [
+      9768,
+      8.872396,
+      7.85151,
+      8.333333
+     ],
+     [
+      9777,
+      11.372657,
+      7.866927,
+      8.333333
+     ],
+     [
+      9785,
+      6.135052,
+      7.696822,
+      8.333333
+     ],
+     [
+      9793,
+      12.320261,
+      7.926198,
+      8.333333
+     ],
+     [
+      9802,
+      5.932761,
+      7.869584,
+      8.333333
+     ],
+     [
+      9810,
+      8.972812,
+      7.837552,
+      8.333333
+     ],
+     [
+      9819,
+      9.896563,
+      7.795832,
+      8.333333
+     ],
+     [
+      9827,
+      10.906094,
+      8.026405,
+      8.333333
+     ],
+     [
+      9843,
+      6.746042,
+      8.016093,
+      8.333333
+     ],
+     [
+      9852,
+      8.150573,
+      8.00302,
+      8.333333
+     ],
+     [
+      9860,
+      7.658593,
+      7.979532,
+      8.333333
+     ],
+     [
+      9869,
+      8.688854,
+      8.01177,
+      8.333333
+     ],
+     [
+      9877,
+      6.991979,
+      8.019583,
+      8.333333
+     ],
+     [
+      9885,
+      16.122708,
+      7.971823,
+      8.333333
+     ],
+     [
+      9900,
+      7.63474,
+      7.933125,
+      8.333333
+     ],
+     [
+      9909,
+      5.409271,
+      7.957083,
+      8.333333
+     ],
+     [
+      9911,
+      6.275105,
+      7.646927,
+      8.333333
+     ],
+     [
+      9919,
+      6.694323,
+      7.975885,
+      8.333333
+     ],
+     [
+      9927,
+      7.523594,
+      7.678802,
+      8.333333
+     ],
+     [
+      9935,
+      10.132136,
+      7.960313,
+      8.333333
+     ],
+     [
+      9952,
+      7.325156,
+      8.026927,
+      8.333333
+     ],
+     [
+      9960,
+      7.213125,
+      8.02229,
+      8.333333
+     ],
+     [
+      9972,
+      8.841615,
+      8.029062,
+      8.333333
+     ],
+     [
+      9981,
+      4.940313,
+      7.953906,
+      8.333333
+     ],
+     [
+      9985,
+      5.894948,
+      7.836667,
+      8.333333
+     ],
+     [
+      9994,
+      7.533021,
+      7.986561,
+      8.333333
+     ],
+     [
+      10002,
+      5.909375,
+      7.834947,
+      8.333333
+     ],
+     [
+      10011,
+      8.029323,
+      7.965312,
+      8.333333
+     ],
+     [
+      10019,
+      6.077708,
+      7.971771,
+      8.333333
+     ],
+     [
+      10027,
+      5.967916,
+      7.935104,
+      8.333333
+     ],
+     [
+      10036,
+      5.630781,
+      7.925989,
+      8.333333
+     ],
+     [
+      10044,
+      7.065573,
+      7.941666,
+      8.333333
+     ],
+     [
+      10052,
+      5.937656,
+      7.961718,
+      8.333333
+     ],
+     [
+      10061,
+      6.662604,
+      7.948281,
+      8.333333
+     ],
+     [
+      10069,
+      6.072552,
+      7.917864,
+      8.333333
+     ],
+     [
+      10077,
+      9.270104,
+      7.831249,
+      8.333333
+     ],
+     [
+      10086,
+      8.018438,
+      7.968854,
+      8.333333
+     ],
+     [
+      10094,
+      6.748854,
+      7.874323,
+      8.333333
+     ],
+     [
+      10103,
+      6.142657,
+      7.906406,
+      8.333333
+     ],
+     [
+      10111,
+      6.840989,
+      7.977603,
+      8.333333
+     ],
+     [
+      10119,
+      6.77073,
+      7.893958,
+      8.333333
+     ],
+     [
+      10127,
+      5.089479,
+      7.958125,
+      8.333333
+     ],
+     [
+      10136,
+      6.684322,
+      8.020624,
+      8.333333
+     ],
+     [
+      10144,
+      5.989636,
+      7.990156,
+      8.333333
+     ],
+     [
+      10152,
+      9.592135,
+      7.999322,
+      8.333333
+     ],
+     [
+      10161,
+      8.057344,
+      8.021354,
+      8.333333
+     ],
+     [
+      10169,
+      5.41224,
+      8.019999,
+      8.333333
+     ],
+     [
+      10178,
+      6.706406,
+      7.990468,
+      8.333333
+     ],
+     [
+      10186,
+      5.587656,
+      7.968593,
+      8.333333
+     ],
+     [
+      10194,
+      5.567864,
+      7.882448,
+      8.333333
+     ],
+     [
+      10203,
+      5.822969,
+      7.86401,
+      8.333333
+     ],
+     [
+      10211,
+      8.102917,
+      7.934063,
+      8.333333
+     ],
+     [
+      10220,
+      8.682343,
+      7.921875,
+      8.333333
+     ],
+     [
+      10228,
+      8.125365,
+      7.986823,
+      8.333333
+     ],
+     [
+      10236,
+      7.982604,
+      7.898124,
+      8.333333
+     ],
+     [
+      10244,
+      5.720989,
+      8.01552,
+      8.333333
+     ],
+     [
+      10253,
+      5.881927,
+      8.041302,
+      8.333333
+     ],
+     [
+      10261,
+      5.577239,
+      8.027447,
+      8.333333
+     ],
+     [
+      10269,
+      7.083906,
+      8.013749,
+      8.333333
+     ],
+     [
+      10278,
+      6.289583,
+      8.054635,
+      8.333333
+     ],
+     [
+      10286,
+      10.434896,
+      7.916926,
+      8.333333
+     ],
+     [
+      10301,
+      9.383541,
+      8.016562,
+      8.333333
+     ],
+     [
+      10311,
+      4.428333,
+      7.987552,
+      8.333333
+     ],
+     [
+      10321,
+      8.040573,
+      7.951249,
+      8.333333
+     ],
+     [
+      10328,
+      7.607864,
+      7.912187,
+      8.333333
+     ],
+     [
+      10336,
+      6.178541,
+      7.945833,
+      8.333333
+     ],
+     [
+      10345,
+      6.689479,
+      8.030885,
+      8.333333
+     ],
+     [
+      10353,
+      5.884687,
+      8.003907,
+      8.333333
+     ],
+     [
+      10361,
+      5.258281,
+      7.969895,
+      8.333333
+     ],
+     [
+      10370,
+      5.374323,
+      7.971302,
+      8.333333
+     ],
+     [
+      10378,
+      6.018021,
+      7.956718,
+      8.333333
+     ],
+     [
+      10387,
+      5.42073,
+      7.982499,
+      8.333333
+     ],
+     [
+      10395,
+      6.1925,
+      7.997968,
+      8.333333
+     ],
+     [
+      10403,
+      5.059948,
+      7.992916,
+      8.333333
+     ],
+     [
+      10412,
+      5.445469,
+      7.966563,
+      8.333333
+     ],
+     [
+      10420,
+      5.111041,
+      7.943177,
+      8.333333
+     ],
+     [
+      10428,
+      5.910052,
+      7.985052,
+      8.333333
+     ],
+     [
+      10437,
+      6.652813,
+      7.927499,
+      8.333333
+     ],
+     [
+      10445,
+      8.88224,
+      7.92901,
+      8.333333
+     ],
+     [
+      10459,
+      7.363438,
+      7.979113,
+      8.333333
+     ],
+     [
+      10463,
+      5.332552,
+      7.988957,
+      8.333333
+     ],
+     [
+      10470,
+      5.127604,
+      8.004114,
+      8.333333
+     ],
+     [
+      10479,
+      6.333073,
+      7.923333,
+      8.333333
+     ],
+     [
+      10487,
+      6.288854,
+      7.977864,
+      8.333333
+     ],
+     [
+      10495,
+      6.058698,
+      7.985104,
+      8.333333
+     ],
+     [
+      10504,
+      6.060938,
+      7.978906,
+      8.333333
+     ],
+     [
+      10512,
+      6.090833,
+      7.981978,
+      8.333333
+     ],
+     [
+      10520,
+      5.940573,
+      7.94151,
+      8.333333
+     ],
+     [
+      10529,
+      9.071875,
+      7.969634,
+      8.333333
+     ],
+     [
+      10537,
+      7.856041,
+      8.025521,
+      8.333333
+     ],
+     [
+      10545,
+      6.101771,
+      7.932604,
+      8.333333
+     ],
+     [
+      10554,
+      5.444479,
+      7.915363,
+      8.333333
+     ],
+     [
+      10562,
+      6.128333,
+      8.003073,
+      8.333333
+     ],
+     [
+      10571,
+      8.731198,
+      8.003541,
+      8.333333
+     ],
+     [
+      10579,
+      5.183854,
+      8.044322,
+      8.333333
+     ],
+     [
+      10588,
+      8.040886,
+      7.995937,
+      8.333333
+     ],
+     [
+      10595,
+      5.595,
+      7.927656,
+      8.333333
+     ],
+     [
+      10604,
+      5.859062,
+      7.90276,
+      8.333333
+     ],
+     [
+      10612,
+      6.70151,
+      7.934114,
+      8.333333
+     ],
+     [
+      10621,
+      6.501927,
+      7.921718,
+      8.333333
+     ],
+     [
+      10629,
+      6.413437,
+      7.873906,
+      8.333333
+     ],
+     [
+      10637,
+      6.628073,
+      7.996666,
+      8.333333
+     ],
+     [
+      10646,
+      6.720989,
+      7.9175,
+      8.333333
+     ],
+     [
+      10654,
+      6.770209,
+      7.843646,
+      8.333333
+     ],
+     [
+      10662,
+      7.004791,
+      7.853229,
+      8.333333
+     ],
+     [
+      10671,
+      6.03724,
+      7.876145,
+      8.333333
+     ],
+     [
+      10679,
+      5.595677,
+      7.878802,
+      8.333333
+     ],
+     [
+      10688,
+      6.781041,
+      7.964635,
+      8.333333
+     ],
+     [
+      10696,
+      6.955781,
+      7.93625,
+      8.333333
+     ],
+     [
+      10704,
+      8.004843,
+      7.976458,
+      8.333333
+     ],
+     [
+      10713,
+      6.886563,
+      7.935729,
+      8.333333
+     ],
+     [
+      10721,
+      6.112813,
+      7.842708,
+      8.333333
+     ],
+     [
+      10729,
+      7.985885,
+      7.983958,
+      8.333333
+     ],
+     [
+      10738,
+      5.436875,
+      7.97901,
+      8.333333
+     ],
+     [
+      10746,
+      5.948386,
+      7.847499,
+      8.333333
+     ],
+     [
+      10754,
+      6.473073,
+      7.872031,
+      8.333333
+     ],
+     [
+      10763,
+      7.716823,
+      7.947605,
+      8.333333
+     ],
+     [
+      10771,
+      6.589114,
+      8.017291,
+      8.333333
+     ],
+     [
+      10779,
+      6.165886,
+      7.917344,
+      8.333333
+     ],
+     [
+      10788,
+      6.998281,
+      7.904792,
+      8.333333
+     ],
+     [
+      10796,
+      7.966927,
+      7.961926,
+      8.333333
+     ],
+     [
+      10807,
+      7.322916,
+      7.914166,
+      8.333333
+     ],
+     [
+      10813,
+      11.185833,
+      7.967656,
+      8.333333
+     ],
+     [
+      10821,
+      5.4625,
+      8.016509,
+      8.333333
+     ],
+     [
+      10830,
+      5.312761,
+      7.997396,
+      8.333333
+     ],
+     [
+      10838,
+      6.092969,
+      7.974687,
+      8.333333
+     ],
+     [
+      10846,
+      5.83151,
+      7.881042,
+      8.333333
+     ],
+     [
+      10855,
+      5.303438,
+      7.861561,
+      8.333333
+     ],
+     [
+      10863,
+      7.816198,
+      7.897291,
+      8.333333
+     ],
+     [
+      10871,
+      6.344636,
+      7.942916,
+      8.333333
+     ],
+     [
+      10880,
+      6.607344,
+      7.943489,
+      8.333333
+     ],
+     [
+      10888,
+      6.484427,
+      7.946042,
+      8.333333
+     ],
+     [
+      10896,
+      6.60901,
+      7.945155,
+      8.333333
+     ],
+     [
+      10905,
+      6.460469,
+      7.868594,
+      8.333333
+     ],
+     [
+      10913,
+      6.287761,
+      7.928333,
+      8.333333
+     ],
+     [
+      10921,
+      6.470104,
+      7.88375,
+      8.333333
+     ],
+     [
+      10930,
+      6.852292,
+      7.919947,
+      8.333333
+     ],
+     [
+      10938,
+      6.522604,
+      7.868958,
+      8.333333
+     ],
+     [
+      10947,
+      6.749584,
+      7.808854,
+      8.333333
+     ],
+     [
+      10955,
+      6.844063,
+      7.887187,
+      8.333333
+     ],
+     [
+      10963,
+      7.041562,
+      7.840885,
+      8.333333
+     ],
+     [
+      10972,
+      7.11151,
+      7.963125,
+      8.333333
+     ],
+     [
+      10980,
+      6.661719,
+      7.993646,
+      8.333333
+     ],
+     [
+      10988,
+      6.438854,
+      7.986718,
+      8.333333
+     ],
+     [
+      10997,
+      6.741822,
+      7.904167,
+      8.333333
+     ],
+     [
+      11005,
+      6.616875,
+      7.956771,
+      8.333333
+     ],
+     [
+      11013,
+      6.779323,
+      7.916667,
+      8.333333
+     ],
+     [
+      11022,
+      6.447083,
+      7.885573,
+      8.333333
+     ],
+     [
+      11030,
+      6.39401,
+      7.958072,
+      8.333333
+     ],
+     [
+      11039,
+      6.554844,
+      7.792343,
+      8.333333
+     ],
+     [
+      11047,
+      6.257448,
+      7.876146,
+      8.333333
+     ],
+     [
+      11055,
+      6.368125,
+      7.925208,
+      8.333333
+     ],
+     [
+      11064,
+      6.866406,
+      8.008698,
+      8.333333
+     ],
+     [
+      11072,
+      6.475364,
+      7.960052,
+      8.333333
+     ],
+     [
+      11080,
+      5.594583,
+      7.901771,
+      8.333333
+     ],
+     [
+      11088,
+      5.74401,
+      7.938021,
+      8.333333
+     ],
+     [
+      11097,
+      5.945625,
+      7.883906,
+      8.333333
+     ],
+     [
+      11105,
+      5.989011,
+      7.970781,
+      8.333333
+     ],
+     [
+      11114,
+      5.930781,
+      7.936718,
+      8.333333
+     ],
+     [
+      11122,
+      5.921407,
+      7.942134,
+      8.333333
+     ],
+     [
+      11130,
+      6.020104,
+      7.91927,
+      8.333333
+     ],
+     [
+      11139,
+      6.335156,
+      7.943385,
+      8.333333
+     ],
+     [
+      11147,
+      6.025833,
+      7.978542,
+      8.333333
+     ],
+     [
+      11155,
+      5.912187,
+      7.945207,
+      8.333333
+     ],
+     [
+      11164,
+      6.040834,
+      7.96802,
+      8.333333
+     ],
+     [
+      11172,
+      6.488125,
+      8.014218,
+      8.333333
+     ],
+     [
+      11180,
+      6.020364,
+      8.033228,
+      8.333333
+     ],
+     [
+      11189,
+      6.046563,
+      7.707084,
+      8.333333
+     ],
+     [
+      11197,
+      6.526823,
+      7.89151,
+      8.333333
+     ],
+     [
+      11206,
+      6.819896,
+      7.852916,
+      8.333333
+     ],
+     [
+      11214,
+      7.400625,
+      7.998332,
+      8.333333
+     ],
+     [
+      11223,
+      6.813854,
+      7.932083,
+      8.333333
+     ],
+     [
+      11231,
+      6.871458,
+      7.980261,
+      8.333333
+     ],
+     [
+      11239,
+      5.670208,
+      7.919583,
+      8.333333
+     ],
+     [
+      11247,
+      6.612709,
+      7.974478,
+      8.333333
+     ],
+     [
+      11256,
+      8.6125,
+      7.955885,
+      8.333333
+     ],
+     [
+      11264,
+      7.054114,
+      7.98901,
+      8.333333
+     ],
+     [
+      11272,
+      6.311197,
+      8.031197,
+      8.333333
+     ],
+     [
+      11281,
+      6.696563,
+      7.965208,
+      8.333333
+     ],
+     [
+      11289,
+      6.132187,
+      7.962968,
+      8.333333
+     ],
+     [
+      11297,
+      6.478854,
+      8.012239,
+      8.333333
+     ],
+     [
+      11306,
+      5.106979,
+      7.931822,
+      8.333333
+     ],
+     [
+      11314,
+      6.151146,
+      7.952083,
+      8.333333
+     ],
+     [
+      11322,
+      6.113958,
+      7.964583,
+      8.333333
+     ],
+     [
+      11331,
+      5.818385,
+      7.965729,
+      8.333333
+     ],
+     [
+      11339,
+      5.941563,
+      8.0125,
+      8.333333
+     ],
+     [
+      11348,
+      5.422969,
+      7.896978,
+      8.333333
+     ],
+     [
+      11356,
+      6.140677,
+      7.913229,
+      8.333333
+     ],
+     [
+      11364,
+      5.247291,
+      7.870781,
+      8.333333
+     ],
+     [
+      11373,
+      5.881562,
+      7.956978,
+      8.333333
+     ],
+     [
+      11381,
+      5.316511,
+      7.901249,
+      8.333333
+     ],
+     [
+      11389,
+      6.015312,
+      7.954687,
+      8.333333
+     ],
+     [
+      11398,
+      5.380573,
+      7.93901,
+      8.333333
+     ],
+     [
+      11406,
+      7.034584,
+      7.883281,
+      8.333333
+     ],
+     [
+      11415,
+      5.567709,
+      7.943385,
+      8.333333
+     ],
+     [
+      11423,
+      4.660833,
+      7.918124,
+      8.333333
+     ],
+     [
+      11431,
+      6.647969,
+      7.855,
+      8.333333
+     ],
+     [
+      11440,
+      6.207708,
+      7.952031,
+      8.333333
+     ],
+     [
+      11448,
+      6.073855,
+      7.938124,
+      8.333333
+     ],
+     [
+      11456,
+      5.155468,
+      7.987865,
+      8.333333
+     ],
+     [
+      11465,
+      4.981146,
+      7.881354,
+      8.333333
+     ],
+     [
+      11473,
+      20.798802,
+      7.988021,
+      8.333333
+     ],
+     [
+      11665,
+      18.197864,
+      8.034687,
+      8.333333
+     ],
+     [
+      11677,
+      9.858698,
+      7.983854,
+      8.333333
+     ],
+     [
+      11740,
+      8.187813,
+      7.82177,
+      8.333333
+     ],
+     [
+      12551,
+      15.156562,
+      7.817865,
+      8.333333
+     ],
+     [
+      13562,
+      20.342292,
+      32.968489,
+      33.333332
+     ],
+     [
+      14599,
+      16.832656,
+      32.917343,
+      33.333332
+     ],
+     [
+      14667,
+      11.04625,
+      32.923854,
+      33.333332
+     ],
+     [
+      14699,
+      10.066667,
+      32.72875,
+      33.333332
+     ],
+     [
+      14733,
+      12.80073,
+      32.759323,
+      33.333332
+     ],
+     [
+      14766,
+      5.256302,
+      32.810781,
+      33.333332
+     ],
+     [
+      14801,
+      5.993177,
+      32.963646,
+      33.333332
+     ],
+     [
+      14834,
+      5.869427,
+      32.930156,
+      33.333332
+     ],
+     [
+      14868,
+      5.664063,
+      32.878646,
+      33.333332
+     ],
+     [
+      14900,
+      7.051094,
+      32.706562,
+      33.333332
+     ],
+     [
+      14934,
+      5.613958,
+      32.886875,
+      33.333332
+     ],
+     [
+      14967,
+      6.384323,
+      32.928021,
+      33.333332
+     ],
+     [
+      15001,
+      6.012344,
+      33.033697,
+      33.333332
+     ],
+     [
+      15033,
+      4.88,
+      32.806145,
+      33.333332
+     ],
+     [
+      15067,
+      5.252552,
+      32.868385,
+      33.333332
+     ],
+     [
+      15101,
+      5.457344,
+      32.962759,
+      33.333332
+     ],
+     [
+      15134,
+      5.071458,
+      32.538801,
+      33.333332
+     ],
+     [
+      15168,
+      4.970678,
+      32.646041,
+      33.333332
+     ],
+     [
+      15602,
+      16.645573,
+      32.98724,
+      33.333332
+     ]
+    ],
+    "sampling": "all",
+    "bucket_ms": null,
+    "frames_seen": 905
+   }
+  }
+ },
+ "measurement_overhead": {
+  "tracing_processes_cpu_time_ms": 1360,
+  "tracing_processes_cpu_share_pct": 1.08,
+  "tracing_processes_peak_rss_kb": 24564,
+  "adb_commands_during_session": 0,
+  "trace_buffer_overrun": false
+ },
+ "references": [
+  {
+   "metric": "hwui",
+   "name": "60fps frame budget",
+   "value": 16.67,
+   "unit": "ms",
+   "source": "Android Vitals — slow rendering",
+   "url": "https://developer.android.com/topic/performance/vitals/render"
+  },
+  {
+   "metric": "hwui",
+   "name": "frozen frame threshold",
+   "value": 700,
+   "unit": "ms",
+   "source": "Android Vitals — frozen frames",
+   "url": "https://developer.android.com/topic/performance/vitals/frozen"
+  },
+  {
+   "metric": "startup",
+   "name": "excessive cold startup time",
+   "value": 5000,
+   "unit": "ms",
+   "source": "Android Vitals — app startup time",
+   "url": "https://developer.android.com/topic/performance/vitals/launch-time"
+  },
+  {
+   "metric": "startup",
+   "name": "excessive warm startup time",
+   "value": 2000,
+   "unit": "ms",
+   "source": "Android Vitals — app startup time",
+   "url": "https://developer.android.com/topic/performance/vitals/launch-time"
+  },
+  {
+   "metric": "startup",
+   "name": "excessive hot startup time",
+   "value": 1500,
+   "unit": "ms",
+   "source": "Android Vitals — app startup time",
+   "url": "https://developer.android.com/topic/performance/vitals/launch-time"
+  },
+  {
+   "metric": "network",
+   "name": "excessive background mobile network usage",
+   "value": 50,
+   "unit": "MB/day",
+   "source": "Android Vitals — Excessive Mobile Network Usage in Background",
+   "url": "https://developer.android.com/topic/performance/vitals/bg-network-usage"
+  }
+ ],
+ "warnings": [
+  {
+   "code": "compile_state_changed",
+   "message": "base.apk [primary-abi] 줄 reason cmdline → bg-dexopt"
+  }
+ ],
+ "artifacts": {
+  "trace": "trace.perfetto-trace",
+  "raw": [
+   "raw/battery_before.txt",
+   "raw/thermalservice_before.txt",
+   "raw/settings_before.txt",
+   "raw/meminfo_before.txt",
+   "raw/iproute_before.txt",
+   "raw/gfxinfo_before.txt",
+   "raw/netstats_before.txt",
+   "raw/packages_before.txt",
+   "raw/battery_after.txt",
+   "raw/thermalservice_after.txt",
+   "raw/settings_after.txt",
+   "raw/meminfo_after.txt",
+   "raw/iproute_after.txt",
+   "raw/gfxinfo_after.txt",
+   "raw/netstats_after.txt",
+   "raw/packages_after.txt"
+  ]
+ }
+}

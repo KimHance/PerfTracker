@@ -1,0 +1,242 @@
+{
+ "summary-1440": {
+  "chars": 4061,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": 31.68,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "hits": []
+ },
+ "missing-1440": {
+  "chars": 3938,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": 31.68,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "hits": []
+ },
+ "compile-1440": {
+  "chars": 4774,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": 31.68,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "hits": []
+ },
+ "end-null-1440": {
+  "chars": 3682,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": 31.68,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "hits": []
+ },
+ "legacy-1440": {
+  "chars": 2585,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": 31.68,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "hits": []
+ },
+ "device-1440": {
+  "chars": 806,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": null,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "hits": []
+ },
+ "diag-1440": {
+  "chars": 2160,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": null,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "hits": []
+ },
+ "diag-noapp-1440": {
+  "chars": 702,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": null,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "hits": []
+ },
+ "summary-390": {
+  "chars": 4061,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": 26,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "hits": []
+ },
+ "missing-390": {
+  "chars": 3938,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": 26,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "hits": []
+ },
+ "compile-390": {
+  "chars": 4774,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": 26,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "hits": []
+ },
+ "end-null-390": {
+  "chars": 3682,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": 26,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "hits": []
+ },
+ "legacy-390": {
+  "chars": 2585,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": 26,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "hits": []
+ },
+ "device-390": {
+  "chars": 806,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": null,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "hits": []
+ },
+ "diag-390": {
+  "chars": 2160,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": null,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "hits": []
+ },
+ "diag-noapp-390": {
+  "chars": 702,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": null,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "hits": []
+ }
+}
