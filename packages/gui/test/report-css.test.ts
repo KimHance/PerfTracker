@@ -110,8 +110,11 @@ const TEXT_COLORS: TextColor[] = REPORT.flatMap((rule) => {
   return out
 })
 
-/** 본문 층의 그릇 — 표 · slice 표 · 전/후 표 · 값 없음 · 막대 줄 · 앱 시작 아래 줄 · 머리 메타 값. */
-const BODY = ['.rp-table', '.rp-slice', '.rp-delta', '.rp-none', '.rp-bar-row', '.rp-stat-title', '.rp-stat-sub', '.rp-meta']
+/** 본문 층의 그릇 — 표 · slice 표 · 전/후 표 · 값 없음 · 막대 줄 · 앱 시작 아래 줄 · 머리 메타 값 · 라벨 단어 줄 · 타일 단어 줄. */
+const BODY = [
+  '.rp-table', '.rp-slice', '.rp-delta', '.rp-none', '.rp-bar-row', '.rp-stat-title', '.rp-stat-sub', '.rp-meta',
+  '.rp-lbl', '.rp-tile-word',
+]
 const inBody = (selector: string): boolean =>
   BODY.some((c) => new RegExp(`${c.replace('.', '\\.')}(?![\\w-])`).test(selector))
 
@@ -235,8 +238,33 @@ describe('보고서 글자 바닥 — report.css', () => {
     }
   })
 
-  // 타일(`.rp-tile-value`)은 rr-layout 이 마크업과 함께 넣는다 — 그 단위가 이 줄을 시험으로 바꾼다.
-  it.todo('RR-3 요약 타일 값 > 섹션 제목 (타일은 rr-layout)')
+  it('RR-3 요약 타일 값 > 섹션 제목', () => {
+    // 들어가는 자리(RR-4)의 숫자가 화면에서 가장 크다 — clamp 최솟값이 섹션 제목보다 크다 (26 > 18).
+    expect(sizeOf('.rp-tile-value')).toBeGreaterThan(sizeOf('.rp-section-head'))
+    // 값이 없는 타일(`값 없음` · 코드)은 섹션 제목보다 크지 않다 — 큰 `값 없음` 은 고장으로 읽힌다 (디자인 결정 2).
+    expect(sizeOf('.rp-tile-none')).toBeLessThanOrEqual(sizeOf('.rp-section-head'))
+    // 타일 단어 줄 · 라벨 단어 줄은 본문 층, 경로 줄은 보조 층 (12).
+    expect(sizeOf('.rp-tile-word')).toBe(sizeOf('.rp-table'))
+    expect(sizeOf('.rp-lbl')).toBe(sizeOf('.rp-table'))
+    expect(sizeOf('.rp-lbl-path')).toBe(12)
+    expect(sizeOf('.rp-tile-path')).toBe(12)
+  })
+
+  it('RR-7 줄바꿈은 break-word — anywhere · break-all 없음', () => {
+    // 줄바꿈 자리는 구분자 뒤 `<wbr>` 이고, 토막이 칸보다 넓을 때만 그 안에서 끊는다 (결정 5). `anywhere` 는
+    // 토막 가운데서 먼저 끊어 `HomeA / ctivity` 를 만들었고, `break-all` 은 모든 글자 사이를 끊는다.
+    const wraps = REPORT.filter((r) => r.decls.has('overflow-wrap') || r.decls.has('word-break'))
+    expect(wraps.length).toBeGreaterThanOrEqual(6)
+    const bad = wraps
+      .filter((r) => r.decls.get('overflow-wrap') === 'anywhere' || r.decls.get('word-break') === 'break-all')
+      .map(sel)
+    expect(bad).toEqual([])
+    for (const s of ['.rp-table th', '.rp-table td', '.rp-wrap', '.rp-lbl-path', '.rp-slice .rp-slice-name', '.rp-tile-path']) {
+      expect(decl(s, 'overflow-wrap'), s).toBe('break-word')
+    }
+    // ellipsis · 자름 0.
+    expect(REPORT.filter((r) => r.decls.get('text-overflow') === 'ellipsis').map(sel)).toEqual([])
+  })
 
   it('RR-2 HANDOFF 글자 바닥 표 = report.css', () => {
     // HANDOFF §5 「글자 바닥」 표가 크기 · 글자 색을 숫자로 말한다 — 코드와 어긋나면 문서가 조용히 낡는다.

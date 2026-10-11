@@ -1,4 +1,24 @@
+import { Fragment } from 'react'
 import { badgeOf, type MetricState } from './blocks.js'
+import { breakAfterSeparators } from './format.js'
+
+/**
+ * 긴 기계 이름 — 구분자 뒤마다 `<wbr>` (RR-7). 글자는 그대로라 복사하면 원문이다 (`&ZeroWidthSpace;` 처럼
+ * 보이지 않는 글자를 섞지 않는다). 토막을 자르는 것은 `format.ts` 의 `breakAfterSeparators`.
+ */
+export function Wbr({ text }: { text: string }) {
+  const parts = breakAfterSeparators(text)
+  return (
+    <>
+      {parts.map((p, i) => (
+        <Fragment key={i}>
+          {p}
+          {i < parts.length - 1 && <wbr />}
+        </Fragment>
+      ))}
+    </>
+  )
+}
 
 /**
  * 블록 하나의 껍데기. 제목 · 단위 · 상태 배지 · 판독줄이 전부 여기 있다.
@@ -15,7 +35,7 @@ export function BlockCard({
   showHead,
   readout,
   readoutKind,
-  footnote,
+  footnotes,
   children,
 }: {
   title: string
@@ -27,7 +47,8 @@ export function BlockCard({
   showHead: boolean
   readout?: string
   readoutKind?: 'idle' | 'value' | 'nosample'
-  footnote?: string
+  /** 각주 단어 줄들 — 빈 문자열은 그리지 않는다. */
+  footnotes?: string[]
   children: React.ReactNode
 }) {
   // partial 은 배지를 달지 않는다 — 지표 넷이 동시에 partial 인 세션이 흔해서 노이즈가 된다.
@@ -36,7 +57,8 @@ export function BlockCard({
 
   return (
     <section
-      className={`rp-card${tone === 'alt' ? ' rp-card-alt' : ''}`}
+      // span 이 6칸 그리드(≤1180)보다 넓으면 한 줄을 다 쓴다 — 안 그러면 암묵 칸이 생겨 페이지가 옆으로 넘친다.
+      className={`rp-card${tone === 'alt' ? ' rp-card-alt' : ''}${span > 6 ? ' rp-span-wide' : ''}`}
       style={{ gridColumn: `span ${span}` }}
     >
       {showHead && (
@@ -56,7 +78,11 @@ export function BlockCard({
         <div className={`rp-readout rp-readout-${readoutKind ?? 'idle'}`}>{readout}</div>
       )}
       {children}
-      {footnote !== undefined && footnote !== '' && <p className="rp-footnote">{footnote}</p>}
+      {(footnotes ?? []).filter((f) => f !== '').map((f, i) => (
+        <p className="rp-footnote" key={i}>
+          {f}
+        </p>
+      ))}
     </section>
   )
 }
@@ -68,7 +94,9 @@ export function BlockCard({
 export function NoneBody({ label, code }: { label: string; code: string | null }) {
   return (
     <div className="rp-none">
-      <span>{label}</span>
+      <span>
+        <Wbr text={label} />
+      </span>
       {code !== null && <code className="rp-none-code">{code}</code>}
     </div>
   )

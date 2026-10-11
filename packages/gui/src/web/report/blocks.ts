@@ -1,5 +1,6 @@
 import type { FrameTimelineDto } from '../../contract/api.js'
 import type { Mark } from './axis.js'
+import { fillReportCopy } from './diagnose-copy.js'
 import type { Fmt } from './format.js'
 import {
   BADGED_STATUS,
@@ -23,8 +24,10 @@ import type {
   SeriesBlock,
   StatBlock,
   TabId,
+  TileSpec,
 } from './manifest.js'
-import { SECTIONS } from './manifest.js'
+import { SECTIONS, TILES } from './manifest.js'
+import { READABILITY_COPY as RC } from './readability-copy.js'
 import { MISSING, type Read, readPath } from './read.js'
 
 /**
@@ -56,11 +59,24 @@ function isEmptyArray(raw: Read): boolean {
   return !Array.isArray(raw) || raw.length === 0
 }
 
+/**
+ * **차트 카드의 `[]` — 재 봤더니 0건** (report-readability B22). 목록 카드의 `크래시 없음` 처럼 `<무엇> 없음` 을
+ * 그린다 — `값 없음`(null 글자)으로 그리면 못 잰 것처럼 읽히고 레일 배지가 센다. 배열이 아닌 것 · `null` ·
+ * 필드 없음은 그대로 `none` 이 가른다 (규칙 3 — 세 상태).
+ */
+function emptyOr(raw: Read, path: string | undefined, word: string): NoneVm {
+  return Array.isArray(raw) && raw.length === 0 ? { none: true, label: word } : none(raw, path)
+}
+
 /* ══════════════════ 시계열 ══════════════════ */
 
 export const SW = 300
 export const SH = 118
-export const SPAD = { l: 36, r: 8, t: 10, b: 26 }
+/**
+ * 왼쪽 여백 46 — 12 단위 눈금 `3,000` 이 여백 안에 든다 (36 이면 카드 안쪽 여백으로 흘렀다 · report-readability
+ * `## 크기` · rr-type 이 `overflow: visible` 로 먼저 막음).
+ */
+export const SPAD = { l: 46, r: 8, t: 10, b: 26 }
 
 export interface SeriesVm {
   none?: false
@@ -126,7 +142,7 @@ export function buildSeries(
   hoverT: number | null,
 ): SeriesVm | NoneVm {
   const raw = readPath(res, b.path)
-  if (raw === MISSING || raw === null || isEmptyArray(raw)) return none(raw, b.path)
+  if (raw === MISSING || raw === null || isEmptyArray(raw)) return emptyOr(raw, b.path, RC.emptySeries)
 
   const tf = b.transform ?? ((v: number) => v)
   const pts = new Map<number, number>()
@@ -286,7 +302,7 @@ export function buildDistribution(
   width: number,
 ): DistributionVm | NoneVm {
   const raw = readPath(res, b.path)
-  if (raw === MISSING || raw === null || isEmptyArray(raw)) return none(raw, b.path)
+  if (raw === MISSING || raw === null || isEmptyArray(raw)) return emptyOr(raw, b.path, RC.emptyFrames)
 
   const buckets = raw as Bucket[]
   const total = buckets.reduce((n, x) => n + x.count, 0)
@@ -384,9 +400,9 @@ export function buildDistribution(
     pLines,
     percentiles,
     share: buildShare(b.share, res),
-    // 각주는 **실제로 일어난 일**만 적는다 — 읽는 법을 설명하는 문장은 카드에 두지 않는다.
-    // 지금은 접지 않으므로(`breakAfterEmptyBuckets: Infinity`) 늘 빈 문자열이다.
-    footnote: collapsed > 0 ? `빈 버킷 ${collapsed}칸 접음` : '',
+    // 각주는 **실제로 일어난 일**만 단어로 적는다 — 읽는 법을 설명하는 문장은 카드에 두지 않는다 (RR-5 ·
+    // 결정 3). 프레임 수를 못 읽었으면 그 토막을 뺀다 — 0 이나 버킷 합으로 지어내지 않는다.
+    footnote: distFootnote(readPath(res, b.framesPath ?? ''), buckets.length, collapsed),
     tipOf: (idx) => {
       const bk = buckets[idx]
       if (bk === undefined) return null
@@ -397,6 +413,16 @@ export function buildDistribution(
       }
     },
   }
+}
+
+/** 분포 각주 — `{frames} 프레임 · 버킷 {buckets}칸` (+ 접었으면 `빈 버킷 N칸 접음`). */
+function distFootnote(frames: Read, buckets: number, collapsed: number): string {
+  const head =
+    typeof frames === 'number'
+      ? fillReportCopy(RC.distFootnote, { frames: nf(frames, 0), buckets: nf(buckets, 0) })
+      : // 프레임 수 토막만 뺀다 — 같은 모음의 뒤 토막 그대로.
+        fillReportCopy(RC.distFootnote.slice(RC.distFootnote.indexOf('버킷')), { buckets: nf(buckets, 0) })
+  return collapsed > 0 ? `${head} · 빈 버킷 ${collapsed}칸 접음` : head
 }
 
 /* ══════════════════ 프레임 시간축 ══════════════════ */
@@ -473,6 +499,8 @@ export interface FrameTimelineVm {
   markLines: { x: number; hot: boolean; label: string }[]
   /** 표본을 뽑았다는 사실. 전부 실었으면 `null` 이고 그때는 각주가 없다. */
   note: string | null
+  /** 막대 · 두 칸 · 가로가 무엇인지 — 단어 각주 (RR-5). 고정 문구라 수를 싣지 않는다. */
+  footnote: string
   tipOf: (idx: number) => { head: string; value: string; lines: string[] } | null
 }
 
@@ -498,10 +526,11 @@ export function buildFrameTimeline(
   if (raw === MISSING || raw === null || typeof raw !== 'object') return none(raw, b.path)
 
   const d = raw as Partial<FrameTimelineDto>
-  const rows = Array.isArray(d.samples) ? d.samples : []
-  // 표본이 비면 그릴 막대가 없다. **`수집 안 함` 과는 다른 문장이다** — 지표는 돌았고
-  // 프레임이 안 잡혔거나 다 걸러진 것이다.
-  if (rows.length === 0) return none(null, b.path)
+  // 표본이 `[]` 면 재 봤더니 0장이다 — `프레임 없음` (B22 · 배지에 안 셈). 표본 칸 자체가 배열이 아니면
+  // 못 읽은 것이라 `값 없음` 그대로.
+  if (!Array.isArray(d.samples)) return none(null, b.path)
+  const rows = d.samples
+  if (rows.length === 0) return { none: true, label: RC.emptyFrames }
 
   const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 
@@ -626,6 +655,7 @@ export function buildFrameTimeline(
         ? null
         : `화면에 나간 프레임 ${seen}${nf(bars.length, 0)}장 표본 ` +
           `(${bucket}구간마다 가장 오래 걸린 한 장)`,
+    footnote: RC.timelineFootnote,
     tipOf: (idx) => {
       const bar = bars[idx]
       if (bar === undefined) return null
@@ -653,7 +683,7 @@ export interface BarsVm {
 
 export function buildBars(b: BarsBlock, res: unknown): BarsVm | NoneVm {
   const raw = readPath(res, b.path)
-  if (raw === MISSING || raw === null || isEmptyArray(raw)) return none(raw, b.path)
+  if (raw === MISSING || raw === null || isEmptyArray(raw)) return emptyOr(raw, b.path, RC.emptyBars)
 
   const rows = raw as Record<string, unknown>[]
   const vals = rows.map((r) => r[b.valueField]).filter((v): v is number => typeof v === 'number')
@@ -758,10 +788,14 @@ export function buildDelta(b: DeltaBlock, res: unknown): DeltaVm | NoneVm {
 }
 
 export interface PairsRowVm {
+  /** 라벨 — 경로 라벨이면 경로 원문 그대로(⌘F 가 닿는다). */
   label: string
+  /** 경로 라벨의 단어 줄 (RR-6). 있으면 라벨이 두 줄 — 단어 위 · 경로 아래. 기기 원문 라벨에는 없다. */
+  word?: string
   value: string
   /** `share` 는 값과 **따로** 낸다. 한 문자열로 붙이면 개수와 비율이 눈에서 섞인다. */
   share: string
+  /** 기계 이름 값 — 구분자 뒤에서 줄바꿈한다 (`<wbr>` · RR-7). 숫자 칸은 아니다 (`1,234` 가 쉼표에서 끊기지 않게). */
   wrap: boolean
   /** 기계값(경로) — 등폭으로 쓴다. */
   mono?: true
@@ -831,8 +865,9 @@ export function buildPairs(b: PairsBlock, res: unknown): PairsVm | NoneVm {
         label: k.l,
         value: fmtValue(v, k.f),
         share,
-        wrap: k.f === 'wrap' || k.f === 'path',
+        wrap: WRAP_FMTS.includes(k.f),
       }
+      if (k.w !== undefined) row.word = k.w
       // 등폭은 기계값에만 — `값 없음` 은 문장이라 본문 글꼴 그대로다.
       if (k.f === 'path' && v !== null && v !== MISSING) row.mono = true
       // **값이 없을 때만** 이유를 단다 — stat 카드와 같은 관례다. 값이 있는데 사유를 달면 멀쩡한
@@ -847,6 +882,9 @@ export function buildPairs(b: PairsBlock, res: unknown): PairsVm | NoneVm {
     }),
   }
 }
+
+/** 기계 이름을 내는 포맷 — 값이 구분자 뒤에서 줄바꿈한다 (RR-7). 숫자 포맷은 넣지 않는다. */
+const WRAP_FMTS: Fmt[] = ['wrap', 'path', 'list', 'dots']
 
 /**
  * **블록 `path` 를 읽는다.** 빈 문자열은 문서 루트다 — 서로 다른 갈래의 값을 한 카드에 모으는
@@ -1053,8 +1091,9 @@ function placeholderOf(b: Block, vm: unknown): string | null {
 /**
  * **레일 배지가 세는 블록인가** (RR-8) — `수집 안 함` · `값 없음` 을 그린 블록.
  *
- * 재 봤더니 없음(`[]`)으로 `없음` 을 그린 블록(`크래시 없음` · `ANR 없음` · `경고 없음`)은 세지 않는다 —
- * 그것은 잰 0 이다(규칙 3). 그 밖의 글자(`바꾸지 않음` 같은 사실 문장)도 같은 이유로 세지 않는다.
+ * 재 봤더니 없음(`[]`)으로 `없음` 을 그린 블록(`크래시 없음` · `ANR 없음` · `경고 없음` · 차트의 `표본 없음` ·
+ * `프레임 없음` · `항목 없음`)은 세지 않는다 — 그것은 잰 0 이다(규칙 3 · B22). 그 밖의 글자(`바꾸지 않음` 같은
+ * 사실 문장)도 같은 이유로 세지 않는다.
  * 요약 타일은 블록이 아니라 이 셈에 들어오지 않는다 — 같은 값의 카드가 이미 센다 (RR 결정 12).
  */
 export function isUncollected(b: Block, vm: unknown): boolean {
@@ -1067,4 +1106,76 @@ export function tabBadgeCount(items: readonly { block: Block; vm: unknown }[], t
   return items.filter(
     (x) => SECTIONS.find((s) => s.id === x.block.section)?.tab === tab && isUncollected(x.block, x.vm),
   ).length
+}
+
+/* ══════════════════ 요약 타일 ══════════════════ */
+
+/**
+ * 타일 하나 (RR-4). **값이 바뀌어도 모양이 같다** — 색 · 굵기 · 아이콘을 정하는 칸이 없고, 클래스는 값이
+ * 있느냐 없느냐로만 갈린다(디자인 결정 2). 순위 · 등급 · 기준 비교 0.
+ */
+export interface TileVm {
+  metric: TileSpec['metric']
+  /** 단어 줄 (`앱 시작` …). */
+  word: string
+  /** 경로 줄 — 필드 경로 원문 (⌘F 가 닿는다). */
+  path: string
+  /** 카드와 같은 배지 — unsupported · skipped · failed 만 (partial 은 배지 없이 `title`). */
+  badge: string | null
+  /** 지표 `reason` 문장 — 툴팁. */
+  title: string | null
+  /**
+   * 값 — **아래 카드의 같은 값과 같은 문자열** (`1,234 ms` · `12.3 MB` · `NONE (0)`). 값이 없으면 `null` 이고
+   * 그때는 `none` 이 선다.
+   */
+  value: string | null
+  /** 그 문자열을 큰 숫자 · 작은 단위로 나눈 것 — 렌더만 쓴다. 이어 붙이면 `value` (+ 덧단위). */
+  big: string
+  small: string
+  /** 값 자리에 서는 말 — `값 없음` · `수집 안 함` · 배지 상태면 `reason_code`. 값이 있으면 `null`. */
+  none: string | null
+  /** `값 없음` 아래 코드 줄. */
+  code: string | null
+}
+
+/**
+ * 포맷된 값 끝의 영문 단위를 떼어 낸다 — `1,234 ms` → [`1,234`, `ms`]. 숫자 뒤 단위가 아니면 그대로
+ * (`NONE (0)` · `collected`). 글자는 하나도 바꾸지 않는다: 큰 글자 · 작은 글자로 나눌 뿐이다.
+ */
+export function splitUnit(s: string): [string, string] {
+  const m = /^(.*\d) ([A-Za-z]+)$/.exec(s)
+  return m === null ? [s, ''] : [m[1]!, m[2]!]
+}
+
+/**
+ * 타일 경로 읽기. `readPath` 는 중간이 `null` 이면 그 아래를 `MISSING` 으로 읽는데, 타일은 **아래 카드와 같은
+ * 상태**를 말해야 한다 — `cpu.data.app` 이 `null` 이면 `앱 CPU 시간` 카드가 `값 없음` 을 그리므로 타일도
+ * `값 없음` 이다 (`수집 안 함` 이면 필드가 없는 옛 세션처럼 읽힌다). 위가 `null` 이면 `null`, 위가 없으면 `MISSING`.
+ */
+function readTilePath(res: unknown, path: string): Read {
+  const v = readPath(res, path)
+  if (v !== MISSING) return v
+  const segs = path.split('.')
+  for (let i = 1; i < segs.length; i++) if (readPath(res, segs.slice(0, i).join('.')) === null) return null
+  return MISSING
+}
+
+export function buildTile(t: TileSpec, res: unknown): TileVm {
+  const st = metricState(res, t.metric)
+  const badge = badgeOf(st)
+  const base = { metric: t.metric, word: t.word, path: t.path, badge, title: st.reason }
+  const empty = { value: null, big: '', small: '' }
+  // 카드와 같은 관례 (디자인 결정 3) — 배지가 서면 값 자리에 그 이유 코드.
+  if (badge !== null) return { ...base, ...empty, none: st.reasonCode ?? NONE_NULL, code: null }
+  const v = readTilePath(res, t.path)
+  if (v === MISSING) return { ...base, ...empty, none: NONE_MISSING, code: null }
+  if (v === null) return { ...base, ...empty, none: NONE_NULL, code: st.reasonCode }
+  const value = fmtValue(v, t.fmt)
+  const [big, unit] = splitUnit(value)
+  return { ...base, value, big, small: t.unit ?? unit, none: null, code: null }
+}
+
+/** 요약 탭 첫 섹션의 타일 8 — `TILES` 순서 그대로 (값으로 고르거나 다시 세우지 않는다). */
+export function buildTiles(res: unknown): TileVm[] {
+  return TILES.map((t) => buildTile(t, res))
 }

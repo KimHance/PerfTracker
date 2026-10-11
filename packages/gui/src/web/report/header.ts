@@ -1,6 +1,7 @@
 import { DIAGNOSE_REPORT_COPY } from './diagnose-copy.js'
 import { fmtValue, fmtWhen } from './format.js'
 import { KNOWN_METRICS, MANIFEST, NOT_DRAWN_METRICS, SCHEMA_MAJOR, type TabId, TABS } from './manifest.js'
+import { READABILITY_COPY } from './readability-copy.js'
 import { MISSING, readPath } from './read.js'
 
 /**
@@ -98,8 +99,9 @@ export function buildHeader(res: unknown): HeaderVm {
         `(sdk ${fmtValue(readPath(res, 'device.static.sdk_int'), 'int')})`,
     },
     { k: '시작', v: fmtWhen(readPath(res, 'session.started_at')) },
-    // 측정 중이면 길이가 없다. 0 이 아니고, "세션 길이" 라고 부르지도 않는다.
-    { k: 'duration', v: running ? '측정 중' : fmtValue(dur, 'ms0') },
+    // 측정 중이면 길이가 없다. 0 이 아니고, "세션 길이" 라고 부르지도 않는다. 라벨은 우리말 — 영어 필드
+    // 이름(`duration`)을 머리에 쓰지 않는다 (RR-6 · HANDOFF 와 같은 `길이`).
+    { k: READABILITY_COPY.headDuration, v: running ? '측정 중' : fmtValue(dur, 'ms0') },
     { k: '옵션', v: readPath(res, 'session.options.launch') === true ? '--launch' : 'attach' },
   ]
 

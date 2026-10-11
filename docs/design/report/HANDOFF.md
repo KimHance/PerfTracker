@@ -116,7 +116,7 @@ maxT = max( 모든 series 의 max t_s, 모든 mark 의 초, ceil(duration_ms/100
 | `bars` | `[{label, value}]` | 코어별 사용률, 클러스터 최대 주파수 |
 | `delta` | 배열 `[{label, before, after}]` 또는 두 객체 경로 + 키 목록 | 온도 존, 기기 상태 전/후 |
 | `pairs` | `[{key, value}]` | 기기·앱 정보, min/avg/max 요약, 오버헤드, 진단 탭의 카드 셋 |
-| `stat` | 단일 값 + 부가 문장 | 상단 요약 타일 |
+| `stat` | 단일 값 — 게이지 + 아래 줄 (큰 숫자 없음 · 값이 없으면 `값 없음` + 코드) | 앱 시작 카드 (숫자는 요약 타일 · RR-4 결정 10) |
 | `frametimeline` | `[경과 ms, 앱 ms, 표시 ms, 마감 ms]` 의 배열 | 시간별 프레임 (렌더 섹션 타임라인 서브탭) |
 | `slicetable` | `[{name, <갈래>: {count, sum_ms, max_ms} \| null, …}]` | 진단 탭의 slice 이름별 표 (**진단 세션에만**) |
 
@@ -155,10 +155,10 @@ metrics.memory.data.system_timeline
 ### kind별 추가 필드
 
 - **series** — `field`, `subField`/`subLabel`(같은 축의 점선 보조선, 부분집합일 때만 · 쌓지 않음), `transform`, `sampling: 'cumulative'|'gauge'|'count'`, `baseline: 'zero'|'data'`, `fmt`
-- **distribution** — `percentilesPath`, `share`(백분위 옆에 세울 비율 하나: `{label, countPath, totalPath}`), `breakAfterEmptyBuckets`(현재 `Infinity` — **버킷은 전부 보여준다**)
+- **distribution** — `percentilesPath`, `share`(백분위 옆에 세울 비율 하나: `{label, countPath, totalPath}`), `framesPath`(각주의 프레임 수), `breakAfterEmptyBuckets`(현재 `Infinity` — **버킷은 전부 보여준다**)
 - **bars** — `labelField`(배열이면 `CPU 0–3` 처럼 범위로), `labelPrefix`, `valueField`, `fmt`, `scaleMax`(`null` 이면 데이터 최댓값)
 - **delta** — 배열형: `labelField` `beforeField` `afterField` `fmt` / 객체형: `beforePath` `afterPath` `keys[]`
-- **pairs** — `keys: [{p, l, f}]` (`p` 는 블록 `path` 기준 상대 경로, 점 표기 가능) 또는 `arrayAs: 'freq'` 같은 특수 변환
+- **pairs** — `keys: [{p, l, w?, f}]` (`p` 는 블록 `path` 기준 상대 경로, 점 표기 가능 · `w` 는 경로 라벨의 단어 줄 — RR-6) 또는 `arrayAs: 'freq'` 같은 특수 변환
 - **stat** — `fmt`, `unit`, `sub: [{l, p, f}]`
 - **frametimeline** — `path` 하나 (`metrics.frame.data`)
 - **slicetable** — `nameField` `nameLabel`, `groups: [{field, label}]`(갈래 셋), `stats: [{field, label, fmt}]`(횟수 · 합 ms · 최대 ms), `rowsUnit`(`{n}` 자리에 행 수)
@@ -185,6 +185,7 @@ metrics.memory.data.system_timeline
 │          │ 플래그 줄                                      │
 │ PERF...  │ 표식 줄 (session.marks)                        │
 │ 세션데이터│ ─────────────────────────────────────────────  │
+│          │ 지표 — 타일 8 (요약 탭만 · 4열 / ≤760 2열)     │
 │          │ 섹션들 (12칸 그리드)                           │
 │ [요약]   │                                                │
 │  기기    │                                                │
@@ -201,10 +202,10 @@ metrics.memory.data.system_timeline
 레일에 **요약 / 기기** 두 개를 둡니다. **진단 세션**(`session.options.diagnose === true`)이면 세 번째 **진단** 탭이 붙습니다 — 기준은 그 칸 하나이고 진단 블록의 유무로 가르지 않습니다. 평소 보고서는 탭 둘 그대로입니다. 섹션 목차나 스크롤 스파이는 없습니다.
 
 - 탭 버튼: `padding:8px var(--space-4)`, 14px, `border-radius:0 99px 99px 0`, 선택 시 `border-left:2px solid var(--color-accent)` + `background:var(--color-accent-100)` + `color:var(--color-accent-800)`
-- 미수집 블록이 있는 탭에는 개수 배지(monospace 12px, `--color-neutral-800` 글자 · `--color-neutral-200` 바탕). 세는 것은 값 자리에 `수집 안 함` · `값 없음` 을 그린 블록뿐입니다 — 재 봤더니 없음(`[]`)으로 `크래시 없음` · `ANR 없음` · `경고 없음` 을 그린 블록은 세지 않습니다(RR-8). 셈은 카드가 그린 글자를 그대로 읽습니다(`blocks.ts` 의 `tabBadgeCount`)
-- **요약** 탭 = `summary` `render` `cpu` `memory` `log` `context` 섹션
+- 미수집 블록이 있는 탭에는 개수 배지(monospace 12px, `--color-neutral-800` 글자 · `--color-neutral-200` 바탕). 세는 것은 값 자리에 `수집 안 함` · `값 없음` 을 그린 블록뿐입니다 — 재 봤더니 없음(`[]`)으로 `크래시 없음` · `ANR 없음` · `경고 없음` · 차트의 `표본 없음` · `프레임 없음` · `항목 없음` 을 그린 블록과 요약 타일은 세지 않습니다(RR-8 · 결정 12 · B22). 셈은 카드가 그린 글자를 그대로 읽습니다(`blocks.ts` 의 `tabBadgeCount`)
+- **요약** 탭 = `지표`(타일 8 — 블록 아님) `startup` `render` `cpu` `memory` `log` `context` 섹션
 - **기기** 탭 = `device` 섹션
-- **진단** 탭 = `diagnose` 섹션(머리 `atrace slice`) — 카드 넷: `기록 범위`(`atrace_categories` · `atrace_apps` · `app_slices_open`) · `slice 수`(`trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `target_process_slice_names_unfolded` · `ftrace_overrun_events` · `target_process_compile_state_slices` · `target_process_jit_slices` — ART 칸 둘은 `why` 짝으로 `null` 이면 코드) · `원본`(`artifacts.trace` · `diagnose.trace_bytes`) 각 span 4 + `slice 이름별` 표 span 12. 라벨은 **필드 경로 그대로**입니다(logcat 카드와 같은 이유). 표가 `null` 이면 탭 개수 배지에 1 이 섭니다.
+- **진단** 탭 = `diagnose` 섹션(머리 `atrace slice`) — 카드 넷: `기록 범위`(`atrace_categories` · `atrace_apps` · `app_slices_open`) · `slice 수`(`trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `target_process_slice_names_unfolded` · `ftrace_overrun_events` · `target_process_compile_state_slices` · `target_process_jit_slices` — ART 칸 둘은 `why` 짝으로 `null` 이면 코드) · `원본`(`artifacts.trace` · `diagnose.trace_bytes`) 각 span 4 + `slice 이름별` 표 span 12. 라벨은 **우리말 단어 줄 + 필드 경로 줄**입니다(RR-6 — 경로 줄은 글자 그대로 · ART 칸 둘은 경로 한 줄). 카드 단위 칸은 비웁니다(`diagnose` 는 뜻 없는 글자였습니다). 표가 `null` 이면 탭 개수 배지에 1 이 섭니다.
 - 탭 전환 시 `window.scrollTo(0, 0)`
 
 ### 헤더
@@ -245,11 +246,22 @@ pill (`font-size:11.5px; padding:3px 10px; border-radius:99px; border:1px solid`
 `display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:var(--space-3)`.
 섹션 제목: `--font-heading` 600 18px uppercase `letter-spacing:.02em` `--color-neutral-800` + 오른쪽으로 뻗는 1px hairline — 카드 제목(15px)보다 크다 (RR-3). 섹션 설명 문장은 두지 않습니다.
 
+### 요약 타일 (`지표` · RR-4)
+
+요약 탭 맨 위 첫 섹션. **지표마다 하나 · 보고서 섹션 순 · 값이 바뀌어도 순서와 수가 그대로**입니다 (결정 9):
+`startup` `앱 시작` · `hwui` `프레임 수` · `frame` `시간별 프레임` · `cpu` `앱 CPU 시간` · `memory` `앱 RSS 최대` · `log` `앱 로그 줄` · `thermal` `스로틀 단계 · 종료` · `network` `수신`. 선언은 `manifest.ts` 의 `TILES`, 뷰모델은 `blocks.ts` 의 `buildTiles`.
+
+- 그리드 `repeat(4, minmax(0,1fr))` (1440 4열 × 2줄) · ≤760 `repeat(2, …)` (2열 × 4줄 — 카드 1열 규칙의 예외). 타일 = 카드와 같은 바탕 · 테두리 · 둥글기.
+- 한 장: 단어 줄(13px `--color-neutral-700`) + 배지 / 값(`--font-heading` 600 `clamp(26px,2.2vw,32px)` `--color-text` · 숫자 `nowrap` · 영문 단위 · `장` · `줄` 은 13px `--color-neutral-600`) / 경로 줄(등폭 12px `--color-neutral-600` · 구분자 뒤 `<wbr>`).
+- 값은 **아래 카드의 같은 값과 같은 문자열**입니다 (startup ↔ `측정값` TotalTime · memory ↔ `앱 RSS 구성` 의 `rss.max_kb` 행 · 나머지는 같은 카드 행). `frame` 만 개수가 아니라 **수집 상태**(`metrics.frame.status` 원문)입니다.
+- 값이 없으면 18px heading `--color-neutral-700` 로 `수집 안 함`(필드 없음) · `값 없음` + 코드 줄(null) · unsupported/skipped/failed 면 카드와 같은 배지 + 그 `reason_code`. partial 은 배지 없이 타일 `title`. 타일은 사라지지 않습니다.
+- **값으로 색 · 굵기 · 아이콘 · 순서를 바꾸지 않습니다** · `references` 를 쓰지 않습니다 · 앱 시작 게이지 색을 타일에 올리지 않습니다 (결정 10). 타일은 블록이 아니라 레일 배지에 세지 않습니다 (결정 12).
+
 ### 카드
 
 `.card`, `border-radius:var(--radius-lg)`, `padding:var(--space-4)`, `grid-column:span {span}`. **코너 십자 마크(`.blueprint`)는 쓰지 않습니다.**
 
-카드 머리: 제목(`--font-heading` 600 15px) + 단위(12px `--color-neutral-600`) + 상태 배지(monospace 12px).
+카드 머리: 제목(`--font-heading` 600 15px) + 단위(12px `--color-neutral-600`) + 상태 배지(monospace 12px). span 이 6칸보다 넓은 카드(`.rp-span-wide`)는 ≤1180 6칸 그리드에서 한 줄을 다 씁니다.
 그 아래 한 줄: **min/avg/max 요약** (12px `--color-neutral-700`) — 호버 중에는 그 초의 값으로 바뀝니다(`--color-accent-700` 600). 표본이 없는 초면 `{m:ss} · 표본 없음`.
 
 ---
@@ -258,13 +270,14 @@ pill (`font-size:11.5px; padding:3px 10px; border-radius:99px; border:1px solid`
 
 ### 시계열 (`series`)
 
-viewBox `300 × 138`, 여백 `{l:40, r:10, t:12, b:30}`, `width:100%`. 눈금은 viewBox 12 단위 — 카드 폭만큼 커져 렌더 1440 ≈ 14.8px · 390 ≈ 13.1px. 카드가 viewBox 보다 좁은 ≈ 362px 미만 창에서는 12px 아래입니다(360 ≈ 11.9 — RR-1 측정 폭 1440 · 390 밖). 왼쪽 여백보다 긴 눈금(`3,000`)은 잘리지 않게 SVG 밖 카드 여백으로 흘러 나갑니다(`overflow:visible`).
+viewBox `300 × 118`, 여백 `{l:46, r:8, t:10, b:26}`(`blocks.ts` 의 `SPAD`), `width:100%`. 눈금은 viewBox 12 단위 — 카드 폭만큼 커져 렌더 1440 ≈ 14.8px · 390 ≈ 13.1px. 카드가 viewBox 보다 좁은 ≈ 362px 미만 창에서는 12px 아래입니다(360 ≈ 11.9 — RR-1 측정 폭 1440 · 390 밖). 왼쪽 여백 46 이 `3,000` 을 담고, 그보다 긴 눈금(`12,000`)은 잘리지 않게 SVG 밖 카드 여백으로 흘러 나갑니다(`overflow:visible`).
 
 - 가로 격자 3줄(min / 중간 / max) `--color-divider` 0.6px
 - 좌·하 축선 `--color-neutral-400` 0.8px + x 눈금 마크
 - **눈금 라벨에 단위를 붙입니다** — x `0s 10s 20s…`(간격은 `maxT` 에 따라 3/10/20/30초), y 숫자만. 별도 축 이름 라벨은 두지 않습니다.
 - 선 `--color-accent` 1.6px `round`. `subField` 는 같은 축에 `--color-neutral-500` 1.1px 점선.
 - 표본 없는 초: 회색 띠. 문구로 세지 않습니다.
+- 계열이 `[]`(재 봤더니 0건)면 카드 본문이 `표본 없음` — `값 없음`(null) · `수집 안 함`(필드 없음)과 다른 말이고 레일 배지에 세지 않습니다 (B22).
 - 호버: 전체를 덮는 투명 `rect` 의 `onMouseMove` 에서 x → 초를 역산해 공유 `hoverT` 를 갱신. 세로 커서선 + 그 초의 점.
 - `baseline:'data'` 인 계열(기기 가용 메모리)만 0 기준선을 벗어납니다 — 양끝 값을 눈금에 표기합니다.
 
@@ -287,11 +300,17 @@ viewBox `측정된 컨테이너 폭 × 190`, 여백 `{l:44, r:10, t:18, b:30}`. 
 - 짚은 슬롯은 `--color-accent` opacity .14 배경으로 표시.
 - 툴팁: `position:fixed`, 마우스 +14px, `border:1px solid var(--color-text)`, `--shadow-md`, `border-radius:var(--radius-md)`. 내용 = **구간 / 프레임 수 / 전체의 N%**.
   **누적 비율을 보여주지 않습니다** — 버킷은 시간축이 아니라 지속 시간 구간이라 "0에서 끝으로 누적된다" 는 인상을 주면 안 됩니다.
-- 각주: **없습니다.** `빈 버킷 N칸 접음` 만 실제로 접혔을 때 나옵니다(지금은 안 접으므로 늘 빈 문자열). 카드에 읽는 법을 설명하지 않습니다 — 카드마다 한 줄씩 붙으면 화면이 글이 됩니다. 지표의 성질은 `README.md` 가 정본입니다.
+- 각주: 단어 한 줄 `{total_frames} 프레임 · 버킷 {칸 수}칸` (프레임 수를 못 읽으면 `버킷 {칸 수}칸` 만) — 실제로 접혔으면 뒤에 `· 빈 버킷 N칸 접음`. 카드 위 읽는 법 문장(`막대가 왼쪽에 몰릴수록 …`)은 지웠습니다 (RR-5 · 결정 3 — 평가 낱말). 지표의 성질은 `README.md` 가 정본입니다.
+- 히스토그램이 `[]` 면 `프레임 없음` (B22 · 배지에 안 셈).
+
+### 시간별 프레임 (`frametimeline`)
+
+- 각주: 단어 한 줄 `막대 = 프레임 · 아래 칸 앱 · 위 칸 표시 · 가로 = 트레이스 시작 뒤 시각` (읽는 법 두 문장 자리 · RR-5) + 표본을 뽑았으면 그 고지 한 줄.
+- 표본이 `[]` 면 `프레임 없음` (B22 · 배지에 안 셈) · 표본 칸이 배열이 아니면 `값 없음`.
 
 ### bars
 
-글자 13px · 비율 12px `--color-neutral-600`. `grid-template-columns:64px minmax(0,1fr) 66px`. 트랙 8px `--color-neutral-200` `border-radius:99px`, 채움 `--color-accent` opacity .7. 값은 우측 정렬 `tabular-nums`.
+글자 13px · 비율 12px `--color-neutral-600`. 배열이 `[]` 면 `항목 없음` (B22 · 배지에 안 셈). `grid-template-columns:64px minmax(0,1fr) 66px`. 트랙 8px `--color-neutral-200` `border-radius:99px`, 채움 `--color-accent` opacity .7. 값은 우측 정렬 `tabular-nums`.
 
 ### delta
 
@@ -303,9 +322,9 @@ viewBox `측정된 컨테이너 폭 × 190`, 여백 `{l:44, r:10, t:18, b:30}`. 
 
 ### pairs
 
-3열 표(라벨 / 값 / 비율). `f:'wrap'` 인 값만 `word-break:break-all`. 비율은 `pct` 가 선언된 키에만 붙고, **값과 따로 낸 칸**입니다 — 한 문자열로 붙이면 개수와 비율이 눈에서 섞입니다.
+3열 표(라벨 / 값 / 비율). 기계 이름 포맷(`wrap` · `path` · `list` · `dots`)의 값과 라벨은 구분자(`/ : $ . ; , _`) **뒤에** `<wbr>` 를 두고 `overflow-wrap:break-word` 로 줄바꿈합니다 — 토막이 칸보다 넓을 때만 토막 안에서 끊습니다. `anywhere` · `break-all` · ellipsis 는 쓰지 않습니다 (RR-7). 숫자 칸에는 `<wbr>` 가 없습니다(`1,234` 가 쉼표에서 끊기지 않게). 비율은 `pct` 가 선언된 키에만 붙고, **값과 따로 낸 칸**입니다 — 한 문자열로 붙이면 개수와 비율이 눈에서 섞입니다.
 
-**라벨은 옮겨 적지 않습니다.** `dumpsys gfxinfo` 의 `Slow issue draw commands` 를 "그리기 명령" 으로 쓰면 원문에서 grep 되지 않고, 우리 스키마 필드를 "앱 warn" 으로 쓰면 `result.json` 에서 찾을 수 없습니다. 기기가 영어로 준 이름은 **그 이름 그대로**, 우리 필드는 **경로 그대로**(`logcat 줄 수` 카드) 싣습니다. 우리말은 카드 제목에만 씁니다.
+**라벨은 옮겨 적지 않습니다.** `dumpsys gfxinfo` 의 `Slow issue draw commands` 를 "그리기 명령" 으로 쓰면 원문에서 grep 되지 않습니다 — 기기가 영어로 준 이름은 **그 이름 그대로 한 줄**입니다. 우리 필드는 **우리말 단어 한 줄 + 경로 원문 한 줄**입니다 (RR-6 · 결정 2): `.rp-lbl` 13px `--color-neutral-700` 위, `.rp-lbl-path` 등폭 12px `--color-neutral-600` 아래. 경로 줄은 지금 라벨 글자 그대로라(`versionCode` · `app.total`) ⌘F · grep 이 `result.json` 에 닿습니다. 단어의 정본은 `docs/design/report-readability.md` `## 문구` 의 라벨 단어 표입니다.
 
 ### pairs — 진단 탭
 
@@ -318,7 +337,7 @@ viewBox `측정된 컨테이너 폭 × 190`, 여백 `{l:44, r:10, t:18, b:30}`. 
 
 진단 블록의 `target_process_slice_names` — 행 = 접은 이름 하나, 열 = 갈래 셋(`메인 스레드` · `그 밖 스레드` · `비동기 트랙`) × (`횟수` · `합 ms` · `최대 ms`). **판정하지 않는 표**입니다.
 
-- **행을 자르지 않고 다 그립니다** (1만 행도 — 창 안 행만 그리지 않습니다. 브라우저 찾기가 상자 밖 이름도 찾습니다). 이름은 자르지 않고 `overflow-wrap:anywhere` 로 줄바꿈합니다 (ellipsis · 툴팁 대체 없음). 이름 열은 등폭 13px `--color-neutral-800`.
+- **행을 자르지 않고 다 그립니다** (1만 행도 — 창 안 행만 그리지 않습니다. 브라우저 찾기가 상자 밖 이름도 찾습니다). 이름은 자르지 않고 구분자 뒤 `<wbr>` + `overflow-wrap:break-word` 로 줄바꿈합니다 (RR-7 · ellipsis · 툴팁 대체 없음 · 복사하면 원문). 이름 열은 등폭 13px `--color-neutral-800`.
 - **처음 순서는 이름의 UTF-16 코드 단위 순**입니다(`a < b` — `Z` 가 `a` 보다 앞). 순위 · 상위 N · 강조 · 줄무늬 · 행별 색 · 굵기 · 아이콘이 없습니다.
 - 카드 단위는 `대상 앱 프로세스 · {n}행` — 프레임워크와 앱 slice 를 가르지 않습니다. 표가 `null` 이면 카드 본문이 `값 없음` + 블록 `reason_code`, `[]` 이면 머리만 있는 `0행` 표입니다.
 - 빈 칸은 `—`(`--color-neutral-600`) — 그 갈래에 그 이름의 slice 가 없거나 끝난 slice 가 없어 합 · 최대가 없습니다. `0` 으로 채우지 않습니다. 숫자는 `tabular-nums` 오른쪽 정렬, 횟수 정수 · 합/최대 소수 한 자리.
@@ -328,7 +347,7 @@ viewBox `측정된 컨테이너 폭 × 190`, 여백 `{l:44, r:10, t:18, b:30}`. 
 
 ### stat
 
-값 / (값이 없으면) `reason_code` / 부가 문장. 큼직한 `값 없음` 만 있으면 도구가 고장 난 것으로 읽히므로 **왜인지를 같이 냅니다** — 카드에는 코드만(`.rp-stat-why`, 등폭), 문장은 `title` 툴팁으로. **값이 있을 때는 붙이지 않습니다**: `partial` 지표의 사유가 멀쩡한 숫자 밑에 서면 그 숫자까지 의심하게 됩니다.
+앱 시작 카드 하나. 제목 / 게이지 / 아래 줄 — **큰 숫자가 없습니다** (결정 10 — 숫자는 요약 타일과 `측정값` 카드의 TotalTime 행). 값이 없으면 `값 없음` · `수집 안 함` 을 본문 크기(`.rp-none` 13px)로 내고 **왜인지를 같이 냅니다** — 카드에는 코드만(`.rp-none-code`, 등폭), 문장은 `title` 툴팁으로. 이 글자를 레일 배지가 셉니다. **값이 있을 때는 코드를 붙이지 않습니다**: `partial` 지표의 사유가 멀쩡한 값 밑에 서면 그 값까지 의심하게 됩니다.
 
 ---
 
@@ -367,7 +386,7 @@ viewBox `측정된 컨테이너 폭 × 190`, 여백 `{l:44, r:10, t:18, b:30}`. 
 토큰 값은 측정 화면과 같고 고치지 않습니다 — 보고서 CSS 가 **글자에 쓰는 토큰만** 고릅니다. 모든 글자 12px 이상 ·
 표 · 카드 본문 13px 이상 · 층은 섹션 제목 18 > 카드 제목 15 > 본문 13. 글자 색은 `--color-neutral-600` 이상
 (bg 6.13 · surface 5.48 · neutral-200 4.84) — `--color-neutral-500` 이하는 그림(띠 · 보조선 · 참고선)에만, 계열색
-(`--color-alt-*`)은 막대에만. 키/값 표의 라벨 열은 45% 를 잡고 라벨 · 값 모두 `overflow-wrap:anywhere` 로 줄바꿈합니다.
+(`--color-alt-*`)은 막대에만. 키/값 표의 라벨 열은 45% 를 잡고 라벨 · 값 모두 구분자 뒤 `<wbr>` + `overflow-wrap:break-word` 로 줄바꿈합니다 (RR-7). 요약 타일 값은 섹션 제목보다 큽니다 (26–32 > 18).
 아래 표는 `packages/gui/test/report-css.test.ts` 가 `report.css` 와 대조합니다 (`—` = 그 규칙이 정하지 않음).
 
 | 층 | 선택자 | 크기 | 글자 색 |
@@ -389,6 +408,12 @@ viewBox `측정된 컨테이너 폭 × 190`, 여백 `{l:44, r:10, t:18, b:30}`. 
 | 푸터 | `.rp-footer` | 12px | `--color-neutral-600` |
 | 눈금 | `.rp-tick` | 12px | — |
 | 시계열 눈금 (viewBox 단위) | `.rp-series .rp-tick` | 12px | — |
+| 타일 값 | `.rp-tile-value` | clamp(26px, 2.2vw, 32px) | `--color-text` |
+| 타일 값 없음 | `.rp-tile-none` | 18px | `--color-neutral-700` |
+| 타일 단어 줄 | `.rp-tile-word` | 13px | `--color-neutral-700` |
+| 타일 경로 줄 | `.rp-tile-path` | 12px | `--color-neutral-600` |
+| 라벨 단어 줄 | `.rp-lbl` | 13px | `--color-neutral-700` |
+| 라벨 경로 줄 | `.rp-lbl-path` | 12px | `--color-neutral-600` |
 
 ## 6. 진입점
 
