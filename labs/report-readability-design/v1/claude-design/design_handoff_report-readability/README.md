@@ -1,28 +1,39 @@
-# 핸드오프 — Report Readability (v1)
+# 핸드오프 — Report Readability (v1 · 구현 끝)
 
-시안 (고침 2 · `report-readability/FIX-1.md` · `FIX-2.md`): 프로젝트 루트 `Report Readability.dc.html` · CSS `report-readability/report-rr.css` · 표본 `report-readability/{base.json,states.js}`.
-정본 문서: 레포 `docs/design/report-readability.md`. 비교 기준(고치지 않음): `Session Report.dc.html` · `diagnostic-mode/Report.html`.
+시안 (고침 5 · `report-readability/FIX-1.md` ~ `FIX-5.md`): 프로젝트 루트 `Report Readability.dc.html` · CSS `report-readability/report-rr.css` · 표본 `report-readability/{base.json,states.js}`.
+정본 문서: 레포 `docs/design/report-readability.md` (`## 정한 것`). 비교 기준(고치지 않음): `Session Report.dc.html` · `diagnostic-mode/Report.html`.
+**구현 끝** — 레포 `packages/gui` (rr-type · rr-layout · bp-gui-report). 아래 「코드에 옮길 것」 은 옮겨졌다 — 지금은 시안 ↔ 구현 대조용.
 
 ## 보는 법
 - `?state=` 또는 편집기 prop `state`: `summary` `missing` `compile` `end-null` `legacy` `device` `diag` `diag-noapp`. 처음 탭은 `RR_STATES[state][1]`, 레일로 바꿀 수 있음.
 - `?shot` — 오른쪽 아래 상태 고르는 줄을 숨김 (사진용).
 - 폭 1440 · 390 둘 다 확인.
 
-## 코드에 옮길 것
-1. `report.css` → `report-rr.css` 의 `/* rr … */` 주석 줄이 바뀐 글자 규칙 (토큰 값은 그대로). 새 클래스: `.rp-tiles` `.rp-tile*` · `.rp-lbl` `.rp-lbl-path` · `.rp-dex*` · `.rp-dist*` · `.rp-span-wide`.
-2. 요약 맨 위 `지표` 섹션 — 타일 8 (순서 고정, 레일 배지에 안 셈).
+## 코드에 옮긴 것
+1. `report.css` → `report-rr.css` 의 `/* rr … */` 주석 줄이 바뀐 글자 규칙 (토큰 값은 그대로). 새 클래스: `.rp-tiles` `.rp-tile*` · `.rp-lbl` `.rp-lbl-path` · `.rp-dex*` · `.rp-dist*` · `.rp-span-wide` · `.rp-nobr`.
+2. 요약 맨 위 `지표` 섹션 — 타일 8 (순서 고정, 레일 배지에 안 셈). 타일 값 = 아래 카드의 같은 문자열 (`13.62 MB` — 시안은 `13.6`).
 3. 앱 시작 stat 카드에서 큰 숫자 삭제 (게이지 · 축 · 아래 줄만).
-4. 렌더 각주 단어화 · 차트 `[]` → `표본 없음` / `프레임 없음` / `항목 없음` (배지에 안 셈).
+4. 렌더 각주 단어화 · `[]` → 시계열 `표본 없음` / 분포 · 시간별 프레임 `프레임 없음` / 막대 · 전/후 표 · 클러스터 주파수 `항목 없음` (배지에 안 셈 · B22 · B37).
 5. 필드 이름 라벨 → 두 줄 (우리말 단어 + 지금 라벨 경로). th `white-space:normal` · 45%.
 6. 긴 이름: 구분자 `/ : $ . ; , _` 뒤 `<wbr>` + `overflow-wrap:break-word` (`anywhere` · `break-all` 없음).
 7. 머리 `duration` → `길이`, `옵션` 에 `--compile speed` (compile 상태만).
-8. 레일 배지 = 그 탭의 `수집 안 함` · `값 없음` 카드 수.
-9. 새 블록 `dexstates` — 요약 맥락 끝 `컴파일 상태 (전 → 후)`, 진단 탭 `컴파일 상태 slice` (자세히: `design_handoff_baseline-profile/README.md`). 가로 스크롤 상자 없음 — 값 칸 `nowrap`, 경로는 `<wbr>` 줄바꿈.
-11. 머리 아래 표식 줄 `.rp-marks` (compile 상태) · 툴팁 `.rp-tip` 글자 12px (값 16px 그대로). 타일 단어 `스로틀 단계 · 종료`.
+8. 레일 배지 = 그 탭의 `수집 안 함` · `값 없음` 카드 수 (진단 대상 앱 없음 = 2 · B30).
+9. 새 블록 `dexstates` — 요약 맥락 끝 `컴파일 상태 (전 → 후)`, 진단 탭 `컴파일 상태 slice` (자세히: `design_handoff_baseline-profile/README.md`). 가로 스크롤 상자 없음. 위치가 때마다 같으면 한 번 (B42) · 보낸 명령 깃발 토큰 nowrap (B40).
 10. 진단: 카테고리에 `dalvik`, `slice 수` 끝 `JIT 컴파일 slice`, 단위 칸 `diagnose` → 빈 칸.
+11. 머리 아래 표식 줄 `.rp-marks` (compile 상태) · 툴팁 `.rp-tip` 글자 12px (값 16px 그대로). 타일 단어 `스로틀 단계 · 종료`.
 
 ## 판정 금지 확인
 상태 문자열(`speed-profile` `verify` `up-to-date` …)은 전부 같은 색 · 같은 굵기 · 등폭 · 원문 순. 예외는 앱 시작 게이지 6색 · 16ms 참고선 둘뿐.
 
-## 사진
-`screenshots/` — 1440 네 장 (summary · missing · device · diag · 고침 2 뒤). 상태 8 × 1440 · 390 전부와 글자 측정은 레포 `labs/report-readability-design/v1/shots/` · `README.md` (16/16: 12px 미만 0% · 4.5:1 미만 0% · 층 31.7 > 18 > 15 > 13 · 390 넘침 0).
+## 사진 — 구현 실렌더 (시안 캡처 아님)
+`screenshots/` — `perftracker report` 가 낸 파일을 연 것 (fullPage).
+
+| 파일 | 무엇 |
+|---|---|
+| `01-summary.png` | 실기기 YouTube 평소 세션 · 요약 · 1440 (SM-S901N · `R5CT0000001` · sdk 36 · 2026-10-11 · RR-9) |
+| `02-missing.png` | 표본 `missing` (sdk 30 꼴) · 요약 · 1440 · 레일 배지 4 |
+| `03-device.png` | 실기기 평소 · 기기 탭 · 1440 |
+| `04-diag.png` | 실기기 진단 세션 · 진단 탭 · 1440 |
+| `05-summary-390.png` · `06-diag-390.png` | 실기기 평소 요약 · 진단 탭 · 390 |
+
+RR-9 (실기기 두 세션 × 탭 × 1440 · 390 = 10장): 12px 미만 0% · 4.5:1 미만 0% · 층 31.68(390 26) > 18 > 15 > 13 · 타일 8 · 레일 배지 0 = `수집 안 함`/`값 없음` 블록 0 · 390 넘침 0 · 카드 안 가로 스크롤 0. 상태 8 × 1440 · 390 시안 측정은 레포 `labs/report-readability-design/v1/shots/` · `README.md`.

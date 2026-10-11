@@ -182,6 +182,8 @@ function ftlBody(data) {
 }
 
 /* ── dexstates ── */
+// 보낸 명령 — 공백으로 나눈 토큰 가운데 `-` 로 시작하는 깃발(`-m` · `-f` · `--reset`)은 통째 nowrap · 나머지는 구분자 뒤 <wbr> (plan B40 · 복사하면 원문)
+const cmdWrap = (s) => String(s).split(' ').map((t) => t.startsWith('-') ? `<span class="rp-nobr">${esc(t)}</span>` : wbr(t)).join(' ')
 const kv = (k, v) => `<span class="rp-dex-kv"><span class="rp-dex-k">${k}</span><span class="rp-dex-val">${v}</span></span>`
 function compileCard(ctx, st) {
   const d = ctx.d, ta = d.target_app || {}
@@ -190,7 +192,7 @@ function compileCard(ctx, st) {
   if (start === MISSING) return ctx.card({ ...opts, body: noneBody(`${NONE_MISS} — target_app.compile_state_start 없음`), none: true })
   const c = get(d, 'session.compile')
   const rec = c !== MISSING && c
-    ? [[lbl('바꾼 값', 'value'), esc(c.value), { mono: 1 }], [lbl('보낸 명령', 'command'), wbr(c.command), { mono: 1, wrap: 1 }], [lbl('걸린 시간', 'elapsed_ms'), `${nf(c.elapsed_ms)} ms`]]
+    ? [[lbl('바꾼 값', 'value'), esc(c.value), { mono: 1 }], [lbl('보낸 명령', 'command'), cmdWrap(c.command), { mono: 1, wrap: 1 }], [lbl('걸린 시간', 'elapsed_ms'), `${nf(c.elapsed_ms)} ms`]]
     : [[lbl('바꾼 기록', 'session.compile'), '바꾸지 않음']]
   const endA = get(d, 'target_app.compile_state_end')
   const times = []
@@ -206,13 +208,18 @@ function compileCard(ctx, st) {
   const body = order.map((k) => {
     const dx = seen.get(k)
     const head = `<tr class="rp-dex-head"><td colspan="3">${wbr(dx.path)}<span class="rp-dex-kvs">${kv('abi', esc(dx.abi))}${kv('primary_abi', yn(dx.primary_abi))}${kv('secondary_dex', yn(dx.secondary_dex))}${kv('public_dex', yn(dx.public_dex))}</span></td></tr>`
+    // 위치 — 그 줄이 있는 때의 location 이 글자 그대로 모두 같으면 머리 행 아래 한 번 · 한 줄 라벨 (plan B42 · 정규화 0)
+    const locs = live.map(([, arr]) => arr.find((y) => key(y) === k)).filter(Boolean).map((x) => x.location)
+    const one = locs.every((l) => l === locs[0])
+    const locVal = (l) => l == null ? NONE_NULL : wbr(l)
+    const locOne = one ? `<tr class="rp-dex-loc rp-dex-loc-one"><td colspan="3"><span class="rp-dex-w">파일 위치</span> <span class="rp-dex-k">location</span> ${locVal(locs[0])}</td></tr>` : ''
     const rows = live.map(([w, arr]) => {
       const x = arr.find((y) => key(y) === k)
       if (!x) return `<tr class="rp-dex-row"><th>${w}</th><td colspan="2">줄 없음</td></tr>`
       return `<tr class="rp-dex-row"><th>${w}</th><td class="mono rp-dex-v">${esc(x.status)}</td><td class="mono rp-dex-v">${esc(x.reason)}</td></tr>`
-        + `<tr class="rp-dex-loc"><td colspan="3">${lbl('파일 위치', 'location')}${x.location == null ? NONE_NULL : wbr(x.location)}</td></tr>`
+        + (one ? '' : `<tr class="rp-dex-loc"><td colspan="3">${lbl('파일 위치', 'location')}${locVal(x.location)}</td></tr>`)
     }).join('')
-    return head + rows
+    return head + locOne + rows
   }).join('')
   const table = `<table class="rp-table rp-dex rp-dex-when"><thead><tr><th>때</th><th>${lbl('컴파일 필터', 'status')}</th><th>${lbl('컴파일 이유', 'reason')}</th></tr></thead><tbody>${body}</tbody></table>`
   return ctx.card({ ...opts, body: pairsTable(rec) + (order.length ? table : '') })
@@ -325,7 +332,7 @@ function summaryTab(ctx, st) {
   const warns = Array.isArray(d.warnings) ? d.warnings : []
   const mo = d.measurement_overhead || {}
   h += section('맥락',
-    ctx.metricCard('thermal', { title: '온도 (세션 전 → 후)', unit: '°C', span: 4 }, (x) => `<table class="rp-table rp-delta"><tbody>${(x.zones || []).map((z) =>
+    ctx.metricCard('thermal', { title: '온도 (세션 전 → 후)', unit: '°C', span: 4 }, (x) => !Array.isArray(x.zones) || x.zones.length === 0 ? noneBody('항목 없음') : `<table class="rp-table rp-delta"><tbody>${x.zones.map((z) =>
       deltaRow(esc(z.name), `${nf(z.before_c, 1)}°C`, `${nf(z.after_c, 1)}°C`, 0, z.delta_c ? `${z.delta_c > 0 ? '+' : ''}${nf(z.delta_c, 1)}°C` : '-')).join('')}</tbody></table>`)
     + ctx.metricCard('thermal', { title: '스로틀 단계', unit: 'dumpsys thermalservice', span: 4 }, (x) => pairsTable([['시작', cell(x.device_status_before, 'thr')], ['종료', cell(x.device_status_after, 'thr')]]))
     + ctx.card({ title: '기기 상태 (전 → 후)', span: 4, body: `<table class="rp-table rp-delta"><tbody>`

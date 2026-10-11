@@ -1240,6 +1240,9 @@ SM-S901N(`R5CT0000001` · sdk 36 · user) · YouTube 21.40.161 로 `start --laun
   하지 않았습니다.
 - **확인하지 못한 것:** sdk 30–35 기기 · YouTube 말고 다른 앱(`baseline.test.ts` 는 다른 앱이면 건너뜀) ·
   현재 구성으로 5회 연속.
+- **보고서 글자 측정 RR-9 (기능 문서 report-readability · ffca69c)** — 같은 기기 YouTube 평소 · 진단 세션 보고서 10장(탭 × 1440 · 390): 12px 미만 0% ·
+  4.5:1 미만 0% · 층 31.68 > 18 > 15 > 13 · 타일 8 · 배지 0 = 미수집 카드 0 · 390 넘침 0 — 걸림 0. 배지는 0 = 0 으로만 봄 · `--compile` 실기기 보고서는 못 봄
+  (README 「검증 환경」 · `docs/design/report-readability.md` 「확인」).
 
 ### 그 밖의 후보 (우선순위 낮음)
 

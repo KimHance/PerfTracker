@@ -5,7 +5,7 @@
 | 기능 | report-readability |
 | 기능 문서 | docs/spec/report-readability.md (701a79f) |
 | 등급 | 화면 |
-| 마지막 변경 | 2026-10-11 · 고침 1 — thermal 낱말 · 표식 · 툴팁 크기 · HANDOFF 어긋남 단위별 · 배지 셈 B30 |
+| 마지막 변경 | 2026-10-11 · ⑨ 승격 — `## 정한 것` 11 · RR-9 실기기 측정 · 시안 고침 5 · 열린 질문 셋 |
 
 세션 보고서 하나만 — 측정 화면은 그대로. 바꾸는 자리는 **보고서 CSS** 와 매니페스트이고 토큰 값은 그대로다 (결정 11).
 컴파일 상태 카드 · 진단 ART 칸 · CLI 줄은 `docs/design/baseline-profile.md` — 같은 시안 파일의 상태로 함께 그렸다.
@@ -14,7 +14,7 @@
 
 | 차수 | 후보 | 고른 것 | 누가 | 로컬 폴더 | 시안 생성기 | 검사 명령 | Claude Design 파일 |
 |---|---|---|---|---|---|---|---|
-| 1 | 1 | | | `labs/report-readability-design/v1/claude-design/` · `v1/shots/` | Claude Design iterate (`v1/brief-claude-design.md` → 고침 `report-readability/FIX-1.md` · `FIX-2.md`) · 표본 `v1/gen_samples.py` | `node v1/shoot.mjs` (사진 · 글자 측정 → `v1/shots/measure.json`) · `python3 v1/check_shots.py` | [성능 측정 CLI GUI 도구](https://claude.ai/design/p/9ee5c8ab-33b9-4586-ae73-69f9e53ecd42) · `Report Readability.dc.html` · `design_handoff_report-readability/` |
+| 1 | 1 | 1 | 메인 (plan B13 ~ B16 · 후보 하나) | `labs/report-readability-design/v1/claude-design/` · `v1/shots/` | Claude Design iterate (`v1/brief-claude-design.md` → 고침 `report-readability/FIX-1.md` ~ `FIX-5.md` · 5 는 구현 뒤 손으로) · 표본 `v1/gen_samples.py` | `node v1/shoot.mjs` (사진 · 글자 측정 → `v1/shots/measure.json`) · `python3 v1/check_shots.py` | [성능 측정 CLI GUI 도구](https://claude.ai/design/p/9ee5c8ab-33b9-4586-ae73-69f9e53ecd42) · `Report Readability.dc.html` · `design_handoff_report-readability/` (사진 = 구현 실렌더) |
 | 1 · 지금 | — | — | 디자이너 | `v1/before/` | `gen_samples.py` → `perftracker report <id> -o <runs> --file … --no-browser` | `node v1/shoot.mjs <base> v1/before before` | 없음 (비교 기준 = `Session Report.dc.html` · 고치지 않음) |
 
 후보 1 — 순서 · 색 · 크기 바닥이 규칙으로 닫혀 남은 갈림은 필드(정함 · RR 결정 9)이지 모양이 아니다 (feas-design).
@@ -31,7 +31,7 @@
 | 크기 | 간격 토큰은 density 0.85× 그대로 (`--space-*`) — 글자만 키운다 | 결정 11 · `tokens.css:50-56` |
 | 그릴 것 | 판정 0 — 값으로 색 · 굵기 · 아이콘 · 순서를 바꾸지 않음 · 위험색 · 강조 · 순위 0 · `references` 안 씀 · 예외 둘(앱 시작 막대 · 16ms 참고선) 그대로 | 루트 규칙 2 · RR-4 · RR-5 · gui AGENTS |
 | 그릴 것 | 계열색(`--color-alt-*`)은 그림(막대 · 선 · 점)에만 — 글자 0 | RR-5 · 결정 6 |
-| 그릴 것 | 세 상태 — 필드 없음 `수집 안 함` · `null` `값 없음` · `[]` `… 없음` 을 다르게 · 못 잰 블록이 사라지지 않음. 차트 카드의 `[]` 도 목록 카드처럼 `<무엇> 없음` (지금은 `값 없음` 으로 그려 배지가 셈 · rr-badge c1ba773 · plan B22) | HANDOFF ① ④ · RR-8 |
+| 그릴 것 | 세 상태 — 필드 없음 `수집 안 함` · `null` `값 없음` · `[]` `… 없음` 을 다르게 · 못 잰 블록이 사라지지 않음. 차트 · 전/후 표 · 주파수 카드의 `[]` 도 목록 카드처럼 `<무엇> 없음` (예전엔 `값 없음` 으로 그려 배지가 셈 — rr-layout 이 고침 · plan B22 · B37) | HANDOFF ① ④ · RR-8 |
 | 그릴 것 | 카드에 읽는 법 문장 0 — 각주는 단어 · DM-15 단어형 | 결정 3 · RR-5 |
 | 데이터 | 글자 색 ≥ 4.5:1 은 `neutral-600` 이상만 (surface 5.48 · neutral-200 4.84) — `—` 를 숫자보다 약하게는 새 토큰 없이 못 함 (열린 질문 5 그대로) | RR-2 · 아래 `## 색` |
 | 데이터 | 타일 값 = 아래 카드의 같은 문자열 — `memory` 의 `rss.max_kb` 는 지금 어느 카드에도 없다 → `앱 RSS 구성` 카드에 행 하나 더함 | RR-4 · `manifest.ts:516-527` |
@@ -173,13 +173,27 @@ slice 표 머리 첫 줄 `line-height: 18px` · 둘째 줄 `top: 27px` 그대로
 | RR-6 | device · diag · diag-noapp · summary (logcat · 진입점 · 머리 `길이`) |
 | RR-7 | device · diag (`$HomeActivity` · `_` 뒤 줄바꿈) |
 | RR-8 | summary (배지 0) · missing (배지 = 블록 수) |
-| RR-9 | 구현 뒤 실기기 — 이 시안은 `shoot.mjs` · `measure.js` 를 그대로 쓴다 |
+| RR-9 | 실기기 YouTube 평소 · 진단 × 요약 · 기기 · 진단 탭 × 1440 · 390 (10장) — `## 확인` |
 
 ## 정한 것
 
-비어 있다 — ⑨ 승격 때 intent 4 의 `사람: 예` 와 후보 고르기 결과가 온다. 이번 차수의 선택은 아래 `## 결정 (이 차수)`.
+⑨ 승격 (2026-10-11 · run baseline-profile) — 디자이너 intent 4 `사람: 예` (bp-design · rr-layout) 와 plan 화면 결정. plan B28 이 디자이너 기본값을 받았고 검토가 건 것만 고쳤다.
 
-### 결정 (이 차수)
+| # | 날짜 · run | 결정 | 확인 거리 |
+|---|---|---|---|
+| 1 | 2026-10-11 · baseline-profile | 후보 1 (후보 하나) — 순서 · 색 · 크기 바닥이 규칙으로 닫혀 갈림은 필드뿐 (plan B13 ~ B16) | `## 시안` |
+| 2 | 2026-10-11 · baseline-profile | 글자 층 — 타일 `clamp(26px, 2.2vw, 32px)` · 섹션 18 heading(대문자 · 자간 .02em) · 카드 제목 15 · 본문 13 · 보조 12 (bp-design 4-1) | RR-1 · RR-3 · `## 크기` |
+| 3 | 2026-10-11 · baseline-profile | 요약 첫 섹션 이름 `지표` (bp-design 4-2) | `## 문구` |
+| 4 | 2026-10-11 · baseline-profile | 타일 8장 값 · 순서 = 섹션 순 (startup · hwui · frame · cpu · memory · log · thermal · network) · frame 은 상태 문자열만 · thermal 은 종료 단계 (plan B13 · B14) | `RR-4 …` 시험 · RR-9 타일 8 |
+| 5 | 2026-10-11 · baseline-profile | 타일 단어 · 단위 — `앱 로그 줄` / `줄` · hwui `장` · thermal `스로틀 단계 · 종료` (bp-design 4-3 · 4-18 · 디자인 검토 #6) | `RR-5 문구 표 ↔ 코드` |
+| 6 | 2026-10-11 · baseline-profile | 타일 값 없음 = 18px heading `neutral-700` + 코드 줄 · unsupported 는 `reason_code` 자체 (bp-design 4-4) | `missing` 사진 |
+| 7 | 2026-10-11 · baseline-profile | 타일 값 = 아래 카드의 같은 문자열 (`13.62 MB` — 시안 `13.6` 이 아님) · 숫자 뒤 영문 단위만 13px 로 나눔 (rr-layout 4-1 · plan B37) | `RR-4 타일 값 = 카드 값` |
+| 8 | 2026-10-11 · baseline-profile | 앱 시작 섹션은 게이지만 · 큰 숫자는 타일 (plan B15) | `RR-4 …` |
+| 9 | 2026-10-11 · baseline-profile | 라벨 단어 줄 30여 개 = `## 문구` 표 · `앱 RSS 구성` 첫 행 `RSS 최대` / `rss.max_kb` (bp-design 4-5 · 4-6) | `RR-6 단어 표 ↔ 코드` |
+| 10 | 2026-10-11 · baseline-profile | 재 봤더니 0건(`[]`)의 낱말 — 시계열 `표본 없음` · 분포 · 시간별 프레임 `프레임 없음` · 막대 · 전/후 표 · 클러스터 주파수 `항목 없음` · 배지에 안 셈 (bp-design 4-8 · rr-layout 4-5 · plan B22 · B37) | `B22 …` 시험 · `summary` 배지 0 |
+| 11 | 2026-10-11 · baseline-profile | 레일 배지 = 그 탭에서 `수집 안 함` · `값 없음` 을 그린 카드 수 (타일 · `… 없음` · `바꾸지 않음` 밖) — 진단 대상 앱 없음 2 (plan B30) | `missing` 4 · `diag-noapp` 2 · RR-9 0 = 0 |
+
+### 결정
 
 | # | 결정 | 왜 | 확인 거리 |
 |---|---|---|---|
@@ -194,33 +208,30 @@ slice 표 머리 첫 줄 `line-height: 18px` · 둘째 줄 `top: 27px` 그대로
 |---|---|---|---|
 | 보고서 8상태 × 1440 · 390 | 없음 | `shoot.mjs` · `check_shots.py` (`--break` · 지금 코드 걸림 64) | `v1/shots/` 16장 (2026-10-11 · 고침 3) — **16/16: 12px 미만 0% · 4.5:1 미만 0% · 최소 12px · 5.48 · 층 31.7(390 26) > 18 > 15 > 13 · 390 넘침 0 · 카드 안 가로 스크롤 0** · 배지 0/4/1/2 · 판정 낱말 0 (`v1/README.md`) |
 | 지금 코드 8상태 × 1440 · 390 | 골든 없음 | `shoot.mjs … before` | `v1/before/` · 요약 1440 12px 미만 85.1% · 4.5:1 미만 12.3% |
-| 구현 rr-type (글자 크기 · 색) 8상태 × 1440 · 390 | 없음 | `packages/gui/test/report-css.test.ts` · `shoot.mjs <base> <runs>/shots/rr-type before` | 2026-10-11 · `samples/` → `perftracker report --file` 실렌더 · **16/16: 12px 미만 0% · 4.5:1 미만 0% · 최소 12px · 4.84 (neutral-200 배지) · 층 18 > 15 > 13 · 넘침 0** · 타일 · 라벨 두 줄 · `<wbr>` 은 rr-layout 뒤 |
-| 구현 rr-layout (타일 · 라벨 두 줄 · `<wbr>` · 차트 `[]` · 앱 시작 게이지만) 8상태 × 1440 · 390 | 없음 | `report.test.ts` (`RR-4 …` · `RR-5 …` · `RR-6 …` · `RR-7 …` · `B22 …`) · `report-copy.test.ts` (`RR-5 문구 표 ↔ 코드` · `RR-6 단어 표 ↔ 코드`) · `report-css.test.ts` (`RR-3 요약 타일 값 > 섹션 제목` · `RR-7 줄바꿈은 break-word`) | 2026-10-11 · `samples/` → `perftracker report --file` 실렌더 · **16/16: 12px 미만 0% · 4.5:1 미만 0% · 층 31.68(390 26) > 18 > 15 > 13 · 390 넘침 0 · 카드 안 가로 스크롤 0 · ellipsis 0** · 레일 요약 배지 summary 0 · missing 4 (시안과 같음) · legacy 0 · diag-noapp 진단 1 (시안 1 · 2 는 bp-gui-report 의 컴파일 카드 몫) |
-| 구현 bp-gui-report (컴파일 카드 · 진단 ART 칸) 같은 8상태 | 없음 | `report.test.ts` (`BP-8 …` · `B30 …`) | 2026-10-11 · 16/16 그대로 (12px · 4.5:1 · 390 넘침 · 카드 안 스크롤 0) · 레일 legacy 요약 1 · diag-noapp 진단 2 — 시안 숫자와 같아짐 (`docs/design/baseline-profile.md` `## 확인`) |
+| 구현 rr-type · rr-layout · bp-gui-report — 같은 8상태 × 1440 · 390 (`samples/` → `perftracker report --file` 실렌더) | 없음 | `report-css.test.ts` · `report.test.ts` (`RR-4 ~ RR-7 …` · `B22 …` · `BP-8 …` · `B30 …`) · `report-copy.test.ts` (`RR-5` · `RR-6` 표 ↔ 코드) | 2026-10-11 · 단위마다 16/16: 12px 미만 0% · 4.5:1 미만 0% · 390 넘침 0 · 카드 안 가로 스크롤 0 · ellipsis 0 · 레일 summary 0 · missing 4 · legacy 1 · diag-noapp 2 — bp-gui-report 뒤 시안 숫자와 같아짐 (단위별 줄은 git 이력 ffca69c) |
+| **RR-9 실기기** — SM-S901N · `R5CT0000001` · sdk 36 · YouTube 21.40.161 · 평소 `bfaf14` · 진단 `6c997f` × 요약 · 기기 · 진단 탭 × 1440 · 390 (10장) | 없음 | `measure.js` + `check_shots.py` `problems()` (스크래치 드라이버 · `v1/README.md` 「RR-9」) | 2026-10-11 · ffca69c · **10/10: 12px 미만 0% · 4.5:1 미만 0% · 최소 12px · 5.48 · 층 31.68(390 26) > 18 > 15 > 13 · 요약 타일 8 · 레일 배지 0 = 미수집 카드 0 · 390 넘침 0 · 카드 안 가로 스크롤 0 · 모델 · serial 보임** — 배지는 0 = 0 으로만 맞음 (두 세션에 `수집 안 함` · `값 없음` 글자 0 · hwui partial 은 배지 없음) · 사진 `runs/baseline-profile/shots/rr9/` |
+| 시안 고침 5 (B37 · B40 · B42 맞춤) 8상태 × 1440 · 390 | 없음 | `shoot.mjs` · `check_shots.py` (`--break` 7 안 걸림 0) | 2026-10-11 · 16/16 그대로 (숫자 위 줄과 같음) · compile 위치 한 번 |
 
 구현 화면 찍는 길: `gen_samples.py` → `perftracker report <id> -o <runs> --file <html> --no-browser` → `shoot.mjs <base> <폴더> before` (시계열 눈금은 SVG 배율로 잼 · 결정 13).
 
 ## HANDOFF 와 어긋남
 
-구현 단위가 고친다 — 글자 크기 · 색은 CSS(rr-type · `report.css`), 마크업 · 매니페스트 · `blocks.ts` 는 rr-layout, 컴파일 · ART 는 bp-gui-report (`docs/design/baseline-profile.md`).
+없음 — rr-type · rr-layout · bp-gui-report 가 `docs/design/report/HANDOFF.md` 에 옮김 (2026-10-11 확인: `지표` · `표본 없음` · `항목 없음` · `길이` · `dexstates` · 깃발 · B42). 단위별 옛 표는 git 이력 (ffca69c).
 
-| 단위 | 문서 · 절 | 지금 HANDOFF | 이 기능 뒤 |
+## 열린 질문
+
+| # | 무엇 | 지금 기본값 | 날짜 · run |
 |---|---|---|---|
-| rr-type | report §3 탭 배지 · 헤더 · 섹션 · 카드 · 표식 · 툴팁 | 배지 9.5px · 메타 12.5px · 섹션 10.5px 등폭 · 단위 11px `neutral-500` · 읽음 줄 11.5px | `## 크기` · `## 색` 표 |
-| rr-type | report §4 시계열 · slice 표 글자 | 눈금 8.5 · 이름 11px | 눈금 viewBox 12 · 이름 13px |
-| rr-layout | report §3 요약 탭 섹션 | `summary` `render` … | `지표`(타일 8) `startup` `render` … `context` |
-| rr-layout | report §3 헤더 메타 · 레일 배지 셈 | `duration` · 미수집 블록 수 | `길이` · 그 탭에서 `수집 안 함` · `값 없음` 을 그린 카드 수 (타일 · `… 없음` · `바꾸지 않음` 밖 · 진단 대상 앱 없음 2 · B30) |
-| rr-layout | report §4 pairs · slice 표 · 경로 | 라벨 옮겨 적지 않음 · `overflow-wrap:anywhere` · `break-all` | 단어 줄 + 경로 줄 (결정 2) · 구분자 뒤 `<wbr>` · `break-word` |
-| rr-layout | report §4 stat · 시계열 · 렌더 | 앱 시작 큰 숫자 · `SPAD.l` 36 · 굵은 읽는 법 문장 · 차트 `[]` = `값 없음` | 게이지만 · 46 · 각주 단어 · `표본 없음` · `프레임 없음` · `항목 없음` |
-| bp-gui-report | report §2 · §3 맥락 · 진단 | 블록 8 | `dexstates` · 컴파일 카드 · ART 카드 (baseline-profile 문서) |
-| — | report §5 토큰 | 토큰 표 | 값 그대로 |
+| 1 | 360 폭 눈금 — 카드가 viewBox 보다 좁아지는 ≈ 362px 미만 창에서 시계열 눈금 11.9px · 분포 눈금(14 단위) 11.5px (`report.css` 주석) | 측정 폭(1440 · 390) 밖이라 그대로 · viewBox 가 잰 폭을 쓰게 되면 다시 | 2026-10-11 · baseline-profile (rr-type 4-4) |
+| 2 | labs 표본의 실기기 serial — `v1/samples/` 8개가 실기기 result.json 을 옮김 (`R5CT0000001` · fingerprint · 설치 경로 해시). 루트 AGENTS 「합성 픽스처만 · 기기 원문은 test/fixtures」 가 labs 를 말하지 않음 | 고치지 않음 · AGENTS 에 labs 시안 표본 예외 한 줄은 기획 (메인) | 2026-10-11 · baseline-profile (디자인 검토 #12 · 후속) |
+| 3 | RR-9 배지 = 미수집 블록 수는 실기기에서 0 = 0 으로만 봄 — 배지가 서는 실기기 세션(sdk 30 꼴 · 옛 파일 · 진단 대상 앱 없음)은 표본뿐 | 표본 `missing` 4 · `legacy` 1 · `diag-noapp` 2 로 대신 | 2026-10-11 · baseline-profile |
 
 ## 검토
 
 | 날짜 · run | 검토 | 누가 | 판정 | 왕복 |
 |---|---|---|---|---|
 | 2026-10-11 · baseline-profile | 실현성 (4985424) | 디자인 | 조건부 10 · 사람 4 → plan B13 ~ B16 | 1 |
-| 2026-10-11 · baseline-profile | 재검토 (fa572d9) | 개발 · 디자인 | 조건부 1 · 후속 #3 → 이 문서 `### 결정 (이 차수)` 1 | 2 |
+| 2026-10-11 · baseline-profile | 재검토 (fa572d9) | 개발 · 디자인 | 조건부 1 · 후속 #3 → 이 문서 `### 결정` 1 | 2 |
 | 2026-10-11 · baseline-profile | 부합 · 구현 가능 (b8c2490) | 디자인 | 조건부 11 → 고침 1 | 1 |
 
 ## 바뀐 기록
@@ -233,3 +244,4 @@ slice 표 머리 첫 줄 `line-height: 18px` · 둘째 줄 `top: 27px` 그대로
 | 2026-10-11 | baseline-profile | rr-type 검수 왕복 1 — 머리 메타 값 색은 `## 색` 대로 `neutral-700` (코드 · HANDOFF 를 맞춤 · 시안 CSS 는 800) · 키/값 표 라벨 열 규칙 특정도 `:where()` 로 낮춤 (dex 표 규칙이 이김) · 눈금 렌더 ≈ 362px 미만 창은 12 아래 (측정 폭 밖 · 주석) |
 | 2026-10-11 | baseline-profile | 구현 rr-layout — `## 확인` 한 줄. 구분자 없는 긴 토막(dex 경로의 40자 해시)이 키/값 표 최소 폭을 밀던 것은 `anywhere` 대신 값 안쪽 상자(`.rp-wrap-in` 폭 0 · 최소 폭 100%)로 막음 — `## 넘침` 「토막이 칸보다 넓을 때만 토막 안」 그대로 (rr-type 검수 후속 3). 타일 경로의 위가 `null` 이면 `값 없음`(카드와 같은 상태) |
 | 2026-10-11 | baseline-profile | rr-layout 검수 왕복 1 · plan B37 — `## 문구` 두 줄 (전/후 표 · 클러스터 주파수 `[]` → `항목 없음`) · `## 확인` rr-layout 줄 배지 숫자 다시 |
+| 2026-10-11 | baseline-profile | ⑨ 승격 — `## 정한 것` 11 (intent 4 사람 예 · plan B13 ~ B15 · B22 · B28 · B30 · B37) · `### 결정 (이 차수)` → `### 결정` · `## 시안` 고른 것 1 · 시안 고침 5 (B37 · B40 · B42) · 핸드오프 사진 = 구현 실렌더 · `## 확인` RR-9 실기기 10장 · `## HANDOFF 와 어긋남` 없음 · `## 열린 질문` 셋 |
