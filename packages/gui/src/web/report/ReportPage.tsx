@@ -44,7 +44,9 @@ function inlineReport(): ReportDocument | null {
  * 옮기지 않고 읽으라는 것이 이 화면의 요점이다.
  */
 export function ReportPage({ runId }: { runId: string }) {
-  const [doc, setDoc] = useState<ReportDocument | null>(null)
+  // 심겨 있으면 첫 그림부터 그 문서다 — 불러오는 중 화면을 거치지 않는다. 시험도 같은 길로 화면 전체를 그린다
+  // (`test/report.test.ts` 의 `react-dom/server` — 레일 배지 · 타일을 렌더 결과로 본다).
+  const [doc, setDoc] = useState<ReportDocument | null>(inlineReport)
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<TabId>('summary')
   const [sub, setSub] = useState<Record<string, string>>({})

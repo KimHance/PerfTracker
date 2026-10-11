@@ -771,7 +771,8 @@ export function buildDelta(b: DeltaBlock, res: unknown): DeltaVm | NoneVm {
   if (b.path === undefined) return { none: true, label: '매니페스트에 path 가 없습니다' }
 
   const raw = readPath(res, b.path)
-  if (raw === MISSING || raw === null || isEmptyArray(raw)) return none(raw, b.path)
+  // 재 봤더니 0개 — `항목 없음` (B37 · B22 와 같은 이유 · 배지에 안 셈).
+  if (raw === MISSING || raw === null || isEmptyArray(raw)) return emptyOr(raw, b.path, RC.emptyDelta)
   const labelField = b.labelField ?? 'name'
   return {
     rows: (raw as Record<string, unknown>[]).map((r) => {
@@ -831,7 +832,8 @@ export function buildPairs(b: PairsBlock, res: unknown): PairsVm | NoneVm {
   }
 
   if (b.arrayAs === 'freq') {
-    if (raw === MISSING || raw === null || isEmptyArray(raw)) return none(raw, b.path)
+    // 재 봤더니 0개 — `항목 없음` (B37 · 배지에 안 셈).
+    if (raw === MISSING || raw === null || isEmptyArray(raw)) return emptyOr(raw, b.path, RC.emptyFreq)
     // 같은 클러스터의 코어는 주파수가 같다. 8줄을 3줄로 접는다 — 같은 값 8번은 정보가 아니다.
     const groups = new Map<string, { cpus: number[]; f: Record<string, number> }>()
     for (const f of raw as Record<string, number>[]) {
@@ -1091,8 +1093,8 @@ function placeholderOf(b: Block, vm: unknown): string | null {
 /**
  * **레일 배지가 세는 블록인가** (RR-8) — `수집 안 함` · `값 없음` 을 그린 블록.
  *
- * 재 봤더니 없음(`[]`)으로 `없음` 을 그린 블록(`크래시 없음` · `ANR 없음` · `경고 없음` · 차트의 `표본 없음` ·
- * `프레임 없음` · `항목 없음`)은 세지 않는다 — 그것은 잰 0 이다(규칙 3 · B22). 그 밖의 글자(`바꾸지 않음` 같은
+ * 재 봤더니 없음(`[]`)으로 `없음` 을 그린 블록(`크래시 없음` · `ANR 없음` · `경고 없음` · 차트 · 전/후 표 ·
+ * 주파수 카드의 `표본 없음` · `프레임 없음` · `항목 없음`)은 세지 않는다 — 그것은 잰 0 이다(규칙 3 · B22 · B37). 그 밖의 글자(`바꾸지 않음` 같은
  * 사실 문장)도 같은 이유로 세지 않는다.
  * 요약 타일은 블록이 아니라 이 셈에 들어오지 않는다 — 같은 값의 카드가 이미 센다 (RR 결정 12).
  */

@@ -1,5 +1,10 @@
+// 화면(.tsx)을 `react-dom/server` 로 그려 보는 시험이 있다 — 그 소스가 쓰는 DOM 타입(`ResizeObserver` ·
+// `getBoundingClientRect`)을 이 파일에서만 싣는다 (tsconfig.test.json 은 Node 만 싣는다 · plan B39).
+/// <reference lib="dom" />
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
   copyViolations,
@@ -8,7 +13,10 @@ import {
   SliceBranchStatsSchema,
   SliceNameRowSchema,
 } from '@perftracker/core'
+import { INLINE_REPORT_GLOBAL } from '../src/contract/api.js'
 import { computeMaxT, type Mark, readMarks } from '../src/web/report/axis.js'
+import { Tiles } from '../src/web/report/Charts.jsx'
+import { ReportPage } from '../src/web/report/ReportPage.jsx'
 import {
   badgeOf,
   blockState,
@@ -2135,10 +2143,42 @@ describe('RR-4 요약 타일', () => {
     expect(tile(FULL, 'cpu').title).not.toBeNull()
     // 타일은 사라지지 않는다 — 문서가 비어도 8장 모두 `수집 안 함`.
     expect(buildTiles({}).map((t) => t.none)).toEqual(ORDER.map(() => NONE_MISSING))
-    // 결정 12 — 타일이 `값 없음` · `수집 안 함` 을 그려도 레일 배지에 안 센다 (타일은 블록이 아니다).
-    expect(MANIFEST.some((b) => (b as { word?: unknown }).word !== undefined)).toBe(false)
-    const blocksOnly = builtAll(FULL).filter((x) => SECTIONS.find((s) => s.id === x.block.section)?.tab === 'summary')
-    expect(tabBadgeCount(builtAll(FULL), 'summary')).toBe(tabBadgeCount(blocksOnly, 'summary'))
+  })
+
+  /**
+   * 결정 12 — 타일이 `값 없음` · `수집 안 함` 을 그려도 레일 배지에 안 센다. **화면 전체를 그려서 본다**
+   * (`react-dom/server` · 심은 문서) — 레일에 선 숫자가 블록에서 센 수와 같고, 타일의 빈 칸은 더해지지 않는다.
+   */
+  it('RR-4 타일은 레일 배지에 안 셈 (결정 12) — 화면 렌더', () => {
+    const g = globalThis as Record<string, unknown>
+    const before = g[INLINE_REPORT_GLOBAL]
+    try {
+      let tileNones = 0
+      for (const doc of [FULL, LOWEND, LEGACY, diagDoc('failed')]) {
+        g[INLINE_REPORT_GLOBAL] = doc
+        const html = renderToStaticMarkup(createElement(ReportPage, { runId: 'x' }))
+        tileNones += (html.match(/class="rp-tile-none"/g) ?? []).length
+        // 레일 버튼마다 숫자 — 없으면 0.
+        const rail = [...html.matchAll(/<button class="rp-tab[^"]*"[^>]*><span>([^<]+)<\/span>(?:<span class="rp-tab-count mono">(\d+)<\/span>)?<\/button>/g)]
+          .map((m) => [m[1]!, Number(m[2] ?? 0)] as const)
+        expect(rail.length, '레일을 못 읽음').toBe(tabsFor(doc).length)
+        // 기대 수는 블록이 그린 글자에서 따로 센다 — `tabBadgeCount` 를 거치지 않는다.
+        for (const [label, n] of rail) {
+          const tab = tabsFor(doc).find((t) => t.label === label)!.id
+          const want = builtAll(doc).filter((x) => {
+            if (SECTIONS.find((s) => s.id === x.block.section)?.tab !== tab) return false
+            const v = x.vm as { none?: boolean; label?: string; dim?: boolean; value?: string }
+            const t = v.none === true ? v.label : x.block.kind === 'stat' && v.dim === true ? v.value : null
+            return typeof t === 'string' && (t === NONE_NULL || t.startsWith(NONE_MISSING))
+          }).length
+          expect(n, `${label}`).toBe(want)
+        }
+      }
+      // 빈 대조가 아니게 — 그린 화면에 `값 없음` · `수집 안 함` 타일이 실제로 있었다.
+      expect(tileNones).toBeGreaterThan(0)
+    } finally {
+      g[INLINE_REPORT_GLOBAL] = before
+    }
   })
 
   it('RR-4 값으로 칠하지 않음', () => {
@@ -2156,11 +2196,13 @@ describe('RR-4 요약 타일', () => {
     const noRefs = structuredClone(FULL) as Record<string, any>
     delete noRefs['references']
     expect(buildTiles(noRefs)).toEqual(buildTiles(FULL))
-    // 렌더러도 값으로 클래스를 고르지 않는다 — Tiles 의 className 은 전부 글자 그대로다.
-    const charts = readFileSync(fileURLToPath(new URL('../src/web/report/Charts.tsx', import.meta.url)), 'utf8')
-    const tiles = charts.slice(charts.indexOf('export function Tiles'))
-    expect(tiles.length).toBeGreaterThan(100)
-    expect(tiles.match(/className=\{/g)).toBeNull()
+    // 렌더러도 값으로 칠하지 않는다 — **그린 결과**를 본다 (`react-dom/server`). 글자를 지운 마크업(태그 · 클래스 ·
+    // style · title)이 값이 아주 다른 두 세션에서 같고, 인라인 style 이 하나도 없다 (색 · 굵기를 값으로 못 바꿈).
+    const markup = (doc: unknown): string => renderToStaticMarkup(createElement(Tiles, { tiles: buildTiles(doc) }))
+    const bare = (html: string): string => html.replace(/>[^<]*</g, '><')
+    expect(markup(FULL)).toContain('rp-tile-value')
+    expect(bare(markup(hot))).toBe(bare(markup(FULL)))
+    for (const doc of [FULL, hot, LOWEND, LEGACY, withFrame()]) expect(markup(doc)).not.toMatch(/ style="/)
   })
 
   it('RR-4 타일 값 = 카드 값', () => {
@@ -2327,5 +2369,39 @@ describe('B22 차트 [] 낱말', () => {
     nul['metrics']['frame']['data']['samples'] = null
     expect((buildSeries(series, nul, 10, [], null) as NoneVm).label).toBe(NONE_NULL)
     expect(tabBadgeCount(builtAll(nul), 'summary')).toBe(4)
+  })
+})
+
+describe('B37 전/후 표 · 주파수 카드 [] 낱말', () => {
+  it('B37 전/후 표 · 주파수 [] → 항목 없음 · null · 필드 없음과 갈림 · 배지에 안 셈', () => {
+    const temp = block<DeltaBlock>('온도 (세션 전 → 후)')
+    const freq = block<PairsBlock>('클러스터 주파수')
+    const set = (zones: unknown, f: unknown): Record<string, any> => {
+      const doc = structuredClone(FULL) as Record<string, any>
+      doc['metrics']['thermal']['data']['zones'] = zones
+      doc['metrics']['cpu']['data']['device_frequency'] = f
+      return doc
+    }
+    // [] — 재 봤더니 0개.
+    const empty = set([], [])
+    expect((buildDelta(temp, empty) as NoneVm).label).toBe('항목 없음')
+    expect((buildPairs(freq, empty) as NoneVm).label).toBe('항목 없음')
+    // null — 못 읽었다.
+    const nul = set(null, null)
+    expect((buildDelta(temp, nul) as NoneVm).label).toBe(NONE_NULL)
+    expect((buildPairs(freq, nul) as NoneVm).label).toBe(NONE_NULL)
+    // 필드 없음 — 수집 안 함.
+    const gone = structuredClone(FULL) as Record<string, any>
+    delete gone['metrics']['thermal']['data']['zones']
+    delete gone['metrics']['cpu']['data']['device_frequency']
+    expect((buildDelta(temp, gone) as NoneVm).label).toBe(`${NONE_MISSING} — metrics.thermal.data.zones 없음`)
+    expect((buildPairs(freq, gone) as NoneVm).label.startsWith(NONE_MISSING)).toBe(true)
+    // 셈 — [] 는 안 세고, null · 없음은 둘 다 센다 (표본 full 의 요약 배지 기준선에서).
+    const base = tabBadgeCount(builtAll(FULL), 'summary')
+    expect(tabBadgeCount(builtAll(empty), 'summary')).toBe(base)
+    expect(tabBadgeCount(builtAll(nul), 'summary')).toBe(base + 2)
+    expect(tabBadgeCount(builtAll(gone), 'summary')).toBe(base + 2)
+    // 문구는 모음에서 — 디자인 문서 표와 대조는 report-copy.test.ts.
+    expect([RC.emptyDelta, RC.emptyFreq]).toEqual(['항목 없음', '항목 없음'])
   })
 })

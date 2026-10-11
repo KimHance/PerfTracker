@@ -144,7 +144,7 @@ describe('RR-5 문구 표 ↔ 코드', () => {
     const code = Object.values(READABILITY_COPY).map(String).sort()
     expect(code).toEqual(table)
     // 표가 실제로 읽혔다 — 빈 배열끼리 같다고 통과하지 않게.
-    expect(table.length).toBe(17)
+    expect(table.length).toBe(19)
     expect(RR_ROWS.every((r) => r.pkg === 'gui')).toBe(true)
   })
 

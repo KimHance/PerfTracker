@@ -144,6 +144,8 @@ slice 표 머리 첫 줄 `line-height: 18px` · 둘째 줄 `top: 27px` 그대로
 | gui | 시계열 카드 `[]` (재 봤더니 0건 · plan B22) | `표본 없음` | `series` 데이터가 `[]` — 배지에 안 셈 | `값 없음` (null 글자) · `0` 선 |
 | gui | 분포 · 시간별 프레임 카드 `[]` | `프레임 없음` | `distribution` · `frametimeline` 데이터 `[]` | `값 없음` |
 | gui | 막대 카드 `[]` | `항목 없음` | `bars` 데이터 `[]` | `값 없음` |
+| gui | 전/후 표 `[]` (배열형 — 온도 존 · plan B37) | `항목 없음` | `delta` 배열 `[]` — 재 봤더니 0개 · 배지에 안 셈 | `값 없음` |
+| gui | 클러스터 주파수 카드 `[]` (`freq` · plan B37) | `항목 없음` | `device_frequency` `[]` — 배지에 안 셈 | `값 없음` |
 | gui | `앱 RSS 구성` 새 행 단어 | `RSS 최대` | 경로 줄 `rss.max_kb` (mb0) — 타일과 같은 문자열 | — |
 
 라벨 단어 줄 (RR-6) — 경로 줄은 지금 라벨 그대로. 기기 원문 라벨(`TotalTime` · `Janky frames` · `user` · `anon` …)은 한 줄 그대로.
@@ -229,3 +231,4 @@ slice 표 머리 첫 줄 `line-height: 18px` · 둘째 줄 `top: 27px` 그대로
 | 2026-10-11 | baseline-profile | 구현 rr-type — `## 확인` 한 줄. `## 넘침` 의 표 th 줄바꿈 · 시계열 `overflow:visible` · 분포 ≤422px 눈금 14 단위는 글자를 키운 결과를 막으려고 rr-type 이 먼저 넣음 (intent rr-type 4) |
 | 2026-10-11 | baseline-profile | rr-type 검수 왕복 1 — 머리 메타 값 색은 `## 색` 대로 `neutral-700` (코드 · HANDOFF 를 맞춤 · 시안 CSS 는 800) · 키/값 표 라벨 열 규칙 특정도 `:where()` 로 낮춤 (dex 표 규칙이 이김) · 눈금 렌더 ≈ 362px 미만 창은 12 아래 (측정 폭 밖 · 주석) |
 | 2026-10-11 | baseline-profile | 구현 rr-layout — `## 확인` 한 줄. 구분자 없는 긴 토막(dex 경로의 40자 해시)이 키/값 표 최소 폭을 밀던 것은 `anywhere` 대신 값 안쪽 상자(`.rp-wrap-in` 폭 0 · 최소 폭 100%)로 막음 — `## 넘침` 「토막이 칸보다 넓을 때만 토막 안」 그대로 (rr-type 검수 후속 3). 타일 경로의 위가 `null` 이면 `값 없음`(카드와 같은 상태) |
+| 2026-10-11 | baseline-profile | rr-layout 검수 왕복 1 · plan B37 — `## 문구` 두 줄 (전/후 표 · 클러스터 주파수 `[]` → `항목 없음`) · `## 확인` rr-layout 줄 배지 숫자 다시 |

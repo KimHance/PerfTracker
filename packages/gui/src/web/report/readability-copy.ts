@@ -32,6 +32,10 @@ export const READABILITY_COPY = {
   emptyFrames: '프레임 없음',
   /** 막대 카드 `[]`. */
   emptyBars: '항목 없음',
+  /** 전/후 표(배열형 · 온도 존) `[]` — B37. */
+  emptyDelta: '항목 없음',
+  /** 클러스터 주파수 카드(`freq`) `[]` — B37. */
+  emptyFreq: '항목 없음',
 } as const
 
 /**
