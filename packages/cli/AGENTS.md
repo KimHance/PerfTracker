@@ -9,6 +9,7 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
 | --- | --- |
 | `src/program.ts` | 명령 11개 등록 (`runs` 는 하위 셋). **실행하지 않는다** |
 | `src/index.ts` | bin 진입점 — `parseAsync` 와 최상위 오류 처리뿐 |
+| `src/unexpected.ts` | 예상 못 한 오류의 머리 문장 · 꼴 — 진입점과 compile 뒤 실패(`commands/compile.ts`)가 같이 부른다 |
 
 **`dist/index.js` 는 매 빌드마다 실행 권한을 잃는다.** `npm install` 이 붙여 준 권한을
 `tsc --build` 가 파일을 다시 쓰면서 떨어뜨리고, 그러면 `npx perftracker` 가 `Permission denied`
@@ -124,6 +125,9 @@ README 「명령 전체」와 이 파일이 말한다 — 시험(`BP-4 README �
   규칙 밖이고 자르지 않는다. 도구는 자동으로 되돌리지 않는다. compile 이 낀 실패 두 종류(`CompileFailedError` ·
   `CompileAppliedError`)도 `compileFailure` 가 상태 줄 · 되돌림 줄을 붙여 같은 code 로 다시 던진다 — 기기가 바뀌었을
   수 있는데 그 사실과 되돌림 명령이 빠지면 안 된다. 문구는 `src/copy/compile.ts` 한 곳 (위 진단 문구와 같은 규율).
+  base.apk 와 보조 dex 는 따로 보고, **되돌릴 수 없는 쪽은 침묵하지 않고 그 사실 한 줄**을 낸다 (plan B34 #5).
+  serial 은 셸이 해석하는 글자가 있을 때만 작은따옴표로 감싼다 (`shellWord`) — 시험이 sh · zsh · bash 에 가짜 adb 로
+  실제로 쳐 본다.
 
 ## 온-디바이스 스펙
 

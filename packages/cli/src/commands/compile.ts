@@ -8,7 +8,8 @@ import {
   readCaptureManifest,
   type TargetApp,
 } from '@perftracker/core'
-import { COMPILE_CLI_COPY as COPY, fillCopy, UNKNOWN_WORD } from '../copy/compile.js'
+import { COMPILE_CLI_COPY as COPY, fillCopy } from '../copy/compile.js'
+import { unexpectedErrorText } from '../unexpected.js'
 
 /**
  * `start --compile` 세션의 cli 표시 (기능 문서 baseline-profile BP-5 · BP-6). `start` · `stop` · `status` 가
@@ -31,8 +32,8 @@ const isRevertMode = (s: string): boolean => (REVERT_MODES as readonly string[])
 export function compileLine(s: CompileSummary): string {
   return fillCopy(COPY.compileLine, {
     value: s.value,
-    before: s.baseStatusBefore ?? UNKNOWN_WORD,
-    after: s.baseStatusAfter ?? UNKNOWN_WORD,
+    before: s.baseStatusBefore ?? COPY.unknownWord,
+    after: s.baseStatusAfter ?? COPY.unknownWord,
     ms: s.elapsedMs.toLocaleString('en-US'),
   })
 }
@@ -49,30 +50,64 @@ export async function readStateAfter(runDir: string): Promise<DexoptLine[] | nul
   }
 }
 
+/** 셸이 글자 그대로 받는 글자 — 이 밖의 글자가 있으면 작은따옴표로 감싼다 (zsh 글롭 `[` · `]` 등). */
+const SHELL_SAFE = /^[A-Za-z0-9._:@%+,/-]+$/
+
+/**
+ * 호스트 셸(sh · bash · zsh)에서 **한 인자로 글자 그대로** 가는 꼴. 보통 serial(USB · `emulator-5554` ·
+ * `ip:port` · mDNS 이름)은 그대로 두고 — 디자인 꼴 그대로 — IPv6 `[fe80::1]:5555` 처럼 셸이 해석하는 글자가
+ * 있을 때만 작은따옴표로 감싼다 (검수 왕복 1 #1 — zsh 가 `no matches found` 로 멈췄다).
+ */
+export function shellWord(s: string): string {
+  return SHELL_SAFE.test(s) ? s : `'${s.replaceAll("'", `'\\''`)}'`
+}
+
 /**
  * 되돌림 줄 (BP-5) — **호스트에서 그대로 쳐서 도는** `adb -s <serial> shell cmd package compile …` 꼴.
  * 대상 앱만이고 (결정 9) 자동으로 실행하지 않는다 (결정 4). 명령 줄은 두 칸 들여 · 앞에 라벨 없음 —
- * 줄째 복사해도 돈다. 80칸 규칙 밖이고 자르지 않는다 (결정 13).
+ * 줄째 복사해도 돈다. 80칸 규칙 밖이고 자르지 않는다 (결정 13). `{pkg}` 는 안드로이드 패키지 이름 글자라
+ * 인용하지 않는다 · `{status}` 는 `REVERT_MODES` 셋뿐이다.
  *
- * - 바꾸기 전 base 줄 `status` 를 모르면 · `-m` 이 받지 않는 값이면 명령 대신 그 사실 한 줄.
- * - 보조 dex 가 있고 `status` 가 모두 같고 `-m` 이 받는 값이면 `--secondary-dex` 한 줄 더 · 서로 다르면 그 사실 한 줄.
+ * base 줄과 보조 dex 는 **따로** 본다 — 한쪽을 되돌릴 수 없어도 다른 쪽 명령은 낸다. 되돌릴 수 없는 쪽은
+ * **침묵하지 않고 그 사실 한 줄** (plan B34 #5 · 규칙 3 — 숨기면 사람은 다 되돌렸다고 믿는다):
+ * - base 줄 `status` 를 모르면 · `-m` 이 받지 않는 값이면 명령 대신 그 사실 한 줄 (머리 밖).
+ * - 보조 dex 가 있고 `status` 가 모두 같으면: `-m` 이 받는 값이면 `--secondary-dex` 명령 · 아니면 그 사실 한 줄.
+ *   서로 다르면 그 사실 한 줄. 명령이 하나라도 있으면 보조 dex 사실 줄은 머리 아래 두 칸 들여 (디자인 블록 2).
  */
 export function revertLines(before: readonly DexoptLine[] | null | undefined, serial: string, pkg: string): string[] {
-  const base = baseDexLine(before)
-  if (base === null) return [COPY.revertUnknown]
-  if (!isRevertMode(base.status)) return [fillCopy(COPY.revertOutside, { status: base.status })]
+  const host = shellWord(serial)
+  /** 명령 대신 낸 base 사실 — 머리 밖. */
+  const facts: string[] = []
+  /** 머리 아래 두 칸 들여 놓는 것 — 명령과 보조 dex 사실. */
+  const block: string[] = []
+  let commands = 0
 
-  const lines = [COPY.revertHead, `  ${fillCopy(COPY.revertBase, { serial, status: base.status, pkg })}`]
+  const base = baseDexLine(before)
+  if (base === null) facts.push(COPY.revertUnknown)
+  else if (!isRevertMode(base.status)) facts.push(fillCopy(COPY.revertOutside, { status: base.status }))
+  else {
+    block.push(fillCopy(COPY.revertBase, { serial: host, status: base.status, pkg }))
+    commands++
+  }
 
   const secondary = (before ?? []).filter((l) => l.secondary_dex)
-  const statuses = new Set(secondary.map((l) => l.status))
-  if (statuses.size > 1) {
-    lines.push(`  ${fillCopy(COPY.secondaryMixed, { n: new Set(secondary.map((l) => l.path)).size })}`)
-  } else if (statuses.size === 1) {
-    const status = [...statuses][0]!
-    if (isRevertMode(status)) lines.push(`  ${fillCopy(COPY.revertSecondary, { serial, status, pkg })}`)
+  const statuses = [...new Set(secondary.map((l) => l.status))]
+  const n = new Set(secondary.map((l) => l.path)).size
+  if (statuses.length > 1) {
+    block.push(fillCopy(COPY.secondaryMixed, { n }))
+  } else if (statuses.length === 1) {
+    const status = statuses[0]!
+    if (isRevertMode(status)) {
+      block.push(fillCopy(COPY.revertSecondary, { serial: host, status, pkg }))
+      commands++
+    } else {
+      block.push(fillCopy(COPY.secondaryOutside, { n, status }))
+    }
   }
-  return lines
+
+  // 명령이 없으면 머리(「실행 뒤 …」)를 낼 까닭이 없다 — 사실 줄만 머리 밖에.
+  if (commands === 0) return [...facts, ...block]
+  return [...facts, COPY.revertHead, ...block.map((l) => `  ${l}`)]
 }
 
 /**
@@ -97,15 +132,14 @@ export function compileFailure(e: unknown, app: TargetApp, serial: string): Perf
     head =
       e.cause instanceof PerfTrackerError
         ? e.message
-        : '예상치 못한 오류가 발생했습니다. 아래 내용과 함께 이슈로 알려주세요.\n' +
-          (e.cause instanceof Error ? (e.cause.stack ?? e.cause.message) : String(e.cause))
+        : unexpectedErrorText(e.cause)
     value = e.compile.value
     before = e.compile.compile_state_before
   } else {
     return null
   }
 
-  const state = fillCopy(COPY.failState, { value, before: baseDexLine(before)?.status ?? UNKNOWN_WORD })
+  const state = fillCopy(COPY.failState, { value, before: baseDexLine(before)?.status ?? COPY.unknownWord })
   return new PerfTrackerError(
     e.code,
     [head, state, '', ...revertLines(before, serial, app.package)].join('\n'),

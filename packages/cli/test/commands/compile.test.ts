@@ -1,4 +1,5 @@
-import { mkdtempSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { chmodSync, existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,6 +13,7 @@ import {
 } from '@perftracker/core'
 import { describe, expect, it, vi } from 'vitest'
 import { compileFailure, REVERT_MODES, revertLines } from '../../src/commands/compile.js'
+import { UNEXPECTED_ERROR_HEAD } from '../../src/unexpected.js'
 import { displayWidth } from '../../src/commands/runs.js'
 import { formatStart, runStart, startSessionOptions } from '../../src/commands/start.js'
 import { runStatus, statusData } from '../../src/commands/status.js'
@@ -244,7 +246,7 @@ describe('BP-5 되돌림 줄 — start · stop · 호스트 꼴', () => {
 
 describe('BP-5 되돌릴 값 없으면 사실 한 줄', () => {
   it('BP-5 되돌릴 값 없으면 사실 한 줄 — base status 가 -m 밖 (디자인 CLI 블록 4)', () => {
-    expect(revertLines([line(BASE, 'run-from-apk'), secondary(1, 'verify')], SERIAL, PKG)).toEqual([
+    expect(revertLines([line(BASE, 'run-from-apk')], SERIAL, PKG)).toEqual([
       '되돌림 줄 없음 · 바꾸기 전 base.apk status run-from-apk · -m 이 받지 않는 값',
     ])
   })
@@ -267,6 +269,96 @@ describe('BP-5 되돌릴 값 없으면 사실 한 줄', () => {
       revert: revertLines(null, SERIAL, PKG),
     })
     expect(out.split('\n').slice(-2)).toEqual(['', COMPILE_CLI_COPY.revertUnknown])
+  })
+})
+
+/**
+ * 보조 dex 는 base 줄과 **따로** 본다 (plan B34 #5 · 검수 왕복 1 후속 1) — 되돌릴 수 없는 쪽이 있으면 침묵하지 않고
+ * 그 사실 한 줄. 숨기면 사람은 다 되돌렸다고 믿는다.
+ */
+describe('BP-5 보조 dex 를 되돌릴 수 없으면 사실 한 줄', () => {
+  const OUTSIDE = '보조 dex 3개 · status run-from-apk · -m 이 받지 않는 값 · 되돌림 줄 없음'
+  const MIXED = '보조 dex 3개 · status 서로 다름 · 보조 dex 되돌림 줄 없음'
+  const runFromApk = [secondary(1, 'run-from-apk'), secondary(2, 'run-from-apk'), secondary(3, 'run-from-apk')]
+  const mixed = [secondary(1, 'verify'), secondary(2, 'run-from-apk'), secondary(3, 'run-from-apk')]
+
+  it('BP-5 보조 dex 를 되돌릴 수 없으면 사실 한 줄 — 모두 같은데 -m 밖 · base 는 되돌림 (머리 아래 두 칸)', () => {
+    expect(revertLines([line(BASE, 'speed-profile'), ...runFromApk], SERIAL, PKG)).toEqual([
+      COMPILE_CLI_COPY.revertHead,
+      BASE_REVERT,
+      `  ${OUTSIDE}`,
+    ])
+  })
+
+  it('BP-5 보조 dex 를 되돌릴 수 없으면 사실 한 줄 — base 가 -m 밖이어도 보조 dex 명령은 낸다', () => {
+    expect(revertLines([line(BASE, 'run-from-apk'), ...BEFORE.slice(1)], SERIAL, PKG)).toEqual([
+      '되돌림 줄 없음 · 바꾸기 전 base.apk status run-from-apk · -m 이 받지 않는 값',
+      COMPILE_CLI_COPY.revertHead,
+      SECONDARY_REVERT,
+    ])
+  })
+
+  it('BP-5 보조 dex 를 되돌릴 수 없으면 사실 한 줄 — base 를 모르고 보조 dex 도 -m 밖 · 명령 0 이면 머리 없이 사실 둘', () => {
+    const noBase = [line(BASE, 'verify', { abi: 'arm', primary_abi: false }), line(BASE, 'speed', { primary_abi: false })]
+    expect(revertLines([...noBase, ...runFromApk], SERIAL, PKG)).toEqual([COMPILE_CLI_COPY.revertUnknown, OUTSIDE])
+  })
+
+  it('BP-5 보조 dex 를 되돌릴 수 없으면 사실 한 줄 — base 가 -m 밖 · 보조 dex 서로 다름', () => {
+    expect(revertLines([line(BASE, 'run-from-apk'), ...mixed], SERIAL, PKG)).toEqual([
+      '되돌림 줄 없음 · 바꾸기 전 base.apk status run-from-apk · -m 이 받지 않는 값',
+      MIXED,
+    ])
+  })
+
+  it('BP-5 보조 dex 를 되돌릴 수 없으면 사실 한 줄 — 보조 dex 개수는 파일 수 (ABI 줄 수 아님)', () => {
+    const twoAbi = [secondary(1, 'quicken'), { ...secondary(1, 'quicken'), abi: 'arm', primary_abi: false }]
+    expect(revertLines([line(BASE, 'speed-profile'), ...twoAbi], SERIAL, PKG).at(-1)).toBe(
+      '  보조 dex 1개 · status quicken · -m 이 받지 않는 값 · 되돌림 줄 없음',
+    )
+  })
+})
+
+/**
+ * 되돌림 줄은 **호스트 셸이 그대로 받아야** 한다 (BP-5 · 결정 13 · 검수 왕복 1 #1). 가짜 `adb`(인자를 NUL 로 끊어
+ * 찍는 셸 스크립트)만 있는 PATH 로 실제 셸에 줄을 쳐서, serial 이 글자 그대로 한 인자로 가는지 본다 — 기기 0.
+ */
+describe('BP-5 되돌림 줄 — 호스트 셸이 그대로 받는다', () => {
+  const fake = mkdtempSync(join(tmpdir(), 'pt-fake-adb-'))
+  writeFileSync(join(fake, 'adb'), '#!/bin/sh\nfor a in "$@"; do printf \'%s\\0\' "$a"; done\n')
+  chmodSync(join(fake, 'adb'), 0o755)
+
+  function argsVia(shell: string, cmdLine: string): string[] {
+    const out = execFileSync(shell, ['-c', cmdLine], { env: { PATH: `${fake}:/usr/bin:/bin` }, encoding: 'utf8' })
+    return out.split('\0').slice(0, -1)
+  }
+
+  const SERIALS = [
+    'R5CT0000001',
+    'emulator-5554',
+    '192.168.0.7:5555',
+    'adb-R5CT0000001-AbCdEf._adb-tls-connect._tcp',
+    '[fe80::1]:5555',
+    "it's *odd? serial",
+  ]
+  const shells = ['/bin/sh', '/bin/zsh', '/bin/bash'].filter((sh) => existsSync(sh))
+
+  it('BP-5 되돌림 줄 — 호스트 셸이 그대로 받는다: 시험할 셸이 있다', () => {
+    expect(shells).toContain('/bin/sh')
+  })
+
+  for (const sh of shells) {
+    it.each(SERIALS)(`BP-5 되돌림 줄 — 호스트 셸이 그대로 받는다: ${sh} · %s`, (serial) => {
+      const [, base, sec] = revertLines(BEFORE, serial, PKG)
+      expect(argsVia(sh, base!)).toEqual(['-s', serial, 'shell', 'cmd', 'package', 'compile', '-m', 'speed-profile', '-f', PKG])
+      expect(argsVia(sh, sec!)).toEqual([
+        '-s', serial, 'shell', 'cmd', 'package', 'compile', '-m', 'verify', '-f', '--secondary-dex', PKG,
+      ])
+    })
+  }
+
+  it('BP-5 되돌림 줄 — 호스트 셸이 그대로 받는다: 보통 serial 은 인용 없이 디자인 꼴 그대로', () => {
+    for (const serial of SERIALS.slice(0, 4)) expect(revertLines(BEFORE, serial, PKG)[1]).toContain(`-s ${serial} shell`)
+    expect(revertLines(BEFORE, '[fe80::1]:5555', PKG)[1]).toContain("-s '[fe80::1]:5555' shell")
   })
 })
 
@@ -318,7 +410,7 @@ describe('BP-5 실패 두 종류에서도 되돌림 줄', () => {
     const cause = new TypeError('boom')
     const out = compileFailure(new CompileAppliedError(COMPILE, cause), APP, SERIAL)!
     expect(out.code).toBe('START_FAILED_AFTER_COMPILE')
-    expect(out.message.startsWith('예상치 못한 오류가 발생했습니다. 아래 내용과 함께 이슈로 알려주세요.\nTypeError: boom')).toBe(true)
+    expect(out.message.startsWith(`${UNEXPECTED_ERROR_HEAD}\nTypeError: boom`)).toBe(true)
     expect(out.message.split('\n').slice(-3)).toEqual([COMPILE_CLI_COPY.revertHead, BASE_REVERT, SECONDARY_REVERT])
   })
 

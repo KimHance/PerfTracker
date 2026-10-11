@@ -481,10 +481,12 @@ npx perftracker stop                         # 경로 · 보고서 명령 + 되�
   ```
 
   바꾸기 전 base.apk 줄의 `status` 로 `-m` 을 채우고, 보조 dex 가 있고 그 `status` 가 모두 같으면 `--secondary-dex`
-  줄이 하나 더 붙습니다(서로 다르면 그 사실 한 줄). `-m` 이 받는 값은 sdk 36 기기 도움말 실측의 `speed` ·
-  `speed-profile` · `verify` 셋이라, 바꾸기 전 `status` 가 그 밖이거나 읽지 못했으면 명령 대신 그 사실 한 줄이
-  나옵니다. 대상 앱만 다루고, 명령 줄은 자르지 않아 80칸을 넘습니다. 되돌려도 처음과 똑같아지지 않는 이유는
-  [`session.compile` 의 한계](#sessioncompile--바꾼-기록)에 있습니다.
+  줄이 하나 더 붙습니다. `-m` 이 받는 값은 sdk 36 기기 도움말 실측의 `speed` · `speed-profile` · `verify` 셋입니다.
+  base.apk 와 보조 dex 는 **따로** 봅니다 — 어느 쪽이든 되돌릴 수 없으면(바꾸기 전 `status` 가 그 셋 밖 · 읽지 못함 ·
+  보조 dex 끼리 서로 다름) 명령 대신 **그 사실 한 줄**이 나오고, 다른 쪽 명령은 그대로 나옵니다. 되돌릴 수 없는
+  dex 가 있다는 사실을 줄로 남기는 것은, 줄이 없으면 다 되돌렸다고 믿게 되기 때문입니다. 대상 앱만 다루고, 명령
+  줄은 자르지 않아 80칸을 넘습니다. serial 에 셸이 해석하는 글자가 있으면(IPv6 `[fe80::1]:5555` 등) 작은따옴표로
+  감쌉니다. 되돌려도 처음과 똑같아지지 않는 이유는 [`session.compile` 의 한계](#sessioncompile--바꾼-기록)에 있습니다.
 - `stop` 이 `result.json` 산출에 실패해 오류로 끝나거나 화면(`open`)에서 세션을 멈추면 되돌림 줄이 나오지
   않습니다 — 그때는 run 디렉토리 `session.json` 의 `compile.compile_state_before` 가 바꾸기 전 상태입니다.
 - `status --json` 은 `compile`(`value` · `baseStatusBefore` · `baseStatusAfter` · `elapsedMs`)을, `runs --json` 은

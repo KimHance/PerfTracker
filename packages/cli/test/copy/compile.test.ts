@@ -64,6 +64,22 @@ const COMMANDS: string[] = [COMPILE_CLI_COPY.revertBase, COMPILE_CLI_COPY.revert
 /** 화면 판정 금지 낱말 — 디자인 표 `안 쓰는 말` 칸 · `check_cli.py` 의 BANNED (결정 6). */
 const BANNED = ['최적화', '적용됨', '프로파일 적용', 'AOT', '프로파일 있음', '예열', '복원', '오류가 발생']
 
+/** 판정 낱말 검사기 — 「판정 낱말 0」 과 「깨 봄」 이 같은 함수를 부른다. */
+function bannedIn(text: string): string[] {
+  return BANNED.filter((w) => text.includes(w))
+}
+
+/** 되돌림 머리 아래 두 칸 들여 놓이는 사실 줄 (디자인 CLI 블록 2) — 80칸은 들여 쓴 채로 잰다. */
+const INDENTED: string[] = [COMPILE_CLI_COPY.secondaryMixed, COMPILE_CLI_COPY.secondaryOutside]
+
+/** 채운 줄이 80칸을 넘는 문구. `swap` 은 깨 봄용 — 틀을 다른 글자로 바꿔 채운다. */
+function overWidth(copies: string[], swap: Record<string, string> = {}): { line: string; w: number }[] {
+  return copies
+    .map((c) => `${INDENTED.includes(c) ? '  ' : ''}${fillCopy(swap[c] ?? c, WIDEST)}`)
+    .map((line) => ({ line, w: displayWidth(line) }))
+    .filter((x) => x.w > 80)
+}
+
 /**
  * 값 자리를 실측한 가장 긴 값으로 채운 표본 — 80칸은 채운 줄로 잰다. `status` 는 기기 원문이라 길이 상한이 없다 —
  * 실측(SM-S901N · 디자인 CLI 블록 4)의 `-m` 밖 값 `run-from-apk` 로 잰다. 그보다 긴 filter 이름(예
@@ -90,7 +106,7 @@ describe('BP-6 문구 표 ↔ 코드', () => {
 
   it('BP-6 문구 표 ↔ 코드 — 표가 실제로 읽혀야 이 시험이 의미를 갖는다', () => {
     // 표를 못 읽어 빈 배열끼리 비교하면 위 단언은 무조건 통과한다.
-    expect(tableCopies('cli').length).toBe(14)
+    expect(tableCopies('cli').length).toBe(16)
   })
 
   /** 표의 cli 줄 가운데 다섯은 core 가 오류 message 로 낸다 — cli 는 그대로 찍으므로 core 출력이 표와 같아야 한다. */
@@ -126,28 +142,34 @@ describe('BP-6 단어형 · 80칸 (DM-15)', () => {
   it('BP-6 단어형 — 되돌림 명령 둘을 뺀 cli 문구가 전부 단어 꼴이다', () => {
     const broken = words.map((c) => ({ c, v: copyViolations(c) })).filter((x) => x.v.length > 0)
     expect(broken).toEqual([])
-    expect(words.length).toBe(12)
+    expect(words.length).toBe(14)
   })
 
   it('BP-6 단어형 — 판정 낱말 0', () => {
-    expect(CODE.flatMap((c) => BANNED.filter((w) => c.includes(w)).map((w) => `${w} | ${c}`))).toEqual([])
+    expect(CODE.flatMap((c) => bannedIn(c).map((w) => `${w} | ${c}`))).toEqual([])
   })
 
-  it('BP-6 단어형 — 깨 봄: 판정 낱말 · 끝 글자가 걸린다', () => {
-    expect(BANNED.filter((w) => !`${COMPILE_CLI_COPY.revertHead} ${w}`.includes(w))).toEqual([])
+  /** 「판정 낱말 0」 이 쓰는 같은 검사기를 깨 본다 — 검사기가 빈 결과만 내면 여기가 RED (검수 왕복 1 #2). */
+  it.each(BANNED)('BP-6 단어형 — 깨 봄: 판정 낱말 %s 가 걸린다', (word) => {
+    expect(bannedIn(`${COMPILE_CLI_COPY.revertHead} ${word}`)).toEqual([word])
+  })
+
+  it('BP-6 단어형 — 깨 봄: 끝 글자 · 권유가 걸린다', () => {
     expect(copyViolations(`${COMPILE_CLI_COPY.revertUnknown} 바꿨습니다`)).not.toEqual([])
     expect(copyViolations(`${COMPILE_CLI_COPY.revertHead} · 다시 재세요`)).toContain('권유:세요')
   })
 
-  it('BP-6 80칸 — 가장 긴 값으로 채워도 되돌림 명령 말고는 80칸 안', () => {
-    const wide = words
-      .map((c) => fillCopy(c, WIDEST))
-      .map((line) => ({ line, w: displayWidth(line) }))
-      .filter((x) => x.w > 80)
-    expect(wide).toEqual([])
+  it('BP-6 80칸 — 가장 긴 값으로 채워도 되돌림 명령 말고는 80칸 안 (머리 아래 줄은 두 칸 들여 잰다)', () => {
+    expect(overWidth(words)).toEqual([])
   })
 
-  it('BP-6 80칸 — 깨 봄: 81칸 줄은 걸린다', () => {
-    expect(displayWidth(`${COMPILE_CLI_COPY.revertOutside}${'x'.repeat(80)}`)).toBeGreaterThan(80)
+  /** 같은 검사기를 깨 본다 — 81칸 줄 · 들여 쓰면 81칸이 되는 보조 dex 줄. */
+  it('BP-6 80칸 — 깨 봄: 81칸 줄 · 들여 81칸이 되는 줄은 걸린다', () => {
+    expect(overWidth(['x'.repeat(81)])).toHaveLength(1)
+    expect(overWidth(['x'.repeat(80)])).toEqual([])
+    const indented = INDENTED[0]!
+    const pad = 'x'.repeat(79 - displayWidth(fillCopy(indented, WIDEST)))
+    expect(overWidth([`${indented}${pad}`])).toEqual([]) // 이름이 달라 들여 셈 밖 — 79칸
+    expect(overWidth([indented], { [indented]: `${indented}${pad}` })).toHaveLength(1) // 들여 81칸
   })
 })

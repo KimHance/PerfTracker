@@ -1211,12 +1211,14 @@ registry 순서는 `hwuiCollector` 바로 뒤에 `frameCollector` 다 — 지표
   `start` · `stop` 의 되돌림 줄, `status --json` 의 `compile`, `runs --json` 행의 `compile`(core `RunSummary` 에 칸을
   더함 · plan B33). 평소 세션의 출력 · JSON 은 이 옵션 이전과 같습니다.
 - **되돌림 줄은 호스트 꼴 한 줄** (`adb -s <serial> shell cmd package compile -m <status> -f <pkg>` · 보조 dex 가 모두
-  같으면 `--secondary-dex` 한 줄 더) — 80칸 밖 · 자르지 않음 · 자동으로 실행하지 않음. 바꾸기 전 `status` 가
-  `-m` 이 받는 셋(`speed` · `speed-profile` · `verify`, sdk 36 도움말 실측) 밖이거나 모르면 그 사실 한 줄.
+  같으면 `--secondary-dex` 한 줄 더) — 80칸 밖 · 자르지 않음 · 자동으로 실행하지 않음 · serial 은 셸이 해석하는
+  글자가 있을 때만 작은따옴표(IPv6 serial 이 zsh 에서 멈추던 것 — sh · zsh · bash 에 가짜 adb 로 쳐 보는 시험).
+  base.apk 와 보조 dex 는 따로 보고, 되돌릴 수 없는 쪽(바꾸기 전 `status` 가 `-m` 이 받는 셋 — `speed` ·
+  `speed-profile` · `verify`, sdk 36 도움말 실측 — 밖 · 모름 · 보조 dex 끼리 다름)은 침묵하지 않고 그 사실 한 줄
+  (plan B34 #5).
   compile 실패(`CompileFailedError`) · compile 뒤 실패(`CompileAppliedError`)에도 상태 줄 · 되돌림 줄이 붙습니다.
 - **확인하지 못한 것:** 실기기에서 줄을 그대로 쳐서 도는지(기능 문서 BP-9 (e) · device 단위) · `stop` 이
-  `result.json` 산출에 실패할 때 · 화면이 세션을 멈출 때는 되돌림 줄이 안 나옵니다 (기능 문서 열린 질문 11) ·
-  보조 dex `status` 가 모두 같지만 `-m` 밖인 경우는 줄을 내지 않습니다(문구 표에 그 문장이 없음).
+  `result.json` 산출에 실패할 때 · 화면이 세션을 멈출 때는 되돌림 줄이 안 나옵니다 (기능 문서 열린 질문 11).
 
 ### 그 밖의 후보 (우선순위 낮음)
 

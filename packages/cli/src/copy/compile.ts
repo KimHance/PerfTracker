@@ -25,6 +25,8 @@ export const COMPILE_CLI_COPY = {
   revertSecondary: 'adb -s {serial} shell cmd package compile -m {status} -f --secondary-dex {pkg}',
   /** 바꾸기 전 보조 dex 의 `status` 가 서로 다를 때. */
   secondaryMixed: '보조 dex {n}개 · status 서로 다름 · 보조 dex 되돌림 줄 없음',
+  /** 바꾸기 전 보조 dex `status` 가 모두 같은데 `-m` 이 받는 값 밖 — 침묵하지 않는다 (plan B34 #5). */
+  secondaryOutside: '보조 dex {n}개 · status {status} · -m 이 받지 않는 값 · 되돌림 줄 없음',
   /** 바꾸기 전 base.apk `status` 가 `-m` 이 받는 값 밖. */
   revertOutside: '되돌림 줄 없음 · 바꾸기 전 base.apk status {status} · -m 이 받지 않는 값',
   /** 바꾸기 전 base.apk `status` 를 모름 (BP-2 null · base 줄을 하나로 못 고름). */
@@ -37,6 +39,8 @@ export const COMPILE_CLI_COPY = {
   failCommand: '보낸 명령  {cmd}',
   /** 실패 · 상태 줄 — 실패 뒤 다시 읽지 않는다 (기기 명령 0). */
   failState: 'Compile   {value} · base.apk 바꾸기 전 {before} · 지금 모름',
+  /** 컴파일 줄 · 실패 상태 줄의 `{before}` · `{after}` 값을 모를 때 — `status 모름` · `지금 모름` 과 같은 말 (plan B34 #3). */
+  unknownWord: '모름',
   /** 거부 · `--launch` 없음 — core `checkCompileOption` 이 낸다. */
   rejectLaunch: '--compile 은 --launch 와만 · 기기 명령 0',
   /** 거부 · 허용 밖 값 — core `checkCompileOption` 이 낸다. */
@@ -53,6 +57,3 @@ export function fillCopy(template: string, values: Record<string, string | numbe
     return String(v)
   })
 }
-
-/** 값을 모를 때 `{before}` · `{after}` 자리에 쓰는 낱말 — 되돌림 줄의 `status 모름` 과 같은 말. */
-export const UNKNOWN_WORD = '모름'
