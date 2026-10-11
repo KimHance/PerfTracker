@@ -1246,10 +1246,19 @@ export type DeviceState = z.infer<typeof DeviceStateSchema>
 export const DexoptLineSchema = z.object({
   path: z
     .string()
-    .describe('dex 파일 경로 원문. 비보조 dex 는 `path:` 줄의 값(설치 폴더의 `base.apk` 등), 보조 dex 는 그 줄 자체.'),
+    .describe(
+      'dex 파일 경로 원문. 비보조 dex 는 `path:` 줄의 값(설치 폴더의 `base.apk` 등), 보조 dex 는 그 줄에서 ' +
+        '끝의 ` (public)` 표시(→ public_dex)를 뗀 나머지 그대로.',
+    ),
   secondary_dex: z
     .boolean()
     .describe('`known secondary dex files:` 아래의 줄이면 true — 앱이 실행 중에 스스로 불러온 dex 다.'),
+  public_dex: z
+    .boolean()
+    .describe(
+      '보조 dex 경로 줄 끝에 ` (public)` 표시가 있으면 true — 그 표시는 `path` 에 넣지 않는다. 표시가 없으면 false. ' +
+        '비보조 dex(`path:` 줄)에는 기기가 이 표시를 찍지 않으므로 늘 false 다.',
+    ),
   abi: z.string().describe('그 줄 머리의 ABI 원문 (`arm64` 등). 한 dex 에 ABI 줄이 여럿일 수 있다.'),
   status: z
     .string()

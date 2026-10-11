@@ -116,6 +116,14 @@ describe('BP-1 README 컴파일 상태 절', () => {
     expect(inEnum).toHaveLength(4)
   })
 
+  /** 검수 #3 — 사유 문장(`renderReason`)은 갈래 셋을 말하는데 README 가 둘만 말했다. 셋 다 README 에 있어야 한다. */
+  it('BP-2 README 가 dexopt_state_unavailable 의 갈래 셋(기기 끊김 · stop 전 extract · 끝 상태 이전 도구)을 말한다', () => {
+    const bullet = /`dexopt_state_unavailable`\(([^)]*)\)/.exec(section('### `target_app` 의 컴파일 상태'))?.[1] ?? ''
+    expect(bullet).toContain('기기 끊김')
+    expect(bullet).toContain('아직 `stop` 하지 않은 세션을 `extract`')
+    expect(bullet).toContain('끝 상태를 읽기 전의 도구로 `stop` 한 run')
+  })
+
   it('BP-1 README 가 두 status 의 뜻을 갈라 적는다 (결정 14)', () => {
     const text = section('### `target_app` 의 컴파일 상태')
     expect(text).toContain('**compiler filter**')

@@ -28,6 +28,11 @@ import type { DexoptLine, TargetApp, Warning } from '../schema/result.js'
  * 다음 기기의 값이 거부된다. `location` 은 `[location is ` 뒤 문자열 전부 — `error` 도,
  * 공백 든 문장(`primary.vdex mapped directly in memory from …/base.dm`)도 그대로.
  *
+ * 컴파일 상태가 아닌 줄 셋은 **꼴을 알고** 싣지 않는다 — `class loader context:`(보조 dex) 와 그
+ * `=VaryingClassLoaderContexts=` 아래 `<pkg>: <문맥>` 하위 줄, `used by other apps: […]`. 셋 다 같은 기기
+ * (SM-S901N · sdk 36) 의 `dumpsys package dexopt` 전 패키지 원문(research A3)에서 본 꼴이다. 보조 dex 경로 줄
+ * 끝의 ` (public)` 은 경로가 아니라 표시라 떼어 `public_dex` 에 싣는다.
+ *
  * 같은 출력의 다른 절(`HeimdAllFS state` 등)에도 `[<pkg>]` · `path:` 줄이 있다. 절의 끝은
  * **0칸 들여쓴 다음 줄**이고, 그 뒤는 보지 않는다.
  */
@@ -38,6 +43,13 @@ const SECONDARY_HEAD = 'known secondary dex files:'
 const ABI_LINE = /^(\S+): \[status=([^\]]*)\] \[reason=([^\]]*)\]( \[primary-abi\])?$/
 const LOCATION_LINE = /^\[location is (.*)\]$/
 const CLASS_LOADER_CONTEXT = /^class loader context: /
+/** 앱마다 문맥이 달라 기기가 `<pkg>: <문맥>` 하위 줄로 펼치는 경우 (A3 GMS 보조 dex). */
+const VARYING_CONTEXTS = 'class loader context: =VaryingClassLoaderContexts='
+const VARYING_CONTEXT_ITEM = /^\S+: /
+/** 그 dex 를 다른 앱도 불러 쓴다는 줄 — 비보조 dex(6칸 · A3 sbrowser) · 보조 dex(8칸 · A3 GMS) 둘 다에 나온다. */
+const USED_BY_OTHER_APPS = /^used by other apps: \[.*\]$/
+/** 보조 dex 경로 줄 끝의 표시. 경로 값에 섞지 않고 `public_dex` 로 가른다. */
+const PUBLIC_SUFFIX = ' (public)'
 
 const indent = (line: string): number => line.length - line.trimStart().length
 
@@ -68,14 +80,20 @@ export function parseDexoptState(text: string, pkg: string): DexoptRead {
   }
 
   const lines: DexoptLine[] = []
-  let dex: { path: string; secondary: boolean } | null = null
+  let dex: { path: string; secondary: boolean; public: boolean } | null = null
   let secondary = false
+  /** `=VaryingClassLoaderContexts=` 줄의 들여쓰기 — 그보다 깊은 `<pkg>: <문맥>` 줄이 그 하위다. */
+  let varyingIndent: number | null = null
   for (const raw of block) {
     const line = raw.trim()
     if (line === '') continue
+    if (varyingIndent !== null) {
+      if (indent(raw) > varyingIndent && VARYING_CONTEXT_ITEM.test(line)) continue
+      varyingIndent = null
+    }
 
     if (line.startsWith('path: ') && !secondary) {
-      dex = { path: line.slice('path: '.length), secondary: false }
+      dex = { path: line.slice('path: '.length), secondary: false, public: false }
       continue
     }
     if (line === SECONDARY_HEAD) {
@@ -84,7 +102,8 @@ export function parseDexoptState(text: string, pkg: string): DexoptRead {
       continue
     }
     if (secondary && line.startsWith('/')) {
-      dex = { path: line, secondary: true }
+      const isPublic = line.endsWith(PUBLIC_SUFFIX)
+      dex = { path: isPublic ? line.slice(0, -PUBLIC_SUFFIX.length) : line, secondary: true, public: isPublic }
       continue
     }
     const abi = ABI_LINE.exec(line)
@@ -92,6 +111,7 @@ export function parseDexoptState(text: string, pkg: string): DexoptRead {
       lines.push({
         path: dex.path,
         secondary_dex: dex.secondary,
+        public_dex: dex.public,
         abi: abi[1]!,
         status: abi[2]!,
         reason: abi[3]!,
@@ -106,7 +126,12 @@ export function parseDexoptState(text: string, pkg: string): DexoptRead {
       last.location = location[1]!
       continue
     }
+    if (secondary && dex !== null && line === VARYING_CONTEXTS) {
+      varyingIndent = indent(raw)
+      continue
+    }
     if (secondary && dex !== null && CLASS_LOADER_CONTEXT.test(line)) continue
+    if (dex !== null && USED_BY_OTHER_APPS.test(line)) continue
 
     return unparsable(raw)
   }

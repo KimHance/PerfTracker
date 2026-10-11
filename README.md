@@ -606,15 +606,17 @@ speed-profile 471 · verify 618 · speed 665 ms). 두 세션의 수치가 다를
   한 번으로 읽습니다. 측정 창 안의 기기 접촉은 그대로 0 입니다.
 - 값은 그 출력의 `Dexopt state` 절 **원문 그대로**입니다. dex 줄마다 하나씩, base.apk 줄과 보조 dex 줄을
   기기 순서대로 전부 싣습니다. 문서 표에 없는 값(`profile-utilization` · `vdex-dm` · `run-from-apk` ·
-  `unknown`)이 실측됐으므로 enum 으로 좁히지 않습니다.
+  `unknown`)이 실측됐으므로 enum 으로 좁히지 않습니다. 컴파일 상태가 아닌 줄(`class loader context: …` 와
+  그 `=VaryingClassLoaderContexts=` 하위 줄 · `used by other apps: […]`)은 꼴을 알고 싣지 않습니다.
 
 | 필드 | 무엇 |
 | --- | --- |
 | `compile_state_start` · `compile_state_end` | dex 줄의 배열. **`null` 은 읽지 못했다는 뜻**이고 `[]` 는 쓰지 않습니다 |
 | `compile_state_start_reason_code` · `compile_state_end_reason_code` | 칸이 `null` 인 이유 (아래 넷 중 하나). 값이 있으면 `null` |
 | `compile_state_start_reason` · `compile_state_end_reason` | 그 이유의 사람용 문장. 매칭에는 코드를 쓰세요 |
-| `path` | dex 파일 경로 원문 — 비보조 dex 는 `path:` 줄의 값(`…/base.apk`), 보조 dex 는 그 줄 자체 |
+| `path` | dex 파일 경로 원문 — 비보조 dex 는 `path:` 줄의 값(`…/base.apk` · split), 보조 dex 는 그 줄에서 끝의 ` (public)` 표시를 뗀 나머지 |
 | `secondary_dex` | `known secondary dex files:` 아래 줄이면 `true` |
+| `public_dex` | 보조 dex 경로 줄 끝에 ` (public)` 표시가 있으면 `true`. 비보조 dex 에는 기기가 이 표시를 찍지 않아 늘 `false` |
 | `abi` | 그 줄 머리의 ABI (`arm64` 등). 한 dex 에 ABI 줄이 여럿일 수 있습니다 |
 | `status` | `[status=…]` — **compiler filter** 입니다 (`speed-profile` · `verify` · `speed` · `run-from-apk` …) |
 | `reason` | `[reason=…]` — 그 컴파일을 일으킨 까닭 (`install-dm` · `bg-dexopt` · `cmdline` · `profile-utilization` …) |
@@ -625,6 +627,7 @@ speed-profile 471 · verify 618 · speed 665 ms). 두 세션의 수치가 다를
 {
   "path": "/data/app/~~j3NK…/com.google.android.youtube-_ZCw…/base.apk",
   "secondary_dex": false,
+  "public_dex": false,
   "abi": "arm64",
   "status": "speed-profile",
   "reason": "profile-utilization",
@@ -639,8 +642,10 @@ speed-profile 471 · verify 618 · speed 665 ms). 두 세션의 수치가 다를
 - **못 읽으면 `null` 이고 이유가 붙습니다** — `dexopt_state_section_missing`(출력에 `Dexopt state` 절이
   없음) · `dexopt_state_package_missing`(절에 대상 패키지 줄이 없음) · `dexopt_state_unparsable`(절은 있는데
   줄 꼴을 모름 — **꼴을 추측해 채우지 않습니다**) · `dexopt_state_unavailable`(그 시점의 출력이 없음 —
-  기기 끊김, 또는 아직 `stop` 하지 않은 세션을 `extract` 한 경우). 실측한 출력 꼴은 sdk 36 기기 하나뿐이라
-  다른 기기에서는 `dexopt_state_unparsable` 이 나올 수 있습니다.
+  기기 끊김, 아직 `stop` 하지 않은 세션을 `extract` 한 경우, 또는 끝 상태를 읽기 전의 도구로 `stop` 한 run 을
+  다시 `extract` 한 경우). 실측한 출력 꼴은 sdk 36 기기 하나뿐입니다 — 그 기기의 전 패키지(635개) 출력에서는
+  dex 줄이 하나도 없는 패키지(오버레이 등 69개)만 `dexopt_state_unparsable` 이었고, 다른 기기 · 버전에서는
+  모르는 꼴 때문에 더 나올 수 있습니다.
 - **세션 중 바뀌었으면 경고가 하나 붙습니다.** 시작 · 끝 상태가 둘 다 있고 base.apk 줄(ABI 줄이 여럿이면
   `[primary-abi]` 줄)의 `status` 또는 `reason` 문자열이 다르면 `warnings` 에 `compile_state_changed` 가
   실립니다 — 백그라운드 dexopt · Play 업데이트 · 제조사 작업이 세션 중에 컴파일했다는 관측된 사건입니다.
