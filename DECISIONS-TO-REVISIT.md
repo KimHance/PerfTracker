@@ -20,3 +20,24 @@
 | 11 | 디자인 문서 `## 문구` 표 core 줄 2개를 개발 워커가 더함 | 주인 예외 | DM-15 「표에만 · 코드에만 0」 을 깨지 않으려면 표가 먼저 · 디자이너는 그때 없었음 | 메인 | — |
 | 12 | 오피스 진행 — 검수 2차를 코드 하나에 명세를 합쳐 돌림 · gui 화면 둘을 gui-server 검수와 동시에 시작 | 단계 5 시간 절약 | 고칠 것이 기계적일 때 | 메인 | 합친 검수가 놓친 것이 나오면 |
 | 13 | 메인 정지 (04:32–06:43) | 워커 보고 알림이 메인 터미널에 안 들어와 2시간 넘게 멈춤 → 메인이 백그라운드 `check --wait` 로 스스로 깸 | 알림 주입은 best-effort (Orca 가이드) | 메인 | 오피스 모드 플러그인에 기본 동작으로 넣을지 |
+
+## 2026-10-11 · baseline-profile (컴파일 상태 · 보고서 가독성)
+
+| # | 결정 | 고른 것 | 왜 | 누가 | 다시 볼 때 |
+|---|---|---|---|---|---|
+| 1 | 컴파일 상태를 싣는 세션 (B17) | 모든 세션 — 평소 `result.json` 의 `target_app` 키가 바뀜 · 캐시한 1.1.0 스키마는 평소 산출물도 거부 (README 1.2.0 문단). 위 diagnostic-mode #1(켤 때만 키)과 다른 길 | 상태 비교가 가장 필요한 것이 평소 세션 · 1.2.0 미출시라 지금이 가장 쌈 | 메인 | 1.1.0 스키마를 캐시한 소비자가 있다는 말이 나올 때 |
+| 2 | 컴파일 상태 필드 (B23) | `target_app.compile_state_start` · `_end` + 각 `_reason_code` · `_reason` · dex × ABI 한 줄 = 한 항목 · 줄에 `secondary_dex` · `public_dex` · schema 1.2.0 그대로 | 진단 `app_slices_open` 꼴 · `before/after` 는 BP-4 「바꾸기 전」 과 겹침 | 메인 | dex 별로 묶은 꼴이 필요할 때 |
+| 3 | 새 reason_code · 진단 ART 칸 이름 (B24 · B29) | `dexopt_state_section_missing` · `_package_missing` · `_unparsable` · `_unavailable` (39 → 43) + `dalvik_not_recorded` · `compile_state_slice_unparsable` (→ 45) · `target_process_compile_state_slices` · `target_process_jit_slices` + 짝 | 갈래마다 대응이 다르고 detail 은 result.json 에 안 실림 | 메인 | 공용 enum 이 너무 커질 때 (진단 전용 enum 으로 나눌지) |
+| 4 | 바꾼 기록 자리 (B31) | `session.compile` — `value` · `command` · `elapsed_ms` · `compile_state_before` + 짝 · `--compile` 세션에만 | `session.options` 는 켠 옵션 표시 · #2 꼴 | 메인 | — |
+| 5 | compile 뒤 실패 (B32) | `CompileAppliedError` 로 감쌈 — 원래 오류는 `cause` · 늘 PerfTrackerError 라 예상 못 한 오류도 이 길 (cli 가 `cause` 로 갈라 옛 머리 · 스택을 찍음) | 기기는 바뀌었는데 되돌림 줄 0 이던 구멍 (규칙 3) | 메인 | 감싼 오류가 다른 오류 처리(종료 코드 · 로그)를 가릴 때 |
+| 6 | `--json` 의 compile 칸 (B33 · B34 #1 #2) | core `RunSummary.compile` (camelCase · `--compile` 기록에만 · 뒤 상태는 result.json 에서만) · `status --json` 은 최상위 `compile` 과 `session.compile`(snake_case 원본)이 같이 나감 | cli 는 파일을 안 읽음(core 몫) · 이웃 칸 꼴 | 메인 | `--json` 소비자가 두 꼴을 헷갈릴 때 |
+| 7 | 문구가 디자인 표보다 먼저 (B25) | core 새 문구(경고 1 · 사유 4 + 2)를 코드가 먼저 넣고 디자인 문서 `## 문구` 표로 올림 · 표가 정본 | 디자인 문서가 그때 브랜치에 없었음 — diagnostic-mode #11 과 같은 주인 예외 | 메인 | 디자인 단위를 개발보다 먼저 합칠 수 있을 때 |
+| 8 | 디자이너 기본값 (B28) | 사람 몫 11개(글자 층 · 첫 섹션 `지표` · 타일 단위 · 라벨 단어 · 차트 낱말 · dex 표 · `컴파일 필터`/`oat 파일 상태` · CLI 줄 · `지금 모름` 등)를 받음 — 디자인 문서가 정본 | 단계 5 · 기능 문서 바닥값 안 · 검토가 따로 봄 | 메인 | 사용자가 화면을 보고 낱말 · 층을 다시 고를 때 |
+| 9 | 보고서 배지 결함을 범위에 (B6 · B22 · B37) | 잰 0(`[]`)을 미수집으로 세던 배지 — 목록 · 차트 · 전/후 표 · 주파수를 낱말로 · 셈은 그린 글자를 따름 · 진단 둘 다 null 이면 2 (B30) | 사용자가 보는 숫자가 틀림 (규칙 3) | 메인 | 배지 셈 규칙이 화면 · 시험 세 벌(`placeholderOf` · `drawn` · `want`)에서 갈릴 때 |
+| 10 | 컴파일 카드 위치 행 · `보낸 명령` 줄바꿈 (B42 · B40) | 같은 `location` 은 머리 아래 한 번 · 깃발 토큰 안 줄바꿈 0 | 되풀이가 카드 높이 46 ~ 50% · `-` / `m` 이 갈림 | 메인 | 접힌 위치 줄 때문에 때마다 다른 dex 를 놓쳤다는 말이 나올 때 |
+| 11 | 렌더 결과 시험 (B39) | 루트 `tsconfig.test.json` 에 `"jsx": "react-jsx"` · `report.test.ts` 에 `/// <reference lib="dom" />` | 타입 검사를 빼지 않고 새 의존성 0 · 약점: 시험 컴파일 전체에 DOM 타입 | 메인 | 다른 시험이 DOM 전역을 실수로 쓸 때 |
+| 12 | 실기기 단위 나눔 (B35 · B41) | device-bp(BP-9 · DM-16 회귀)를 rr-layout 과 나란히 · RR-9 재료(평소 1 · 진단 1)는 잠금이 풀린 때 device-bp 가 녹화 · 그리기 · 측정은 마지막 단위가 기기 없이 | 끝을 당김 · 잠금 해제를 다시 부탁하지 않음 | 메인 | — |
+| 13 | 실기기 잠금 (B36 · B38 · B38a) | 비보안 잠금만 adb 로 깨움 · 보안 잠금(PIN)은 사람에게 · 잠긴 채 돈 회 25/27 은 기대값을 안 바꾸고 기록 · 사람이 푼 뒤 27/27 | PIN 은 사람 몫 · 화면 꺼짐 설정 안 바꿈 | 메인 | 온-디바이스 스펙이 잠금 상태를 먼저 확인하게 할 때 |
+| 14 | 사용자 폰 상태 (B7 · B12) | 실기기 시험이 YouTube 컴파일 상태를 바꾼 것을 받아들임 — base.apk `reason` `profile-utilization` → `cmdline` · 보조 dex 처음과 다름 · `debug.atrace.app_0` 남음 | "유튜브로 테스트" · 정확히 되돌릴 명령 없음 | 메인 | 사용자가 폰 YouTube 를 되돌리고 싶을 때 (재설치) |
+| 15 | diagnostic-mode #4 허용 목록 | am · wm · view · **dalvik** + 대상 앱 하나 (DM 결정 36) — 위 #4 줄은 그때 사실 | 진단 세션에서 ART 신호 (BP-7) | 메인 | — |
+| 16 | 운영 — 질문 답이 워커에 안 닿음 (bp-core-art) | 메인 `send` 가 ok 였는데 워커는 답 없음으로 기본값 → `[object Object]` · 고침 1 에서 반영 | 막힌 `ask` 에는 `reply` 로 답해야 닿음 | 메인 | 오피스 모드 플러그인 안내에 넣을지 |
