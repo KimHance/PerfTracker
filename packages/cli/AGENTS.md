@@ -9,15 +9,18 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
 | --- | --- |
 | `src/program.ts` | 명령 11개 등록 (`runs` 는 하위 셋). **실행하지 않는다** |
 | `src/index.ts` | bin 진입점 — `parseAsync` 와 최상위 오류 처리뿐 |
+| `src/unexpected.ts` | 예상 못 한 오류의 머리 문장 · 꼴 — 진입점과 compile 뒤 실패(`commands/compile.ts`)가 같이 부른다 |
 
 **`dist/index.js` 는 매 빌드마다 실행 권한을 잃는다.** `npm install` 이 붙여 준 권한을
 `tsc --build` 가 파일을 다시 쓰면서 떨어뜨리고, 그러면 `npx perftracker` 가 `Permission denied`
 로 죽는다. 루트 `build` 스크립트가 빌드 뒤에 다시 `chmod` 한다 — 잊고 지우면 조용히 재발한다.
 | `src/context.ts` | `--adb` / `--device` 를 core 의 컨텍스트로 |
-| `src/commands/` | 명령 하나당 파일 하나 (`browser.ts` 만 예외 — 브라우저 여는 헬퍼를 `open`·`report` 가 나눠 쓴다) |
+| `src/commands/` | 명령 하나당 파일 하나 (예외 둘 — `browser.ts` 는 브라우저 여는 헬퍼를 `open`·`report` 가, `compile.ts` 는 `--compile` 세션의 컴파일 줄 · 되돌림 줄을 `start`·`stop`·`status` 가 나눠 쓴다) |
 | `src/copy/diagnose.ts` | 진단 모드가 새로 내는 cli 문구 모음 — 정본은 `docs/design/diagnostic-mode.md` `## 문구` 표 |
+| `src/copy/compile.ts` | `start --compile` 의 cli 문구 모음 — 정본은 `docs/design/baseline-profile.md` `## 문구` 표 |
 | `test/readme.test.ts` | 등록된 명령이 전부 README 에 있는지 · `start` 옵션이 전부 README 에 있는지 대조 |
 | `test/copy/diagnose.test.ts` | cli 진단 문구 ↔ 디자인 문서 `## 문구` 표 양방향 대조 · 단어형 규칙 (DM-15) |
+| `test/copy/compile.test.ts` | `--compile` 문구 ↔ 디자인 문서 `## 문구` 표 양방향 대조 · core 가 내는 거부 · 실패 문구 대조 · 단어형 · 80칸 (BP-6) |
 | `test/preview-flag.test.ts` | GUI 가 적는 `start` 줄(시작 바 예고 · 서버 실행 줄)의 플래그가 commander 에 등록된 `start` 옵션과 같은지 대조 (DM-2) |
 | `test/on-device/` | **실기기가 있어야 도는 스펙.** `npm run test:device` 로만 실행 |
 
@@ -37,8 +40,9 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
 **명령을 늘리면 README 의 「명령 전체」도 같은 커밋에서 고친다.** `runs` 셋이 한동안 문서에
 없었다 — 틀린 것이 아니라 빠진 것이라 읽는 사람은 알 길이 없었다. `test/readme.test.ts` 가
 이제 그것을 막는다. **`start` 의 옵션도 같다** — 등록된 옵션(`--app` `--name` `--device`
-`--launch` `--out` `--force` `--diagnose`)이 README 어딘가에, `--diagnose` 는 「명령 전체」 절 안에
-있어야 한다.
+`--launch` `--out` `--force` `--diagnose` `--compile`)이 README 어딘가에, `--diagnose` · `--compile` 은
+「명령 전체」 절 안에 있어야 한다. **`--compile` 은 `--launch` 와만** 받는다는 조건은 `--help` 설명(80칸)에 없으므로
+README 「명령 전체」와 이 파일이 말한다 — 시험(`BP-4 README 옵션 대조`)이 둘 다 본다.
 
 ## 제약
 
@@ -111,6 +115,19 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
   `## 문구` 표이고 `test/copy/diagnose.test.ts` 가 표의 cli 줄과 양방향으로 대조한다. 문구를 바꾸려면
   표를 먼저 고친다. 꼴은 단어형(끝 글자 `다`/`요` · 권유 · 평가 낱말 없음)이고 기존 문구는 대상이
   아니다 (plan D10). 새 줄은 80칸 안 — 시험이 표시 폭(한글 2칸)으로 잰다.
+- **`start --compile` (기능 문서 baseline-profile BP-4 ~ BP-6) 은 그 세션에만 표시한다.** `--compile` 은
+  `--launch` 와만 받고, 거부(`--launch` 없음 · 허용 밖 값)는 **기기 명령 0** 이다 — `runStart` 가 옛 세션 정리 ·
+  앱 해석보다 먼저 core 의 `checkCompileOption` 을 부른다 (판정을 다시 쓰지 않는다). `--diagnose` 처럼 기본값이 없고
+  안 주면 core 옵션 객체에 `compile` 키가 없다. 그 세션이면 `start` · `status` 에 `Compile` 줄(80칸 안) ·
+  `start` · `stop` 에 되돌림 줄 · `status --json` 의 `compile` · `runs --json` 행의 `compile`(core `RunSummary`) —
+  아닌 세션에는 하나도 없다. 바꾼 뒤 상태는 `capture.json` 에서 읽는다 (호스트 파일 · 기기 0).
+- **되돌림 줄은 호스트에서 그대로 쳐서 도는 한 줄이다** (`adb -s <serial> shell cmd package compile …`). 80칸
+  규칙 밖이고 자르지 않는다. 도구는 자동으로 되돌리지 않는다. compile 이 낀 실패 두 종류(`CompileFailedError` ·
+  `CompileAppliedError`)도 `compileFailure` 가 상태 줄 · 되돌림 줄을 붙여 같은 code 로 다시 던진다 — 기기가 바뀌었을
+  수 있는데 그 사실과 되돌림 명령이 빠지면 안 된다. 문구는 `src/copy/compile.ts` 한 곳 (위 진단 문구와 같은 규율).
+  base.apk 와 보조 dex 는 따로 보고, **되돌릴 수 없는 쪽은 침묵하지 않고 그 사실 한 줄**을 낸다 (plan B34 #5).
+  serial 은 셸이 해석하는 글자가 있을 때만 작은따옴표로 감싼다 (`shellWord`) — 시험이 sh · zsh · bash 에 가짜 adb 로
+  실제로 쳐 본다.
 
 ## 온-디바이스 스펙
 

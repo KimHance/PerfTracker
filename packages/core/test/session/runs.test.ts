@@ -136,6 +136,73 @@ describe('진단 태그', () => {
   })
 })
 
+/**
+ * 기록 목록의 바꾼 기록 요약 (baseline-profile BP-6 · plan B33) — `start --compile` 기록에만 `compile` 이고 평소
+ * 기록에는 키가 없다 (진단 태그와 같은 이유). `result.json` 이 정본, 산출이 실패한 run 은 `session.json` 이 말한다.
+ */
+describe('BP-6 runs 바꾼 기록', () => {
+  const BASE = '/data/app/~~x==/com.x-y==/base.apk'
+  const dex = (status: string, over: Record<string, unknown> = {}) => ({
+    path: BASE,
+    secondary_dex: false,
+    public_dex: false,
+    abi: 'arm64',
+    status,
+    reason: 'cmdline',
+    location: null,
+    primary_abi: true,
+    ...over,
+  })
+  const compile = {
+    value: 'speed',
+    command: "cmd package compile -m speed -f 'com.x'",
+    elapsed_ms: 67_500,
+    compile_state_before: [dex('speed-profile'), dex('verify', { path: '/data/user/0/com.x/a.jar', secondary_dex: true })],
+    compile_state_before_reason_code: null,
+    compile_state_before_reason: null,
+  }
+  const at = { startedAt: '2026-10-11T10:00:00', endedAt: '2026-10-11T10:00:30' }
+  const result = (id: string, extra: Record<string, unknown> = {}, after: unknown = [dex('speed')]) =>
+    JSON.stringify({
+      session: { id, started_at: at.startedAt, ended_at: at.endedAt, ...extra },
+      target_app: { package: 'com.x', compile_state_start: after },
+    })
+
+  it('BP-6 --json 은 compile 세션에만 — result.json 의 바꾼 기록 · 시작 상태로 base 줄 전 → 후', async () => {
+    await write('c', { id: 'ccc', name: 'ccc', ...at })
+    await writeFile(join(out, 'c', 'result.json'), result('ccc', { compile }), 'utf8')
+    await write('n', { id: 'nnn', name: 'nnn', ...at })
+    await writeFile(join(out, 'n', 'result.json'), result('nnn'), 'utf8')
+
+    const byId = new Map((await listRuns(out)).map((r) => [r.id, r]))
+    expect(byId.get('ccc')!.compile).toEqual({
+      value: 'speed',
+      baseStatusBefore: 'speed-profile',
+      baseStatusAfter: 'speed',
+      elapsedMs: 67_500,
+    })
+    expect(Object.keys(byId.get('nnn')!)).not.toContain('compile')
+  })
+
+  it('BP-6 --json 은 compile 세션에만 — 산출이 실패한 run 은 session.json 의 기록 · 뒤는 null (추측 0)', async () => {
+    await write('s', { id: 'sss', name: 'sss', ...at, compile })
+    const [run] = await listRuns(out)
+    expect(run!.compile).toEqual({ value: 'speed', baseStatusBefore: 'speed-profile', baseStatusAfter: null, elapsedMs: 67_500 })
+  })
+
+  it('BP-6 --json 은 compile 세션에만 — 상태를 못 읽었거나 base 줄을 하나로 못 고르면 null', async () => {
+    const ambiguous = [dex('speed', { primary_abi: false }), dex('verify', { abi: 'arm', primary_abi: false })]
+    await write('u', { id: 'uuu', name: 'uuu', ...at })
+    await writeFile(
+      join(out, 'u', 'result.json'),
+      result('uuu', { compile: { ...compile, compile_state_before: null } }, ambiguous),
+      'utf8',
+    )
+    const [run] = await listRuns(out)
+    expect(run!.compile).toEqual({ value: 'speed', baseStatusBefore: null, baseStatusAfter: null, elapsedMs: 67_500 })
+  })
+})
+
 describe('이름 변경', () => {
   it('디렉토리 경로는 그대로 둔다', async () => {
     // 경로가 바뀌면 이미 그 경로를 적어 둔 메모와 CLI 로그가 전부 죽는다.

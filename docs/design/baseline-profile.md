@@ -141,12 +141,14 @@ report-readability `## 상태` 의 행을 같이 쓴다 (6상태 × 2) · CLI 6�
 | cli | 되돌림 명령 (base) | `adb -s {serial} shell cmd package compile -m {status} -f {pkg}` | 호스트 꼴 · 80칸 밖 | — |
 | cli | 되돌림 명령 (보조 dex) | `adb -s {serial} shell cmd package compile -m {status} -f --secondary-dex {pkg}` | 같음 | — |
 | cli | 보조 dex `status` 서로 다름 | `보조 dex {n}개 · status 서로 다름 · 보조 dex 되돌림 줄 없음` | BP-5 | — |
+| cli | 보조 dex `status` 모두 같은데 `-m` 밖 | `보조 dex {n}개 · status {status} · -m 이 받지 않는 값 · 되돌림 줄 없음` | BP-5 · plan B34 #5 — 침묵 안 함 · base 줄과 따로 판단 (base 가 `-m` 밖 · 모름이어도) · 머리 아래면 두 칸 들여 75칸 | `복원` |
 | cli | 되돌릴 값이 `-m` 밖 | `되돌림 줄 없음 · 바꾸기 전 base.apk status {status} · -m 이 받지 않는 값` | sdk 36 도움말의 셋 밖 | — |
 | cli | 바꾸기 전 `status` null | `되돌림 줄 없음 · 바꾸기 전 base.apk status 모름` | BP-2 | — |
 | cli | 실패 머리 (종료 코드 · `Failure`) | `컴파일 실패 · 세션 안 엶 · exit {code}` | run 디렉토리 0 | `오류가 발생` |
 | cli | 실패 머리 (한도) | `컴파일 한도 10분 넘음 · 세션 안 엶` | 결정 10 | — |
 | cli | 실패 · 보낸 명령 | `보낸 명령  {cmd}` | 원문 그대로 | — |
 | cli | 실패 · 상태 줄 | `Compile   {value} · base.apk 바꾸기 전 {before} · 지금 모름` | 실패 뒤 다시 읽지 않음 | — |
+| cli | 컴파일 줄 · 실패 상태 줄의 `{before}` · `{after}` 값을 모를 때 | `모름` | 못 읽음 · base 줄을 하나로 못 고름 — `status 모름` · `지금 모름` 과 같은 말 (plan B34 #3) | `—` · `없음` |
 | cli | 거부 · `--launch` 없음 | `--compile 은 --launch 와만 · 기기 명령 0` | 결정 8 | — |
 | cli | 거부 · 허용 밖 값 | `--compile {value} · 받는 값 reset · speed-profile · speed · 기기 명령 0` | BP-4 | — |
 | gui | 머리 `옵션` 칸 꼬리 | `--compile {value}` | `--launch` 뒤 | — |
@@ -219,3 +221,4 @@ report-readability `## 상태` 의 행을 같이 쓴다 (6상태 × 2) · CLI 6�
 |---|---|---|
 | 2026-10-11 | baseline-profile | 처음 — 보고서 카드 · 진단 ART 칸 · `dexstates` · CLI 6블록 · `## 문구` 정본 (cli 14 · gui 12) |
 | 2026-10-11 | baseline-profile | 고침 1 (디자인 검토 #1 ~ 5 · 7 · 10 · 11) — core 이름 · 필드 넷 · 줄 맞춤 · 배지 셈 · core 문구 11 · 진단 값 칸 둘 |
+| 2026-10-11 | baseline-profile | bp-cli 검수 왕복 1 · plan B34 — cli 문구 둘 더함: 보조 dex `status` 모두 같은데 `-m` 밖 사실 줄 (#5 · 침묵 안 함) · 값 모름 낱말 `모름` (#3) |

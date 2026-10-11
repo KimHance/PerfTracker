@@ -1,13 +1,17 @@
 import {
   type ActiveSession,
   beginStart,
+  checkCompileOption,
+  type DexoptLine,
   resolveTargetApp,
   startSession,
   type StartOptions,
   type TargetApp,
+  summarizeCompile,
 } from '@perftracker/core'
 import type { CliContext } from '../context.js'
 import { DIAGNOSE_CLI_COPY } from '../copy/diagnose.js'
+import { compileFailure, compileLine, readStateAfter, revertLines } from './compile.js'
 
 /** `start` 가 commander 에게서 받는 옵션. `diagnose` 는 기본값이 없다 — 안 주면 `undefined`. */
 export interface StartCliOptions {
@@ -17,6 +21,8 @@ export interface StartCliOptions {
   out: string
   force: boolean
   diagnose?: boolean
+  /** `--compile <값>` — 기본값이 없다. 안 주면 `undefined` 이고 기기 상태를 바꾸지 않는다 (BP-4). */
+  compile?: string
 }
 
 /**
@@ -24,13 +30,24 @@ export interface StartCliOptions {
  * 여기 남은 것은 옵션을 넘기고 결과를 사람이 읽는 문장으로 바꾸는 일이다.
  */
 export async function runStart(ctx: CliContext, opts: StartCliOptions): Promise<string> {
+  // `--compile` 거부는 **기기 명령 0** 이어야 한다 (BP-4 · 결정 8) — 옛 세션 정리(`--force`)와 앱 해석이
+  // 둘 다 기기 접촉이라 그보다 먼저. 판정은 core 의 것을 그대로 부른다 (startSession 도 스스로 다시 본다).
+  checkCompileOption({ launch: opts.launch, compile: opts.compile })
+
   // 앱 해석은 기기 접촉이다. 활성 세션이 있으면 측정 창이 열려 있으므로, 여기서 먼저 걸러야
   // 사용자가 MeasurementWindowViolationError 대신 "이미 세션이 있습니다" 를 본다.
   await beginStart(ctx, { force: opts.force })
 
   const app = await resolveTargetApp(ctx, opts.app)
-  const session = await startSession(ctx, app, startSessionOptions(opts, new Date()))
-  return formatStart(session, app)
+  let session: ActiveSession
+  try {
+    session = await startSession(ctx, app, startSessionOptions(opts, new Date()))
+  } catch (e) {
+    // compile 이 낀 실패면 기기 상태가 바뀌었을 수 있다 — 되돌림 줄을 붙여 던진다 (BP-5 · plan B32).
+    throw compileFailure(e, app, ctx.serial) ?? e
+  }
+  const after = session.compile === undefined ? null : await readStateAfter(session.runDir)
+  return formatStart(session, app, after)
 }
 
 /**
@@ -48,13 +65,27 @@ export function startSessionOptions(opts: StartCliOptions, now: Date): StartOpti
     force: opts.force,
     now,
     ...(opts.diagnose === true ? { diagnose: true } : {}),
+    // 같은 이유로 `--compile` 도 줬을 때만 (BP-4 — 없는 세션은 core 옵션 객체가 이 기능 전과 같다).
+    ...(opts.compile !== undefined ? { compile: opts.compile } : {}),
   }
 }
 
-/** `start` 가 남기는 문장. 기기를 모르는 순수 함수라 시험이 그대로 부른다. */
-export function formatStart(session: ActiveSession, app: TargetApp): string {
+/**
+ * `start` 가 남기는 문장. 기기를 모르는 순수 함수라 시험이 그대로 부른다.
+ *
+ * `after` 는 `--compile` 세션의 바꾼 뒤 상태(`capture.json` 의 시작 상태) — 그 세션이 아니면 안 쓴다.
+ */
+export function formatStart(session: ActiveSession, app: TargetApp, after: readonly DexoptLine[] | null = null): string {
   // 진단 세션이면 무엇을 켰는지 라벨 줄 하나 (DM-11). 평소 세션에는 줄이 없다.
   const diagnose = session.options.diagnose === true ? `\n${DIAGNOSE_CLI_COPY.labelLine}` : ''
+
+  // `--compile` 세션이면 바꾼 값 · 전 → 후 줄과 되돌림 줄 (BP-5 · BP-6). 아닌 세션에는 둘 다 없다.
+  const compile = session.compile
+  const compileRow = compile === undefined ? '' : `\n${compileLine(summarizeCompile(compile, after))}`
+  const revert =
+    compile === undefined
+      ? ''
+      : `\n\n${revertLines(compile.compile_state_before, session.serial, session.packageName).join('\n')}`
 
   const startup =
     session.startup !== null && session.startup.totalTimeMs !== null
@@ -81,7 +112,7 @@ export function formatStart(session: ActiveSession, app: TargetApp): string {
     `측정을 시작했습니다.\n` +
     `Session   ${session.name}  (${session.id})\n` +
     `App       ${app.label}  ${app.package}\n` +
-    `Run dir   ${session.runDir}${diagnose}${startup}${notice}${appSliceNotice}\n\n` +
+    `Run dir   ${session.runDir}${diagnose}${compileRow}${startup}${notice}${appSliceNotice}${revert}\n\n` +
     `기기에서 앱을 조작한 뒤 perftracker stop 을 실행하세요.\n` +
     `측정 중에는 기기에 어떤 명령도 보내지 않습니다.`
   )
