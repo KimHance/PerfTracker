@@ -1386,11 +1386,23 @@ const OPEN_UNKNOWN_REASON = renderReason({
 
 type DiagState =
   | 'collected' | 'open-null' | 'no-process' | 'failed' | 'stale'
-  | 'ftrace-not-recorded' | 'ftrace-setup-errors'
+  | 'ftrace-not-recorded' | 'ftrace-setup-errors' | 'dalvik-off'
+
+/** ART 칸 (1) — SM-S901N · YouTube 원본의 컴파일 상태 slice 두 줄 (경로 해시는 줄임 · baseline-profile BP-7). */
+const COMPILE_STATES = [
+  {
+    location: '/data/app/~~j3NK…/com.google.android.youtube-_ZCw…/oat/arm64/base.odex',
+    status: 'up-to-date', filter: 'speed-profile', reason: 'profile-utilization',
+  },
+  {
+    location: 'primary.vdex mapped directly in memory from /data/app/~~KFTc…/com.google.android.gms-tENA…/split_DynamiteLoader_installtime.dm',
+    status: 'up-to-date', filter: 'verify', reason: 'vdex-dm',
+  },
+]
 
 function diagBlock(state: DiagState): Record<string, unknown> {
   const base: Record<string, unknown> = {
-    atrace_categories: ['am', 'wm', 'view'],
+    atrace_categories: ['am', 'wm', 'view', 'dalvik'],
     atrace_apps: ['com.google.android.youtube'],
     status: 'collected',
     reason_code: null,
@@ -1405,6 +1417,12 @@ function diagBlock(state: DiagState): Record<string, unknown> {
     trace_bytes: 6783480,
     target_process_slice_names_unfolded: 4921,
     target_process_slice_names: SLICE_ROWS,
+    target_process_compile_state_slices: COMPILE_STATES,
+    target_process_compile_state_slices_reason_code: null,
+    target_process_compile_state_slices_reason: null,
+    target_process_jit_slices: 54,
+    target_process_jit_slices_reason_code: null,
+    target_process_jit_slices_reason: null,
   }
   const reason = (code: string, detail: Record<string, unknown> = {}): Record<string, unknown> => ({
     reason_code: code,
@@ -1415,6 +1433,18 @@ function diagBlock(state: DiagState): Record<string, unknown> {
     target_process_slices_unfinished: null,
     target_process_slice_names_unfolded: null,
     target_process_slice_names: null,
+  }
+  /** ART 칸 둘이 null — 이유는 짝 칸에 (트레이스 쪽 이유면 블록과 같은 코드 · BP-7). */
+  const noArt = (code: string, detail: Record<string, unknown> = {}): Record<string, unknown> => {
+    const r = reason(code, detail)
+    return {
+      target_process_compile_state_slices: null,
+      target_process_compile_state_slices_reason_code: r['reason_code'],
+      target_process_compile_state_slices_reason: r['reason'],
+      target_process_jit_slices: null,
+      target_process_jit_slices_reason_code: r['reason_code'],
+      target_process_jit_slices_reason: r['reason'],
+    }
   }
   switch (state) {
     case 'collected':
@@ -1430,10 +1460,11 @@ function diagBlock(state: DiagState): Record<string, unknown> {
       return {
         ...base, ...noSlices, status: 'partial',
         ...reason('process_not_in_trace', { package: 'com.google.android.youtube' }),
+        ...noArt('process_not_in_trace', { package: 'com.google.android.youtube' }),
       }
     case 'failed':
       return {
-        ...base, ...noSlices, status: 'failed', ...reason('trace_missing'),
+        ...base, ...noSlices, status: 'failed', ...reason('trace_missing'), ...noArt('trace_missing'),
         trace_slices: null, ftrace_overrun_events: null, trace_bytes: null,
       }
     case 'stale':
@@ -1445,11 +1476,17 @@ function diagBlock(state: DiagState): Record<string, unknown> {
       }
     case 'ftrace-not-recorded':
       return {
-        ...base, ...noSlices, status: 'partial', ...reason('ftrace_not_recorded'),
+        ...base, ...noSlices, status: 'partial', ...reason('ftrace_not_recorded'), ...noArt('ftrace_not_recorded'),
         trace_slices: null, ftrace_overrun_events: null,
       }
     case 'ftrace-setup-errors':
       return { ...base, status: 'partial', ...reason('ftrace_setup_errors', { setup_errors: 28 }) }
+    case 'dalvik-off':
+      // dalvik 을 켜기 전 진단 run 을 extract 로 다시 낸 문서 — 블록은 collected 그대로, ART 칸만 null.
+      return {
+        ...base, atrace_categories: ['am', 'wm', 'view'],
+        ...noArt('dalvik_not_recorded', { atrace_categories: ['am', 'wm', 'view'] }),
+      }
   }
 }
 
@@ -1470,8 +1507,17 @@ function diagDoc(state: DiagState): Record<string, unknown> {
 
 const DIAG_STATES: DiagState[] = [
   'collected', 'open-null', 'no-process', 'failed', 'stale', 'ftrace-not-recorded', 'ftrace-setup-errors',
+  'dalvik-off',
 ]
 const DIAG_BLOCKS = MANIFEST.filter((b) => b.section === 'diagnose')
+/** 이유 칸 → 그 이유가 딸린 값 칸 (매니페스트 `why` 선언에서). */
+const WHY_OWNER = new Map(
+  DIAG_BLOCKS.flatMap((b) =>
+    b.kind === 'pairs'
+      ? (b.keys ?? []).flatMap((k) => (k.why === undefined ? [] : [[k.why.code, k.p], [k.why.reason, k.p]] as [string, string][]))
+      : [],
+  ),
+)
 const SLICE_CARD = MANIFEST.find((b) => b.kind === 'slicetable') as SliceTableBlock
 
 /**
@@ -1480,8 +1526,9 @@ const SLICE_CARD = MANIFEST.find((b) => b.kind === 'slicetable') as SliceTableBl
  * 1. 행 — pairs 카드의 라벨이 필드 경로이고 값 칸이 그 값을 같은 포맷으로 낸다 (null 이면 `값 없음`)
  * 2. 카드 배지 — `status` 가 unsupported · skipped · failed
  * 3. 카드 제목 title — `reason` 문장. partial 의 `status` · `reason_code` 도 이 자리로 센다
- * 4. 열림 행 title — `app_slices_open_reason`
- * 5. null 값 자리의 코드 — 열림 행(`app_slices_open_reason_code`) · 표 자리(블록 `reason_code`)
+ * 4. 이유가 딸린 행(`why`)의 title — `app_slices_open_reason` · ART 칸 둘의 `_reason`
+ * 5. null 값 자리의 코드 — 이유가 딸린 행(`app_slices_open_reason_code` · ART 칸 둘의 `_reason_code`) ·
+ *    표 자리(블록 `reason_code`)
  *
  * 뷰모델에서 거꾸로 센다 — 선언이 아니라 **그려질 것**이 근거다.
  */
@@ -1515,11 +1562,11 @@ function diagnosePlaces(doc: unknown): Map<string, string[]> {
         const own = b.path === 'diagnose' || key.p.startsWith('diagnose.')
         if (!own) continue
         if (row.label === key.p && row.value === fmtValue(block[field] as never, key.f)) add(field, `행:${b.title}`)
-        if (row.title !== undefined && row.title === block['app_slices_open_reason']) {
-          add('app_slices_open_reason', `열림 행 title`)
+        if (key.why !== undefined && row.title !== undefined && row.title === block[key.why.reason]) {
+          add(key.why.reason, `행 title:${key.p}`)
         }
-        if (row.code !== undefined && row.code === block['app_slices_open_reason_code']) {
-          add('app_slices_open_reason_code', `열림 행 코드`)
+        if (key.why !== undefined && row.code !== undefined && row.code === block[key.why.code]) {
+          add(key.why.code, `행 코드:${key.p}`)
         }
       }
     }
@@ -1545,6 +1592,41 @@ function diagnosePlaces(doc: unknown): Map<string, string[]> {
   return places
 }
 
+/**
+ * plan B27 — 진단 블록 컴파일 상태 slice(객체 배열)를 기존 `list` 칸이 그린다. 객체 항목은 `키=값` 을 공백으로
+ * 이은 한 줄(기기 slice 원문 꼴)이고, 문자열 항목은 그대로다. `[object Object]` 가 찍히는 길이 없어야 한다.
+ */
+describe('BP-7 컴파일 상태 칸 — list 의 객체 항목', () => {
+  it('BP-7 컴파일 상태 칸 — 객체 항목은 키=값 한 줄(객체 순서) · 문자열 항목은 그대로', () => {
+    expect(fmtValue([{ location: '/a b/base.odex', status: 'up-to-date', filter: 'speed', reason: 'cmdline' }] as never, 'list'))
+      .toBe('location=/a b/base.odex status=up-to-date filter=speed reason=cmdline')
+    expect(fmtValue([{ b: 2, a: 1 }, { c: null }] as never, 'list')).toBe('b=2 a=1, c=null')
+    expect(fmtValue(['tag1', 'tag2'] as never, 'list')).toBe('tag1, tag2')
+    expect(fmtValue([] as never, 'list')).toBe('없음')
+  })
+
+  it('BP-7 컴파일 상태 칸 — 진단 탭 어느 상태에서도 [object Object] 가 찍히지 않고, 값이 있으면 원문 꼴 줄이다', () => {
+    for (const s of DIAG_STATES) {
+      const doc = diagDoc(s)
+      for (const b of DIAG_BLOCKS) {
+        if (b.kind !== 'pairs') continue
+        const vm = buildPairs(b, doc)
+        if ((vm as NoneVm).none === true) continue
+        for (const row of (vm as PairsVm).rows) expect(row.value, `${s} / ${row.label}`).not.toContain('[object Object]')
+      }
+    }
+    const counts = DIAG_BLOCKS.find(
+      (b): b is PairsBlock => b.kind === 'pairs' && (b.keys ?? []).some((k) => k.p === 'target_process_compile_state_slices'),
+    )!
+    const row = (buildPairs(counts, diagDoc('collected')) as PairsVm).rows.find(
+      (r) => r.label === 'target_process_compile_state_slices',
+    )!
+    expect(row.value).toBe(
+      COMPILE_STATES.map((c) => `location=${c.location} status=${c.status} filter=${c.filter} reason=${c.reason}`).join(', '),
+    )
+  })
+})
+
 describe('DM-13 진단 탭 전 필드', () => {
   /** 스키마가 블록에 필드를 늘리면 여기서 먼저 깨진다 — 그 필드의 자리를 정하기 전엔 통과하지 않는다. */
   it('DM-13 진단 탭 전 필드 — 블록 필드 목록이 core 스키마와 같다 (시험 문서가 전부를 싣는다)', () => {
@@ -1569,9 +1651,9 @@ describe('DM-13 진단 탭 전 필드', () => {
       const silentOk = hidden.filter((k) => {
         if (k === 'status') return block['status'] === 'collected'
         if (k === 'reason_code' || k === 'reason') return block[k] === null && block['status'] === 'collected'
-        if (k === 'app_slices_open_reason_code' || k === 'app_slices_open_reason') {
-          return block[k] === null && block['app_slices_open'] === true
-        }
+        // 값에 딸린 이유 칸(`why`) — 값이 있으면 이유는 null 이고 말할 것이 없다.
+        const owner = WHY_OWNER.get(k)
+        if (owner !== undefined) return block[k] === null && block[owner] !== null
         return false
       })
       expect(hidden.filter((k) => !silentOk.includes(k)), JSON.stringify([...places])).toEqual([])
@@ -1671,7 +1753,7 @@ describe('DM-13 진단 탭 전 필드', () => {
     const scope = DIAG_BLOCKS.find((b) => b.title === '기록 범위') as PairsBlock
     const rows = (buildPairs(scope, diagDoc('collected')) as PairsVm).rows
     expect(rows.map((r) => [r.label, r.value])).toEqual([
-      ['atrace_categories', 'am · wm · view'],
+      ['atrace_categories', 'am · wm · view · dalvik'],
       ['atrace_apps', 'com.google.android.youtube'],
       ['app_slices_open', '예'],
     ])

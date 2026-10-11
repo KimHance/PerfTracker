@@ -19,6 +19,8 @@ import { METRIC_REASON_CODES, renderReason } from '../../src/schema/reasons.js'
 import { APP_SLICE_MIN_SDK, appSliceOpen } from '../../src/session/diagnose.js'
 import { FakeProcessRunner } from '../support/fakeProcessRunner.js'
 import {
+  CompileStateSliceSchema,
+  DexoptLineSchema,
   DiagnoseBlockSchema,
   ResultSchema,
   SCHEMA_VERSION,
@@ -186,6 +188,7 @@ describe('DM-7 README 진단 블록 절', () => {
       ...Object.keys(DiagnoseBlockSchema.shape),
       ...Object.keys(SliceNameRowSchema.shape),
       ...Object.keys(SliceBranchStatsSchema.shape),
+      ...Object.keys(CompileStateSliceSchema.shape),
     ]
     expect(listed.filter((k) => !inSchema.includes(k)), 'README 에만 있는 필드').toEqual([])
     expect(inSchema.filter((k) => !listed.includes(k)), '스키마에만 있는 필드').toEqual([])
@@ -194,7 +197,7 @@ describe('DM-7 README 진단 블록 절', () => {
   it('DM-7 README 진단 블록 절이 합 ms 와 갈래 · 접기 · 순서 규칙을 말한다', () => {
     const text = section('### `diagnose`')
     expect(text).toContain('`sum_ms` 를 행끼리 더하지 마세요')
-    expect(text).toContain('프레임워크 slice(am · wm · view)와 앱 slice 를 가르지 않습니다')
+    expect(text).toContain('프레임워크 slice(am · wm · view · dalvik)와 앱 slice 를 가르지 않습니다')
     expect(text).toContain('frametimeline')
     expect(text).toContain('UTF-16 코드 단위 순')
     expect(text).toContain('`app_slices_open_unknown`')
@@ -247,7 +250,7 @@ describe('DM-9 README 진단 절 ↔ 코드', () => {
       appPid: PID,
       env: { sdkInt: 36, dataSources: ['linux.ftrace'] },
       debuggable: false,
-      scope: { atraceCategories: ['am', 'wm', 'view'], atraceApps: [PKG] },
+      scope: { atraceCategories: ['am', 'wm', 'view', 'dalvik'], atraceApps: [PKG] },
       ...over,
     }
   }
@@ -285,6 +288,8 @@ describe('DM-9 README 진단 절 ↔ 코드', () => {
     'trace_bytes',
     'target_process_slice_names_unfolded',
     'target_process_slice_names',
+    'target_process_compile_state_slices',
+    'target_process_jit_slices',
   ] as const
 
   /** 머리가 `head` 로 시작하는 표의 줄들 — 칸마다 문자열. */
@@ -388,6 +393,43 @@ describe('DM-9 README 진단 절 ↔ 코드', () => {
     expect(Object.keys(example)).toEqual(Object.keys(DiagnoseBlockSchema.shape))
     // 스키마가 모르는 키는 parse 가 지운다 — 지운 것이 있으면 같지 않다.
     expect(DiagnoseBlockSchema.parse(example)).toEqual(example)
+  })
+})
+
+/**
+ * BP-7 · 결정 14 — 같은 낱말 `status` 가 두 자리에서 다른 뜻이다. `target_app.compile_state_*[].status` 는
+ * compiler filter 이고, 진단 블록 컴파일 상태 slice 의 `status` 는 oat 파일 상태다(그쪽 compiler filter 는 `filter`).
+ * 스키마만 읽는 소비자(CI · LLM)와 README 를 읽는 사람이 둘을 같은 것으로 비교하지 않게 양쪽이 갈라 적는다.
+ */
+describe('BP-7 status 두 뜻', () => {
+  const desc = (schema: { shape: Record<string, { description?: string }> }, key: string): string =>
+    schema.shape[key]?.description ?? ''
+
+  it('BP-7 status 두 뜻 describe — 스키마 두 자리가 서로를 가리키며 뜻을 가른다', () => {
+    const slice = desc(CompileStateSliceSchema, 'status')
+    expect(slice).toContain('oat 파일의 상태')
+    expect(slice).toContain('compiler filter 가 ')
+    expect(slice).toContain('filter')
+    expect(slice).toContain('target_app.compile_state_start[].status')
+    expect(desc(CompileStateSliceSchema, 'filter')).toContain('compiler filter')
+    const dexopt = desc(DexoptLineSchema, 'status')
+    expect(dexopt).toContain('compiler filter')
+    expect(dexopt).toContain('진단 블록 컴파일 상태 slice 의 `status`(oat 파일 상태')
+    // 블록 칸 설명도 같은 말을 한다 — 칸만 보는 소비자에게.
+    expect(desc(DiagnoseBlockSchema, 'target_process_compile_state_slices')).toContain('oat 파일 상태')
+  })
+
+  it('BP-7 status 두 뜻 describe — README 의 진단 절과 target_app 절이 둘 다 가른다', () => {
+    const diag = section('### `diagnose`')
+    expect(diag).toMatch(/\*\*`status` 가 둘입니다\.\*\* 이 목록의 `status` 는 \*\*oat 파일 상태\*\*/)
+    expect(diag).toContain('compiler filter 는 `filter` 칸입니다')
+    const target = section('### `target_app` 의 컴파일 상태')
+    expect(target).toContain('**`status` 는 진단 블록의 컴파일 상태 slice 에 나오는 `status` 와 뜻이 다릅니다.**')
+  })
+
+  it('BP-7 판정 필드 0 — ART 칸 · 한 줄에 순위 · 비율 · 등급 · 기준선 필드가 없다', () => {
+    const keys = [...Object.keys(DiagnoseBlockSchema.shape), ...Object.keys(CompileStateSliceSchema.shape)]
+    expect(keys.filter((k) => /rank|ratio|pct|share|grade|score|baseline|verdict|top/.test(k))).toEqual([])
   })
 })
 

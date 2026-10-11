@@ -704,6 +704,21 @@ export const MANIFEST: Block[] = [
       { p: 'target_process_slices_unfinished', l: 'target_process_slices_unfinished', f: 'int' },
       { p: 'target_process_slice_names_unfolded', l: 'target_process_slice_names_unfolded', f: 'int' },
       { p: 'ftrace_overrun_events', l: 'ftrace_overrun_events', f: 'int' },
+      // ART 칸 (baseline-profile BP-7) — 블록 status 와 따로 가는 이유를 행마다 단다 (열림 행과 같은 꼴).
+      // 자리 · 라벨은 최소로 둔 것이다 — bp-gui-report 가 디자인 문서대로 다듬는다 (plan B26).
+      // 컴파일 상태는 객체 배열이다 — `list` 포맷이 항목마다 `키=값` 을 공백으로 이은 한 줄(기기 slice 원문 꼴)로
+      // 내고 항목끼리는 `, ` 로 잇는다 (plan B27). 줄마다 나눠 그리는 꼴은 bp-gui-report 몫.
+      {
+        p: 'target_process_compile_state_slices', l: 'target_process_compile_state_slices', f: 'list',
+        why: {
+          code: 'target_process_compile_state_slices_reason_code',
+          reason: 'target_process_compile_state_slices_reason',
+        },
+      },
+      {
+        p: 'target_process_jit_slices', l: 'target_process_jit_slices', f: 'int',
+        why: { code: 'target_process_jit_slices_reason_code', reason: 'target_process_jit_slices_reason' },
+      },
     ],
   },
   {

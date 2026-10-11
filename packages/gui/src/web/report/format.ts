@@ -44,6 +44,18 @@ const THERMAL_STATUS = [
   'NONE', 'LIGHT', 'MODERATE', 'SEVERE', 'CRITICAL', 'EMERGENCY', 'SHUTDOWN',
 ]
 
+/**
+ * `list` 의 한 항목. 객체면 `키=값` 을 공백으로 이어 한 줄 — 진단 블록 컴파일 상태 slice 가 기기 원문
+ * (`location=… status=… filter=… reason=…`)과 같은 꼴로 나와 칸이 무엇인지 잃지 않는다 (plan B27).
+ * 키 순서는 객체 순서 그대로. 그냥 `String` 이면 `[object Object]` 가 찍힌다.
+ */
+function listItem(x: unknown): string {
+  if (x !== null && typeof x === 'object' && !Array.isArray(x)) {
+    return Object.entries(x).map(([k, val]) => `${k}=${String(val)}`).join(' ')
+  }
+  return String(x)
+}
+
 export function fmtValue(v: Read, f: Fmt | undefined): string {
   if (v === MISSING) return NONE_MISSING
   if (v === null || v === undefined) return NONE_NULL
@@ -54,7 +66,7 @@ export function fmtValue(v: Read, f: Fmt | undefined): string {
 
   if (f === 'bool') return v === true ? '예' : v === false ? '아니오' : String(v)
   if (f === 'list') {
-    return Array.isArray(v) ? (v.length === 0 ? '없음' : v.join(', ')) : String(v)
+    return Array.isArray(v) ? (v.length === 0 ? '없음' : v.map(listItem).join(', ')) : String(v)
   }
   // 짧은 이름 목록(atrace 카테고리 `am · wm · view`). CLI 의 진단 라벨 줄과 같은 구분자다.
   if (f === 'dots') {

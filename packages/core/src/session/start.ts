@@ -202,7 +202,7 @@ export interface StartOptions {
   now: Date
   home?: string
   /**
-   * 진단 세션으로 연다 (`--diagnose`) — atrace am · wm · view + 대상 앱 slice 를 기록하고
+   * 진단 세션으로 연다 (`--diagnose`) — atrace am · wm · view · dalvik + 대상 앱 slice 를 기록하고
    * 최대 10분이다. 없거나 false 면 평소 세션이고 기기로 나가는 config 가 이 옵션이 없던 때와
    * 글자 하나 다르지 않다 (DM-1).
    */

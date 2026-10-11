@@ -38,15 +38,18 @@ export const ALLOWED_FTRACE_EVENTS: readonly string[] = [
  * 진단 세션이 켜는 atrace 카테고리이자 **허용 목록** (DM-3 · DM-4). 여기 없는 카테고리는
  * 진단 세션이어도 config 에 들어갈 수 없다.
  *
- * 왜 이 셋인가 (SM-S901N · YouTube 15초 실측, 2026-10-07): am · wm · view 에 대상 앱 slice 를
+ * 왜 이 넷인가 (SM-S901N · YouTube 15초 실측, 2026-10-07): am · wm · view 에 대상 앱 slice 를
  * 더한 원본이 6.5–8.1 MiB 다. **gfx** 를 더하면 37 MiB · slice 38만으로 늘고 늘어난 몫은 대부분
  * surfaceflinger · HWC composer 다 (plan D21). **input** 은 gfx 와 함께 33 MiB 였고 몫을 떼지
  * 못했다. **sched** 는 고빈도라 `ALLOWED_FTRACE_EVENTS` 와 같은 이유로 막는다.
+ * **dalvik** 은 2026-10-11 에 더했다 (diagnostic-mode 결정 36 · baseline-profile BP-7) — 트레이스 안에서
+ * 컴파일 상태(`location=… status=… filter=… reason=…`) · JIT slice 를 읽는 유일한 길이고, 15초에 slice
+ * 약 1.4만(전 프로세스)을 더했지만 원본 크기 · traced_probes CPU 차이는 회차 변동 안이었다 (research B).
  *
  * atrace slice 의 비용은 커널 ftrace 와 달리 **slice 를 남기는 프로세스 자신**에게 청구된다.
  * 그래서 평소 세션에는 하나도 켜지 않는다 — `assertLowOverheadConfig` 가 `atrace_` 키를 본다.
  */
-export const DIAGNOSE_ATRACE_CATEGORIES: readonly string[] = ['am', 'wm', 'view']
+export const DIAGNOSE_ATRACE_CATEGORIES: readonly string[] = ['am', 'wm', 'view', 'dalvik']
 
 /**
  * 진단 config 에 들어갈 수 있는 `atrace_` 키. **이 둘 밖은 진단 세션이어도 거부한다.**

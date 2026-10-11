@@ -3,7 +3,7 @@ import { type AppProcessCandidate, appProcessSql, resolveAppProcess, staleNameRe
 import { round } from '../collectors/num.js'
 import type { TraceProcessor } from '../perfetto/traceProcessor/client.js'
 import { type MetricReason, renderReason } from '../schema/reasons.js'
-import type { DiagnoseBlock, MetricStatus, SliceBranchStats, SliceNameRow } from '../schema/result.js'
+import type { CompileStateSlice, DiagnoseBlock, MetricStatus, SliceBranchStats, SliceNameRow } from '../schema/result.js'
 import { appSliceOpen } from '../session/diagnose.js'
 
 /**
@@ -117,8 +117,18 @@ export function diagnoseSlicesSql(upid: number, pid: number): string {
  * 이름 길이는 자르지 않는다 (435자 이름이 실재한다 — 원문 그대로 grep 되게).
  */
 export function foldSliceName(name: string): string {
+  if (CLASS_DESCRIPTOR.test(name)) return CLASS_DESCRIPTOR_FOLDED
   return name.replace(/[A-Za-z0-9]*[0-9][A-Za-z0-9]*/g, '*')
 }
+
+/**
+ * **클래스 디스크립터 접기** (diagnostic-mode 결정 37 · plan B18). 이름 **전체**가 `L` 로 시작해 `;` 로 끝나고
+ * 공백이 없으면 한 행 `L*;` 다. `dalvik` 이 남기는 이 slice 는 숫자 없는 난독화 이름(`Lfvb;`)이 대부분이라
+ * 위 숫자 토큰 규칙으로 안 접힌다 — 실측 YouTube 15초에 접은 표가 1,099 → 6,227 ~ 27,335행이었고 그중
+ * `L…;` 가 5,233 · 25,523행이었다. 공백이 든 이름(`Lock contention on …`)은 디스크립터가 아니다.
+ */
+const CLASS_DESCRIPTOR = /^L[^\s]*;$/
+const CLASS_DESCRIPTOR_FOLDED = 'L*;'
 
 /** 이름의 UTF-16 코드 단위 순 — 호스트 로캘과 무관하다 (결정 7). `localeCompare` 를 쓰지 않는다. */
 export function compareCodeUnits(a: string, b: string): number {
@@ -191,6 +201,68 @@ export function buildSliceTable(groups: SliceGroupRow[]): SliceTable {
   return { rows, slices, unfinished: slices - finished, namesUnfolded: unfolded.size }
 }
 
+/**
+ * **ART 칸 둘** (기능 문서 baseline-profile BP-7) — 표와 **같은 (원문 이름 × 갈래) 행**에서 뽑는다.
+ * 쿼리를 따로 두지 않는 이유: 같은 행에서 나와야 표의 `JIT compiling …` 행 count 합과 이 수가 어긋날 수
+ * 없고, 대상 앱 프로세스 · atrace slice 범위(frametimeline 제외)도 표와 같아진다.
+ */
+export const JIT_SLICE_PREFIX = 'JIT compiling'
+const COMPILE_STATE_PREFIX = 'location='
+
+/**
+ * ART 가 dex 를 열 때 남기는 `location=%s status=%s filter=%s reason=%s` 를 네 칸으로 가른다.
+ * `location` 에는 공백이 들 수 있다(`primary.vdex mapped directly in memory from …`) — 그래서 앞에서 자르지
+ * 않고 **마지막** ` status=` · ` filter=` · ` reason=` 자리로 가른다(탐욕 `.*`). 뒤 셋은 공백 없는 낱말이다.
+ */
+const COMPILE_STATE = /^location=(.*) status=(\S+) filter=(\S+) reason=(\S+)$/
+
+export function parseCompileStateSlice(name: string): CompileStateSlice | null {
+  const m = COMPILE_STATE.exec(name)
+  if (m === null) return null
+  return { location: m[1]!, status: m[2]!, filter: m[3]!, reason: m[4]! }
+}
+
+export interface ArtCells {
+  compileStates: { value: CompileStateSlice[] | null; reason: MetricReason | null }
+  jitSlices: number
+}
+
+/**
+ * 원문 이름 행 → ART 칸 둘. 컴파일 상태 줄은 같은 네 값이면 하나로(갈래가 달라도 · 여러 번 열려도) 싣고,
+ * 순서는 원문 이름의 코드 단위 순이다 (입력 순서와 무관 — DM-8). `location=` 으로 시작하는데 네 칸으로
+ * 갈리지 않는 이름이 하나라도 있으면 목록은 null 이다 — 빼고 내면 그 줄을 "없었다" 로 말한다.
+ */
+export function buildArtCells(groups: SliceGroupRow[]): ArtCells {
+  let jitSlices = 0
+  const byName = new Map<string, CompileStateSlice>()
+  let unparsable: string | null = null
+  for (const g of groups) {
+    if (g.name.startsWith(JIT_SLICE_PREFIX)) jitSlices += g.count
+    if (!g.name.startsWith(COMPILE_STATE_PREFIX) || byName.has(g.name)) continue
+    const parsed = parseCompileStateSlice(g.name)
+    if (parsed === null) {
+      if (unparsable === null || compareCodeUnits(g.name, unparsable) < 0) unparsable = g.name
+      continue
+    }
+    byName.set(g.name, parsed)
+  }
+  if (unparsable !== null) {
+    return {
+      compileStates: { value: null, reason: { code: 'compile_state_slice_unparsable', detail: { name: unparsable } } },
+      jitSlices,
+    }
+  }
+  return {
+    compileStates: { value: [...byName.keys()].sort(compareCodeUnits).map((n) => byName.get(n)!), reason: null },
+    jitSlices,
+  }
+}
+
+/** 세션 기록의 켠 카테고리에 `dalvik` 이 있나. 기록이 없으면(null) 모른다 — 상수로 메우지 않는다 (결정 27). */
+function dalvikRecorded(scope: DiagnoseExtractInput['scope']): boolean {
+  return scope !== null && scope.atraceCategories.includes('dalvik')
+}
+
 export interface DiagnoseExtractInput {
   /** 원본을 읽는 trace_processor. 원본이 없으면 null. */
   tp: TraceProcessor | null
@@ -214,6 +286,8 @@ interface TraceCells {
   ftrace_overrun_events: number | null
   target_process_slice_names_unfolded: number | null
   target_process_slice_names: SliceNameRow[] | null
+  /** 표를 만든 경우에만 있다 — 없으면 ART 칸은 트레이스 쪽 이유(블록 reason)로 null 이다. */
+  art: ArtCells | null
 }
 
 const NO_TRACE_CELLS: TraceCells = {
@@ -223,6 +297,7 @@ const NO_TRACE_CELLS: TraceCells = {
   ftrace_overrun_events: null,
   target_process_slice_names_unfolded: null,
   target_process_slice_names: null,
+  art: null,
 }
 
 const FTRACE_SOURCE = 'linux.ftrace'
@@ -319,6 +394,7 @@ async function readTraceCells(
         target_process_slices_unfinished: table.unfinished,
         target_process_slice_names_unfolded: table.namesUnfolded,
         target_process_slice_names: table.rows,
+        art: buildArtCells(groups),
       },
     }
   } catch (e) {
@@ -347,6 +423,16 @@ export async function extractDiagnose(input: DiagnoseExtractInput): Promise<Diag
 
   const { status, reason, cells } = await readTraceCells(input)
 
+  // ART 칸의 이유 — dalvik 을 안 켠 원본이 먼저다(트레이스가 멀쩡해도 0개가 "없었다" 가 아니다 · 블록 status 는
+  // 그대로). 그다음은 표를 못 만든 트레이스 쪽 이유(블록 reason 과 같은 코드). 값이 있으면 이유는 null.
+  const dalvikReason: MetricReason | null = dalvikRecorded(input.scope)
+    ? null
+    : { code: 'dalvik_not_recorded', detail: { atrace_categories: input.scope?.atraceCategories ?? null } }
+  const art = dalvikReason === null ? cells.art : null
+  const artMissing = dalvikReason ?? (art === null ? reason : null)
+  const compileReason = artMissing ?? art?.compileStates.reason ?? null
+  const jitReason = artMissing
+
   return {
     atrace_categories: input.scope?.atraceCategories ?? null,
     atrace_apps: input.scope?.atraceApps ?? null,
@@ -363,5 +449,11 @@ export async function extractDiagnose(input: DiagnoseExtractInput): Promise<Diag
     trace_bytes: await fileBytes(input.tracePath),
     target_process_slice_names_unfolded: cells.target_process_slice_names_unfolded,
     target_process_slice_names: cells.target_process_slice_names,
+    target_process_compile_state_slices: art?.compileStates.value ?? null,
+    target_process_compile_state_slices_reason_code: compileReason?.code ?? null,
+    target_process_compile_state_slices_reason: renderReason(compileReason),
+    target_process_jit_slices: art?.jitSlices ?? null,
+    target_process_jit_slices_reason_code: jitReason?.code ?? null,
+    target_process_jit_slices_reason: renderReason(jitReason),
   }
 }

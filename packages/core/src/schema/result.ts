@@ -7,6 +7,9 @@ import { METRIC_REASON_CODES, type MetricReasonCode } from './reasons.js'
 // 같은 1.2.0 에 컴파일 상태(기능 문서 baseline-profile BP-1)를 더했다 — `target_app.compile_state_*`
 // optional 여섯 칸과 reason_code 넷(`dexopt_state_*`). 이쪽은 **모든 세션**에 실린다 (결정 7). `target_app` 이
 // 닫힌 객체라 캐시해 둔 1.1.0 스키마는 평소 세션 산출물도 거부한다.
+// 같은 1.2.0 에 진단 블록 ART 칸 둘(BP-7 — `diagnose.target_process_compile_state_slices` ·
+// `target_process_jit_slices` 와 각 `_reason_code` · `_reason`)을 optional 로, reason_code 둘
+// (`dalvik_not_recorded` · `compile_state_slice_unparsable`)을 더했다. 진단 세션에만 실린다.
 // 전부 아래 표의 minor 항목이고, 이 키들이 없는 1.1.0 문서는 이 스키마를 그대로 통과한다.
 //
 // 1.1.0 — M2 가 metrics 에 startup / cpu / memory / log 를, M3 가 thermal / network 를
@@ -1727,7 +1730,9 @@ export const SliceNameRowSchema = z.object({
       '**접은 이름.** 원문 이름에서 숫자가 든 영문 · 숫자 토큰(연속한 [A-Za-z0-9] 가운데 숫자가 ' +
         '하나라도 있는 것 — 숫자 · 0x16진 · `1001yo7d2xmcq` 같은 토큰)을 `*` 하나로 바꾼 것이다. ' +
         '`Choreographer#doFrame 136993` → `Choreographer#doFrame *` · `tk-trace-id: 1001yo7d2xmcq` → ' +
-        '`tk-trace-id: *`. 숫자가 없는 토큰은 그대로다. 원문에 이미 `*` 가 있었는지는 이 값으로 가를 수 ' +
+        '`tk-trace-id: *`. 숫자가 없는 토큰은 그대로다. 단 이름 전체가 클래스 디스크립터(`L` 로 시작해 `;` 로 ' +
+        '끝나고 공백이 없음 — `Lcom/google/Foo;` · 난독화 `Lfvb;`)이면 한 행 `L*;` 로 접는다. ' +
+        '원문에 이미 `*` 가 있었는지는 이 값으로 가를 수 ' +
         '없다. 길이는 자르지 않는다. 원문 이름은 원본 트레이스(artifacts.trace)에 그대로 있다.',
     ),
   main_thread: SliceBranchStatsSchema.nullable().describe(
@@ -1742,6 +1747,56 @@ export const SliceNameRowSchema = z.object({
   ),
 })
 export type SliceNameRow = z.infer<typeof SliceNameRowSchema>
+
+/**
+ * 진단 블록 ART 칸 (1) 의 한 줄 — `dalvik` 이 남기는 컴파일 상태 slice
+ * `location=<…> status=<…> filter=<…> reason=<…>` 하나 (기능 문서 baseline-profile BP-7).
+ *
+ * **`status` 가 `target_app.compile_state_*[].status` 와 같은 낱말 다른 뜻이다** (결정 14) — 여기는 oat 파일
+ * 상태(`up-to-date` …)이고 compiler filter 는 `filter` 다. 저쪽 `status` 가 compiler filter 다.
+ */
+export const CompileStateSliceSchema = z.object({
+  location: z
+    .string()
+    .describe(
+      '`location=` 뒤 원문 그대로 — odex · vdex 경로이거나 `none` 이거나 공백 든 문장' +
+        '(`primary.vdex mapped directly in memory from …/x.dm`)이다. 공백이 있어도 갈림은 마지막 ' +
+        '` status=` · ` filter=` · ` reason=` 자리로 정한다.',
+    ),
+  status: z
+    .string()
+    .describe(
+      '`status=` 원문 — ART 가 연 **oat 파일의 상태**(`up-to-date` · `no-dex-code` …)다. **compiler filter 가 ' +
+        '아니다** — 그것은 `filter` 칸이다. `target_app.compile_state_start[].status`(`dumpsys package` 의 ' +
+        '`[status=…]` — compiler filter)와 **같은 낱말 다른 뜻**이다.',
+    ),
+  filter: z
+    .string()
+    .describe(
+      '`filter=` 원문 — compiler filter (`speed-profile` · `verify` · `speed` · `unknown` …). ' +
+        '`target_app.compile_state_*[].status` 와 같은 종류의 값이다.',
+    ),
+  reason: z
+    .string()
+    .describe('`reason=` 원문 — 그 컴파일을 일으킨 까닭 (`profile-utilization` · `install-dm` · `vdex-dm` · `unknown` …).'),
+})
+export type CompileStateSlice = z.infer<typeof CompileStateSliceSchema>
+
+/** ART 칸 둘의 이유 짝 — 두 칸이 같은 말을 하되 무엇의 이유인지만 다르다. */
+const artReasonCode = (field: string) =>
+  z
+    .enum(METRIC_REASON_CODES)
+    .nullable()
+    .optional()
+    .describe(
+      `${field} 가 null 인 이유의 기계 키. 값이 있으면 null. dalvik_not_recorded 면 세션 기록에 dalvik 이 ` +
+        '없어(이 기록 전 진단 run 을 extract 로 다시 낸 경우) 블록 status 와 무관하게 null 이다. 트레이스 쪽 ' +
+        '이유(process_not_in_trace · ftrace_not_recorded · data_source_not_registered · trace_missing · ' +
+        'query_failed)면 블록 reason_code 와 같은 코드다. 이 키가 없는 문서는 이 칸이 생기기 전에 산출된 것이다.',
+    )
+
+const artReason = (field: string) =>
+  z.string().nullable().optional().describe(`${field}_reason_code 의 사람용 문장. 매칭에는 코드를 쓴다.`)
 
 /**
  * **진단 세션에만 있는 최상위 블록** (기능 문서 DM-6 · DM-7 · DM-9).
@@ -1824,7 +1879,7 @@ export const DiagnoseBlockSchema = z
       .nonnegative()
       .nullable()
       .describe(
-        '**대상 앱 프로세스**의 slice 수 — 표의 횟수를 모두 더한 값과 같다. 프레임워크 slice(am · wm · view)와 ' +
+        '**대상 앱 프로세스**의 slice 수 — 표의 횟수를 모두 더한 값과 같다. 프레임워크 slice(am · wm · view · dalvik)와 ' +
           '앱 slice 를 가르지 않는다(atrace 마커에 가를 태그가 없다). 대상 앱 프로세스는 metrics 와 같은 ' +
           '규칙으로 하나를 고른다. ' +
           DIAGNOSE_SLICE_SCOPE +
@@ -1886,10 +1941,46 @@ export const DiagnoseBlockSchema = z
           '남았거나 · 트레이스를 못 읽음) — ' +
           '빈 배열이면 프로세스는 찾았고 slice 가 0개였다.',
       ),
+    target_process_compile_state_slices: z
+      .array(CompileStateSliceSchema)
+      .nullable()
+      .optional()
+      .describe(
+        '**ART 칸 (1) — 대상 앱 프로세스의 컴파일 상태 slice 목록.** atrace `dalvik` 이 dex 를 열 때 남기는 ' +
+          '`location=… status=… filter=… reason=…` 이름의 slice 를 네 칸으로 가른 것이다. 같은 네 값은 한 줄로 ' +
+          '(중복 없이) 싣고, 순서는 원문 이름의 UTF-16 코드 단위 순이다. 대상 앱 프로세스 · atrace slice 범위는 ' +
+          'target_process_slice_names 와 같다 — 그 표의 원문 이름에서 뽑는다. ' +
+          '**줄의 status 는 oat 파일 상태이고 compiler filter 는 filter 칸이다** — ' +
+          'target_app.compile_state_*[].status(compiler filter)와 같은 낱말 다른 뜻이다. 이 도구는 값을 ' +
+          '비교하거나 판정하지 않는다.\n' +
+          '**null 은 모른다는 뜻이다**(이유는 _reason_code) — 빈 배열은 dalvik 이 켜졌고 프로세스를 찾았는데 ' +
+          '그 꼴의 slice 가 0개였다는 뜻이다. 이 키가 없는 문서는 이 칸이 생기기 전(baseline-profile 이전)에 ' +
+          '산출된 것이다.',
+      ),
+    target_process_compile_state_slices_reason_code: artReasonCode('target_process_compile_state_slices'),
+    target_process_compile_state_slices_reason: artReason('target_process_compile_state_slices'),
+    target_process_jit_slices: z
+      .number()
+      .int()
+      .nonnegative()
+      .nullable()
+      .optional()
+      .describe(
+        '**ART 칸 (2) — 대상 앱 프로세스의 JIT 컴파일 slice 수.** 이름이 `JIT compiling` 으로 시작하는 slice 를 ' +
+          '갈래와 무관하게 센다 — target_process_slice_names 의 그 이름들 count 합과 같다. ' +
+          DIAGNOSE_UNFINISHED +
+          ' 이 도구는 이 수에 많고 적음을 매기지 않는다. sdk 36 한 기기에서만 실측했다 — 다른 버전 · 비디버그 ' +
+          '앱에서 dalvik slice 가 앱 프로세스에 실리는지는 확인하지 않았다.\n' +
+          '**null 은 모른다는 뜻이다**(이유는 _reason_code) — 0 은 dalvik 이 켜졌고 프로세스를 찾았는데 JIT slice 가 ' +
+          '0개였다는 뜻이다. 이 키가 없는 문서는 이 칸이 생기기 전에 산출된 것이다.',
+      ),
+    target_process_jit_slices_reason_code: artReasonCode('target_process_jit_slices'),
+    target_process_jit_slices_reason: artReason('target_process_jit_slices'),
   })
   .describe(
     '**진단 세션에만 있는 블록** (session.options.diagnose 가 true). 평소 세션에는 키가 없다. ' +
-      'atrace(카테고리 am · wm · view + 대상 앱 하나의 앱 slice)를 켠 세션의 slice 집계다. ' +
+      'atrace(카테고리 am · wm · view · dalvik + 대상 앱 하나의 앱 slice — 실제로 켠 값은 atrace_categories)를 ' +
+      '켠 세션의 slice 집계다. ' +
       DIAGNOSE_OVERHEAD_CAVEAT +
       ' 원본은 artifacts.trace 하나이고 `perftracker extract` 가 기기 없이 같은 블록을 다시 낸다. ' +
       '시간축 그림은 이 블록에 없다 — 원본을 Perfetto UI 로 열 것.',

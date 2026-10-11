@@ -57,7 +57,7 @@ export function metricSupportChecks(env: CollectorEnv): DoctorCheck[] {
  * debuggable 은 모른다(`null`): sdk ≥31 이면 앱과 무관하게 열리고, ≤30 이면 debuggable 앱만이다.
  *
  * `capability` 다 — sdk 는 고칠 수 없는 사실이라 ✗ 여도 doctor 의 종료 코드를 바꾸지 않는다.
- * 프레임워크 slice(am · wm · view)는 sdk 와 무관하게 실리므로 진단 세션 자체는 열린다.
+ * 프레임워크 slice(am · wm · view · dalvik)는 sdk 와 무관하게 실리므로 진단 세션 자체는 열린다.
  */
 export function diagnoseDoctorCheck(sdkInt: number): DoctorCheck {
   const open = appSliceOpen(sdkInt, null).open === true

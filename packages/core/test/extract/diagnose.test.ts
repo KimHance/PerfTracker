@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { appProcessSql } from '../../src/collectors/appProcess.js'
 import { DIAGNOSE_COPY, fillCopy } from '../../src/copy/diagnose.js'
 import {
+  buildArtCells,
   buildSliceTable,
   compareCodeUnits,
   DIAGNOSE_TOTALS_SQL,
@@ -14,8 +15,11 @@ import {
   extractDiagnose,
   FTRACE_LOSS_STATS,
   foldSliceName,
+  parseCompileStateSlice,
   type SliceGroupRow,
 } from '../../src/extract/diagnose.js'
+import { renderReason } from '../../src/schema/reasons.js'
+import { DiagnoseBlockSchema } from '../../src/schema/result.js'
 import { TraceProcessor } from '../../src/perfetto/traceProcessor/client.js'
 import { artifactFor, cachedBinaryPath } from '../../src/perfetto/traceProcessor/locate.js'
 import { FakeProcessRunner } from '../support/fakeProcessRunner.js'
@@ -67,10 +71,31 @@ function input(over: Partial<DiagnoseExtractInput> = {}): DiagnoseExtractInput {
     appPid: APP_PID,
     env: { sdkInt: 36, dataSources: ['linux.process_stats', 'linux.sys_stats', 'linux.ftrace'] },
     debuggable: false,
-    scope: { atraceCategories: ['am', 'wm', 'view'], atraceApps: [PKG] },
+    scope: { atraceCategories: ['am', 'wm', 'view', 'dalvik'], atraceApps: [PKG] },
     ...over,
   }
 }
+
+/** dalvik 을 켜기 전(baseline-profile 이전) 진단 run 의 session.json 기록. */
+const OLD_SCOPE = { atraceCategories: ['am', 'wm', 'view'], atraceApps: [PKG] }
+
+/**
+ * SM-S901N · YouTube 21.40.161 15초 원본(research raw-baseline B-Y-r1 · pid 5153)의 컴파일 상태 slice 원문
+ * 그대로 — trace_processor 로 뽑은 이름 6개(그중 `location=none …` 은 3번 열림). 경로의 해시 토큰도 원문.
+ */
+const LOC_YT =
+  'location=/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/oat/arm64/base.odex ' +
+  'status=up-to-date filter=speed-profile reason=profile-utilization'
+const LOC_NONE = 'location=none status=no-dex-code filter=unknown reason=unknown'
+const LOC_PCAM =
+  'location=/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/oat/arm64/pcam.vdex ' +
+  'status=up-to-date filter=verify reason=vdex'
+const LOC_DM_LOCATION =
+  'primary.vdex mapped directly in memory from /data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/split_DynamiteLoader_installtime.dm'
+const LOC_DM = `location=${LOC_DM_LOCATION} status=up-to-date filter=verify reason=vdex-dm`
+const LOC_WEBVIEW =
+  'location=/data/app/~~MjuOuRHiVEevnTwW46TUwg==/com.google.android.webview-td0bFyTvF7EmulJitVzgDw==/oat/arm64/base.odex ' +
+  'status=up-to-date filter=speed-profile reason=install-dm'
 
 describe('DM-7 접기 규칙', () => {
   it('DM-7 접기 규칙 — 숫자가 든 영문 · 숫자 토큰만 * 하나로 접고, 숫자 없는 토큰과 나머지 글자는 원문 그대로', () => {
@@ -104,6 +129,218 @@ describe('DM-7 접기 규칙', () => {
     expect(table.rows[0]!.other_threads).toEqual({ count: 1, sum_ms: 1, max_ms: 1 })
     expect(table.namesUnfolded).toBe(4)
     expect(table.slices).toBe(7)
+  })
+})
+
+describe('DM-7 클래스 디스크립터 접기', () => {
+  it('DM-7 클래스 디스크립터 접기 — 이름 전체가 L…; (공백 없음)이면 L*; 하나, 아니면 결정 22 규칙 그대로', () => {
+    const cases: [string, string][] = [
+      // dalvik 이 남기는 난독화 디스크립터 — 숫자가 없어 결정 22 로는 안 접힌다.
+      ['Lfvb;', 'L*;'],
+      ['Lcom/google/android/libraries/youtube/Foo;', 'L*;'],
+      ['Lcom/google/Foo$1;', 'L*;'],
+      ['L;', 'L*;'],
+      // 공백이 들면 디스크립터가 아니다 — 숫자 토큰 규칙만.
+      ['Lock contention on thread list lock (owner tid: 12804)', 'Lock contention on thread list lock (owner tid: *)'],
+      ['L foo;', 'L foo;'],
+      // `L` 로 시작하지 않거나 `;` 로 끝나지 않으면 그대로 결정 22.
+      ['Lfvb', 'Lfvb'],
+      ['lfvb;', 'lfvb;'],
+      ['VerifyClass Lfvb;', 'VerifyClass Lfvb;'],
+      ['JIT compiling void Lfvb;.a(int) (kind=Baseline) from base.apk', 'JIT compiling void Lfvb;.a(int) (kind=Baseline) from base.apk'],
+      ['Layout2;', 'L*;'],
+      ['Layout 2', 'Layout *'],
+    ]
+    for (const [raw, folded] of cases) expect(foldSliceName(raw), raw).toBe(folded)
+  })
+
+  it('DM-7 클래스 디스크립터 접기 — 디스크립터 여럿이 한 행으로 합쳐지고, 접기 전 이름 수는 원문으로 센다', () => {
+    const table = buildSliceTable([
+      g('Lfvb;', 'main', 3, 3, 3_000, 1_000),
+      g('Lcom/a/B;', 'main', 1, 1, 2_000, 2_000),
+      g('Lcom/a/B;', 'other', 2, 2, 4_000, 3_000),
+      g('Lzz;', 'other', 1, 0, 0, null),
+      g('RV Scroll', 'main', 1, 1, 500_000, 500_000),
+    ])
+    expect(table.rows.map((r) => r.name)).toEqual(['L*;', 'RV Scroll'])
+    expect(table.rows[0]!.main_thread).toEqual({ count: 4, sum_ms: 0.005, max_ms: 0.002 })
+    expect(table.rows[0]!.other_threads).toEqual({ count: 3, sum_ms: 0.004, max_ms: 0.003 })
+    expect(table.namesUnfolded).toBe(4)
+    expect(table.slices).toBe(8)
+    expect(table.unfinished).toBe(1)
+  })
+})
+
+describe('BP-7 컴파일 상태 slice 파싱', () => {
+  it('BP-7 컴파일 상태 slice 파싱 — 네 칸으로 갈리고, 공백 든 location 은 마지막 status= · filter= · reason= 자리로 갈린다', () => {
+    expect(parseCompileStateSlice(LOC_YT)).toEqual({
+      location:
+        '/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/oat/arm64/base.odex',
+      status: 'up-to-date',
+      filter: 'speed-profile',
+      reason: 'profile-utilization',
+    })
+    expect(parseCompileStateSlice(LOC_DM)).toEqual({
+      location: LOC_DM_LOCATION,
+      status: 'up-to-date',
+      filter: 'verify',
+      reason: 'vdex-dm',
+    })
+    expect(parseCompileStateSlice(LOC_NONE)).toEqual({
+      location: 'none',
+      status: 'no-dex-code',
+      filter: 'unknown',
+      reason: 'unknown',
+    })
+    // location 안에 ` status=` 꼴 글자가 있어도 마지막 자리로 가른다.
+    expect(parseCompileStateSlice('location=/x status=a/y.odex status=up-to-date filter=speed reason=cmdline')).toEqual({
+      location: '/x status=a/y.odex',
+      status: 'up-to-date',
+      filter: 'speed',
+      reason: 'cmdline',
+    })
+    // 꼴이 다르면 추측하지 않는다.
+    for (const bad of [
+      'location=/x status=up-to-date filter=speed',
+      'location=/x status=up-to-date filter=speed reason=cmdline extra=1',
+      'location=/x filter=speed status=up-to-date reason=cmdline',
+      'location=/x status= filter=speed reason=cmdline',
+    ]) {
+      expect(parseCompileStateSlice(bad), bad).toBeNull()
+    }
+  })
+
+  it('BP-7 컴파일 상태 slice 파싱 — 같은 네 값은 한 줄 (갈래 · 횟수 무관) · 순서는 원문 이름의 코드 단위 순 · 입력 순서와 무관', () => {
+    const rows = [
+      g(LOC_WEBVIEW, 'other', 1, 1, 430_000, 430_000),
+      g(LOC_NONE, 'main', 3, 3, 30_000, 10_000),
+      g(LOC_YT, 'main', 1, 1, 16_690_000, 16_690_000),
+      g(LOC_DM, 'other', 1, 1, 100_000, 100_000),
+      g(LOC_PCAM, 'other', 1, 1, 4_060_000, 4_060_000),
+      g(LOC_NONE, 'other', 1, 1, 10_000, 10_000),
+      g('bindApplication', 'main', 1, 1, 1, 1),
+    ]
+    const art = buildArtCells(rows)
+    expect(art.compileStates.reason).toBeNull()
+    expect(art.compileStates.value!.map((r) => `${r.location} ${r.filter}`)).toEqual([
+      '/data/app/~~MjuOuRHiVEevnTwW46TUwg==/com.google.android.webview-td0bFyTvF7EmulJitVzgDw==/oat/arm64/base.odex speed-profile',
+      '/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/oat/arm64/base.odex speed-profile',
+      '/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/oat/arm64/pcam.vdex verify',
+      'none unknown',
+      `${LOC_DM_LOCATION} verify`,
+    ])
+    expect(JSON.stringify(buildArtCells([...rows].reverse()))).toBe(JSON.stringify(art))
+  })
+
+  it('BP-7 컴파일 상태 slice 파싱 — location= 인데 꼴을 모르는 이름이 하나라도 있으면 목록 null + compile_state_slice_unparsable (JIT 수는 그대로)', () => {
+    const art = buildArtCells([
+      g(LOC_YT, 'main', 1, 1, 1, 1),
+      g('location=/x status=up-to-date filter=speed', 'main', 1, 1, 1, 1),
+      g('JIT compiling void Lfvb;.a() (kind=Baseline) from base.apk', 'other', 2, 2, 1, 1),
+    ])
+    expect(art.compileStates.value).toBeNull()
+    expect(art.compileStates.reason).toEqual({
+      code: 'compile_state_slice_unparsable',
+      detail: { name: 'location=/x status=up-to-date filter=speed' },
+    })
+    expect(renderReason(art.compileStates.reason)).toContain('location=/x status=up-to-date filter=speed')
+    expect(art.jitSlices).toBe(2)
+  })
+})
+
+describe('BP-7 JIT slice 수', () => {
+  it('BP-7 JIT slice 수 — JIT compiling 으로 시작하는 slice 를 갈래 무관 · 끝나지 않은 것까지 센다 = 표의 그 이름들 count 합', () => {
+    const rows = [
+      g('JIT compiling void Lfvb;.a(int) (kind=Baseline) from base.apk', 'other', 50, 49, 1, 1),
+      g('JIT compiling int Lzz;.b() (kind=Optimized) from base.apk', 'other', 1, 1, 1, 1),
+      g('JIT compiling void Lq;.c() (kind=Baseline) from base.apk', 'main', 1, 1, 1, 1),
+      // 이름이 JIT compiling 으로 시작하지 않으면 세지 않는다 — JIT 스레드의 바깥 slice · 다른 dalvik slice.
+      g('Compiling baseline', 'other', 52, 52, 1, 1),
+      g('Background JIT compiling', 'other', 3, 3, 1, 1),
+      g('jit compiling lower', 'other', 4, 4, 1, 1),
+    ]
+    const art = buildArtCells(rows)
+    expect(art.jitSlices).toBe(52)
+
+    const table = buildSliceTable(rows)
+    const fromTable = table.rows
+      .filter((r) => r.name.startsWith('JIT compiling'))
+      .flatMap((r) => [r.main_thread, r.other_threads, r.async_tracks])
+      .reduce((n, c) => n + (c?.count ?? 0), 0)
+    expect(fromTable).toBe(art.jitSlices)
+  })
+})
+
+describe('BP-7 ART 칸 null', () => {
+  it('BP-7 dalvik 안 켠 원본은 null — 기록에 dalvik 이 없거나 기록이 null 이면 두 칸 null + dalvik_not_recorded · 블록 status 그대로', async () => {
+    for (const scope of [OLD_SCOPE, null]) {
+      const block = await extractDiagnose(input({ scope }))
+      expect(block.target_process_compile_state_slices, JSON.stringify(scope)).toBeNull()
+      expect(block.target_process_jit_slices).toBeNull()
+      expect(block.target_process_compile_state_slices_reason_code).toBe('dalvik_not_recorded')
+      expect(block.target_process_jit_slices_reason_code).toBe('dalvik_not_recorded')
+      expect(block.target_process_jit_slices_reason).toBe(
+        renderReason({ code: 'dalvik_not_recorded', detail: { atrace_categories: scope?.atraceCategories ?? null } }),
+      )
+      // 블록은 이것 때문에 바뀌지 않는다 — 표 · 수는 잰 그대로.
+      expect(block.status).toBe('collected')
+      expect(block.reason_code).toBeNull()
+      expect(block.target_process_slices).toBe(6)
+      expect(block.target_process_slice_names).toHaveLength(3)
+    }
+    expect(
+      renderReason({ code: 'dalvik_not_recorded', detail: { atrace_categories: ['am', 'wm', 'view'] } }),
+    ).toContain('am · wm · view')
+  })
+
+  it('BP-7 dalvik 안 켠 원본은 null — 원문 이름에 location= · JIT 가 있어도 기록이 없으면 세지 않는다', async () => {
+    const groups = [...GROUPS, g(LOC_YT, 'main', 1, 1, 1, 1), g('JIT compiling x', 'other', 5, 5, 1, 1)]
+    const tp = tpWith([HAPPY[0]!, HAPPY[1]!, [diagnoseSlicesSql(UPID, APP_PID), groups]])
+    const block = await extractDiagnose(input({ tp, scope: OLD_SCOPE }))
+    expect(block.target_process_compile_state_slices).toBeNull()
+    expect(block.target_process_jit_slices).toBeNull()
+    const on = await extractDiagnose(input({ tp: tpWith([HAPPY[0]!, HAPPY[1]!, [diagnoseSlicesSql(UPID, APP_PID), groups]]) }))
+    expect(on.target_process_compile_state_slices).toHaveLength(1)
+    expect(on.target_process_jit_slices).toBe(5)
+  })
+
+  it('BP-7 대상 앱 못 찾으면 null — 트레이스 쪽 이유면 두 칸 null + 블록과 같은 코드 (0 · [] 아님)', async () => {
+    const cases: [string, DiagnoseExtractInput][] = [
+      ['process_not_in_trace', input({ tp: tpWith([HAPPY[0]!, [appProcessSql(PKG, APP_PID), []]]) })],
+      ['ftrace_not_recorded', input({ tp: tpWith([totals({ ftrace_cpu_stats: 0, ftrace_overrun_events: null })]) })],
+      ['trace_missing', input({ tp: null })],
+      ['query_failed', input({ tp: tpWith(HAPPY.slice(0, 2)) })],
+      ['data_source_not_registered', input({ env: { sdkInt: 36, dataSources: [] } })],
+    ]
+    for (const [code, inp] of cases) {
+      const block = await extractDiagnose(inp)
+      expect(block.reason_code, code).toBe(code)
+      expect(block.target_process_compile_state_slices, code).toBeNull()
+      expect(block.target_process_jit_slices, code).toBeNull()
+      expect(block.target_process_compile_state_slices_reason_code, code).toBe(code)
+      expect(block.target_process_jit_slices_reason_code, code).toBe(code)
+      expect(block.target_process_jit_slices_reason, code).toBe(block.reason)
+    }
+    // dalvik 을 안 켠 원본이면 트레이스 쪽 이유보다 그것이 먼저다.
+    const old = await extractDiagnose(input({ tp: null, scope: OLD_SCOPE }))
+    expect(old.target_process_jit_slices_reason_code).toBe('dalvik_not_recorded')
+  })
+
+  it('BP-7 대상 앱 못 찾으면 null — 값이 있는 partial(낡은 이름 · 켜기 오류)이면 두 칸은 잰 값 · 이유 null', async () => {
+    const groups = [...GROUPS, g(LOC_NONE, 'main', 3, 3, 1, 1), g('JIT compiling x', 'other', 2, 2, 1, 1)]
+    for (const tp of [
+      tpWith([HAPPY[0]!, [appProcessSql(PKG, APP_PID), [{ upid: UPID, pid: APP_PID, name: '<pre-initialized>' }]], [diagnoseSlicesSql(UPID, APP_PID), groups]]),
+      tpWith([totals({ ftrace_setup_errors: 3 }), HAPPY[1]!, [diagnoseSlicesSql(UPID, APP_PID), groups]]),
+    ]) {
+      const block = await extractDiagnose(input({ tp }))
+      expect(block.status).toBe('partial')
+      expect(block.target_process_compile_state_slices).toEqual([
+        { location: 'none', status: 'no-dex-code', filter: 'unknown', reason: 'unknown' },
+      ])
+      expect(block.target_process_jit_slices).toBe(2)
+      expect(block.target_process_compile_state_slices_reason_code).toBeNull()
+      expect(block.target_process_jit_slices_reason_code).toBeNull()
+    }
   })
 })
 
@@ -285,7 +522,7 @@ describe('D35 ftrace 가 원본에 안 남음', () => {
     expect(block.ftrace_overrun_events).toBeNull()
     // 열림 · 범위는 트레이스와 따로 간다.
     expect(block.app_slices_open).toBe(true)
-    expect(block.atrace_categories).toEqual(['am', 'wm', 'view'])
+    expect(block.atrace_categories).toEqual(['am', 'wm', 'view', 'dalvik'])
   })
 
   /**
@@ -396,6 +633,66 @@ describe.skipIf(TP_BIN === null)('D18 · D35 실 trace_processor (합성 systrac
   })
 })
 
+/**
+ * BP-7 「같은 원본을 trace_processor 로 다시 세면 둘이 같다」. ART 칸은 표 쿼리(`diagnoseSlicesSql`)의 행에서
+ * 뽑으므로, 실 엔진에 그 쿼리를 돌려 만든 칸이 같은 원본을 **다른 SQL**(이름 glob 으로 직접 센 것)과 같은지 본다.
+ * 원본은 합성 systrace — 대상 프로세스(100) 안 두 스레드 · 다른 프로세스(200)의 같은 이름 slice.
+ * 실기기 원문(research raw-baseline B-Y-r1)으로 같은 대조를 한 결과는 intent bp-core-art 7 에 있다.
+ */
+describe.skipIf(TP_BIN === null)('BP-7 실 trace_processor — ART 칸을 다시 세면 같다', () => {
+  function systrace(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'pt-art-tp-'))
+    const path = join(dir, 'trace.systrace')
+    const line = (tid: number, pid: number, t: number, body: string): string =>
+      `           <...>-${tid}   (  ${pid}) [000] ....  ${t.toFixed(6)}: tracing_mark_write: ${body}\n`
+    let text = '# tracer: nop\n#\n'
+    let t = 10
+    const slice = (tid: number, pid: number, name: string): void => {
+      text += line(tid, pid, t, `B|${pid}|${name}`)
+      text += line(tid, pid, t + 0.0005, `E|${pid}`)
+      t += 0.001
+    }
+    slice(100, 100, LOC_YT)
+    slice(100, 100, LOC_NONE)
+    slice(100, 100, LOC_NONE)
+    slice(101, 100, LOC_NONE)
+    slice(101, 100, LOC_DM)
+    for (let i = 0; i < 7; i++) slice(101, 100, `JIT compiling void Lfvb;.m${i}() (kind=Baseline) from base.apk`)
+    slice(100, 100, 'JIT compiling int Lzz;.b() (kind=Optimized) from base.apk')
+    slice(101, 100, 'Compiling baseline')
+    slice(100, 100, 'Lfvb;')
+    // 다른 프로세스 — 대상 앱 몫에 들면 안 된다.
+    slice(200, 200, LOC_WEBVIEW)
+    slice(200, 200, 'JIT compiling void La;.x() (kind=Baseline) from base.apk')
+    // 끝나지 않은 JIT slice — 횟수에는 든다.
+    text += line(101, 100, t, 'B|100|JIT compiling void Lq;.open() (kind=Baseline) from base.apk')
+    writeFileSync(path, text)
+    return path
+  }
+
+  it('BP-7 실 엔진 — 컴파일 상태 slice 목록 · JIT slice 수가 이름 glob 으로 직접 센 값과 같다', async () => {
+    const tp = new TraceProcessor(TP_BIN!, systrace())
+    const [cand] = await tp.queryJson<{ upid: number; pid: number }[]>(appProcessSql('com.x', 100))
+    expect(cand!.pid).toBe(100)
+    const art = buildArtCells(await tp.queryJson<SliceGroupRow[]>(diagnoseSlicesSql(cand!.upid, 100)))
+
+    const scope =
+      'from slice s left join thread_track tt on tt.id = s.track_id left join thread t on t.utid = tt.utid ' +
+      'left join process_track pt on pt.id = s.track_id ' +
+      `where (t.upid = ${cand!.upid} or pt.upid = ${cand!.upid})`
+    const direct = await tp.queryJson<{ jit: number; locs: string[] }>(
+      "select json_object('jit', (select count(*) " + scope + " and s.name glob 'JIT compiling*'), " +
+        "'locs', (select json_group_array(name) from (select distinct s.name as name " + scope +
+        " and s.name glob 'location=*' order by 1))) as j",
+    )
+    expect(art.jitSlices).toBe(direct.jit)
+    expect(art.jitSlices).toBe(9)
+    expect(art.compileStates.value!.map((r) => `location=${r.location} status=${r.status} filter=${r.filter} reason=${r.reason}`))
+      .toEqual([...direct.locs].sort(compareCodeUnits))
+    expect(art.compileStates.value).toHaveLength(3)
+  })
+})
+
 describe('extractDiagnose', () => {
   it('DM-7 블록 — 켠 범위 · 수 · 원본 크기 · 표가 한 블록에 실린다', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'pt-diag-'))
@@ -405,7 +702,7 @@ describe('extractDiagnose', () => {
     const block = await extractDiagnose(input({ tracePath }))
 
     expect(block).toEqual({
-      atrace_categories: ['am', 'wm', 'view'],
+      atrace_categories: ['am', 'wm', 'view', 'dalvik'],
       atrace_apps: [PKG],
       status: 'collected',
       reason_code: null,
@@ -424,7 +721,15 @@ describe('extractDiagnose', () => {
         { name: 'RV Scroll', main_thread: { count: 3, sum_ms: 3, max_ms: 1.2 }, other_threads: null, async_tracks: null },
         { name: 'bindApplication', main_thread: { count: 1, sum_ms: 67.307, max_ms: 67.307 }, other_threads: null, async_tracks: null },
       ],
+      // dalvik 이 켜졌고 프로세스를 찾았는데 그 꼴의 slice 가 없었다 — 잰 0 이다 (null 아님).
+      target_process_compile_state_slices: [],
+      target_process_compile_state_slices_reason_code: null,
+      target_process_compile_state_slices_reason: null,
+      target_process_jit_slices: 0,
+      target_process_jit_slices_reason_code: null,
+      target_process_jit_slices_reason: null,
     })
+    expect(DiagnoseBlockSchema.parse(block)).toEqual(block)
   })
 
   it('DM-7 켠 범위는 session.json 기록 그대로 — 기록이 없으면 상수에서 지어내지 않고 null', async () => {

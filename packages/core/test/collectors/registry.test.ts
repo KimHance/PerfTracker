@@ -175,7 +175,7 @@ describe('collectTraceConfigBlocks — 진단 세션 (DM-3)', () => {
     [...text.matchAll(new RegExp(`${key}:\\s*"([^"]+)"`, 'g'))].map((m) => m[1]!).sort()
   const NO_SYS_STATS = { sdkInt: 36, dataSources: ['linux.process_stats', 'android.surfaceflinger.frametimeline'] }
 
-  it('DM-3 진단 config 범위 — 카테고리 정확히 {am, wm, view} · 앱 slice 대상 하나 · ftrace_events 는 평소와 같은 집합', () => {
+  it('DM-3 진단 config 범위 — 카테고리 정확히 {am, wm, view, dalvik} · 앱 slice 대상 하나 · ftrace_events 는 평소와 같은 집합', () => {
     for (const env of [OK, NO_SYS_STATS]) {
       const normal = buildTraceConfig({ dataSourceBlocks: collectTraceConfigBlocks(env) })
       const diag = buildTraceConfig({
@@ -183,7 +183,7 @@ describe('collectTraceConfigBlocks — 진단 세션 (DM-3)', () => {
         diagnose: { packageName: PKG },
       })
 
-      expect(values(diag, 'atrace_categories')).toEqual(['am', 'view', 'wm'])
+      expect(values(diag, 'atrace_categories')).toEqual(['am', 'dalvik', 'view', 'wm'])
       expect(values(diag, 'atrace_apps')).toEqual([PKG])
       expect(values(diag, 'ftrace_events')).toEqual(values(normal, 'ftrace_events'))
       expect(diag.split('name: "linux.ftrace"').length - 1).toBe(1)

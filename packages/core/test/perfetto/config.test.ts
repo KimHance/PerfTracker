@@ -3,6 +3,7 @@ import {
   ALLOWED_FTRACE_EVENTS,
   assertLowOverheadConfig,
   buildTraceConfig,
+  DIAGNOSE_ATRACE_CATEGORIES,
   mergeTraceConfigBlocks,
 } from '../../src/perfetto/config.js'
 import { PerfettoSessionError } from '../../src/errors.js'
@@ -196,7 +197,7 @@ describe('assertLowOverheadConfig — atrace (DM-4)', () => {
     `data_sources { config { name: "linux.ftrace" ftrace_config { ${body} } } }\n${tail}`
   const IN_SCOPE =
     'ftrace_events: "power/cpu_frequency" atrace_categories: "am" atrace_categories: "wm" ' +
-    `atrace_categories: "view" atrace_apps: "${PKG}"`
+    `atrace_categories: "view" atrace_categories: "dalvik" atrace_apps: "${PKG}"`
 
   it('DM-4 평소 config atrace 거부 — atrace_ 로 시작하는 키가 하나라도 있으면', () => {
     for (const body of [
@@ -209,6 +210,11 @@ describe('assertLowOverheadConfig — atrace (DM-4)', () => {
       expect(() => assertLowOverheadConfig(ftrace(body)), body).toThrow(PerfettoSessionError)
       expect(() => assertLowOverheadConfig(ftrace(body), null), body).toThrow(/진단 세션/)
     }
+  })
+
+  it('BP-7 진단 config dalvik — 허용 목록이 am · wm · view · dalvik 이고 평소 config 에는 dalvik 도 거부', () => {
+    expect([...DIAGNOSE_ATRACE_CATEGORIES]).toEqual(['am', 'wm', 'view', 'dalvik'])
+    expect(() => assertLowOverheadConfig(ftrace('atrace_categories: "dalvik"'))).toThrow(/진단 세션/)
   })
 
   it('DM-4 평소 config atrace 거부 — buildTraceConfig 도 diagnose 없이는 막는다', () => {
@@ -230,6 +236,9 @@ describe('assertLowOverheadConfig — atrace (DM-4)', () => {
       [`${IN_SCOPE} atrace_categories: "gfx"`, /"gfx"/],
       [`${IN_SCOPE} atrace_categories: "input"`, /"input"/],
       [`${IN_SCOPE} atrace_categories: "sched"`, /"sched"/],
+      // dalvik 은 낱말 그대로만 — 대소문자 · 접두어가 다르면 허용 목록 밖이다.
+      [`${IN_SCOPE} atrace_categories: "Dalvik"`, /"Dalvik"/],
+      [`${IN_SCOPE} atrace_categories: "art"`, /"art"/],
       ['atrace_categories: "am" atrace_apps: "com.android.chrome"', /대상 앱/],
       ['atrace_categories: "am" atrace_apps: "*"', /와일드카드/],
       ['atrace_categories: "am" atrace_apps: "com.google.*"', /와일드카드/],
@@ -244,9 +253,10 @@ describe('assertLowOverheadConfig — atrace (DM-4)', () => {
     }
   })
 
-  it('DM-4 진단 config 허용 범위는 통과한다 — 카테고리 셋의 부분집합 · 대상 앱 하나', () => {
+  it('DM-4 진단 config 허용 범위는 통과한다 — 카테고리 넷의 부분집합 · 대상 앱 하나', () => {
     expect(() => assertLowOverheadConfig(ftrace(IN_SCOPE), DIAG)).not.toThrow()
     expect(() => assertLowOverheadConfig(ftrace('atrace_categories: "am"'), DIAG)).not.toThrow()
+    expect(() => assertLowOverheadConfig(ftrace('atrace_categories: "dalvik"'), DIAG)).not.toThrow()
     expect(() => assertLowOverheadConfig(ftrace(`atrace_apps: "${PKG}"`), DIAG)).not.toThrow()
   })
 

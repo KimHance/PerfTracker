@@ -187,7 +187,7 @@
 | `--launch` | 앱을 콜드로 띄우고 시작 시간을 측정 (기본 켬) | ON |
 | `--force` | 이 기기에 남은 기존 세션을 버리고 시작 (기본 켬) | ON |
 | `--offline` | trace_processor 를 내려받지 않음 (캐시만 사용) | OFF |
-| `--diagnose` | atrace slice 기록 (am · wm · view + 대상 앱) · 최대 10분 | OFF — 정지하면 다시 꺼진다 (`--launch`/`--force` 와 달리 남기지 않음) |
+| `--diagnose` | atrace slice 기록 (am · wm · view · dalvik + 대상 앱) · 최대 10분 | OFF — 정지하면 다시 꺼진다 (`--launch`/`--force` 와 달리 남기지 않음) |
 
 `--diagnose` 는 진단 세션(atrace slice 기록 — 평소 세션과 수치를 나란히 놓을 수 없다)이라 평소 옵션 셋 뒤 끝 행이다. 설명 문구의 정본은 `docs/design/diagnostic-mode.md` `## 문구`.
 

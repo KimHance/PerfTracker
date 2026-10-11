@@ -592,7 +592,7 @@ describe('startSession — 진단 세션', () => {
 
     expect(session.options).toEqual({ launch: true, diagnose: true })
     expect(session.diagnose).toEqual({
-      atraceCategories: ['am', 'wm', 'view'],
+      atraceCategories: ['am', 'wm', 'view', 'dalvik'],
       atraceApps: ['com.nhn.android.webtoon'],
       notice: null,
     })
@@ -601,15 +601,15 @@ describe('startSession — 진단 세션', () => {
     expect(stored.diagnose).toEqual(session.diagnose)
   })
 
-  it('DM-3 진단 config 범위 — start 가 보낸 config 의 atrace 는 am · wm · view + 대상 앱 하나다', async () => {
+  it('DM-3 진단 config 범위 — start 가 보낸 config 의 atrace 는 am · wm · view · dalvik + 대상 앱 하나다', async () => {
     const h = diagStart({ diagnose: true })
     await h.result
     const text = sentConfig(h.runner)
     const values = (key: string): string[] =>
       [...text.matchAll(new RegExp(`${key}:\\s*"([^"]+)"`, 'g'))].map((m) => m[1]!)
 
-    expect(new Set(values('atrace_categories'))).toEqual(new Set(['am', 'wm', 'view']))
-    expect(values('atrace_categories')).toHaveLength(3)
+    expect(new Set(values('atrace_categories'))).toEqual(new Set(['am', 'wm', 'view', 'dalvik']))
+    expect(values('atrace_categories')).toHaveLength(4)
     expect(values('atrace_apps')).toEqual(['com.nhn.android.webtoon'])
     expect(values('ftrace_events')).toEqual(['power/cpu_frequency'])
     // atrace 를 빼면 평소 config 와 duration 말고는 같다 — 다른 데이터소스는 늘지도 줄지도 않는다.
