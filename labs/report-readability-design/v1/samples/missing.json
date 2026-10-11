@@ -1,0 +1,1414 @@
+{
+ "schema_version": "1.2.0",
+ "schema_help": "필드의 뜻과 함정(특히 null 과 0 의 차이)은 `perftracker schema` 가 내는 JSON Schema 에 있습니다. 값을 해석하기 전에 그것부터 읽으세요.",
+ "tool": {
+  "name": "perftracker",
+  "version": "0.2.1",
+  "host": {
+   "os": "darwin",
+   "arch": "arm64",
+   "node": "25.2.1"
+  }
+ },
+ "session": {
+  "id": "rr0001",
+  "name": "youtube-미수집",
+  "state": "completed",
+  "started_at": "2026-10-07T22:00:22.980Z",
+  "ended_at": "2026-10-07T22:00:41.561Z",
+  "duration_ms": 18581,
+  "trace_span_ms": 16471,
+  "trace_start_offset_ms": 2207,
+  "options": {
+   "launch": true
+  },
+  "marks": []
+ },
+ "device": {
+  "serial": "R5CT0000001",
+  "static": {
+   "manufacturer": "samsung",
+   "model": "SM-S901N",
+   "android_release": "11",
+   "sdk_int": 30,
+   "build_fingerprint": "samsung/r0qksx/r0q:16/BP2A.250605.031.A3/S901NKSS9GZE5:user/release-keys",
+   "abis": [
+    "arm64-v8a",
+    "armeabi-v7a",
+    "armeabi"
+   ],
+   "soc_model": "SM8450",
+   "soc_manufacturer": "QTI",
+   "cpu": {
+    "core_count": 8,
+    "clusters": [
+     {
+      "cpus": [
+       0,
+       1,
+       2,
+       3
+      ],
+      "max_freq_khz": 1785600
+     },
+     {
+      "cpus": [
+       4,
+       5,
+       6
+      ],
+      "max_freq_khz": 2496000
+     },
+     {
+      "cpus": [
+       7
+      ],
+      "max_freq_khz": 2995200
+     }
+    ]
+   },
+   "memory_total_kb": 7394216,
+   "display": {
+    "width_px": 1080,
+    "height_px": 2340,
+    "density_dpi": 480,
+    "active_refresh_rate_hz": null,
+    "supported_refresh_rates_hz": [
+     10,
+     24,
+     30,
+     48,
+     60,
+     96,
+     120
+    ],
+    "orientation": "portrait",
+    "size_class": "normal",
+    "opengl_es_version": "196610"
+   }
+  },
+  "state_before": {
+   "captured_at": "2026-10-07T22:00:22.980Z",
+   "battery_level": 97,
+   "battery_temp_c": 31.6,
+   "charging": false,
+   "connection": "usb",
+   "screen_brightness": 43,
+   "power_save_mode": false,
+   "network": "wifi",
+   "mem_available_kb": 2508120,
+   "animator_duration_scale": 1,
+   "thermal_zones": [
+    {
+     "name": "AP",
+     "celsius": 32.9,
+     "type": 0,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "BAT",
+     "celsius": 31.6,
+     "type": 2,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "PATHM",
+     "celsius": 34.3,
+     "type": 5,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "SKIN",
+     "celsius": 31.8,
+     "type": 3,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "SUBBAT",
+     "celsius": 0,
+     "type": 2,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "SUBBATRAW",
+     "celsius": 0,
+     "type": 2,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "USB",
+     "celsius": 31.3,
+     "type": 4,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "PA1THM",
+     "celsius": 27,
+     "type": 5,
+     "status": 0,
+     "source": "cached"
+    }
+   ]
+  },
+  "state_after": {
+   "captured_at": "2026-10-07T22:00:41.561Z",
+   "battery_level": 97,
+   "battery_temp_c": 31.6,
+   "charging": false,
+   "connection": "usb",
+   "screen_brightness": 43,
+   "power_save_mode": false,
+   "network": "wifi",
+   "mem_available_kb": 2775316,
+   "animator_duration_scale": 1,
+   "thermal_zones": [
+    {
+     "name": "AP",
+     "celsius": 40.6,
+     "type": 0,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "BAT",
+     "celsius": 31.6,
+     "type": 2,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "PATHM",
+     "celsius": 35.9,
+     "type": 5,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "SKIN",
+     "celsius": 32.7,
+     "type": 3,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "SUBBAT",
+     "celsius": 0,
+     "type": 2,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "SUBBATRAW",
+     "celsius": 0,
+     "type": 2,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "USB",
+     "celsius": 31.3,
+     "type": 4,
+     "status": 0,
+     "source": "hal"
+    },
+    {
+     "name": "PA1THM",
+     "celsius": 27,
+     "type": 5,
+     "status": 0,
+     "source": "cached"
+    }
+   ]
+  }
+ },
+ "target_app": {
+  "package": "com.google.android.youtube",
+  "label": "YouTube",
+  "label_source": "apk_resources",
+  "version_name": "21.29.366",
+  "version_code": 1561186612,
+  "uid": 10257,
+  "install_source": "com.android.vending",
+  "launcher_activity": "com.google.android.youtube.app.honeycomb.Shell$HomeActivity",
+  "launcher_activity_candidates": null,
+  "pid": 25978,
+  "debuggable": false,
+  "large_heap": true,
+  "min_sdk": 32,
+  "target_sdk": 37,
+  "primary_cpu_abi": "arm64-v8a",
+  "compile_state_start": [
+   {
+    "path": "/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/base.apk",
+    "secondary_dex": false,
+    "public_dex": false,
+    "abi": "arm64",
+    "status": "speed-profile",
+    "reason": "profile-utilization",
+    "primary_abi": true,
+    "location": "/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/oat/arm64/base.odex"
+   },
+   {
+    "path": "/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/pcam.jar",
+    "secondary_dex": true,
+    "public_dex": false,
+    "abi": "arm64",
+    "status": "verify",
+    "reason": "vdex",
+    "primary_abi": true,
+    "location": "/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/oat/arm64/pcam.vdex"
+   },
+   {
+    "path": "/data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/pcam.jar",
+    "secondary_dex": true,
+    "public_dex": false,
+    "abi": "arm64",
+    "status": "verify",
+    "reason": "vdex",
+    "primary_abi": true,
+    "location": "/data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/oat/arm64/pcam.vdex"
+   },
+   {
+    "path": "/data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/pcam.jar",
+    "secondary_dex": true,
+    "public_dex": false,
+    "abi": "arm64",
+    "status": "verify",
+    "reason": "vdex",
+    "primary_abi": true,
+    "location": "/data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/oat/arm64/pcam.vdex"
+   }
+  ],
+  "compile_state_end": [
+   {
+    "path": "/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/base.apk",
+    "secondary_dex": false,
+    "public_dex": false,
+    "abi": "arm64",
+    "status": "speed-profile",
+    "reason": "profile-utilization",
+    "primary_abi": true,
+    "location": "/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/oat/arm64/base.odex"
+   },
+   {
+    "path": "/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/pcam.jar",
+    "secondary_dex": true,
+    "public_dex": false,
+    "abi": "arm64",
+    "status": "verify",
+    "reason": "vdex",
+    "primary_abi": true,
+    "location": "/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/oat/arm64/pcam.vdex"
+   },
+   {
+    "path": "/data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/pcam.jar",
+    "secondary_dex": true,
+    "public_dex": false,
+    "abi": "arm64",
+    "status": "verify",
+    "reason": "vdex",
+    "primary_abi": true,
+    "location": "/data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/oat/arm64/pcam.vdex"
+   },
+   {
+    "path": "/data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/pcam.jar",
+    "secondary_dex": true,
+    "public_dex": false,
+    "abi": "arm64",
+    "status": "verify",
+    "reason": "vdex",
+    "primary_abi": true,
+    "location": "/data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/oat/arm64/pcam.vdex"
+   }
+  ],
+  "compile_state_start_reason_code": null,
+  "compile_state_start_reason": null,
+  "compile_state_end_reason_code": null,
+  "compile_state_end_reason": null
+ },
+ "metrics": {
+  "startup": {
+   "status": "collected",
+   "source": "am start -W: TotalTime / LaunchState",
+   "reason_code": null,
+   "reason": null,
+   "data": {
+    "total_time_ms": 828,
+    "launch_state": "COLD",
+    "status": "ok",
+    "wait_time_ms": 830
+   }
+  },
+  "cpu": {
+   "status": "partial",
+   "source": "perfetto: linux.process_stats runtime.* (앱) + linux.sys_stats cpu.times.* · ftrace power/cpu_frequency (기기 전역)",
+   "reason_code": "app_cpu_sdk_too_low",
+   "reason": null,
+   "data": {
+    "device_sampled_ms": 16077,
+    "device_samples": 18,
+    "device_total_busy_pct": 35.21,
+    "device_per_core": [
+     {
+      "cpu": 0,
+      "busy_pct": 42.42
+     },
+     {
+      "cpu": 1,
+      "busy_pct": 36.97
+     },
+     {
+      "cpu": 2,
+      "busy_pct": 37.17
+     },
+     {
+      "cpu": 3,
+      "busy_pct": 36.06
+     },
+     {
+      "cpu": 4,
+      "busy_pct": 40.9
+     },
+     {
+      "cpu": 5,
+      "busy_pct": 36.8
+     },
+     {
+      "cpu": 6,
+      "busy_pct": 35.47
+     },
+     {
+      "cpu": 7,
+      "busy_pct": 16.33
+     }
+    ],
+    "device_frequency": [
+     {
+      "cpu": 0,
+      "samples": 1219,
+      "min_khz": 729600,
+      "max_khz": 1785600,
+      "avg_khz": 1234013.5
+     },
+     {
+      "cpu": 1,
+      "samples": 1219,
+      "min_khz": 729600,
+      "max_khz": 1785600,
+      "avg_khz": 1234013.5
+     },
+     {
+      "cpu": 2,
+      "samples": 1219,
+      "min_khz": 729600,
+      "max_khz": 1785600,
+      "avg_khz": 1234013.5
+     },
+     {
+      "cpu": 3,
+      "samples": 1219,
+      "min_khz": 729600,
+      "max_khz": 1785600,
+      "avg_khz": 1234013.5
+     },
+     {
+      "cpu": 4,
+      "samples": 3153,
+      "min_khz": 633600,
+      "max_khz": 2496000,
+      "avg_khz": 1510010.3
+     },
+     {
+      "cpu": 5,
+      "samples": 3153,
+      "min_khz": 633600,
+      "max_khz": 2496000,
+      "avg_khz": 1510010.3
+     },
+     {
+      "cpu": 6,
+      "samples": 3153,
+      "min_khz": 633600,
+      "max_khz": 2496000,
+      "avg_khz": 1510010.3
+     },
+     {
+      "cpu": 7,
+      "samples": 1723,
+      "min_khz": 806400,
+      "max_khz": 2995200,
+      "avg_khz": 1974190.1
+     }
+    ],
+    "device_timeline": [
+     {
+      "t_s": 1,
+      "busy_pct": 78.02
+     },
+     {
+      "t_s": 2,
+      "busy_pct": 15.15
+     },
+     {
+      "t_s": 3,
+      "busy_pct": 30.62
+     },
+     {
+      "t_s": 4,
+      "busy_pct": 38.97
+     },
+     {
+      "t_s": 5,
+      "busy_pct": 49.33
+     },
+     {
+      "t_s": 6,
+      "busy_pct": 50.58
+     },
+     {
+      "t_s": 7,
+      "busy_pct": 32.47
+     },
+     {
+      "t_s": 8,
+      "busy_pct": 36.62
+     },
+     {
+      "t_s": 9,
+      "busy_pct": 35.93
+     },
+     {
+      "t_s": 10,
+      "busy_pct": 35.71
+     },
+     {
+      "t_s": 11,
+      "busy_pct": 36.72
+     },
+     {
+      "t_s": 12,
+      "busy_pct": 37.12
+     },
+     {
+      "t_s": 13,
+      "busy_pct": 21.13
+     },
+     {
+      "t_s": 14,
+      "busy_pct": 20.48
+     },
+     {
+      "t_s": 15,
+      "busy_pct": 20.38
+     },
+     {
+      "t_s": 16,
+      "busy_pct": 20.36
+     }
+    ],
+    "app": null
+   }
+  },
+  "memory": {
+   "status": "collected",
+   "source": "perfetto: linux.process_stats mem.rss + linux.sys_stats meminfo",
+   "reason_code": null,
+   "reason": null,
+   "data": {
+    "process": "com.google.android.youtube",
+    "pid": 25978,
+    "samples": 17,
+    "rss": {
+     "min_kb": 84360,
+     "max_kb": 431912,
+     "avg_kb": 372443
+    },
+    "rss_anon": {
+     "min_kb": 43864,
+     "max_kb": 236652,
+     "avg_kb": 194295
+    },
+    "rss_file": {
+     "min_kb": 39664,
+     "max_kb": 190192,
+     "avg_kb": 174317
+    },
+    "timeline": [
+     {
+      "t_s": 0,
+      "rss_kb": 84360
+     },
+     {
+      "t_s": 1,
+      "rss_kb": 311368
+     },
+     {
+      "t_s": 2,
+      "rss_kb": 312264
+     },
+     {
+      "t_s": 3,
+      "rss_kb": 348856
+     },
+     {
+      "t_s": 4,
+      "rss_kb": 365688
+     },
+     {
+      "t_s": 5,
+      "rss_kb": 384980
+     },
+     {
+      "t_s": 6,
+      "rss_kb": 382616
+     },
+     {
+      "t_s": 7,
+      "rss_kb": 390424
+     },
+     {
+      "t_s": 8,
+      "rss_kb": 402840
+     },
+     {
+      "t_s": 9,
+      "rss_kb": 389528
+     },
+     {
+      "t_s": 10,
+      "rss_kb": 394488
+     },
+     {
+      "t_s": 11,
+      "rss_kb": 413388
+     },
+     {
+      "t_s": 12,
+      "rss_kb": 428360
+     },
+     {
+      "t_s": 13,
+      "rss_kb": 428064
+     },
+     {
+      "t_s": 14,
+      "rss_kb": 431052
+     },
+     {
+      "t_s": 15,
+      "rss_kb": 431340
+     },
+     {
+      "t_s": 16,
+      "rss_kb": 431912
+     }
+    ],
+    "rss_watermark_peak_kb": 432584,
+    "system": {
+     "mem_total_kb": 7394216,
+     "mem_available": {
+      "min_kb": 2656364,
+      "max_kb": 2980920,
+      "avg_kb": 2743982
+     },
+     "mem_free": {
+      "min_kb": 213676,
+      "max_kb": 469248,
+      "avg_kb": 339288
+     },
+     "cached": {
+      "min_kb": 2433932,
+      "max_kb": 2515976,
+      "avg_kb": 2482069
+     },
+     "swap_total_kb": 8388604,
+     "swap_free": {
+      "min_kb": 6103904,
+      "max_kb": 6138208,
+      "avg_kb": 6128267
+     }
+    },
+    "system_timeline": [
+     {
+      "t_s": 0,
+      "mem_available_kb": 2980920,
+      "mem_free_kb": 415804
+     },
+     {
+      "t_s": 1,
+      "mem_available_kb": 2682136,
+      "mem_free_kb": 213676
+     },
+     {
+      "t_s": 2,
+      "mem_available_kb": 2684400,
+      "mem_free_kb": 280292
+     },
+     {
+      "t_s": 3,
+      "mem_available_kb": 2656364,
+      "mem_free_kb": 246936
+     },
+     {
+      "t_s": 4,
+      "mem_available_kb": 2681324,
+      "mem_free_kb": 270660
+     },
+     {
+      "t_s": 5,
+      "mem_available_kb": 2780312,
+      "mem_free_kb": 367748
+     },
+     {
+      "t_s": 6,
+      "mem_available_kb": 2786328,
+      "mem_free_kb": 371752
+     },
+     {
+      "t_s": 7,
+      "mem_available_kb": 2778524,
+      "mem_free_kb": 364952
+     },
+     {
+      "t_s": 8,
+      "mem_available_kb": 2762956,
+      "mem_free_kb": 350852
+     },
+     {
+      "t_s": 9,
+      "mem_available_kb": 2773296,
+      "mem_free_kb": 357452
+     },
+     {
+      "t_s": 10,
+      "mem_available_kb": 2762416,
+      "mem_free_kb": 346000
+     },
+     {
+      "t_s": 11,
+      "mem_available_kb": 2778560,
+      "mem_free_kb": 359140
+     },
+     {
+      "t_s": 12,
+      "mem_available_kb": 2687636,
+      "mem_free_kb": 337352
+     },
+     {
+      "t_s": 13,
+      "mem_available_kb": 2686208,
+      "mem_free_kb": 334840
+     },
+     {
+      "t_s": 14,
+      "mem_available_kb": 2691304,
+      "mem_free_kb": 338892
+     },
+     {
+      "t_s": 15,
+      "mem_available_kb": 2704560,
+      "mem_free_kb": 341400
+     },
+     {
+      "t_s": 16,
+      "mem_available_kb": 2703900,
+      "mem_free_kb": 340196
+     }
+    ]
+   }
+  },
+  "log": {
+   "status": "collected",
+   "source": "perfetto: android.log (min_prio=PRIO_WARN) + linux.process_stats (앱 프로세스 특정)",
+   "reason_code": null,
+   "reason": null,
+   "data": {
+    "min_prio": "PRIO_WARN",
+    "app": {
+     "process": "com.google.android.youtube",
+     "pid": 25978,
+     "total": 547,
+     "by_priority": {
+      "warn": 399,
+      "error": 148,
+      "fatal": 0
+     },
+     "timeline": [
+      {
+       "t_s": 0,
+       "count": 64,
+       "error": 11
+      },
+      {
+       "t_s": 1,
+       "count": 4,
+       "error": 0
+      },
+      {
+       "t_s": 2,
+       "count": 14,
+       "error": 1
+      },
+      {
+       "t_s": 3,
+       "count": 50,
+       "error": 25
+      },
+      {
+       "t_s": 4,
+       "count": 147,
+       "error": 13
+      },
+      {
+       "t_s": 5,
+       "count": 23,
+       "error": 18
+      },
+      {
+       "t_s": 6,
+       "count": 154,
+       "error": 12
+      },
+      {
+       "t_s": 7,
+       "count": 23,
+       "error": 21
+      },
+      {
+       "t_s": 8,
+       "count": 4,
+       "error": 0
+      },
+      {
+       "t_s": 9,
+       "count": 3,
+       "error": 1
+      },
+      {
+       "t_s": 10,
+       "count": 2,
+       "error": 0
+      },
+      {
+       "t_s": 11,
+       "count": 37,
+       "error": 24
+      },
+      {
+       "t_s": 12,
+       "count": 7,
+       "error": 7
+      },
+      {
+       "t_s": 13,
+       "count": 1,
+       "error": 1
+      },
+      {
+       "t_s": 14,
+       "count": 5,
+       "error": 5
+      },
+      {
+       "t_s": 15,
+       "count": 5,
+       "error": 5
+      },
+      {
+       "t_s": 16,
+       "count": 4,
+       "error": 4
+      }
+     ]
+    },
+    "device_total": 899,
+    "device_by_priority": {
+     "warn": 475,
+     "error": 424,
+     "fatal": 0
+    },
+    "device_crashes": [],
+    "device_anrs": []
+   }
+  },
+  "thermal": {
+   "status": "collected",
+   "source": "dumpsys thermalservice: 세션 시작 직전 / 종료 직후 스냅샷의 센서별 온도 차이. 기기 전역이며 대상 앱의 온도가 아니다. 전/후 두 점이므로 구간 중 최고 온도는 포함하지 않는다.",
+   "reason_code": null,
+   "reason": null,
+   "data": {
+    "zones": [
+     {
+      "name": "AP",
+      "type": 0,
+      "before_c": 32.9,
+      "after_c": 40.6,
+      "delta_c": 7.7,
+      "status_before": 0,
+      "status_after": 0,
+      "source": "hal"
+     },
+     {
+      "name": "BAT",
+      "type": 2,
+      "before_c": 31.6,
+      "after_c": 31.6,
+      "delta_c": 0,
+      "status_before": 0,
+      "status_after": 0,
+      "source": "hal"
+     },
+     {
+      "name": "PATHM",
+      "type": 5,
+      "before_c": 34.3,
+      "after_c": 35.9,
+      "delta_c": 1.6,
+      "status_before": 0,
+      "status_after": 0,
+      "source": "hal"
+     },
+     {
+      "name": "SKIN",
+      "type": 3,
+      "before_c": 31.8,
+      "after_c": 32.7,
+      "delta_c": 0.9,
+      "status_before": 0,
+      "status_after": 0,
+      "source": "hal"
+     },
+     {
+      "name": "SUBBAT",
+      "type": 2,
+      "before_c": 0,
+      "after_c": 0,
+      "delta_c": 0,
+      "status_before": 0,
+      "status_after": 0,
+      "source": "hal"
+     },
+     {
+      "name": "SUBBATRAW",
+      "type": 2,
+      "before_c": 0,
+      "after_c": 0,
+      "delta_c": 0,
+      "status_before": 0,
+      "status_after": 0,
+      "source": "hal"
+     },
+     {
+      "name": "USB",
+      "type": 4,
+      "before_c": 31.3,
+      "after_c": 31.3,
+      "delta_c": 0,
+      "status_before": 0,
+      "status_after": 0,
+      "source": "hal"
+     },
+     {
+      "name": "PA1THM",
+      "type": 5,
+      "before_c": 27,
+      "after_c": 27,
+      "delta_c": 0,
+      "status_before": 0,
+      "status_after": 0,
+      "source": "cached"
+     }
+    ],
+    "device_status_before": 0,
+    "device_status_after": null,
+    "status_override_before": false,
+    "status_override_after": false,
+    "hal_ready_before": true,
+    "hal_ready_after": true,
+    "headroom_thresholds": [
+     null,
+     0.8666667,
+     0.93333334,
+     1,
+     1.1333333,
+     1.4333333,
+     2.4333334
+    ]
+   }
+  },
+  "network": {
+   "status": "unsupported",
+   "source": "dumpsys netstats: mAppUidStatsMap 의 세션 전/후 델타 (uid 단위, IP 계층 바이트, loopback 포함 전 인터페이스 합계, wifi/mobile 분리 없음, 큰 패킷은 GSO 추정)",
+   "reason_code": "sdk_too_low",
+   "reason": "이 기기의 sdk_int=30 로는 수집할 수 없습니다 (최소 sdk_int=34, Android 14).",
+   "data": null
+  },
+  "hwui": {
+   "status": "partial",
+   "source": "dumpsys gfxinfo (세션 전후 델타)",
+   "reason_code": "hwui_counters_since_process_start",
+   "reason": "com.google.android.youtube 의 HWUI 수치는 세션 전후 차이가 아니라 **프로세스 시작 이후 누적**입니다 — 세션 중 프로세스가 새로 떴습니다(--launch 세션은 항상 그렇습니다). 그 프로세스가 세션 안에서 시작했으므로 세션값과 같지만, 앱이 여러 번 죽었다면 마지막 시작 이후만 담습니다.",
+   "data": {
+    "total_frames": 907,
+    "janky_frames": 45,
+    "missed_vsync": 12,
+    "high_input_latency": 1576,
+    "slow_ui_thread": 34,
+    "slow_bitmap_uploads": 4,
+    "slow_draw_commands": 21,
+    "deadline_missed": 45,
+    "histogram": [
+     {
+      "from_ms": 0,
+      "to_ms": 5,
+      "count": 135
+     },
+     {
+      "from_ms": 5,
+      "to_ms": 6,
+      "count": 304
+     },
+     {
+      "from_ms": 6,
+      "to_ms": 7,
+      "count": 206
+     },
+     {
+      "from_ms": 7,
+      "to_ms": 8,
+      "count": 94
+     },
+     {
+      "from_ms": 8,
+      "to_ms": 9,
+      "count": 40
+     },
+     {
+      "from_ms": 9,
+      "to_ms": 10,
+      "count": 29
+     },
+     {
+      "from_ms": 10,
+      "to_ms": 11,
+      "count": 16
+     },
+     {
+      "from_ms": 11,
+      "to_ms": 12,
+      "count": 11
+     },
+     {
+      "from_ms": 12,
+      "to_ms": 13,
+      "count": 13
+     },
+     {
+      "from_ms": 13,
+      "to_ms": 14,
+      "count": 7
+     },
+     {
+      "from_ms": 14,
+      "to_ms": 15,
+      "count": 3
+     },
+     {
+      "from_ms": 15,
+      "to_ms": 16,
+      "count": 8
+     },
+     {
+      "from_ms": 16,
+      "to_ms": 17,
+      "count": 4
+     },
+     {
+      "from_ms": 17,
+      "to_ms": 18,
+      "count": 3
+     },
+     {
+      "from_ms": 18,
+      "to_ms": 19,
+      "count": 1
+     },
+     {
+      "from_ms": 19,
+      "to_ms": 20,
+      "count": 5
+     },
+     {
+      "from_ms": 20,
+      "to_ms": 21,
+      "count": 4
+     },
+     {
+      "from_ms": 21,
+      "to_ms": 22,
+      "count": 2
+     },
+     {
+      "from_ms": 22,
+      "to_ms": 23,
+      "count": 3
+     },
+     {
+      "from_ms": 23,
+      "to_ms": 24,
+      "count": 4
+     },
+     {
+      "from_ms": 24,
+      "to_ms": 25,
+      "count": 2
+     },
+     {
+      "from_ms": 25,
+      "to_ms": 26,
+      "count": 4
+     },
+     {
+      "from_ms": 26,
+      "to_ms": 27,
+      "count": 0
+     },
+     {
+      "from_ms": 27,
+      "to_ms": 28,
+      "count": 0
+     },
+     {
+      "from_ms": 28,
+      "to_ms": 29,
+      "count": 0
+     },
+     {
+      "from_ms": 29,
+      "to_ms": 30,
+      "count": 0
+     },
+     {
+      "from_ms": 30,
+      "to_ms": 31,
+      "count": 0
+     },
+     {
+      "from_ms": 31,
+      "to_ms": 32,
+      "count": 0
+     },
+     {
+      "from_ms": 32,
+      "to_ms": 34,
+      "count": 2
+     },
+     {
+      "from_ms": 34,
+      "to_ms": 36,
+      "count": 0
+     },
+     {
+      "from_ms": 36,
+      "to_ms": 38,
+      "count": 2
+     },
+     {
+      "from_ms": 38,
+      "to_ms": 40,
+      "count": 0
+     },
+     {
+      "from_ms": 40,
+      "to_ms": 42,
+      "count": 1
+     },
+     {
+      "from_ms": 42,
+      "to_ms": 44,
+      "count": 0
+     },
+     {
+      "from_ms": 44,
+      "to_ms": 46,
+      "count": 0
+     },
+     {
+      "from_ms": 46,
+      "to_ms": 48,
+      "count": 1
+     },
+     {
+      "from_ms": 48,
+      "to_ms": 53,
+      "count": 0
+     },
+     {
+      "from_ms": 53,
+      "to_ms": 57,
+      "count": 2
+     },
+     {
+      "from_ms": 57,
+      "to_ms": 61,
+      "count": 0
+     },
+     {
+      "from_ms": 61,
+      "to_ms": 65,
+      "count": 0
+     },
+     {
+      "from_ms": 65,
+      "to_ms": 69,
+      "count": 0
+     },
+     {
+      "from_ms": 69,
+      "to_ms": 73,
+      "count": 0
+     },
+     {
+      "from_ms": 73,
+      "to_ms": 77,
+      "count": 0
+     },
+     {
+      "from_ms": 77,
+      "to_ms": 81,
+      "count": 0
+     },
+     {
+      "from_ms": 81,
+      "to_ms": 85,
+      "count": 0
+     },
+     {
+      "from_ms": 85,
+      "to_ms": 89,
+      "count": 0
+     },
+     {
+      "from_ms": 89,
+      "to_ms": 93,
+      "count": 0
+     },
+     {
+      "from_ms": 93,
+      "to_ms": 97,
+      "count": 0
+     },
+     {
+      "from_ms": 97,
+      "to_ms": 101,
+      "count": 0
+     },
+     {
+      "from_ms": 101,
+      "to_ms": 105,
+      "count": 0
+     },
+     {
+      "from_ms": 105,
+      "to_ms": 109,
+      "count": 0
+     },
+     {
+      "from_ms": 109,
+      "to_ms": 113,
+      "count": 0
+     },
+     {
+      "from_ms": 113,
+      "to_ms": 117,
+      "count": 0
+     },
+     {
+      "from_ms": 117,
+      "to_ms": 121,
+      "count": 0
+     },
+     {
+      "from_ms": 121,
+      "to_ms": 125,
+      "count": 0
+     },
+     {
+      "from_ms": 125,
+      "to_ms": 129,
+      "count": 0
+     },
+     {
+      "from_ms": 129,
+      "to_ms": 133,
+      "count": 0
+     },
+     {
+      "from_ms": 133,
+      "to_ms": 150,
+      "count": 1
+     },
+     {
+      "from_ms": 150,
+      "to_ms": 200,
+      "count": 0
+     },
+     {
+      "from_ms": 200,
+      "to_ms": 250,
+      "count": 0
+     },
+     {
+      "from_ms": 250,
+      "to_ms": 300,
+      "count": 0
+     },
+     {
+      "from_ms": 300,
+      "to_ms": 350,
+      "count": 0
+     },
+     {
+      "from_ms": 350,
+      "to_ms": 400,
+      "count": 0
+     },
+     {
+      "from_ms": 400,
+      "to_ms": 450,
+      "count": 0
+     },
+     {
+      "from_ms": 450,
+      "to_ms": 500,
+      "count": 0
+     },
+     {
+      "from_ms": 500,
+      "to_ms": 550,
+      "count": 0
+     },
+     {
+      "from_ms": 550,
+      "to_ms": 600,
+      "count": 0
+     },
+     {
+      "from_ms": 600,
+      "to_ms": 650,
+      "count": 0
+     },
+     {
+      "from_ms": 650,
+      "to_ms": 700,
+      "count": 0
+     },
+     {
+      "from_ms": 700,
+      "to_ms": null,
+      "count": 0
+     }
+    ],
+    "percentiles": {
+     "p50": 7,
+     "p90": 11,
+     "p95": 16,
+     "p99": 26
+    }
+   }
+  },
+  "frame": {
+   "status": "unsupported",
+   "source": "perfetto: actual/expected_frame_timeline_slice",
+   "reason_code": "sdk_too_low",
+   "reason": "이 기기의 sdk_int=30 로는 수집할 수 없습니다 (최소 sdk_int=31, Android 12).",
+   "data": null
+  }
+ },
+ "measurement_overhead": {
+  "tracing_processes_cpu_time_ms": 1360,
+  "tracing_processes_cpu_share_pct": 1.08,
+  "tracing_processes_peak_rss_kb": 24564,
+  "adb_commands_during_session": 0,
+  "trace_buffer_overrun": false
+ },
+ "references": [
+  {
+   "metric": "hwui",
+   "name": "60fps frame budget",
+   "value": 16.67,
+   "unit": "ms",
+   "source": "Android Vitals — slow rendering",
+   "url": "https://developer.android.com/topic/performance/vitals/render"
+  },
+  {
+   "metric": "hwui",
+   "name": "frozen frame threshold",
+   "value": 700,
+   "unit": "ms",
+   "source": "Android Vitals — frozen frames",
+   "url": "https://developer.android.com/topic/performance/vitals/frozen"
+  },
+  {
+   "metric": "startup",
+   "name": "excessive cold startup time",
+   "value": 5000,
+   "unit": "ms",
+   "source": "Android Vitals — app startup time",
+   "url": "https://developer.android.com/topic/performance/vitals/launch-time"
+  },
+  {
+   "metric": "startup",
+   "name": "excessive warm startup time",
+   "value": 2000,
+   "unit": "ms",
+   "source": "Android Vitals — app startup time",
+   "url": "https://developer.android.com/topic/performance/vitals/launch-time"
+  },
+  {
+   "metric": "startup",
+   "name": "excessive hot startup time",
+   "value": 1500,
+   "unit": "ms",
+   "source": "Android Vitals — app startup time",
+   "url": "https://developer.android.com/topic/performance/vitals/launch-time"
+  },
+  {
+   "metric": "network",
+   "name": "excessive background mobile network usage",
+   "value": 50,
+   "unit": "MB/day",
+   "source": "Android Vitals — Excessive Mobile Network Usage in Background",
+   "url": "https://developer.android.com/topic/performance/vitals/bg-network-usage"
+  }
+ ],
+ "warnings": [],
+ "artifacts": {
+  "trace": "trace.perfetto-trace",
+  "raw": [
+   "raw/battery_before.txt",
+   "raw/thermalservice_before.txt",
+   "raw/settings_before.txt",
+   "raw/meminfo_before.txt",
+   "raw/iproute_before.txt",
+   "raw/gfxinfo_before.txt",
+   "raw/netstats_before.txt",
+   "raw/packages_before.txt",
+   "raw/battery_after.txt",
+   "raw/thermalservice_after.txt",
+   "raw/settings_after.txt",
+   "raw/meminfo_after.txt",
+   "raw/iproute_after.txt",
+   "raw/gfxinfo_after.txt",
+   "raw/netstats_after.txt",
+   "raw/packages_after.txt"
+  ]
+ }
+}
