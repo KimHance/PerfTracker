@@ -1725,10 +1725,10 @@ PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지명> npm run tes
 
 ## 검증 환경
 
-| 항목 | M0+M1 | M2 | M3 | 진단 세션 |
-|---|---|---|---|---|
-| 실기기 (SM-S901N, Android 16 / sdk 36) | ✅ | ✅ | ✅ | ✅ |
-| 에뮬레이터 (sdk_gphone64_arm64, API 35, 4코어) | — | ✅ | ✅ | — |
+| 항목 | M0+M1 | M2 | M3 | 진단 세션 | 컴파일 상태 |
+|---|---|---|---|---|---|
+| 실기기 (SM-S901N, Android 16 / sdk 36) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 에뮬레이터 (sdk_gphone64_arm64, API 35, 4코어) | — | ✅ | ✅ | — | — |
 
 실기기 검증(2026-07-27)은 두 단계로 나뉩니다. **숫자가 다른 이유를 함께 적습니다** —
 중간에 스펙이 하나 늘고 대상 앱이 바뀌었기 때문입니다.
@@ -1737,13 +1737,16 @@ PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지명> npm run tes
 | --- | --- | --- | --- |
 | 실기기 검증 웨이브 | 10 | **5회 연속 10/10** | `com.android.settings` |
 | CPU·Log 앱 단위화 이후 | 11 | **1회 11/11** | `com.nhn.android.webtoon` |
-| 진단 세션 스펙 추가 (현재, 2026-10-08) | 20 | **1회 20/20** | `com.google.android.youtube` |
+| 진단 세션 스펙 추가 (2026-10-08) | 20 | **1회 20/20** | `com.google.android.youtube` |
+| 컴파일 상태 스펙 추가 (현재, 2026-10-11) | 27 | **1회 27/27** (화면이 잠긴 채 돈 앞 회는 25/27 — [아래](#컴파일-상태--compile를-실기기가-검증한-것-2026-10-11-sm-s901n--sdk-36)) | `com.google.android.youtube` |
 
 즉 **현재 스펙 구성으로 5회 연속을 돌린 적은 없습니다.** 5회 연속의 근거는 그 앞 구성의
 것이고, 10 → 11 로 늘어난 스펙 하나는 "세션 스펙의 대상 앱이 이 기기에 설치되어 있다"(`m0`)입니다.
 대상 앱을 바꾼 이유는 아래 "온-디바이스 테스트를 다른 기기에서 돌리기" 에 있습니다.
 11 → 20 은 진단 세션 스펙(`diagnose.test.ts`, 9개)이고, 그 회차의 대상 앱은 YouTube 입니다 —
 **20개를 웹툰으로 돌린 적은 없습니다** ([아래](#진단-세션--diagnose을-실기기가-검증한-것-2026-10-08-sm-s901n--sdk-36)).
+20 → 27 은 컴파일 상태 스펙(`baseline.test.ts`, 6개)과 진단 스펙의 ART 칸 하나입니다 — `baseline.test.ts` 는
+대상 앱이 YouTube 가 아니면 통째로 건너뜁니다 (그 앱의 컴파일 상태를 몰래 바꾸지 않으려고).
 
 유닛 테스트는 그 시점에 `npm test` **723/723**, `npm run typecheck` · `npm run build`
 클린이었습니다 (M3 당시의 수치입니다 — 지금은 더 늘었습니다).
@@ -1780,7 +1783,7 @@ PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지명> npm run tes
   TraceConfig(`trace_config_pbtxt`)를 꺼내 보면 진단 세션 것에서 `atrace_*` 네 줄이 빠지고 `duration_ms` 만
   600000 → 1800000 으로 다를 뿐 나머지는 글자까지 같습니다. 평소 원본의 스레드 slice 는 0개입니다.
 
-온-디바이스 스펙 `packages/cli/test/on-device/diagnose.test.ts`(9개)가 같은 것을 봅니다. 수의 크기는 단언하지
+온-디바이스 스펙 `packages/cli/test/on-device/diagnose.test.ts`(10개 — 2026-10-11 에 ART 칸 하나가 늘었습니다)가 같은 것을 봅니다. 수의 크기는 단언하지
 않고 관계를 단언합니다 — `trace_processor` 로 따로 센 수 = 블록의 수, 보고서 행 모델의 행 수 = 블록 표 행 수,
 `extract` 를 다시 돌린 블록 = `stop` 이 쓴 블록(바이트까지). 스펙 회차 가운데 한 번은 앱이 트레이스에
 낡은 이름으로 남아 블록이 `partial` + `process_name_stale_in_trace` 였고 값은 다 있었습니다
@@ -1799,6 +1802,51 @@ PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지명> npm run tes
 - **`bindApplication` 행이 atrace 켜짐 대기 덕인지.** 대기를 뺀 빌드로 돌린 1회에서도 행이 잡혔습니다
   (대기를 넣기 전 실측은 0/1). 경합이라 한 번으로는 못 가립니다 — 대기 자체는 유닛 시험(`D14 …`)이 지킵니다.
 - **ftrace 손실이 0 이 아닌 회차** · **10분짜리 진단 원본으로 낸 블록**(쿼리 시간 · `result.json` 크기) — 본 적이 없습니다.
+
+### 컴파일 상태(`--compile`)를 실기기가 검증한 것 (2026-10-11, SM-S901N / sdk 36)
+
+대상은 YouTube 21.40.161 (profileable 아님) · `R5CT0000001` · `ro.build.type=user` 이고, 에뮬레이터가 같이 꽂혀 있어
+모든 명령에 serial 을 줬습니다. 온-디바이스 스펙 `packages/cli/test/on-device/baseline.test.ts`(6개)가 한 바퀴를
+돕니다 — (a) 평소 `--launch` → (b) `--compile speed` → (c) `--compile reset` → (d) 진단 + `--compile speed`
+(스와이프 4회) → (e) (b) 가 낸 되돌림 줄을 **글자 그대로** 셸에 넘김. 앞 회의 끝이 뒤 회의 「바꾸기 전」 입니다.
+
+| 회 | 본 것 (회마다 `adb_commands_during_session` 0) |
+| --- | --- |
+| (a) | `compile_state_start` · `_end` 의 dex 줄 전부가 같은 순간 창 밖에서 읽은 `dumpsys package` 와 같음 (base.apk `speed-profile` / `cmdline`) |
+| (b) | 시작 상태 base.apk `speed` / `cmdline` · `session.compile.compile_state_before` 의 base 줄 = (a) 끝 · 걸린 69,468 · 19,405 ms · TotalTime 636 · 713 ms (두 회) · `start` 와 `stop` 이 같은 되돌림 줄을 냄 |
+| (c) | 시작 상태 base.apk `verify` / `vdex-dm` · `location` 이 공백 든 문장(`primary.vdex mapped directly in memory from …/base.dm`) · 보조 dex 셋이 `run-from-apk` / `unknown` 으로 바뀜 |
+| (d) | 컴파일 상태 slice 중 base 줄(dumpsys 의 base.apk `location` 과 같은 slice) `filter=speed` · `status=up-to-date` · JIT slice 0 · 접기 전 이름 25,233 · 34,398 → 표 927 · 1,442행(그중 `L*;` 한 행 · 화면 잠김 · 풀림 두 회) |
+| (e) | 되돌림 줄 실행 → `Success` · base.apk `speed-profile`(처음 값) / **`cmdline`** |
+
+- **보조 dex 는 처음으로 돌아오지 않았습니다.** 스펙 회차 사이에 기기가 보조 dex 하나를 스스로
+  `speed-profile` / `bg-dexopt` 로 바꿔 둔 상태에서 (b) 가 돌았고, 바꾸기 전 보조 dex 의 `status` 가 서로 달라
+  `--secondary-dex` 되돌림 줄 대신 그 사실 한 줄이 나왔습니다 (BP-5 그대로). 그 뒤 (c) 의 `--reset` 이 셋을
+  `run-from-apk` 로 바꿨고, 끝 상태는 `verify` / `vdex` 하나 · `run-from-apk` / `unknown` 둘입니다 — 처음
+  (`verify` / `cmdline` 셋)과 다릅니다. 두 번째 회는 그 상태에서 시작해 같은 상태로 끝났습니다(보조 dex 두 줄
+  `location` 이 `error`). 스펙 밖에서 다시 컴파일하지 않았습니다. 되돌림 블록의 실제 꼴:
+
+  ```
+  되돌림 · 실행 뒤 reason = cmdline · 기기가 다시 바꿀 수 있음
+    adb -s R5CT0000001 shell cmd package compile -m speed-profile -f com.google.android.youtube
+    보조 dex 3개 · status 서로 다름 · 보조 dex 되돌림 줄 없음
+  ```
+- **트레이스 안 slice 와 dumpsys 가 같은 말을 합니다** — 진단 세션(`--compile` 없음)의 컴파일 상태 slice 중 base
+  줄 `filter` 는 같은 세션 시작 상태 base.apk `status` 와 같고, JIT 수 · 컴파일 상태 줄 수는 같은 원본을
+  `trace_processor` 로 따로 센 수와 같습니다 (`diagnose.test.ts` 의 `DM-16 ART 칸`). `dalvik` 이 켜진 그 진단 세션
+  1회(잠금 푼 회): JIT 27 · 컴파일 상태 6줄 · 접기 전 이름 9,597 → 표 1,476행 · `RV Scroll` 행 있음 · 블록 `partial`
+  (`process_name_stale_in_trace` — 값은 다 있음).
+- **스펙이 기기 상태를 영구히 바꿉니다** — 돌릴 때마다 base.apk `reason` 이 `cmdline` 이 되고 보조 dex 가
+  바뀔 수 있습니다. (e) 에 닿기 전에 실패하면 `afterAll` 이 잡아 둔 되돌림 줄을 대신 돌립니다.
+- 측정 창 안 기기 접촉 0 은 그대로입니다 — 상태 바꾸기 · 다시 읽기는 창 열기 전, 끝 상태는 원본 회수 뒤입니다.
+
+**검증하지 못한 것:**
+
+- **sdk 30–35 기기의 `Dexopt state` · `cmd package compile` 출력 꼴** — 실측은 sdk 36 하나입니다.
+- **YouTube 말고 다른 앱.** `baseline.test.ts` 는 다른 앱이면 건너뜁니다.
+- **(b) · (d) 의 TotalTime · 표 행 수가 상태 몫인지** — 회마다 1회라 비교하지 않습니다 (도구는 비교하지 않습니다).
+- **화면이 잠긴 채 돈 회.** 첫 전체 실행은 기기가 보안 잠금 상태였고(모든 세션 hwui 프레임 1) `DM-16 RV Scroll 행` ·
+  `m0 포그라운드 패키지` 둘이 실패했습니다 — 스와이프가 피드를 못 굴렸고 포커스가 잠금 화면이었습니다. 사람이
+  잠금을 푼 뒤 같은 스펙이 27/27 이었습니다. 온-디바이스 스펙은 화면이 켜지고 잠금이 풀린 기기를 전제합니다.
 
 ### M3 에서 에뮬레이터가 **실제로 검증한** 것
 

@@ -21,6 +21,7 @@
   아래 §7 을 보세요.
 - **기준선 (2026-10-08):** `npm test` **1,443/1,443** (79 파일, 2초 안팎) · `npm run typecheck` · `npm run build`
   클린 · 온-디바이스 `npm run test:device` **20 스펙** (SM-S901N · 대상 앱 YouTube 20/20).
+  2026-10-11 컴파일 상태 스펙으로 **27 스펙** (SM-S901N · YouTube 27/27 — §3 「실기기 — 컴파일 상태 한 바퀴」).
   **`npm run build` 가 이제 `packages/gui/tsconfig.web.json` 도 타입체크합니다** — vite 는
   타입을 안 보고 `tsc --build` 는 그 프로젝트를 포함하지 않아, 보고서 화면의 코드가
   `npm run typecheck` 를 따로 돌리는 사람에게만 보였습니다.
@@ -140,7 +141,8 @@ serial `R5CT0000001`.
 - **여러 존을 가진 기기의 thermal 섹션 병합 중 tie-break** — "값이 다를 때 HAL 을 택한다" 는
   규칙은 **합성 픽스처로만** 검증됐습니다. 실기기 8덤프에서 `Cached` 와 HAL 의 공유 존 값이
   **전부 완전히 일치**해서, 그 기기의 실데이터에서 이 규칙이 바꾼 값은 하나도 없습니다.
-- **현재 스펙 구성(20개)으로 온-디바이스를 5회 연속 돌린 적이 없습니다.** 1회 20/20 입니다
+- **현재 스펙 구성(27개)으로 온-디바이스를 5회 연속 돌린 적이 없습니다.** 1회 27/27 입니다
+  (2026-10-11, SM-S901N · 대상 앱 YouTube). 그 앞 구성(20개)은 1회 20/20
   (2026-10-08, SM-S901N · 대상 앱 YouTube — 20개를 웹툰으로 돌린 적은 없습니다). 그 앞 구성(11개)은
   1회 11/11 이고, 5회 연속 10/10 은 그보다 앞 구성(10개, 대상 앱이 설정 앱)의 근거입니다.
 - **진단 세션(`--diagnose`)은 SM-S901N(sdk 36) · YouTube 로만 확인했습니다** (2026-10-08 — 확인한 숫자는
@@ -1196,7 +1198,8 @@ registry 순서는 `hwuiCollector` 바로 뒤에 `frameCollector` 다 — 지표
   (plan B32). 감싸기만 하고 기기 명령은 더하지 않습니다.
 - **schema 1.2.0 그대로** — `session.compile` 은 optional 이고 `--compile` 세션에만 실립니다. `session` 이 닫힌
   객체라 캐시한 1.1.0 스키마는 그 세션의 산출물을 거부합니다. 새 reason_code 없음.
-- **확인하지 못한 것:** 실기기에서 이 경로 전체(기능 문서 BP-9 · device 단위) · sdk ≤33 의 `cmd package compile`
+- 실기기 확인은 아래 「실기기 — 컴파일 상태 한 바퀴」 절입니다.
+- **확인하지 못한 것:** sdk ≤33 의 `cmd package compile`
   출력 꼴 (열린 질문 10 — 실패 판정은 종료 코드 · 줄 머리 `Failure` · 한도 셋뿐).
 
 ### ✅ 컴파일 상태를 맞춰 재기 — `start --compile` 의 CLI 쪽 (2026-10-11, 기능 문서 baseline-profile BP-4 · BP-5 · BP-6)
@@ -1217,8 +1220,26 @@ registry 순서는 `hwuiCollector` 바로 뒤에 `frameCollector` 다 — 지표
   `speed-profile` · `verify`, sdk 36 도움말 실측 — 밖 · 모름 · 보조 dex 끼리 다름)은 침묵하지 않고 그 사실 한 줄
   (plan B34 #5).
   compile 실패(`CompileFailedError`) · compile 뒤 실패(`CompileAppliedError`)에도 상태 줄 · 되돌림 줄이 붙습니다.
-- **확인하지 못한 것:** 실기기에서 줄을 그대로 쳐서 도는지(기능 문서 BP-9 (e) · device 단위) · `stop` 이
+- 되돌림 줄을 실기기 호스트 셸에 그대로 넘겨 돈 것은 아래 「실기기 — 컴파일 상태 한 바퀴」 절입니다.
+- **확인하지 못한 것:** `stop` 이
   `result.json` 산출에 실패할 때 · 화면이 세션을 멈출 때는 되돌림 줄이 안 나옵니다 (기능 문서 열린 질문 11).
+
+### ✅ 실기기 — 컴파일 상태 한 바퀴 (2026-10-11, 기능 문서 baseline-profile BP-9 · diagnostic-mode DM-16 회귀)
+
+SM-S901N(`R5CT0000001` · sdk 36 · user) · YouTube 21.40.161 로 `start --launch` → `--compile speed` → `--compile reset`
+→ 진단 + `--compile speed` → 되돌림 줄을 **글자 그대로** 실행, 을 온-디바이스 스펙 `baseline.test.ts`(6개)로 돌렸습니다.
+회마다 측정 창 안 adb 0. 무엇을 봤는지 · 수치는 README 「검증 환경」 의 「컴파일 상태(`--compile`)를 실기기가 검증한 것」 이 정본입니다.
+
+- **`npm run test:device` 27/27** (2026-10-11 · 대상 앱 YouTube) — 20 → 27 은 `baseline.test.ts` 6개와 진단 스펙의
+  ART 칸 하나(`DM-16 ART 칸` — 컴파일 상태 slice 의 base 줄 `filter` = 시작 상태 base.apk `status` · JIT 수 · 줄 수를
+  `trace_processor` 로 다시 세어 대조). 진단 스펙의 켠 카테고리 단언 · DM-3 config 대조에 `dalvik` 이 들어갔습니다.
+  화면이 잠긴 채 돈 앞 회는 25/27 (`RV Scroll` 행 · m0 포그라운드) — 스펙은 잠금이 풀린 기기를 전제합니다.
+- **되돌림 뒤 base.apk 는 처음 `status`(`speed-profile`) · `reason` 은 `cmdline`.** 보조 dex 는 처음(`verify` /
+  `cmdline` 셋)으로 돌아오지 않았습니다 — 회차 사이에 기기가 하나를 `bg-dexopt` 로 바꿔 바꾸기 전 보조 dex 가 서로
+  달랐고(→ 되돌림 줄 대신 사실 한 줄), `--reset` 이 바꾼 둘이 `run-from-apk` 로 남았습니다. 지시 밖 재컴파일은
+  하지 않았습니다.
+- **확인하지 못한 것:** sdk 30–35 기기 · YouTube 말고 다른 앱(`baseline.test.ts` 는 다른 앱이면 건너뜀) ·
+  현재 구성으로 5회 연속.
 
 ### 그 밖의 후보 (우선순위 낮음)
 
