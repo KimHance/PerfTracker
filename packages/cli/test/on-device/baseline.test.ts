@@ -24,7 +24,9 @@ import { DEVICE_OPTS, DEVICE_TARGET_APP } from './target.js'
  * (a) 평소 `--launch` → (b) `--compile speed` → (c) `--compile reset` → (d) 진단 + `--compile speed` →
  * (e) (b) 가 낸 되돌림 줄을 **그대로** 셸에 넘긴다. 이 순서가 한 바퀴이고 앞 회의 끝이 뒤 회의 "바꾸기 전" 이다.
  *
- * **이 스펙은 기기 상태를 영구히 바꾼다** (plan B7 · B12 — 받아들인 대가). 되돌려도 base.apk `reason` 은
+ * **이 스펙은 기기 상태를 영구히 바꾼다** (plan B7 · B12 — 받아들인 대가). 그래서 대상 앱이 YouTube 라도
+ * **`PERFTRACKER_TEST_COMPILE=1` 로 켤 때만** 돈다 — 기본 대상 앱이 YouTube 라 켜는 표시 없이 돌면
+ * `npm run test:device` 한 번이 그 기기의 YouTube 컴파일 상태를 몰래 바꾼다. 되돌려도 base.apk `reason` 은
  * `cmdline` 으로 남는다 — (e) 가 그 사실을 단언한다. 중간에 실패해 (e) 에 닿지 못하면 `afterAll` 이 잡아 둔
  * 되돌림 줄을 대신 돌린다 (기기를 `speed` · `verify` 로 두고 떠나지 않으려고).
  *
@@ -121,7 +123,7 @@ async function runSession(
   return { active: active!, startOutput, stopOutput, result }
 }
 
-describe.skipIf(DEVICE_TARGET_APP !== BP9_APP)('BP-9 실기기 — YouTube 컴파일 상태 (a → e 한 바퀴)', () => {
+describe.skipIf(DEVICE_TARGET_APP !== BP9_APP || process.env['PERFTRACKER_TEST_COMPILE'] !== '1')('BP-9 실기기 — YouTube 컴파일 상태 (a → e 한 바퀴)', () => {
   const out = mkdtempSync(join(tmpdir(), 'pt-bp9-'))
   /** 이 스펙이 기기를 건드리기 전의 상태 — (e) 의 "처음 값". */
   let initial: DexoptLine[]

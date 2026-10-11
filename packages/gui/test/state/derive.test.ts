@@ -129,7 +129,7 @@ describe('앱 검색', () => {
   it('라벨과 패키지명 둘 다로 찾힌다', () => {
     // 사람은 둘 중 아는 쪽으로 검색한다.
     expect(filterApps(apps, 'stream').map((a) => a.label)).toEqual(['Stream (debug)'])
-    expect(filterApps(apps, 'example').map((a) => a.label)).toEqual(['Stream (debug)'])
+    expect(filterApps(apps, 'example.streaming').map((a) => a.label)).toEqual(['Stream (debug)'])
     expect(filterApps(apps, 'airbnb.android').map((a) => a.label)).toEqual(['Airbnb'])
     expect(filterApps(apps, '없는앱')).toHaveLength(0)
   })

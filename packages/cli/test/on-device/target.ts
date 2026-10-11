@@ -28,13 +28,19 @@ import { COLLECTORS, createAdbContext, probeDevice, renderReason } from '@perftr
  * ## 공유 uid 커버리지는 어디로 갔는가
  *
  * 설정 앱은 uid 1000 을 **86개 패키지와 공유해서**(실기기 실측) `uid_shared_by_multiple_packages`
- * 갈래를 온-디바이스에서 실제로 밟는 유일한 선택이었다. 웹툰은 uid 10388 을 혼자 쓴다.
+ * 갈래를 온-디바이스에서 실제로 밟는 유일한 선택이었다. 기본 대상 앱(YouTube)은 uid 를 혼자 쓴다.
  *
  * 그 갈래는 **유닛 테스트로 옮겼다** — `packages/core/test/collectors/network.test.ts` 의
  * `pm list packages -U` 픽스처가 실기기 원문에서 뜬 `uid:1000` 86줄을 그대로 재현하고,
  * 공유 uid 가 `partial` + `uid_shared_by_multiple_packages` 로 나오는 것과 값이 하나도 빠짐없이
  * 실리는 것을 거기서 단언한다. **그 로직에 기기가 필요한 부분은 없다** — 입력은 dumpsys 원문
  * 텍스트이고 그 원문은 `runs/` 아래 실기기 세션에 그대로 남아 있다.
+ *
+ * ## 왜 YouTube 인가
+ *
+ * 대부분의 안드로이드 기기에 기본으로 깔려 있어, 특정 개발자의 폰에 있는 앱에 기대지 않는다.
+ * 진단 스펙의 `RV Scroll` 행(DM-16)과 컴파일 상태 스펙(BP-9)도 YouTube 에 대한 사실이라
+ * 기본값으로 돌리면 건너뛰는 스펙 없이 전부 돈다.
  *
  * ## 다른 기기에서 돌릴 때
  *
@@ -43,7 +49,7 @@ import { COLLECTORS, createAdbContext, probeDevice, renderReason } from '@perftr
  * 이유는 단순하다 — 건너뛴 스펙은 통과한 스펙과 같은 색으로 보이고, 그러면 이 파일이 지키려는
  * 것이 아무 데서도 지켜지지 않는다.
  */
-export const DEVICE_TARGET_APP = process.env['PERFTRACKER_TEST_APP'] ?? 'com.nhn.android.webtoon'
+export const DEVICE_TARGET_APP = process.env['PERFTRACKER_TEST_APP'] ?? 'com.google.android.youtube'
 
 /**
  * 어느 기기에서 돌릴지. **기기가 두 대 이상 꽂혀 있으면 지정해야 한다** —

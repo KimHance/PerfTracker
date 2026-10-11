@@ -226,7 +226,7 @@ report-readability `## 상태` 의 행을 같이 쓴다 (6상태 × 2) · CLI 6�
 
 | # | 무엇 | 지금 기본값 | 날짜 · run |
 |---|---|---|---|
-| 1 | labs 표본 · CLI 시안의 실기기 serial `R5CT0000001` (`labs/baseline-profile-design/v1/gen_cli.py` · `cli/blocks.txt` · report-readability `v1/samples/`) — 루트 AGENTS 「합성 픽스처만」 이 labs 를 말하지 않음 | 고치지 않음 · AGENTS 예외 한 줄은 기획 (메인) | 2026-10-11 · baseline-profile (디자인 검토 #12) |
+| 1 | labs 표본 · CLI 시안의 실기기 serial (`labs/baseline-profile-design/v1/gen_cli.py` · `cli/blocks.txt` · report-readability `v1/samples/`) — 루트 AGENTS 「합성 픽스처만」 이 labs 를 말하지 않음 | 고치지 않음 · AGENTS 예외 한 줄은 기획 (메인) | 2026-10-11 · baseline-profile (디자인 검토 #12) |
 | 2 | 보낸 명령 · 바꾼 기록 · 바뀜 경고를 실기기 보고서로 본 적 없음 — RR-9 두 세션은 `--compile` 아님 · BP-9 는 CLI · 스펙만 | 표본 `compile` 실렌더로 대신 | 2026-10-11 · baseline-profile |
 | 3 | 390 카드 사진에 고정 표식 줄(`마커`)이 겹침 — 카드만 찍을 때(`05-compile-390`) 생기는 사진 꾸밈 · 화면 결함 아님 | 그대로 | 2026-10-11 · baseline-profile |
 

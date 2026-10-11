@@ -25,6 +25,8 @@
 - 계층 규율 · 제약이 바뀜 → 해당 모듈 `AGENTS.md` 의 제약 절
 - 새 모듈/서브디렉토리 추가 → 이 파일의 모듈 맵 + 새 `AGENTS.md`
 - 지표 · 스키마 · 수집 경로 변경 → `README.md`(정본) + `docs/STATUS.md`
+- **버전을 올리면 → `CHANGELOG.md` 에 그 버전 절.** README 는 사용법만 — 날짜가 붙은 검증 기록 · 버전 이력은
+  `CHANGELOG.md` 로 간다
 - **명령 · 옵션 추가/이름 변경 → `README.md` 의 「명령 전체」 + `packages/cli/AGENTS.md`**
 - GUI 화면 · 카피 · 토큰 변경 → `docs/design/gui/HANDOFF.md` 와 어긋나지 않는지 확인
 - 기능 문서가 있는 기능의 동작 · 받아들임 기준이 바뀜 → `docs/spec/<기능>.md` 의 그 항목 행 ·
@@ -73,4 +75,5 @@
   gui 테스트는 소스를 직접 읽으므로 빌드가 필요 없다.
 - **`gh` CLI 를 쓰지 않는다.** git CLI 나 GitHub REST API 를 쓴다.
 
-판단 이력과 그 근거는 `.superpowers/sdd/STANDING-ORDERS.md`, 진행 상태는 `docs/STATUS.md`.
+판단 이력과 그 근거는 기능 문서 `### 결정` · `DECISIONS-TO-REVISIT.md`, 버전별 변경은 `CHANGELOG.md`, 진행 상태는 `docs/STATUS.md`.
+초기(M0 ~ M3) 개발 기록은 git 히스토리에만 있다.

@@ -40,7 +40,7 @@
   그려집니다. 지표가 늘면 `manifest.ts` 에 한 줄이면 됩니다.
 - **마킹이 생겼습니다** — `perftracker mark "스크롤 시작"` 과 GUI 가 **같은 자리**에 쌓고,
   `result.json` 의 `session.marks[]` 로 나갑니다. 기기에 아무것도 보내지 않습니다.
-- 판단의 근거가 궁금하면 **`.superpowers/sdd/STANDING-ORDERS.md`** 를 여세요 (§5).
+- 판단의 근거가 궁금하면 기능 문서(`docs/spec/`)의 `### 결정` 과 `DECISIONS-TO-REVISIT.md` 를 여세요 (§5).
 
 새 기기에서 처음 돌린다면 README 의 **"설치"** 와 **"온-디바이스 테스트를 다른 기기에서
 돌리기"** 두 절을 먼저 보세요. `adb` 가 `PATH` 에 없는 것과 온-디바이스 대상 앱이 고정이라는
@@ -65,7 +65,7 @@ M0 과 M1 은 계획서 하나로 함께 진행됐습니다 (`990517f docs: M0+M
 ### 실기기 검증(2026-07-27)에서 무엇이 확인됐고 무엇이 고쳐졌나
 
 기기: **SM-S901N (Galaxy S22) / Android 16 / sdk 36 / SM8450 / 7,394MB / 1080x2340@120Hz**,
-serial `R5CT0000001`.
+serial.
 
 **확인된 것 (에뮬레이터가 원리적으로 못 보던 것들):**
 
@@ -167,7 +167,7 @@ serial `R5CT0000001`.
 
 ### ✅ 1순위 — 요약 렌더링 제거 (2026-07-27 완료)
 
-**사용자 지시: "요약은 필요없다, 그냥 순수 데이터값·측정값이 필요하다".**
+**원칙: 터미널에 요약을 찍지 않는다 — 산출물은 측정값 그대로인 `result.json` 하나다.**
 
 `packages/cli/src/format/`(`summary.ts` 337줄과 그 테스트)를 통째로 지웠습니다. `stop` 과
 `extract` 는 이제 **`→ <runDir>/result.json` 한 줄만** 냅니다.
@@ -214,9 +214,8 @@ grep 하세요.**)
 
 ### ✅ GUI (2026-07-28 — 화면 + 서버, 실기기 검증 완료)
 
-**사용자 지시였던 "GUI 는 젤 마지막에, 프로젝트 정리되면 클로드 디자인한테 시킬 것" 이
-실행됐습니다.** 클로드 디자인이 낸 핸드오프(`docs/design/gui/`)를 받아 착수했습니다.
-사용자 지시: **"데이터 연결은 나중에 해도 되니까 일단 UI 아키텍처 등등 만들고 있어봐."**
+**GUI 는 CLI 가 정리된 뒤 마지막에 착수했습니다.** 디자인 핸드오프(`docs/design/gui/`)를 받아
+**UI 아키텍처를 먼저 세우고 데이터 연결은 뒤로** 미뤘습니다.
 
 | | 상태 |
 | --- | --- |
@@ -323,8 +322,8 @@ Android 11 에서 통과한 필드는 12~16 에서도 통과합니다** — 양 
 
 ### ✅ data / domain 아키텍처 분리 (2026-07-27)
 
-**사용자 지시: "도메인 모델링이 GUI 에 보여지는 데이터고, 파싱하고 가져오는 건 sdk 별로
-다르니까 데이터 모델로 분리하고 도메인 모델로 매핑하게끔."**
+**원칙: 도메인 모델은 화면에 보이는 데이터이고, 기기에서 가져와 파싱하는 일은 sdk 마다 다르므로
+데이터 모델로 분리해 도메인 모델로 매핑한다.**
 
 수집기 6개를 전부 네 계층으로 나눴습니다:
 
@@ -1226,7 +1225,7 @@ registry 순서는 `hwuiCollector` 바로 뒤에 `frameCollector` 다 — 지표
 
 ### ✅ 실기기 — 컴파일 상태 한 바퀴 (2026-10-11, 기능 문서 baseline-profile BP-9 · diagnostic-mode DM-16 회귀)
 
-SM-S901N(`R5CT0000001` · sdk 36 · user) · YouTube 21.40.161 로 `start --launch` → `--compile speed` → `--compile reset`
+SM-S901N(sdk 36 · user) · YouTube 21.40.161 로 `start --launch` → `--compile speed` → `--compile reset`
 → 진단 + `--compile speed` → 되돌림 줄을 **글자 그대로** 실행, 을 온-디바이스 스펙 `baseline.test.ts`(6개)로 돌렸습니다.
 회마다 측정 창 안 adb 0. 무엇을 봤는지 · 수치는 README 「검증 환경」 의 「컴파일 상태(`--compile`)를 실기기가 검증한 것」 이 정본입니다.
 
@@ -1356,56 +1355,20 @@ RED 가 나는지 확인하고 원복합니다.** 통과하는 테스트는 증�
 
 ## 5. 저장소에 무엇이 있고 어디부터 읽나
 
-작업 렛저와 계획서가 **저장소에 함께 들어 있습니다** (`.superpowers/` 와 `docs/superpowers/`
-아래 105개 파일). 다만 그것을 처음부터 훑을 필요는 없습니다. 읽는 순서는 이렇습니다.
+읽는 순서는 이렇습니다.
 
 ### 먼저 읽을 것
 
 1. **[`README.md`](../README.md)** — 도구가 무엇이고 `result.json` 을 어떻게 읽는지. **정본입니다.**
-2. **[`.superpowers/sdd/STANDING-ORDERS.md`](../.superpowers/sdd/STANDING-ORDERS.md)** —
-   **지금까지의 모든 판단과 그 근거.** 가장 중요한 파일입니다. 사용자 상시 지시로 시작해
-   마일스톤별로 "왜 이렇게 했는가" 가 번호를 달고 쌓여 있습니다. 어떤 코드가 왜 그 모양인지
-   궁금하면 대개 여기 답이 있습니다. **정정 기록도 그대로 남아 있습니다**
-   (예: "81행 정상 파싱" 이 사실이 아니었다는 정정 — §1 참고).
+2. **[`CHANGELOG.md`](../CHANGELOG.md)** — 버전마다 무엇이 바뀌었고 실기기에서 무엇을 확인했는지.
+3. **기능 문서 [`docs/spec/`](spec/)** — 기능마다 항목 ID · 받아들임 기준 · `### 결정`(왜 이렇게 했는가).
+   화면 쪽은 **디자인 문서 [`docs/design/`](design/)** 가 같은 일을 한다.
+4. **[`DECISIONS-TO-REVISIT.md`](../DECISIONS-TO-REVISIT.md)** — 사람이 다시 볼 만한 구조 결정.
 
-### 설계와 계획
+### 초기 개발 기록
 
-- **[`docs/superpowers/plans/`](superpowers/plans/)** — **M2 · M3 계획서.**
-  **단, 계획서의 코드 블록은 초안이지 정본이 아닙니다.** 이 저장소에서 계획서에 실린 코드가
-  그대로는 동작하지 않은 경우가 **다섯 번** 있었습니다 (정규식 오류, 단언 숫자 오류,
-  `replace` vs `replaceAll` 로 델타가 전부 0 이 되는 픽스처 등). 옮기기 전에 RED→GREEN 을
-  실제로 돌리세요.
-
-- **원 설계 스펙과 M0+M1 계획서는 디스크에 없습니다 — git 히스토리에만 있습니다.**
-  커밋 `acfcaf2`(`chore: superpowers 산출물을 저장소에서 제외한다`)가 추적을 끊으면서 **파일
-  자체를 지웠기 때문**입니다. 그 뒤 gitignore 정책은 되돌렸지만 지워진 두 파일은 돌아오지
-  않았습니다. 필요하면 이렇게 꺼내세요:
-
-  ```bash
-  # v1 설계 문서 (497줄) — 왜 이 아키텍처인가의 원본
-  git show acfcaf2^:docs/superpowers/specs/2026-07-25-perftracker-cli-design.md > /tmp/design.md
-
-  # M0+M1 계획서 (6,592줄) — 태스크 18개의 단계별 스펙
-  git show acfcaf2^:docs/superpowers/plans/2026-07-25-perftracker-m0-m1.md > /tmp/m0-m1-plan.md
-  ```
-
-  설계 문서에 있는 것: 비루팅·릴리즈 빌드·임의의 앱이라는 절대 제약, 관찰자 효과를 구조로
-  강제한다는 결정, capture/extract 2단계 분리의 근거, "수집기는 무판정, 임계값 비교는 별도
-  `check` 명령으로(v2)" 라는 범위 결정. **지금 코드가 왜 이 모양인지의 뿌리가 여기 있습니다.**
-
-### 마일스톤별 리뷰·수정 보고서
-
-`.superpowers/sdd/<날짜>-<이름>/` 아래에 브리프·보고서·리뷰 diff 가 들어 있습니다.
-
-| 디렉토리 | 무엇 |
-| --- | --- |
-| `.superpowers/sdd/2026-07-25-perftracker-m0-m1/` | M0+M1. 태스크 18개의 브리프·보고서와 리뷰 diff |
-| `.superpowers/sdd/2026-07-26-perftracker-m2/` | M2. `m2-fix-report.md`, `final-review-fix-report.md`, `m4-fix-report.md` |
-| `.superpowers/sdd/2026-07-26-perftracker-m3/` | M3. 배치 A/B/C 보고서와 최종 리뷰 수정 |
-| `.superpowers/sdd/2026-07-27-real-device/` | 실기기 검증. `fix-report.md`(실기기가 찾은 결함), `app-scoped-report.md`(CPU·Log 앱 단위화) |
-
-특정 결함의 전말이 궁금할 때만 여는 것으로 충분합니다. 요점은 전부
-`STANDING-ORDERS.md` 로 올라와 있습니다.
+M0 ~ M3(2026-07) 의 작업 렛저 · 계획서 · 리뷰 보고서는 저장소에서 지웠습니다 — git 히스토리에만 있습니다.
+필요하면 지우기 직전 커밋에서 꺼내세요 (`git log --diff-filter=D --oneline -- .superpowers docs/superpowers`).
 
 ### 저장소에 **없는** 것
 

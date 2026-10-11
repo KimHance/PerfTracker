@@ -119,7 +119,7 @@
 | 4 | 200% 확대(1.4.4) · 키보드 이동 · 스크린리더 | 재지 않음 | 2026-10-11 · baseline-profile |
 | 5 | slice 표 빈 칸 `—` 62.3% — 숫자와 같은 무게로 보임 | 대비 4.5:1 지키는 안에서 디자인이 정함 · 접지 않음 (결정 4) | 2026-10-11 · baseline-profile |
 | 6 | ≈362px 미만 창에서 SVG 눈금 렌더가 12px 아래 (360 시계열 11.9 · 분포 11.5) — RR-1 측정 폭(1440 · 390) 밖 | 그대로 · 시계열 viewBox 를 잰 폭으로 바꾸면 풀림 (결정 13) | 2026-10-11 · baseline-profile |
-| 7 | `labs/` 시안 표본이 실기기 `result.json` 을 그대로 옮김 (serial `R5CT0000001` · fingerprint · 설치 경로 해시) — `AGENTS.md` 「합성 픽스처만 · 기기 원문 예외는 test/fixtures」 가 labs 를 말하지 않음 | 지금 안 고침 (개인 정보 0 · serial 은 README · spec 에 이미) · AGENTS.md 의 labs 예외 한 줄은 메인 | 2026-10-11 · baseline-profile |
+| 7 | `labs/` 시안 표본이 실기기 `result.json` 을 그대로 옮김 (serial · fingerprint · 설치 경로 해시) — `AGENTS.md` 「합성 픽스처만 · 기기 원문 예외는 test/fixtures」 가 labs 를 말하지 않음 | 지금 안 고침 (개인 정보 0 · serial 은 README · spec 에 이미) · AGENTS.md 의 labs 예외 한 줄은 메인 | 2026-10-11 · baseline-profile |
 | 8 | 한글 문장의 줄바꿈 자리 (경고 `…컴파일 상태가 바뀌 / 었음`) — RR-7 은 기계 이름만 말함 | 그대로 — 브라우저 기본 | 2026-10-11 · baseline-profile |
 
 ## 바뀐 기록

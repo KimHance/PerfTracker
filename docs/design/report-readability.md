@@ -209,7 +209,7 @@ slice 표 머리 첫 줄 `line-height: 18px` · 둘째 줄 `top: 27px` 그대로
 | 보고서 8상태 × 1440 · 390 | 없음 | `shoot.mjs` · `check_shots.py` (`--break` · 지금 코드 걸림 64) | `v1/shots/` 16장 (2026-10-11 · 고침 3) — **16/16: 12px 미만 0% · 4.5:1 미만 0% · 최소 12px · 5.48 · 층 31.7(390 26) > 18 > 15 > 13 · 390 넘침 0 · 카드 안 가로 스크롤 0** · 배지 0/4/1/2 · 판정 낱말 0 (`v1/README.md`) |
 | 지금 코드 8상태 × 1440 · 390 | 골든 없음 | `shoot.mjs … before` | `v1/before/` · 요약 1440 12px 미만 85.1% · 4.5:1 미만 12.3% |
 | 구현 rr-type · rr-layout · bp-gui-report — 같은 8상태 × 1440 · 390 (`samples/` → `perftracker report --file` 실렌더) | 없음 | `report-css.test.ts` · `report.test.ts` (`RR-4 ~ RR-7 …` · `B22 …` · `BP-8 …` · `B30 …`) · `report-copy.test.ts` (`RR-5` · `RR-6` 표 ↔ 코드) | 2026-10-11 · 단위마다 16/16: 12px 미만 0% · 4.5:1 미만 0% · 390 넘침 0 · 카드 안 가로 스크롤 0 · ellipsis 0 · 레일 summary 0 · missing 4 · legacy 1 · diag-noapp 2 — bp-gui-report 뒤 시안 숫자와 같아짐 (단위별 줄은 git 이력 ffca69c) |
-| **RR-9 실기기** — SM-S901N · `R5CT0000001` · sdk 36 · YouTube 21.40.161 · 평소 `bfaf14` · 진단 `6c997f` × 요약 · 기기 · 진단 탭 × 1440 · 390 (10장) | 없음 | `measure.js` + `check_shots.py` `problems()` (스크래치 드라이버 · `v1/README.md` 「RR-9」) | 2026-10-11 · ffca69c · **10/10: 12px 미만 0% · 4.5:1 미만 0% · 최소 12px · 5.48 · 층 31.68(390 26) > 18 > 15 > 13 · 요약 타일 8 · 레일 배지 0 = 미수집 카드 0 · 390 넘침 0 · 카드 안 가로 스크롤 0 · 모델 · serial 보임** — 배지는 0 = 0 으로만 맞음 (두 세션에 `수집 안 함` · `값 없음` 글자 0 · hwui partial 은 배지 없음) · 사진 `runs/baseline-profile/shots/rr9/` |
+| **RR-9 실기기** — SM-S901N · sdk 36 · YouTube 21.40.161 · 평소 `bfaf14` · 진단 `6c997f` × 요약 · 기기 · 진단 탭 × 1440 · 390 (10장) | 없음 | `measure.js` + `check_shots.py` `problems()` (스크래치 드라이버 · `v1/README.md` 「RR-9」) | 2026-10-11 · ffca69c · **10/10: 12px 미만 0% · 4.5:1 미만 0% · 최소 12px · 5.48 · 층 31.68(390 26) > 18 > 15 > 13 · 요약 타일 8 · 레일 배지 0 = 미수집 카드 0 · 390 넘침 0 · 카드 안 가로 스크롤 0 · 모델 · serial 보임** — 배지는 0 = 0 으로만 맞음 (두 세션에 `수집 안 함` · `값 없음` 글자 0 · hwui partial 은 배지 없음) · 사진 `runs/baseline-profile/shots/rr9/` |
 | 시안 고침 5 (B37 · B40 · B42 맞춤) 8상태 × 1440 · 390 | 없음 | `shoot.mjs` · `check_shots.py` (`--break` 7 안 걸림 0) | 2026-10-11 · 16/16 그대로 (숫자 위 줄과 같음) · compile 위치 한 번 |
 
 구현 화면 찍는 길: `gen_samples.py` → `perftracker report <id> -o <runs> --file <html> --no-browser` → `shoot.mjs <base> <폴더> before` (시계열 눈금은 SVG 배율로 잼 · 결정 13).
@@ -223,7 +223,7 @@ slice 표 머리 첫 줄 `line-height: 18px` · 둘째 줄 `top: 27px` 그대로
 | # | 무엇 | 지금 기본값 | 날짜 · run |
 |---|---|---|---|
 | 1 | 360 폭 눈금 — 카드가 viewBox 보다 좁아지는 ≈ 362px 미만 창에서 시계열 눈금 11.9px · 분포 눈금(14 단위) 11.5px (`report.css` 주석) | 측정 폭(1440 · 390) 밖이라 그대로 · viewBox 가 잰 폭을 쓰게 되면 다시 | 2026-10-11 · baseline-profile (rr-type 4-4) |
-| 2 | labs 표본의 실기기 serial — `v1/samples/` 8개가 실기기 result.json 을 옮김 (`R5CT0000001` · fingerprint · 설치 경로 해시). 루트 AGENTS 「합성 픽스처만 · 기기 원문은 test/fixtures」 가 labs 를 말하지 않음 | 고치지 않음 · AGENTS 에 labs 시안 표본 예외 한 줄은 기획 (메인) | 2026-10-11 · baseline-profile (디자인 검토 #12 · 후속) |
+| 2 | labs 표본의 실기기 serial — `v1/samples/` 8개가 실기기 result.json 을 옮김 (실기기(SM-S901N) · fingerprint · 설치 경로 해시). 루트 AGENTS 「합성 픽스처만 · 기기 원문은 test/fixtures」 가 labs 를 말하지 않음 | 고치지 않음 · AGENTS 에 labs 시안 표본 예외 한 줄은 기획 (메인) | 2026-10-11 · baseline-profile (디자인 검토 #12 · 후속) |
 | 3 | RR-9 배지 = 미수집 블록 수는 실기기에서 0 = 0 으로만 봄 — 배지가 서는 실기기 세션(sdk 30 꼴 · 옛 파일 · 진단 대상 앱 없음)은 표본뿐 | 표본 `missing` 4 · `legacy` 1 · `diag-noapp` 2 로 대신 | 2026-10-11 · baseline-profile |
 
 ## 검토
