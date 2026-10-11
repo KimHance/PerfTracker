@@ -1171,7 +1171,9 @@ registry 순서는 `hwuiCollector` 바로 뒤에 `frameCollector` 다 — 지표
 - 그 다섯 원본에 블록 쿼리를 다시 돌려 이름 glob 으로 직접 센 값과 맞췄습니다 — JIT 39 · 52 · 54 · 297 · 0,
   컴파일 상태 각 6줄. dalvik 을 안 켠 원본은 두 칸이 `null` + `dalvik_not_recorded`.
 - 문구 넷(cli `Diagnose` 라벨 줄 63칸 · gui 04 옵션 행 설명 · gui HANDOFF 옵션 표 · 디자인 문서 `## 문구`)에 `dalvik`.
-- **아직 없는 것:** 보고서 진단 탭의 ART 칸 자리 (baseline-profile BP-8 · bp-gui-report). **확인하지 못한 것:**
+- **보고서:** 진단 탭 `slice 수` 카드에 ART 칸 두 행이 최소로 있습니다 — 라벨은 필드 경로 그대로, `null` 이면
+  `값 없음` + 코드, 컴파일 상태는 항목마다 `키=값` 한 줄(plan B26 · B27). 자리 · 모양(줄마다 나눈 표 · 라벨)은
+  baseline-profile BP-8 · bp-gui-report 가 디자인 문서대로 다듬습니다. **확인하지 못한 것:**
   sdk ≤35 · 비디버그 앱에서 `dalvik` slice 가 앱 프로세스에 실리는지 (기능 문서 열린 질문 10 — 실측 sdk 36 하나).
 
 ### 그 밖의 후보 (우선순위 낮음)
