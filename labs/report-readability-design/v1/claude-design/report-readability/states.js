@@ -1,5 +1,5 @@
 // Report Readability.dc.html 의 ?state= 표본 8개 — base.json(실기기 YouTube 진단 세션을 줄인 것) 하나에서 짓는다.
-// labs/report-readability-design/v1/gen_samples.py 와 같은 고침이다 (파이썬 → JS). 새 필드 이름은 자리표시 (README 정본).
+// labs/report-readability-design/v1/gen_samples.py 와 같은 고침이다 (파이썬 → JS). 필드 이름 · 모양은 core 실제 (KimHance/baseline-profile 20688ab · `session.compile` 은 bp-core-compile 0ef33ad · plan B31).
 (function () {
   const PKG = 'com.google.android.youtube'
   const APP = `/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/${PKG}-_ZCw5JfQvaAuZ5khXQX0GQ==`
@@ -10,11 +10,13 @@
     `${DATA}/app_yqzdkcache/drgd/v/pcam.jar`,
   ]
   const clone = (x) => JSON.parse(JSON.stringify(x))
-  const dex = (path, status, reason, location) => ({ path, abi: 'arm64', status, reason, location, primary_abi: true })
+  // DexoptLineSchema — dex 하나 × ABI 하나 한 줄
+  const dex = (path, status, reason, location, secondary = false) =>
+    ({ path, secondary_dex: secondary, public_dex: false, abi: 'arm64', status, reason, primary_abi: true, location })
   const vdex = (p) => p.slice(0, p.lastIndexOf('/')) + '/oat/arm64/pcam.vdex'
-  const state = (st, rs) => ({
-    dex: [dex(`${APP}/base.apk`, st, rs, `${APP}/oat/arm64/base.odex`), ...SECONDARY.map((p) => dex(p, 'verify', 'vdex', vdex(p)))],
-  })
+  // 배열 바로 (null = 못 읽음 · [] 는 쓰지 않음)
+  const state = (st, rs) =>
+    [dex(`${APP}/base.apk`, st, rs, `${APP}/oat/arm64/base.odex`), ...SECONDARY.map((p) => dex(p, 'verify', 'vdex', vdex(p), true))]
 
   function normal(base) {
     const d = clone(base)
@@ -23,6 +25,7 @@
     d.session.name = 'youtube-평소'
     d.target_app.compile_state_start = state('speed-profile', 'profile-utilization')
     d.target_app.compile_state_end = state('speed-profile', 'profile-utilization')
+    for (const ph of ['start', 'end']) { d.target_app[`compile_state_${ph}_reason_code`] = null; d.target_app[`compile_state_${ph}_reason`] = null }
     return d
   }
   function summary(base) {
@@ -54,18 +57,23 @@
     const d = normal(base)
     d.session.name = 'youtube-compile-speed'
     d.session.options = { launch: true, compile: 'speed' }
-    d.session.compile = { value: 'speed', command: `cmd package compile -m speed -f ${PKG}`, before: state('speed-profile', 'profile-utilization'), elapsed_ms: 67500 }
+    d.session.compile = { value: 'speed', command: `cmd package compile -m speed -f ${PKG}`, elapsed_ms: 67500, compile_state_before: state('speed-profile', 'profile-utilization'), compile_state_before_reason_code: null, compile_state_before_reason: null }
     d.target_app.compile_state_start = state('speed', 'cmdline')
-    d.target_app.compile_state_end = state('speed', 'bg-dexopt')
-    d.warnings = [{ code: 'compile_state_changed', message: 'base.apk [primary-abi] 줄 reason cmdline → bg-dexopt' }]
+    // 끝 상태 base 줄 reason 을 다르게 (바뀜 경고) · 세션 중 앱이 불러온 보조 dex 한 줄이 끝에만 (다른 때 칸 `줄 없음`)
+    const end = state('speed', 'bg-dexopt')
+    end.push(dex(`${DATA}/app_tmp/fx/q.dex`, 'run-from-apk', 'unknown', null, true))
+    d.target_app.compile_state_end = end
+    d.session.marks = [{ offset_ms: 3200, label: '홈 로딩' }, { offset_ms: 9400, label: '스크롤' }]
+    // core app/dexopt.ts compileStateChangeWarning 문구 그대로
+    d.warnings = [{ code: 'compile_state_changed', message: '세션 중 base.apk 컴파일 상태가 바뀌었음 — status speed → speed · reason cmdline → bg-dexopt (target_app.compile_state_start · compile_state_end)' }]
     return d
   }
   function endNull(base) {
     const d = normal(base)
     d.session.name = 'youtube-extract'
     d.target_app.compile_state_end = null
-    d.target_app.compile_state_end_reason_code = 'compile_state_not_read'
-    d.target_app.compile_state_end_reason = 'stop 전에 extract 로 산출 — 끝 상태를 읽지 않음'
+    d.target_app.compile_state_end_reason_code = 'dexopt_state_unavailable'
+    d.target_app.compile_state_end_reason = '아직 stop 하지 않은 세션 — 세션 끝 컴파일 상태를 읽지 않음'
     return d
   }
   function legacy(base) {
@@ -85,15 +93,17 @@
     g.target_process_slice_names = g.target_process_slice_names.concat([
       { name: 'L*;', main_thread: { count: 2317, sum_ms: 118.4, max_ms: 10.9 }, other_threads: { count: 2898, sum_ms: 178.2, max_ms: 6.1 }, async_tracks: null },
     ])
-    g.target_process_compile_states = [
+    g.target_process_compile_state_slices = [
       { location: `${APP}/oat/arm64/base.odex`, status: 'up-to-date', filter: 'speed-profile', reason: 'profile-utilization' },
       { location: `${DATA}/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/oat/arm64/pcam.vdex`, status: 'up-to-date', filter: 'verify', reason: 'vdex' },
       { location: 'primary.vdex mapped directly in memory from /data/app/~~KFTc…/com.google.android.gms-…/split_DynamiteLoader_installtime.dm', status: 'up-to-date', filter: 'verify', reason: 'vdex-dm' },
       { location: 'none', status: 'no-dex-code', filter: 'unknown', reason: 'unknown' },
     ]
-    g.target_process_compile_states_reason_code = null
+    g.target_process_compile_state_slices_reason_code = null
+    g.target_process_compile_state_slices_reason = null
     g.target_process_jit_slices = 52
     g.target_process_jit_slices_reason_code = null
+    g.target_process_jit_slices_reason = null
     return d
   }
   function diagNoapp(base) {
@@ -104,9 +114,11 @@
     g.reason_code = 'process_not_in_trace'
     g.reason = '대상 앱 프로세스를 트레이스에서 특정하지 못했다.'
     for (const k of ['target_process_slices', 'target_process_slices_unfinished', 'target_process_slice_names_unfolded',
-      'target_process_slice_names', 'target_process_compile_states', 'target_process_jit_slices']) g[k] = null
-    g.target_process_compile_states_reason_code = 'process_not_in_trace'
-    g.target_process_jit_slices_reason_code = 'process_not_in_trace'
+      'target_process_slice_names', 'target_process_compile_state_slices', 'target_process_jit_slices']) g[k] = null
+    for (const k of ['target_process_compile_state_slices', 'target_process_jit_slices']) {
+      g[`${k}_reason_code`] = 'process_not_in_trace'
+      g[`${k}_reason`] = '대상 앱 프로세스를 트레이스에서 특정하지 못했다.'
+    }
     return d
   }
 

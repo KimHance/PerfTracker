@@ -1,5 +1,7 @@
 # Report Readability — Claude Design 브리프 (v1)
 
+> 이 브리프의 필드 이름(`{dex:[…]}` · `target_process_compile_states` · `compile_state_not_read`)은 1차 자리표시다 — 고침 3(`report-readability/FIX-3.md`)에서 core 실제 이름으로 바뀌었다.
+
 새 디자인 파일 **`Report Readability.dc.html`** 하나 (프로젝트 루트 · `Session Report.dc.html` 과 같은 `.dc.html` 꼴 — `<x-dc>` + `text/x-dc` 스크립트 · `$preview` 1440×980 · 편집기 enum prop).
 **`Session Report.dc.html` 은 고치지 않는다** (비교 기준). 정본: 레포 `docs/design/report-readability.md` · `docs/design/baseline-profile.md` — 이 브리프는 그 요약이다.
 

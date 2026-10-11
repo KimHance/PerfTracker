@@ -2,7 +2,7 @@
 """시안 사진 · 글자 측정 검사 — shoot.mjs 가 남긴 shots/measure.json 과 사진 16장.
 
 RR-1 12px 미만 글자 0% · RR-2 4.5:1 미만 글자 0% · RR-3 층 순서 (타일 값 > 섹션 > 카드 제목 > 본문 · 이웃 차 ≥ 2) ·
-390 페이지 가로 넘침 0 · 상태 8 × 폭 2 사진이 다 있다.
+390 페이지 가로 넘침 0 · 카드 안 가로 스크롤 0 (slice 표 · 프레임 시간축 빼고) · 상태 8 × 폭 2 사진이 다 있다.
 
   python3 labs/report-readability-design/v1/check_shots.py [<사진 폴더>]   # 기본 v1/shots
   python3 labs/report-readability-design/v1/check_shots.py --break          # 깬 측정값이 걸리는지
@@ -32,6 +32,8 @@ def problems(key: str, m: dict) -> list[str]:
             out.append(f"타일 값 {lay['tile_value']} ≤ 섹션 {lay['section']}")
     if key.endswith('-390') and m['overflow_x'] != 0:
         out.append(f"390 가로 넘침 {m['overflow_x']}px")
+    if m.get('inner_scroll'):
+        out.append(f"카드 안 가로 스크롤 {m['inner_scroll']}")
     return out
 
 
@@ -46,6 +48,7 @@ def main() -> int:
             {**good, 'layers': {**good['layers'], 'section': 16}},
             {**good, 'layers': {**good['layers'], 'tile_value': 18}},
             {**good, 'overflow_x': 3},
+            {**good, 'inner_scroll': ['rp-dex-scroll']},
         ]
         missed = [b for b in bad if not problems('summary-390', b)]
         clean = problems('summary-390', good)

@@ -19,7 +19,7 @@
 <link rel="stylesheet" href="report-readability/report-rr.css">
 <script src="report-readability/states.js"></script>
 </helmet>
-<div ref="{{ rootRef }}" onClick="{{ onRootClick }}" style="min-height:100vh;background:var(--color-bg)"></div>
+<div ref="{{ rootRef }}" onClick="{{ onRootClick }}" onMouseOver="{{ onRootOver }}" style="min-height:100vh;background:var(--color-bg)"></div>
 <sc-if value="{{ showPicker }}" hint-placeholder-val="{{ false }}">
   <div class="diag-picker" aria-label="시안 상태">
     <sc-for list="{{ picks }}" as="p" hint-placeholder-count="8">
@@ -127,6 +127,7 @@ function seriesBody(ctx, arr, o, m, maxT) {
     + ys.map((v) => `<line class="rp-gridline" x1="${L}" x2="${W - R}" y1="${py(v).toFixed(1)}" y2="${py(v).toFixed(1)}"></line><text class="rp-tick" x="${L - 6}" y="${(py(v) + 4).toFixed(1)}" text-anchor="end">${fa(v)}</text>`).join('')
     + `<line class="rp-axis" x1="${L}" x2="${L}" y1="${T}" y2="${H - B}"></line><line class="rp-axis" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"></line>`
     + xs.map((t, i) => `<line class="rp-axis" x1="${px(t).toFixed(1)}" x2="${px(t).toFixed(1)}" y1="${H - B}" y2="${H - B + 3}"></line><text class="rp-tick" x="${px(t).toFixed(1)}" y="${H - 10}" text-anchor="${i === 0 ? 'start' : i === xs.length - 1 ? 'end' : 'middle'}">${t}s</text>`).join('')
+    + ((ctx.d.session && Array.isArray(ctx.d.session.marks)) ? ctx.d.session.marks : []).filter((mk) => mk.offset_ms / 1000 <= maxT).map((mk) => `<line class="rp-markline" x1="${px(mk.offset_ms / 1000).toFixed(1)}" x2="${px(mk.offset_ms / 1000).toFixed(1)}" y1="${T}" y2="${H - B}"></line>`).join('')
     + (sub.length > 1 ? `<path class="rp-subline" d="${path(sub)}"></path>` : '')
     + `<path class="rp-line" d="${path(pts)}"></path></svg>`
   const vv = pts.map((p) => p[1])
@@ -181,43 +182,50 @@ function ftlBody(data) {
 }
 
 /* ── dexstates ── */
-const abi = (x) => `${esc(x.abi)}${x.primary_abi ? ' · primary-abi' : ''}`
+const kv = (k, v) => `<span class="rp-dex-kv"><span class="rp-dex-k">${k}</span><span class="rp-dex-val">${v}</span></span>`
 function compileCard(ctx, st) {
   const d = ctx.d, ta = d.target_app || {}
   const start = get(d, 'target_app.compile_state_start')
   const opts = { title: '컴파일 상태 (전 → 후)', span: 12 }
   if (start === MISSING) return ctx.card({ ...opts, body: noneBody(`${NONE_MISS} — target_app.compile_state_start 없음`), none: true })
   const c = get(d, 'session.compile')
-  const top = c !== MISSING && c
-    ? pairsTable([[lbl('바꾼 값', 'value'), esc(c.value), { mono: 1 }], [lbl('보낸 명령', 'command'), wbr(c.command), { mono: 1, wrap: 1 }], [lbl('걸린 시간', 'elapsed_ms'), `${nf(c.elapsed_ms)} ms`]])
-    : pairsTable([[lbl('바꾼 기록', 'session.compile'), '바꾸지 않음']])
-  const end = get(d, 'target_app.compile_state_end')
+  const rec = c !== MISSING && c
+    ? [[lbl('바꾼 값', 'value'), esc(c.value), { mono: 1 }], [lbl('보낸 명령', 'command'), wbr(c.command), { mono: 1, wrap: 1 }], [lbl('걸린 시간', 'elapsed_ms'), `${nf(c.elapsed_ms)} ms`]]
+    : [[lbl('바꾼 기록', 'session.compile'), '바꾸지 않음']]
+  const endA = get(d, 'target_app.compile_state_end')
   const times = []
-  if (c !== MISSING && c && c.before) times.push(['바꾸기 전', c.before])
-  times.push(['시작', start])
-  times.push(['끝', end === MISSING ? null : end])
-  const dexes = (start && start.dex) || []
-  const body = dexes.map((dx, i) => {
-    const head = `<tr class="rp-dex-head"><td colspan="3">${wbr(dx.path)}<span class="rp-dex-abi">${abi(dx)}</span></td></tr>`
-    const rows = times.map(([w, s]) => {
-      const x = s && s.dex ? s.dex[i] : null
-      if (!x) return `<tr class="rp-dex-row"><th>${w}</th><td colspan="2">${NONE_NULL}${noneCode(ta.compile_state_end_reason_code)}</td></tr>`
+  if (c !== MISSING && c && c.compile_state_before !== undefined) times.push(['바꾸기 전', c.compile_state_before, 'compile_state_before', c.compile_state_before_reason_code, c.compile_state_before_reason])
+  times.push(['시작', start, 'compile_state_start', ta.compile_state_start_reason_code, ta.compile_state_start_reason])
+  times.push(['끝', endA === MISSING ? null : endA, 'compile_state_end', ta.compile_state_end_reason_code, ta.compile_state_end_reason])
+  // 못 읽은 때(배열 null)는 기록 칸 한 행으로 — dex 줄마다 되풀이하지 않는다
+  for (const [w, arr, path, code, why] of times) if (arr === null) rec.push([lbl(w, path), NONE_NULL + noneCode(code), { title: why || '' }])
+  const live = times.filter((t) => Array.isArray(t[1]))
+  const key = (x) => `${x.path}\u0000${x.abi}`
+  const order = [], seen = new Map()
+  for (const [, arr] of live) for (const x of arr) if (!seen.has(key(x))) { seen.set(key(x), x); order.push(key(x)) }
+  const body = order.map((k) => {
+    const dx = seen.get(k)
+    const head = `<tr class="rp-dex-head"><td colspan="3">${wbr(dx.path)}<span class="rp-dex-kvs">${kv('abi', esc(dx.abi))}${kv('primary_abi', yn(dx.primary_abi))}${kv('secondary_dex', yn(dx.secondary_dex))}${kv('public_dex', yn(dx.public_dex))}</span></td></tr>`
+    const rows = live.map(([w, arr]) => {
+      const x = arr.find((y) => key(y) === k)
+      if (!x) return `<tr class="rp-dex-row"><th>${w}</th><td colspan="2">줄 없음</td></tr>`
       return `<tr class="rp-dex-row"><th>${w}</th><td class="mono rp-dex-v">${esc(x.status)}</td><td class="mono rp-dex-v">${esc(x.reason)}</td></tr>`
-        + `<tr class="rp-dex-loc"><td colspan="3">${lbl('파일 위치', 'location')}${wbr(x.location)}</td></tr>`
+        + `<tr class="rp-dex-loc"><td colspan="3">${lbl('파일 위치', 'location')}${x.location == null ? NONE_NULL : wbr(x.location)}</td></tr>`
     }).join('')
     return head + rows
   }).join('')
-  const table = `<div class="rp-dex-scroll"><table class="rp-table rp-dex"><thead><tr><th>때</th><th>${lbl('컴파일 필터', 'status')}</th><th>${lbl('컴파일 이유', 'reason')}</th></tr></thead><tbody>${body}</tbody></table></div>`
-  return ctx.card({ ...opts, body: top + table })
+  const table = `<table class="rp-table rp-dex rp-dex-when"><thead><tr><th>때</th><th>${lbl('컴파일 필터', 'status')}</th><th>${lbl('컴파일 이유', 'reason')}</th></tr></thead><tbody>${body}</tbody></table>`
+  return ctx.card({ ...opts, body: pairsTable(rec) + (order.length ? table : '') })
 }
 function compileSliceCard(ctx) {
   const g = ctx.d.diagnose
-  const v = g.target_process_compile_states
+  const v = g.target_process_compile_state_slices
   const opts = { title: '컴파일 상태 slice', span: 12, m: g }
-  if (v === undefined) return ctx.card({ ...opts, body: noneBody(`${NONE_MISS} — diagnose.target_process_compile_states 없음`), none: true })
-  if (v === null) return ctx.card({ ...opts, body: noneBody(NONE_NULL, g.target_process_compile_states_reason_code), none: true })
-  const body = v.map((x) => `<tr class="rp-dex-head"><td colspan="3">${wbr(x.location)}</td></tr><tr class="rp-dex-row"><td class="mono rp-dex-v">${esc(x.status)}</td><td class="mono rp-dex-v">${esc(x.filter)}</td><td class="mono rp-dex-v">${esc(x.reason)}</td></tr>`).join('')
-  return ctx.card({ ...opts, body: `<div class="rp-dex-scroll"><table class="rp-table rp-dex"><thead><tr><th>${lbl('oat 파일 상태', 'status')}</th><th>${lbl('컴파일 필터', 'filter')}</th><th>${lbl('컴파일 이유', 'reason')}</th></tr></thead><tbody>${body}</tbody></table></div>` })
+  if (v === undefined) return ctx.card({ ...opts, body: noneBody(`${NONE_MISS} — diagnose.target_process_compile_state_slices 없음`), none: true })
+  if (v === null) return ctx.card({ ...opts, body: noneBody(NONE_NULL, g.target_process_compile_state_slices_reason_code), none: true })
+  if (!v.length) return ctx.card({ ...opts, body: noneBody('컴파일 상태 slice 없음') })
+  const body = v.map((x) => `<tr class="rp-dex-head"><td colspan="2">${wbr(x.location)}<span class="rp-dex-kvs"><span class="rp-dex-kv"><span class="rp-dex-w">oat 파일 상태</span><span class="rp-dex-k">status</span><span class="rp-dex-val">${esc(x.status)}</span></span></span></td></tr><tr class="rp-dex-row"><td class="mono rp-dex-v">${esc(x.filter)}</td><td class="mono rp-dex-v">${esc(x.reason)}</td></tr>`).join('')
+  return ctx.card({ ...opts, body: `<table class="rp-table rp-dex"><thead><tr><th>${lbl('컴파일 필터', 'filter')}</th><th>${lbl('컴파일 이유', 'reason')}</th></tr></thead><tbody>${body}</tbody></table>` })
 }
 
 /* ── 탭: 요약 ── */
@@ -228,7 +236,7 @@ const TILES = [
   ['cpu', '앱 CPU 시간', 'metrics.cpu.data.app.total_ms', (v) => nf(v), 'ms'],
   ['memory', '앱 RSS 최대', 'metrics.memory.data.rss.max_kb', (v) => nf(v / 1024), 'MB'],
   ['log', '앱 로그 줄', 'metrics.log.data.app.total', (v) => nf(v), '줄'],
-  ['thermal', '스로틀 종료', 'metrics.thermal.data.device_status_after', thr, ''],
+  ['thermal', '스로틀 단계 · 종료', 'metrics.thermal.data.device_status_after', thr, ''],
   ['network', '수신', 'metrics.network.data.rx_bytes', bytes, ''],
 ]
 function tiles(ctx) {
@@ -429,9 +437,12 @@ function renderDoc(d, st, tab, sort) {
   const meta = [['앱', `${esc(a.label)} · ${wbr(a.package)} · ${esc(a.version_name)}`], ['기기', `${esc(s.model)} · ${esc(d.device.serial)} · Android ${esc(s.android_release)} (sdk ${esc(s.sdk_int)})`],
     ['시작', esc(String(ss.started_at).slice(0, 19).replace('T', ' '))], ['길이', `${nf(ss.duration_ms)} ms`], ['옵션', esc(opts.join(' '))]]
   const head = `<header class="rp-head"><div class="rp-head-top"><span class="rp-sid mono">${esc(ss.id)}</span><h1 class="rp-name">${esc(ss.name)}</h1><span class="rp-state">${esc(ss.state)}</span>${d.diagnose ? '<span class="rp-state rp-state-diagnose">진단</span>' : ''}</div><div class="rp-meta">${meta.map(([k, v]) => `<span class="rp-meta-item"><i>${k}</i>${v}</span>`).join('')}</div></header>`
+  const mk = Array.isArray(ss.marks) ? ss.marks : []
+  const clk = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}`
+  const marks = mk.length ? `<div class="rp-marks"><span class="rp-marks-label">표식</span>${mk.map((m) => `<button type="button" class="rp-mark" data-mark-at="${clk(m.offset_ms)}" data-mark-ms="${m.offset_ms}" data-mark-label="${esc(m.label)}"><span class="rp-mark-at mono">${clk(m.offset_ms)}</span>${esc(m.label)}</button>`).join('')}</div>` : ''
   const t = d.tool || {}, hh = t.host || {}
   const footer = `<footer class="rp-footer"><span class="mono">${esc(t.name)} ${esc(t.version)} · ${esc(hh.os)}/${esc(hh.arch)} · node ${esc(hh.node)}</span><span class="mono">schema_version ${esc(d.schema_version)}</span></footer>`
-  return `<div class="rp-shell">${rail}<main class="rp-main">${head}${content}${footer}</main></div>`
+  return `<div class="rp-shell">${rail}<main class="rp-main">${head}${marks}${content}${footer}</main></div>`
 }
 
 class Component extends DCLogic {
@@ -478,6 +489,14 @@ class Component extends DCLogic {
     this.painted = key; this.paintedTab = `${s.st}|${tab}`
     if (prevTab !== this.paintedTab) window.scrollTo(0, 0)
   }
+  onRootOver = (e) => {
+    const m = e.target.closest ? e.target.closest('.rp-mark') : null
+    if (!m) { if (this.tip) this.tip.style.display = 'none'; return }
+    if (!this.tip) { this.tip = document.createElement('div'); this.tip.className = 'rp-tip'; document.body.appendChild(this.tip) }
+    const r = m.getBoundingClientRect()
+    this.tip.innerHTML = `<div class="rp-tip-head mono">${esc(m.dataset.markAt)}</div><div class="rp-tip-value">${esc(m.dataset.markLabel)}</div><div class="rp-tip-sub num">세션 시작 뒤 ${nf(Number(m.dataset.markMs))} ms</div>`
+    this.tip.style.display = 'block'; this.tip.style.left = `${Math.round(r.left)}px`; this.tip.style.top = `${Math.round(r.bottom + 8)}px`
+  }
   onRootClick = (e) => {
     const t = e.target.closest('[data-tab]')
     if (t) { this.setState({ tab: t.dataset.tab }); return }
@@ -491,6 +510,7 @@ class Component extends DCLogic {
     return {
       rootRef: this.rootRef,
       onRootClick: this.onRootClick,
+      onRootOver: this.onRootOver,
       showPicker: this.shot !== true,
       picks: STATES.map((id) => ({ id, on: String(id === this.state.st), go: () => this.pick(id) })),
     }

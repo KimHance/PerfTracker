@@ -5,8 +5,8 @@
 `device-report-diagnose.html` 에 실린 것). 그것을 **줄이고 고쳐** 상태마다 표본을 짓는다:
 slice 표는 앞 40행 · 시계열은 그대로 · 새 필드(컴파일 상태 · 바꾼 기록 · ART 칸)는 실측 원문 꼴로 지은 값.
 
-**새 필드 이름은 자리표시다** — 정본은 README 이고 bp-core-state · bp-core-art · bp-core-compile 이 정한다.
-화면이 읽는 칸의 모양(dex 줄마다 path · abi · status · reason · location · primary_abi)만 기능 문서 BP-1 · BP-4 · BP-7 을 따른다.
+필드 이름 · 모양은 core 실제 (KimHance/baseline-profile 20688ab — `schema/result.ts` DexoptLineSchema · CompileStateSliceSchema ·
+`schema/reasons.ts`) 그대로다. `session.compile` 은 bp-core-compile 0ef33ad (plan B31) 의 꼴.
 
   python3 -I labs/report-readability-design/v1/gen_samples.py <실기기 result.json> [<runs 디렉토리>]
   → labs/report-readability-design/v1/samples/<상태>.json  (+ <runs>/<상태>/result.json — 지금 코드 실렌더용)
@@ -29,9 +29,10 @@ SECONDARY = [
 ]
 
 
-def dex(path, status, reason, location):
-    return {'path': path, 'abi': 'arm64', 'status': status, 'reason': reason,
-            'location': location, 'primary_abi': True}
+def dex(path, status, reason, location, secondary=False):
+    # DexoptLineSchema — dex 하나 × ABI 하나 한 줄
+    return {'path': path, 'secondary_dex': secondary, 'public_dex': False, 'abi': 'arm64',
+            'status': status, 'reason': reason, 'primary_abi': True, 'location': location}
 
 
 def odex():
@@ -44,8 +45,8 @@ def vdex(p):
 
 def state(base_status, base_reason, base_loc=None, sec=('verify', 'vdex')):
     rows = [dex(f'{APP}/base.apk', base_status, base_reason, base_loc or odex())]
-    rows += [dex(p, sec[0], sec[1], vdex(p)) for p in SECONDARY]
-    return {'dex': rows}
+    rows += [dex(p, sec[0], sec[1], vdex(p), secondary=True) for p in SECONDARY]
+    return rows  # 배열 바로 (null = 못 읽음 · [] 는 쓰지 않음)
 
 
 def normal(src):
@@ -55,6 +56,9 @@ def normal(src):
     d['session']['name'] = 'youtube-평소'
     d['target_app']['compile_state_start'] = state('speed-profile', 'profile-utilization')
     d['target_app']['compile_state_end'] = state('speed-profile', 'profile-utilization')
+    for ph in ('start', 'end'):
+        d['target_app'][f'compile_state_{ph}_reason_code'] = None
+        d['target_app'][f'compile_state_{ph}_reason'] = None
     d['artifacts'] = {k: v for k, v in d.get('artifacts', {}).items()}
     return d
 
@@ -95,14 +99,23 @@ def compile_speed(src):
     d['session']['compile'] = {
         'value': 'speed',
         'command': f'cmd package compile -m speed -f {PKG}',
-        'before': state('speed-profile', 'profile-utilization'),
         'elapsed_ms': 67500,
+        'compile_state_before': state('speed-profile', 'profile-utilization'),
+        'compile_state_before_reason_code': None,
+        'compile_state_before_reason': None,
     }
     d['target_app']['compile_state_start'] = state('speed', 'cmdline')
     # 바뀜 경고를 보이려고 끝 상태 base 줄 reason 만 다르게 지었다 (BP-3)
-    d['target_app']['compile_state_end'] = state('speed', 'bg-dexopt')
+    # 바뀜 경고를 보이려고 끝 상태 base 줄 reason 을 다르게 · 세션 중 앱이 불러온 보조 dex 한 줄이 끝에만 (줄 없음)
+    end = state('speed', 'bg-dexopt')
+    extra = f'{DATA}/app_tmp/fx/q.dex'
+    end.append(dex(extra, 'run-from-apk', 'unknown', None, secondary=True))
+    d['target_app']['compile_state_end'] = end
+    d['session']['marks'] = [{'offset_ms': 3200, 'label': '홈 로딩'}, {'offset_ms': 9400, 'label': '스크롤'}]
+    # core app/dexopt.ts compileStateChangeWarning 문구 그대로
     d['warnings'] = [{'code': 'compile_state_changed',
-                      'message': 'base.apk [primary-abi] 줄 reason cmdline → bg-dexopt'}]
+                      'message': '세션 중 base.apk 컴파일 상태가 바뀌었음 — status speed → speed · reason cmdline → bg-dexopt '
+                                 '(target_app.compile_state_start · compile_state_end)'}]
     return d
 
 
@@ -110,8 +123,8 @@ def end_null(src):
     d = normal(src)
     d['session']['name'] = 'youtube-extract'
     d['target_app']['compile_state_end'] = None
-    d['target_app']['compile_state_end_reason_code'] = 'compile_state_not_read'
-    d['target_app']['compile_state_end_reason'] = 'stop 전에 extract 로 산출 — 끝 상태를 읽지 않음'
+    d['target_app']['compile_state_end_reason_code'] = 'dexopt_state_unavailable'
+    d['target_app']['compile_state_end_reason'] = '아직 stop 하지 않은 세션 — 세션 끝 컴파일 상태를 읽지 않음'
     return d
 
 
@@ -134,7 +147,7 @@ def diag(src):
         {'name': 'L*;', 'main_thread': {'count': 2317, 'sum_ms': 118.4, 'max_ms': 10.9},
          'other_threads': {'count': 2898, 'sum_ms': 178.2, 'max_ms': 6.1}, 'async_tracks': None},
     ]
-    g['target_process_compile_states'] = [
+    g['target_process_compile_state_slices'] = [
         {'location': f'{APP}/oat/arm64/base.odex', 'status': 'up-to-date',
          'filter': 'speed-profile', 'reason': 'profile-utilization'},
         {'location': f'{DATA}/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/oat/arm64/pcam.vdex',
@@ -143,9 +156,11 @@ def diag(src):
          'status': 'up-to-date', 'filter': 'verify', 'reason': 'vdex-dm'},
         {'location': 'none', 'status': 'no-dex-code', 'filter': 'unknown', 'reason': 'unknown'},
     ]
-    g['target_process_compile_states_reason_code'] = None
+    g['target_process_compile_state_slices_reason_code'] = None
+    g['target_process_compile_state_slices_reason'] = None
     g['target_process_jit_slices'] = 52
     g['target_process_jit_slices_reason_code'] = None
+    g['target_process_jit_slices_reason'] = None
     return d
 
 
@@ -158,10 +173,11 @@ def diag_noapp(src):
     g['reason'] = '대상 앱 프로세스를 트레이스에서 특정하지 못했다.'
     for k in ('target_process_slices', 'target_process_slices_unfinished',
               'target_process_slice_names_unfolded', 'target_process_slice_names',
-              'target_process_compile_states', 'target_process_jit_slices'):
+              'target_process_compile_state_slices', 'target_process_jit_slices'):
         g[k] = None
-    g['target_process_compile_states_reason_code'] = 'process_not_in_trace'
-    g['target_process_jit_slices_reason_code'] = 'process_not_in_trace'
+    for k in ('target_process_compile_state_slices', 'target_process_jit_slices'):
+        g[f'{k}_reason_code'] = 'process_not_in_trace'
+        g[f'{k}_reason'] = '대상 앱 프로세스를 트레이스에서 특정하지 못했다.'
     return d
 
 

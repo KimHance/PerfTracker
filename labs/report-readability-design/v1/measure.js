@@ -75,6 +75,11 @@
       body: sizeOf('.rp-table td') ?? sizeOf('.rp-table'),
     },
     overflow_x: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    // 카드 안에서 옆으로 넘치는 상자 — 허용은 slice 이름별 표 · 프레임 시간축 둘뿐 (페이지 넘침 0 이 삼키는 자리)
+    inner_scroll: [...root.querySelectorAll('*')].filter((e) => {
+      if (e.closest('.rp-slice-scroll, .rp-ftl-scroll')) return false
+      return e.scrollWidth > e.clientWidth + 1 && /auto|scroll/.test(getComputedStyle(e).overflowX)
+    }).map((e) => e.className || e.tagName).slice(0, 5),
     hits: [...new Set(hits)].slice(0, 12),
   }
 }

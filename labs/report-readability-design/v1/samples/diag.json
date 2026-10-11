@@ -245,78 +245,90 @@
   "min_sdk": 32,
   "target_sdk": 37,
   "primary_cpu_abi": "arm64-v8a",
-  "compile_state_start": {
-   "dex": [
-    {
-     "path": "/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/base.apk",
-     "abi": "arm64",
-     "status": "speed-profile",
-     "reason": "profile-utilization",
-     "location": "/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/oat/arm64/base.odex",
-     "primary_abi": true
-    },
-    {
-     "path": "/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/pcam.jar",
-     "abi": "arm64",
-     "status": "verify",
-     "reason": "vdex",
-     "location": "/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/oat/arm64/pcam.vdex",
-     "primary_abi": true
-    },
-    {
-     "path": "/data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/pcam.jar",
-     "abi": "arm64",
-     "status": "verify",
-     "reason": "vdex",
-     "location": "/data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/oat/arm64/pcam.vdex",
-     "primary_abi": true
-    },
-    {
-     "path": "/data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/pcam.jar",
-     "abi": "arm64",
-     "status": "verify",
-     "reason": "vdex",
-     "location": "/data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/oat/arm64/pcam.vdex",
-     "primary_abi": true
-    }
-   ]
-  },
-  "compile_state_end": {
-   "dex": [
-    {
-     "path": "/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/base.apk",
-     "abi": "arm64",
-     "status": "speed-profile",
-     "reason": "profile-utilization",
-     "location": "/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/oat/arm64/base.odex",
-     "primary_abi": true
-    },
-    {
-     "path": "/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/pcam.jar",
-     "abi": "arm64",
-     "status": "verify",
-     "reason": "vdex",
-     "location": "/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/oat/arm64/pcam.vdex",
-     "primary_abi": true
-    },
-    {
-     "path": "/data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/pcam.jar",
-     "abi": "arm64",
-     "status": "verify",
-     "reason": "vdex",
-     "location": "/data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/oat/arm64/pcam.vdex",
-     "primary_abi": true
-    },
-    {
-     "path": "/data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/pcam.jar",
-     "abi": "arm64",
-     "status": "verify",
-     "reason": "vdex",
-     "location": "/data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/oat/arm64/pcam.vdex",
-     "primary_abi": true
-    }
-   ]
-  }
+  "compile_state_start": [
+   {
+    "path": "/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/base.apk",
+    "secondary_dex": false,
+    "public_dex": false,
+    "abi": "arm64",
+    "status": "speed-profile",
+    "reason": "profile-utilization",
+    "primary_abi": true,
+    "location": "/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/oat/arm64/base.odex"
+   },
+   {
+    "path": "/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/pcam.jar",
+    "secondary_dex": true,
+    "public_dex": false,
+    "abi": "arm64",
+    "status": "verify",
+    "reason": "vdex",
+    "primary_abi": true,
+    "location": "/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/oat/arm64/pcam.vdex"
+   },
+   {
+    "path": "/data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/pcam.jar",
+    "secondary_dex": true,
+    "public_dex": false,
+    "abi": "arm64",
+    "status": "verify",
+    "reason": "vdex",
+    "primary_abi": true,
+    "location": "/data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/oat/arm64/pcam.vdex"
+   },
+   {
+    "path": "/data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/pcam.jar",
+    "secondary_dex": true,
+    "public_dex": false,
+    "abi": "arm64",
+    "status": "verify",
+    "reason": "vdex",
+    "primary_abi": true,
+    "location": "/data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/oat/arm64/pcam.vdex"
+   }
+  ],
+  "compile_state_end": [
+   {
+    "path": "/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/base.apk",
+    "secondary_dex": false,
+    "public_dex": false,
+    "abi": "arm64",
+    "status": "speed-profile",
+    "reason": "profile-utilization",
+    "primary_abi": true,
+    "location": "/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/oat/arm64/base.odex"
+   },
+   {
+    "path": "/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/pcam.jar",
+    "secondary_dex": true,
+    "public_dex": false,
+    "abi": "arm64",
+    "status": "verify",
+    "reason": "vdex",
+    "primary_abi": true,
+    "location": "/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/oat/arm64/pcam.vdex"
+   },
+   {
+    "path": "/data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/pcam.jar",
+    "secondary_dex": true,
+    "public_dex": false,
+    "abi": "arm64",
+    "status": "verify",
+    "reason": "vdex",
+    "primary_abi": true,
+    "location": "/data/user/0/com.google.android.youtube/app_pccache2/5/C261F5452FADA828A0BEBA37A55BDC37FE758C0A/oat/arm64/pcam.vdex"
+   },
+   {
+    "path": "/data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/pcam.jar",
+    "secondary_dex": true,
+    "public_dex": false,
+    "abi": "arm64",
+    "status": "verify",
+    "reason": "vdex",
+    "primary_abi": true,
+    "location": "/data/user/0/com.google.android.youtube/app_yqzdkcache/drgd/v/oat/arm64/pcam.vdex"
+   }
+  ]
  },
  "metrics": {
   "startup": {
@@ -7300,7 +7312,7 @@
     "async_tracks": null
    }
   ],
-  "target_process_compile_states": [
+  "target_process_compile_state_slices": [
    {
     "location": "/data/app/~~j3NKMoNZzMtIkX7kyHNSsQ==/com.google.android.youtube-_ZCw5JfQvaAuZ5khXQX0GQ==/oat/arm64/base.odex",
     "status": "up-to-date",
@@ -7326,9 +7338,11 @@
     "reason": "unknown"
    }
   ],
-  "target_process_compile_states_reason_code": null,
+  "target_process_compile_state_slices_reason_code": null,
+  "target_process_compile_state_slices_reason": null,
   "target_process_jit_slices": 52,
-  "target_process_jit_slices_reason_code": null
+  "target_process_jit_slices_reason_code": null,
+  "target_process_jit_slices_reason": null
  },
  "measurement_overhead": {
   "tracing_processes_cpu_time_ms": 1360,

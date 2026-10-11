@@ -3,9 +3,9 @@
 | 항목 | 값 |
 |---|---|
 | 기능 | report-readability |
-| 기능 문서 | docs/spec/report-readability.md (fa572d9) |
+| 기능 문서 | docs/spec/report-readability.md (701a79f) |
 | 등급 | 화면 |
-| 마지막 변경 | 2026-10-11 · 처음 — 제약 · 시안 v1 후보 1 (8상태 × 1440 · 390) · 크기 · 색 · 타일 · 라벨 단어 |
+| 마지막 변경 | 2026-10-11 · 고침 1 — thermal 낱말 · 표식 · 툴팁 크기 · HANDOFF 어긋남 단위별 · 배지 셈 B30 |
 
 세션 보고서 하나만 — 측정 화면은 그대로. 바꾸는 자리는 **보고서 CSS** 와 매니페스트이고 토큰 값은 그대로다 (결정 11).
 컴파일 상태 카드 · 진단 ART 칸 · CLI 줄은 `docs/design/baseline-profile.md` — 같은 시안 파일의 상태로 함께 그렸다.
@@ -71,7 +71,7 @@
 | legacy | 옛 result.json — 컴파일 카드 `수집 안 함` | ✓ | ✓ |
 | device | 기기 탭 — 라벨 두 줄 · fingerprint · 진입점 줄바꿈 | ✓ | ✓ |
 | diag | 진단 탭 — 라벨 두 줄 · ART 두 칸 · slice 표 13px · `L*;` 행 | ✓ | ✓ |
-| diag-noapp | 진단 대상 앱 없음 — 수 칸 · 표 · ART `값 없음` + `process_not_in_trace` | ✓ | ✓ |
+| diag-noapp | 진단 대상 앱 없음 — 수 칸 · 표 · ART `값 없음` + `process_not_in_trace` · 진단 배지 2 (표 · 컴파일 상태 slice · plan B30) | ✓ | ✓ |
 
 ## 크기
 
@@ -83,12 +83,12 @@
 | 섹션 제목 | `.rp-section-head` | 18px · 대문자 · 자간 0.02em | heading 600 · `neutral-800` | 10.5px 등폭 대문자 |
 | 카드 제목 | `.rp-card-title` · 타일 단어 줄 | 15px · 타일 단어 줄은 13px | heading 600 | 12.5px |
 | 본문 | `.rp-table` th · td · slice 표 · bars · delta · `.rp-none` · 라벨 단어 줄 · 머리 메타 값 | 13px | body · slice 이름 · 경로 값 등폭 | 11 – 12.5px |
-| 보조 | 경로 줄 · 카드 단위 · 배지 · 탭 배지 · 각주 · 코드 · 눈금 · 읽음 줄 · 푸터 · 머리 메타 라벨 · 백분위 머리 | 12px | 경로 · 코드 · 배지 등폭 | 8.5 – 11px |
+| 보조 | 경로 줄 · 카드 단위 · 배지 · 탭 배지 · 각주 · 코드 · 눈금 · 읽음 줄 · 푸터 · 머리 메타 라벨 · 백분위 머리 · `.rp-marks-label` · `.rp-tip-head` · `.rp-tip-sub` | 12px | 경로 · 코드 · 배지 등폭 | 8.5 – 11px |
 | 백분위 · 툴팁 값 | `.rp-pct b` · `.rp-tip-value` | `clamp(18px, 1.4vw, 22px)` · 16px | heading 600 | 15–18 · 16 |
 | 머리 | `.rp-name` · `.rp-sid` · 상태 pill | 그대로 · 12px · 12px | — | 26–34 · 11 · 10 |
 | 레일 | `.rp-tab` · `.rp-brand-1` · `.rp-brand-2` | 14px · 15px · 12px | — | 13.5 · 15 · 12 |
 
-세 층: 섹션 18 > 카드 제목 15 > 본문 13 (차 3 · 2) · 타일 값 ≥ 26 > 18. 시계열 눈금은 viewBox 12 단위 · 왼쪽 여백 40 → 46.
+세 층: 섹션 18 > 카드 제목 15 > 본문 13 (차 3 · 2) · 타일 값 ≥ 26 > 18. 시계열 눈금 viewBox 12 단위 (CSS · rr-type) · 왼쪽 여백 `SPAD.l` 36 → 46 (`blocks.ts` · rr-layout).
 slice 표 머리 첫 줄 `line-height: 18px` · 둘째 줄 `top: 27px` 그대로 (13px 가 18px 줄에 들어감).
 
 ## 넘침
@@ -134,7 +134,7 @@ slice 표 머리 첫 줄 `line-height: 18px` · 둘째 줄 `top: 27px` 그대로
 | gui | 타일 단어 · cpu | `앱 CPU 시간` | `metrics.cpu.data.app.total_ms` | — |
 | gui | 타일 단어 · memory | `앱 RSS 최대` | `metrics.memory.data.rss.max_kb` (mb0) | — |
 | gui | 타일 단어 · log | `앱 로그 줄` | `metrics.log.data.app.total` · 단위 `줄` | `앱 경고·에러` (원본의 틀린 제목) |
-| gui | 타일 단어 · thermal | `스로틀 종료` | `metrics.thermal.data.device_status_after` (thermal) | `발열` · `최고 온도` |
+| gui | 타일 단어 · thermal | `스로틀 단계 · 종료` | `metrics.thermal.data.device_status_after` (thermal) | `발열` · `최고 온도` |
 | gui | 타일 단어 · network | `수신` | `metrics.network.data.rx_bytes` (bytes) | — |
 | gui | 타일 단위 (hwui) | `장` | 프레임 장 수 | `개` |
 | gui | 타일 단위 (log) | `줄` | logcat 줄 수 | `건` |
@@ -181,8 +181,8 @@ slice 표 머리 첫 줄 `line-height: 18px` · 둘째 줄 `top: 27px` 그대로
 
 | # | 결정 | 왜 | 확인 거리 |
 |---|---|---|---|
-| 1 | refeas 후속 #3 — `startup` 타일은 `측정값` 카드의 `TotalTime` 행과 맞댄다 (게이지 카드에 값 글자를 남기지 않음) · `frame` 타일은 `RR-4 타일 값 = 카드 값` 에서 빼고 `RR-4 frame 타일은 상태만` 이 맡는다 (타일 문자열 = `metrics.frame.status` 원문) · `memory` 는 `앱 RSS 구성` 카드에 `rss.max_kb` 행을 더해 맞댄다 | 맞댈 카드 행이 이미 있음(startup) · frame 은 개수가 없어 맞댈 값이 없음 · rss.max_kb 는 화면에 없던 값 | `RR-4 타일 값 = 카드 값` 대상 7 (startup · hwui · cpu · memory · log · thermal · network) |
-| 2 | 타일 값이 없을 때 — `값 없음` · `수집 안 함` · reason_code 를 18px heading `neutral-700` + 코드 줄 12px 등폭. 값이 있을 때 26–32px | 큼직한 `값 없음` 만은 고장으로 읽힘 (HANDOFF stat) · 크기는 값이 아니라 **있음 · 없음** 으로만 갈림 — 값끼리는 같은 크기 · 색 | `missing` 사진 |
+| 1 | refeas 후속 #3 — `startup` 타일 ↔ `측정값` 카드 `TotalTime` 행 · `frame` 타일은 `RR-4 타일 값 = 카드 값` 밖 (`RR-4 frame 타일은 상태만` · 문자열 = `metrics.frame.status`) · `memory` 는 `앱 RSS 구성` 에 `rss.max_kb` 행을 더함 | 맞댈 행이 있음 · frame 은 값 없음 · rss.max_kb 는 화면에 없던 값 | `RR-4 타일 값 = 카드 값` 대상 7 (startup · hwui · cpu · memory · log · thermal · network) |
+| 2 | 타일 값 없음 — `값 없음` · `수집 안 함` · reason_code 를 18px heading `neutral-700` + 코드 줄 · 값은 26–32px | 큰 `값 없음` 은 고장으로 읽힘 · 크기는 **있음 · 없음** 으로만 갈림 | `missing` 사진 |
 | 3 | 타일 배지 — unsupported · skipped · failed 는 카드와 같은 배지 · partial 은 배지 없이 `title` | HANDOFF ④ 그대로 · 타일만 다른 규칙이면 두 벌 | `missing` 사진 |
 | 4 | 섹션 제목을 등폭 대문자에서 heading 18px 로 — 자간 0.16em → 0.02em | 10.5px 등폭이 본문보다 작았음 (S1) · 위계는 크기로 | RR-3 |
 
@@ -190,26 +190,25 @@ slice 표 머리 첫 줄 `line-height: 18px` · 둘째 줄 `top: 27px` 그대로
 
 | 시안 | 골든 | 시험 이름 | 실화면 결과 |
 |---|---|---|---|
-| 보고서 8상태 × 1440 · 390 | 골든 없음 | `shoot.mjs` · `check_shots.py` (깨 봄 `--break` · 지금 코드는 걸림 64) | `v1/shots/` 16장 (2026-10-11 · 고침 2) — **16/16: 12px 미만 0% · 4.5:1 미만 0% · 최소 12px · 5.48 · 층 31.7(390 26) > 18 > 15 > 13 · 390 넘침 0** · 타일 8 순서 고정 · 배지 0/4/1/2 · 판정 낱말 0 · ellipsis 0 (`v1/README.md`) |
+| 보고서 8상태 × 1440 · 390 | 없음 | `shoot.mjs` · `check_shots.py` (`--break` · 지금 코드 걸림 64) | `v1/shots/` 16장 (2026-10-11 · 고침 3) — **16/16: 12px 미만 0% · 4.5:1 미만 0% · 최소 12px · 5.48 · 층 31.7(390 26) > 18 > 15 > 13 · 390 넘침 0 · 카드 안 가로 스크롤 0** · 배지 0/4/1/2 · 판정 낱말 0 (`v1/README.md`) |
 | 지금 코드 8상태 × 1440 · 390 | 골든 없음 | `shoot.mjs … before` | `v1/before/` · 요약 1440 12px 미만 85.1% · 4.5:1 미만 12.3% |
 
-구현 화면 찍는 길 (단위 몫): `gen_samples.py <result.json> <runs>` → `perftracker report <id> -o <runs> --file <html> --no-browser` → `shoot.mjs <base> <폴더> before`.
-시계열 눈금 렌더 크기는 `measure.js` 가 SVG 배율로 잰다 (결정 13).
+구현 화면 찍는 길: `gen_samples.py` → `perftracker report <id> -o <runs> --file <html> --no-browser` → `shoot.mjs <base> <폴더> before` (시계열 눈금은 SVG 배율로 잼 · 결정 13).
 
 ## HANDOFF 와 어긋남
 
-구현 단위가 고친다 (brief rr-type · rr-layout · bp-gui-report) — 목록만.
+구현 단위가 고친다 — 글자 크기 · 색은 CSS(rr-type · `report.css`), 마크업 · 매니페스트 · `blocks.ts` 는 rr-layout, 컴파일 · ART 는 bp-gui-report (`docs/design/baseline-profile.md`).
 
-| 문서 · 절 | 지금 HANDOFF | 이 기능 뒤 |
-|---|---|---|
-| report §3 탭 배지 | monospace 9.5px · 미수집 블록 수 | 12px · `수집 안 함` · `값 없음` 블록 수 (타일 · `없음` · `바꾸지 않음` 밖) |
-| report §3 요약 탭 섹션 | `summary` `render` … | `지표`(타일 8) `startup` `render` … `context` |
-| report §3 헤더 메타 | 12.5px | 값 13px · 라벨 12px `neutral-600` · `길이` |
-| report §3 섹션 · 카드 | 섹션 10.5px 등폭 · 카드 제목 15px · 단위 11px `neutral-500` · 읽음 줄 11.5px | `## 크기` 표 |
-| report §4 pairs | 라벨 옮겨 적지 않음 · 우리말은 카드 제목에만 | 경로 라벨 = 단어 줄 + 경로 줄 (결정 2) · 기기 원문 라벨은 그대로 |
-| report §4 slice 표 | 이름 11px · `overflow-wrap:anywhere` | 13px · 구분자 뒤 `<wbr>` |
-| report §4 stat | 값 / 코드 / 부가 문장 | 앱 시작 카드는 게이지만 · 타일이 값 |
-| report §5 | 토큰 표 | 값 그대로 — 글자 색 줄만 `## 색` |
+| 단위 | 문서 · 절 | 지금 HANDOFF | 이 기능 뒤 |
+|---|---|---|---|
+| rr-type | report §3 탭 배지 · 헤더 · 섹션 · 카드 · 표식 · 툴팁 | 배지 9.5px · 메타 12.5px · 섹션 10.5px 등폭 · 단위 11px `neutral-500` · 읽음 줄 11.5px | `## 크기` · `## 색` 표 |
+| rr-type | report §4 시계열 · slice 표 글자 | 눈금 8.5 · 이름 11px | 눈금 viewBox 12 · 이름 13px |
+| rr-layout | report §3 요약 탭 섹션 | `summary` `render` … | `지표`(타일 8) `startup` `render` … `context` |
+| rr-layout | report §3 헤더 메타 · 레일 배지 셈 | `duration` · 미수집 블록 수 | `길이` · 그 탭에서 `수집 안 함` · `값 없음` 을 그린 카드 수 (타일 · `… 없음` · `바꾸지 않음` 밖 · 진단 대상 앱 없음 2 · B30) |
+| rr-layout | report §4 pairs · slice 표 · 경로 | 라벨 옮겨 적지 않음 · `overflow-wrap:anywhere` · `break-all` | 단어 줄 + 경로 줄 (결정 2) · 구분자 뒤 `<wbr>` · `break-word` |
+| rr-layout | report §4 stat · 시계열 · 렌더 | 앱 시작 큰 숫자 · `SPAD.l` 36 · 굵은 읽는 법 문장 · 차트 `[]` = `값 없음` | 게이지만 · 46 · 각주 단어 · `표본 없음` · `프레임 없음` · `항목 없음` |
+| bp-gui-report | report §2 · §3 맥락 · 진단 | 블록 8 | `dexstates` · 컴파일 카드 · ART 카드 (baseline-profile 문서) |
+| — | report §5 토큰 | 토큰 표 | 값 그대로 |
 
 ## 검토
 
@@ -217,9 +216,11 @@ slice 표 머리 첫 줄 `line-height: 18px` · 둘째 줄 `top: 27px` 그대로
 |---|---|---|---|---|
 | 2026-10-11 · baseline-profile | 실현성 (4985424) | 디자인 | 조건부 10 · 사람 4 → plan B13 ~ B16 | 1 |
 | 2026-10-11 · baseline-profile | 재검토 (fa572d9) | 개발 · 디자인 | 조건부 1 · 후속 #3 → 이 문서 `### 결정 (이 차수)` 1 | 2 |
+| 2026-10-11 · baseline-profile | 부합 · 구현 가능 (b8c2490) | 디자인 | 조건부 11 → 고침 1 | 1 |
 
 ## 바뀐 기록
 
 | 날짜 | run | 무엇이 |
 |---|---|---|
 | 2026-10-11 | baseline-profile | 처음 — 제약 · 크기 · 색 · 타일 8 · 라벨 단어 · 시안 v1 후보 1 (16장) |
+| 2026-10-11 | baseline-profile | 고침 1 (디자인 검토 #5 · 6 · 8 · 9 · 11) — `스로틀 단계 · 종료` · 크기 표 셋 · HANDOFF 단위별 · 배지 2 (B30) · 기준 701a79f |

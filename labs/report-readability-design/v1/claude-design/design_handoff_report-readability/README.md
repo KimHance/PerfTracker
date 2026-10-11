@@ -17,7 +17,8 @@
 6. 긴 이름: 구분자 `/ : $ . ; , _` 뒤 `<wbr>` + `overflow-wrap:break-word` (`anywhere` · `break-all` 없음).
 7. 머리 `duration` → `길이`, `옵션` 에 `--compile speed` (compile 상태만).
 8. 레일 배지 = 그 탭의 `수집 안 함` · `값 없음` 카드 수.
-9. 새 블록 `dexstates` — 요약 맥락 끝 `컴파일 상태 (전 → 후)`, 진단 탭 `컴파일 상태 slice`.
+9. 새 블록 `dexstates` — 요약 맥락 끝 `컴파일 상태 (전 → 후)`, 진단 탭 `컴파일 상태 slice` (자세히: `design_handoff_baseline-profile/README.md`). 가로 스크롤 상자 없음 — 값 칸 `nowrap`, 경로는 `<wbr>` 줄바꿈.
+11. 머리 아래 표식 줄 `.rp-marks` (compile 상태) · 툴팁 `.rp-tip` 글자 12px (값 16px 그대로). 타일 단어 `스로틀 단계 · 종료`.
 10. 진단: 카테고리에 `dalvik`, `slice 수` 끝 `JIT 컴파일 slice`, 단위 칸 `diagnose` → 빈 칸.
 
 ## 판정 금지 확인

@@ -9,6 +9,7 @@ import pathlib
 import re
 import sys
 
+sys.dont_write_bytecode = True  # gen_cli import 가 __pycache__ 를 레포에 남기지 않게
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from gen_cli import width  # noqa: E402
 

@@ -38,12 +38,14 @@ python3 -I labs/report-readability-design/v1/check_shots.py …/before   # 지�
 | 고침 1 (`FIX-1.md`) | 위 아홉 · ABI 를 dex 머리 행으로 · 값 칸 `nowrap` · 끝 눈금 근처 정규 눈금 생략 · unsupported 타일은 `reason_code` 자체 | 아홉 다 고쳐짐 · 숫자 16/16 그대로 통과 · 그러나 기기 카드 `시리얼` 행 (지금 코드에 없음) · `versionCode` 쉼표 없음 · 목록 ` · ` · 막대 값 단위 빠짐 · diag-noapp null 칸마다 코드 |
 | 핸드오프 사진 | Claude Design 이 `design_handoff_*/screenshots/` 에 1440 사진 8장 (자체 캡처) | — |
 | 고침 2 (`FIX-2.md`) | 위 다섯 되돌림 · 기기 · diag-noapp 핸드오프 사진 다시 · `_shots_tmp` 지움 | 다섯 다 고쳐짐 · 숫자 16/16 · 내용 검사 그대로 |
+| 고침 3 (`FIX-3.md` · 디자인 검토 조건부 11) | core 실제 이름 · 모양 (`states.js` · `gen_samples.py`) · 머리 행 필드 넷 · 줄 맞춤 (`줄 없음` · null 때 행 빼기) · 진단 표 값 칸 둘 · 스크롤 상자 0 · `스로틀 단계 · 종료` · 표식 · 툴팁 12px · 여백 46 · 핸드오프 사진 8장 다시 | 16/16 그대로 · 카드 안 가로 스크롤 0 (새 검사 — 고침 2 시안은 diag-390 `rp-dex-scroll` 로 걸림) |
+| 고침 4 (`FIX-4.md` · plan B31) | `session.compile.before` → `compile_state_before` (+ 짝) | 모양 같음 · 사진 안 다시 찍음 |
 
 ## 측정 (글자 측정 · 2026-10-11)
 
 12px 미만 · 4.5:1 미만 (글자 수 가중) · 최소 크기 · 최소 대비 / 층 = 타일 값 · 섹션 · 카드 제목 · 본문 px / 390 가로 넘침.
 
-| 상태-폭 | 지금 코드 | 시안 (고침 2) | 층 | 넘침 |
+| 상태-폭 | 지금 코드 | 시안 (고침 3 · 4) | 층 | 넘침 |
 |---|---|---|---|---|
 | summary-1440 | 85.1% · 12.3% · 10px · 3.82 | 0% · 0% · 12px · 5.48 | 31.68 · 18 · 15 · 13 | 0 |
 | missing-1440 | 84.4% · 15.1% · 9.5px · 3.82 | 0% · 0% · 12px · 5.48 | 31.68 · 18 · 15 · 13 | 0 |
@@ -62,19 +64,19 @@ python3 -I labs/report-readability-design/v1/check_shots.py …/before   # 지�
 | diag-390 | 94.5% · 3.5% · 10px · 3.82 | 0% · 0% · 12px · 5.48 | — · 18 · 15 · 13 | 0 |
 | diag-noapp-390 | 71.1% · 18.9% · 10px · 3.82 | 0% · 0% · 12px · 5.48 | — · 18 · 15 · 13 | 0 |
 
-최소 대비 5.48 = `neutral-600` on surface — 글자에 `neutral-500` · `alt-*` 0 이라는 뜻. 시계열 눈금은 SVG 배율로 잰 렌더 크기.
+카드 안 가로 스크롤 16/16 0 (slice 이름별 표 · 프레임 시간축 빼고). 최소 대비 5.48 = `neutral-600` on surface — 글자에 `neutral-500` · `alt-*` 0 이라는 뜻. 시계열 눈금은 SVG 배율로 잰 렌더 크기.
 
 ### 내용 (상태 8 · 1440 · `?shot`)
 
 | 상태 | 타일 · 순서 | 레일 | 평가 · 판정 낱말 | ellipsis | `<wbr>` | 보인 낱말 |
 |---|---|---|---|---|---|---|
-| summary | 8 · startup,hwui,frame,cpu,memory,log,thermal,network | 요약 0 | 0 | 0 | 228 | `표본 없음` · `바꾸지 않음` · `길이` |
+| summary | 8 · startup,hwui,frame,cpu,memory,log,thermal,network | 요약 0 | 0 | 0 | 228 | `표본 없음` · `바꾸지 않음` · `길이` · `스로틀 단계 · 종료` |
 | missing | 8 · 같음 | 요약 4 (시간별 프레임 · 앱 CPU · 앱 CPU 시간 · 네트워크) | 0 | 0 | 228 | `값 없음` · `sdk_too_low` |
-| compile | 8 · 같음 | 요약 0 | 0 | 0 | 291 | `--compile speed` |
-| end-null | 8 · 같음 | 요약 0 | 0 | 0 | 171 | 끝 행 `값 없음` |
+| compile | 8 · 같음 | 요약 0 | 0 | 0 | 309 | `--compile speed` · 표식 둘 · `줄 없음` 둘 · `secondary_dex` · `public_dex` · core 경고 문구 |
+| end-null | 8 · 같음 | 요약 0 | 0 | 0 | 173 | 기록 칸 `끝`/`compile_state_end` `값 없음` `dexopt_state_unavailable` · 끝 행 0 |
 | legacy | 8 · 같음 | 요약 1 (컴파일 카드 `수집 안 함`) | 0 | 0 | 64 | `수집 안 함` |
 | device | — | 0 | 0 | 0 | 26 | 라벨 두 줄 |
-| diag | — | 진단 0 | 0 | 0 | 142 | ART 두 칸 · `L*;` |
-| diag-noapp | — | 진단 2 (표 · 컴파일 상태 slice) | 0 | 0 | 26 | `값 없음` · `process_not_in_trace` |
+| diag | — | 진단 0 | 0 | 0 | 142 | ART 두 칸 · `oat 파일 상태` 머리 행 · `L*;` |
+| diag-noapp | — | 진단 2 (표 · 컴파일 상태 slice · plan B30) | 0 | 0 | 26 | `값 없음` · `process_not_in_trace` |
 
-평가 · 판정 낱말 = DM-15 목록 + `최적화` `적용됨` `AOT` `예열` `duration` `니다`. 본 사진: 1차 summary-1440 · missing-1440 · diag-1440 · compile-390 / 고침 1 summary-1440 · compile-1440(맥락) · compile-390(컴파일 카드) · missing-390(위) · device-390 · diag-noapp-1440 / 고침 2 device-390 · diag-noapp-1440. end-null · legacy 사진은 숫자 · 내용 검사만.
+평가 · 판정 낱말 = DM-15 목록 + `최적화` `적용됨` `AOT` `예열` `duration` `니다`. 본 사진: 고침 3 compile-1440(머리 · 컴파일 카드 · `줄 없음`) · end-null-1440(기록 칸) · diag-390(진단 표) / 1차 summary-1440 · missing-1440 · diag-1440 · compile-390 / 고침 1 summary-1440 · compile-1440(맥락) · compile-390(컴파일 카드) · missing-390(위) · device-390 · diag-noapp-1440 / 고침 2 device-390 · diag-noapp-1440. end-null · legacy 사진은 숫자 · 내용 검사만.
