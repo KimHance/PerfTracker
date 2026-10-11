@@ -1,0 +1,66 @@
+### 1 start --launch --compile speed · 성공
+  측정을 시작했습니다.
+  Session   youtube-speed  (a1b2c3)
+  App       YouTube  com.google.android.youtube
+  Run dir   /Users/me/runs/2026-10-11_164012_youtube-speed
++ Compile   speed · base.apk speed-profile → speed · 67,500 ms
+  Startup   TotalTime 844ms · COLD
+  
++ 되돌림 · 실행 뒤 reason = cmdline · 기기가 다시 바꿀 수 있음
+>   adb -s R5CT0000001 shell cmd package compile -m speed-profile -f com.google.android.youtube
+>   adb -s R5CT0000001 shell cmd package compile -m verify -f --secondary-dex com.google.android.youtube
+  
+  기기에서 앱을 조작한 뒤 perftracker stop 을 실행하세요.
+  측정 중에는 기기에 어떤 명령도 보내지 않습니다.
+
+### 2 start --compile · 실패 · 거부
++ 컴파일 실패 · 세션 안 엶 · exit 1
++ 보낸 명령  cmd package compile -m speed -f com.google.android.youtube
++ Compile   speed · base.apk 바꾸기 전 speed-profile · 지금 모름
+  
++ 되돌림 · 실행 뒤 reason = cmdline · 기기가 다시 바꿀 수 있음
+>   adb -s R5CT0000001 shell cmd package compile -m speed-profile -f com.google.android.youtube
++   보조 dex 3개 · status 서로 다름 · 보조 dex 되돌림 줄 없음
+  
++ --compile 은 --launch 와만 · 기기 명령 0
++ --compile verify · 받는 값 reset · speed-profile · speed · 기기 명령 0
+
+### 3 stop · 되돌림 줄
+  → /Users/me/runs/2026-10-11_164012_youtube-speed/result.json
+    perftracker report a1b2c3 로 보고서를 엽니다
+  
++ 되돌림 · 실행 뒤 reason = cmdline · 기기가 다시 바꿀 수 있음
+>   adb -s R5CT0000001 shell cmd package compile -m speed-profile -f com.google.android.youtube
+>   adb -s R5CT0000001 shell cmd package compile -m verify -f --secondary-dex com.google.android.youtube
+
+### 4 stop · 되돌릴 값 없음
+  → /Users/me/runs/2026-10-11_164012_youtube-speed/result.json
+    perftracker report a1b2c3 로 보고서를 엽니다
+  
++ 되돌림 줄 없음 · 바꾸기 전 base.apk status run-from-apk · -m 이 받지 않는 값
+  
+# 바꾸기 전 status 를 못 읽은 세션 (BP-2 null)
++ 되돌림 줄 없음 · 바꾸기 전 base.apk status 모름
+
+### 5 status · --compile 세션
+  Session   youtube-speed  (a1b2c3)
+  App       com.google.android.youtube
+  Elapsed   00:42
+  Run dir   /Users/me/runs/2026-10-11_164012_youtube-speed
++ Compile   speed · base.apk speed-profile → speed · 67,500 ms
+
+### 6 start --help
+  Usage: perftracker start [options]
+  
+  측정 세션을 시작한다
+  
+  Options:
+    -a, --app <라벨|패키지> 대상 앱 (생략 시 포그라운드 앱)
+    -n, --name <이름>      세션 이름
+    -d, --device <serial>  대상 기기 serial
+    --launch               앱을 콜드 상태로 실행하고 시작 시간을 측정한다 (default: false)
+    -o, --out <dir>        결과를 저장할 디렉토리 (default: "runs")
+    --force                이 기기의 기존 세션을 버리고 시작한다 (default: false)
+    --diagnose             진단 세션 — atrace slice 기록 · 최대 10분
++   --compile <값>         기기 컴파일 상태 바꿈 · reset · speed-profile · speed
+    -h, --help             display help for command

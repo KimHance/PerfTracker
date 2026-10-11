@@ -12,6 +12,8 @@ import { hwuiCollector } from '../../src/collectors/hwui/index.js'
 import { startupCollector } from '../../src/collectors/startup.js'
 import { thermalCollector } from '../../src/collectors/thermal/index.js'
 import { buildTraceConfig } from '../../src/perfetto/config.js'
+import { diagnoseFtraceBlock, FTRACE_POWER_BLOCK } from '../../src/collectors/blocks.js'
+import { diagnoseScope } from '../../src/session/diagnose.js'
 
 const OK = {
   sdkInt: 36,
@@ -158,5 +160,54 @@ describe('collectSnapshotSpecs', () => {
   it('thermal 은 스냅샷을 하나도 선언하지 않는다 — 원문은 이미 찍히고 있다', () => {
     expect(collectSnapshotSpecs({ sdkInt: 33, dataSources: [] })).toEqual([])
     expect(collectSnapshotSpecs(OK).map((s) => s.key)).not.toContain('thermalservice')
+  })
+})
+
+/**
+ * DM-3. atrace 는 `linux.ftrace` 의 키라 별도 데이터소스로 낼 수 없고, 소스 하나 · 블록 하나
+ * 규칙(`mergeTraceConfigBlocks`) 아래에서는 평소의 `FTRACE_POWER_BLOCK` 과 **같은 블록 안**에
+ * 있어야 한다. 그래서 진단 세션은 그 블록을 같은 자리에서 진단 블록으로 바꾼다.
+ */
+describe('collectTraceConfigBlocks — 진단 세션 (DM-3)', () => {
+  const PKG = 'com.google.android.youtube'
+  const scope = diagnoseScope(PKG)
+  const values = (text: string, key: string): string[] =>
+    [...text.matchAll(new RegExp(`${key}:\\s*"([^"]+)"`, 'g'))].map((m) => m[1]!).sort()
+  const NO_SYS_STATS = { sdkInt: 36, dataSources: ['linux.process_stats', 'android.surfaceflinger.frametimeline'] }
+
+  it('DM-3 진단 config 범위 — 카테고리 정확히 {am, wm, view, dalvik} · 앱 slice 대상 하나 · ftrace_events 는 평소와 같은 집합', () => {
+    for (const env of [OK, NO_SYS_STATS]) {
+      const normal = buildTraceConfig({ dataSourceBlocks: collectTraceConfigBlocks(env) })
+      const diag = buildTraceConfig({
+        dataSourceBlocks: collectTraceConfigBlocks(env, scope),
+        diagnose: { packageName: PKG },
+      })
+
+      expect(values(diag, 'atrace_categories')).toEqual(['am', 'dalvik', 'view', 'wm'])
+      expect(values(diag, 'atrace_apps')).toEqual([PKG])
+      expect(values(diag, 'ftrace_events')).toEqual(values(normal, 'ftrace_events'))
+      expect(diag.split('name: "linux.ftrace"').length - 1).toBe(1)
+    }
+    // cpu 가 미지원인 기기 — 평소에 이벤트가 없으니 진단에도 없다. atrace 는 그래도 실린다.
+    expect(values(buildTraceConfig({ dataSourceBlocks: collectTraceConfigBlocks(NO_SYS_STATS) }), 'ftrace_events')).toEqual([])
+  })
+
+  it('DM-3 진단 블록은 평소 ftrace 블록의 자리를 그대로 차지한다 — 다른 블록 순서 · 글자 그대로', () => {
+    const normal = collectTraceConfigBlocks(OK)
+    const diag = collectTraceConfigBlocks(OK, scope)
+    expect(diag).toHaveLength(normal.length)
+    expect(diag.map((b) => (b === diagnoseFtraceBlock(scope, true) ? FTRACE_POWER_BLOCK : b))).toEqual(normal)
+  })
+
+  it('DM-3 진단 블록의 이벤트 부분은 FTRACE_POWER_BLOCK 과 글자까지 같다', () => {
+    expect(diagnoseFtraceBlock(scope, true).replace(/atrace_\w+: "[^"]*" /g, '')).toBe(FTRACE_POWER_BLOCK)
+  })
+
+  it('DM-3 평소 config 에 atrace 없음 — 어느 기기에서도 atrace 키 0개', () => {
+    const envs = [OK, OLD, NO_SYS_STATS, { ...OK, sdkInt: 30 }, { ...OK, sdkInt: 33 }]
+    for (const env of envs) {
+      expect(collectTraceConfigBlocks(env).join('\n')).not.toMatch(/atrace_/)
+      expect(collectTraceConfigBlocks(env, null)).toEqual(collectTraceConfigBlocks(env))
+    }
   })
 })

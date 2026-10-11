@@ -1,6 +1,6 @@
 # 프로젝트 현황 — 이어서 작업하려면 여기부터
 
-마지막 갱신: 2026-08-31.
+마지막 갱신: 2026-10-08.
 
 이 문서는 **다른 컴퓨터에서 저장소를 클론해 작업을 이어받는 사람**을 위한 것입니다.
 "무엇이 끝났고, 무엇을 확인하지 못했고, 다음에 무엇을 할 차례인가" 세 가지에 답합니다.
@@ -19,8 +19,9 @@
   백분위도 내지 않고 `samples`(시간축)뿐이라 `hwui` 와 같은 종류의 숫자를 갖지 않습니다.
   sdk 31(Android 12) 하한이 다시 생겼습니다. 자세한 것은 README `metrics.frame` 절과
   아래 §7 을 보세요.
-- **기준선:** `npm test` **1,072/1,072** (66 파일, 1초 남짓) · `npm run typecheck` · `npm run build`
-  클린 · 온-디바이스 `npm run test:device` **11 스펙**.
+- **기준선 (2026-10-08):** `npm test` **1,443/1,443** (79 파일, 2초 안팎) · `npm run typecheck` · `npm run build`
+  클린 · 온-디바이스 `npm run test:device` **20 스펙** (SM-S901N · 대상 앱 YouTube 20/20).
+  2026-10-11 컴파일 상태 스펙으로 **27 스펙** (SM-S901N · YouTube 27/27 — §3 「실기기 — 컴파일 상태 한 바퀴」).
   **`npm run build` 가 이제 `packages/gui/tsconfig.web.json` 도 타입체크합니다** — vite 는
   타입을 안 보고 `tsc --build` 는 그 프로젝트를 포함하지 않아, 보고서 화면의 코드가
   `npm run typecheck` 를 따로 돌리는 사람에게만 보였습니다.
@@ -140,8 +141,18 @@ serial `R5CT0000001`.
 - **여러 존을 가진 기기의 thermal 섹션 병합 중 tie-break** — "값이 다를 때 HAL 을 택한다" 는
   규칙은 **합성 픽스처로만** 검증됐습니다. 실기기 8덤프에서 `Cached` 와 HAL 의 공유 존 값이
   **전부 완전히 일치**해서, 그 기기의 실데이터에서 이 규칙이 바꾼 값은 하나도 없습니다.
-- **현재 스펙 구성(11개)으로 온-디바이스를 5회 연속 돌린 적이 없습니다.** 1회 11/11 입니다.
-  5회 연속 10/10 은 그 앞 구성(10개, 대상 앱이 설정 앱)의 근거입니다.
+- **현재 스펙 구성(27개)으로 온-디바이스를 5회 연속 돌린 적이 없습니다.** 1회 27/27 입니다
+  (2026-10-11, SM-S901N · 대상 앱 YouTube). 그 앞 구성(20개)은 1회 20/20
+  (2026-10-08, SM-S901N · 대상 앱 YouTube — 20개를 웹툰으로 돌린 적은 없습니다). 그 앞 구성(11개)은
+  1회 11/11 이고, 5회 연속 10/10 은 그보다 앞 구성(10개, 대상 앱이 설정 앱)의 근거입니다.
+- **진단 세션(`--diagnose`)은 SM-S901N(sdk 36) · YouTube 로만 확인했습니다** (2026-10-08 — 확인한 숫자는
+  README 「검증 환경」). 여기서 확인하지 못한 것:
+  - **sdk 31–34 · sdk 30 이하 실기기.** 앱 slice 열림 조건 표의 그 칸은 안드로이드 문서 근거와 합성 시험뿐입니다
+    (기능 문서 diagnostic-mode 열린 질문 1 · 2).
+  - **다른 앱.** 진단 스펙을 YouTube 말고 돌린 적이 없고, `RV Scroll` 행은 YouTube 일 때만 단언합니다.
+  - **`bindApplication` 행이 atrace 켜짐 대기 덕인지.** 대기를 뺀 빌드로 돌린 1회에서도 행이 잡혔습니다
+    (대기를 넣기 전 실측은 0/1). 경합이라 한두 번으로는 못 가립니다 — 대기 자체는 유닛 시험(`D14 …`)이 지킵니다.
+  - **ftrace 손실이 0 이 아닌 회차 · 10분짜리 진단 원본으로 낸 블록** — 본 적이 없습니다.
 - **프레임 타임라인 차트를 실기기 데이터로 본 적이 없습니다.** 되살린 `metrics.frame`
   수집기 자체는 실기기(SM-F936N)로 검증됐지만(§ 위 「프레임의 시간축을 되살렸다」), 그
   데이터를 그리는 GUI 차트는 **합성 `result.json` 으로만** 헤드리스 렌더했습니다
@@ -189,8 +200,10 @@ serial `R5CT0000001`.
 있습니다. 정확한 경계가 필요하다는 요구가 실제로 올라오면 그때 처리할 문제이지, 도구가 미리
 답을 정해 둘 문제가 아니라고 판단했습니다.
 
-`schema_version` 은 **1.1.0 그대로**입니다 — 그 계약은 출시된 적이 없어서 "그 필드를 가졌던
-1.1.0" 이 세상에 존재하지 않습니다 (`result.ts` 상단의 미출시 규칙과 같은 근거).
+`schema_version` 은 그때 **1.1.0 그대로** 두었습니다 — 개발 중이라 "미출시 버전 안의 확장은 버전
+사유가 아니다" 로 판단했습니다. 1.1.0 은 뒤에 npm 0.1.0(2026-08-20) ~ 0.2.1 로 나갔고, 0.2.0 도
+같은 1.1.0 으로 `metrics.frame` 과 reason_code `no_frames` 를 더했습니다 (git 2ee8198 · 4a68127).
+진단 블록은 1.2.0 으로 올렸습니다 (아래 「진단 세션의 결과 자리」 · `result.ts` 상단 규칙표).
 
 이 두 작업으로 **온-디바이스 스펙 3개가 함께 바뀌었습니다.** `m1`/`m2`/`m3` 이 요약 문자열을
 `toContain('Frame')` 식으로 단언하고 있었는데, 그 단언들을 **`result.json` 의 메트릭 자리를
@@ -1105,6 +1118,131 @@ registry 순서는 `hwuiCollector` 바로 뒤에 `frameCollector` 다 — 지표
   열어 SVG 렌더 · 서브탭 전환 · 범례/툴팁 마크업 · 가로 스크롤 컨테이너 · 콘솔 오류 0 을
   확인했다. **실제 기기 데이터의 모양도, `sdk_too_low` 경로도, 마크와 프레임의 실제 정렬도
   이 방법으로는 확인되지 않는다** — 다음에 기기를 연결하면 Step 1·3 을 먼저 돌릴 것.
+
+### ✅ 진단 세션의 결과 자리 — `diagnose` 블록 · schema 1.2.0 (2026-10-08, 기능 문서 diagnostic-mode)
+
+**진단 세션(`start --diagnose`)의 `result.json` 에만** `session.options.diagnose: true` 와 최상위
+`diagnose` 블록이 실립니다 — 켠 atrace 범위 · 앱 slice 열림 · slice 수 · ftrace 손실 · 원본 크기 ·
+접은 이름별 표(갈래 셋 × 횟수 · 합 · 최대). 평소 세션의 `result.json` 에는 진단 키가 하나도 없습니다
+(컴파일 상태 키는 모든 세션에 실립니다 — 아래 절). 자리와 읽는 법은 README `diagnose` 절이 정본입니다.
+
+- **`schema_version` 1.2.0.** 출시된 1.1.0 계약을 넓히므로 minor 를 올렸습니다 (0.2.0 의 frame 확장은
+  1.1.0 그대로 나갔습니다 — 위 「`within_16_67ms_ratio` 제거」 절). reason_code 는 셋이 늘어 39개입니다 —
+  `app_slices_open_unknown`(블록의 열림 칸) · `ftrace_not_recorded`(원본에 ftrace 가 안 남음 — slice 칸이
+  0 이 아니라 `null`) · `ftrace_setup_errors`(켜다 오류만 남 — 잰 값 그대로 `partial`). 셋 다 메트릭에는 안 실립니다.
+- **frametimeline 은 어디에도 세지 않습니다** — 대상 앱의 Actual · Expected Timeline 이 비동기 갈래를
+  덮던 것(15초에 이름 448–881개)을 실현성 재검토에서 잡았습니다.
+- 쿼리는 실측 원본 둘(SM-S901N · YouTube 15초, 2026-10-07 조사)에 직접 돌려 조사 수치와 맞췄습니다 —
+  대상 앱 slice 62,803 · 90,645 · 접기 전 이름 4,921 · 7,036 → 접은 뒤 1,082 · 920행.
+- **확인하지 못한 것:** 10분 진단 세션 원본(이름 10⁴ 대)에서 쿼리 시간 · 출력 크기, sdk ≤30 기기의
+  열림 `null` 경로(합성 시험만). 실기기 확인은 기능 문서 DM-16 이 맡습니다.
+
+### ✅ 시작 · 끝 컴파일 상태 — `target_app.compile_state_*` (2026-10-11, 기능 문서 baseline-profile BP-1 ~ BP-3)
+
+**모든 세션**의 `target_app` 에 `dumpsys package` 의 `Dexopt state` 원문이 dex 줄마다 시작 · 끝 둘로 실립니다
+(`status` = compiler filter · `reason` · `location` · `[primary-abi]`). 같은 기기 · 같은 YouTube 를 상태만
+바꿔 띄우면 TotalTime 중앙값이 471 · 618 · 665 ms 로 갈렸는데 `result.json` 에 그 상태가 없었습니다.
+자리와 읽는 법은 README 「`target_app` 의 컴파일 상태」 가 정본입니다.
+
+- **기기 명령:** 시작 상태는 대상 앱 해석이 이미 돌리던 `dumpsys package` 출력에서 읽어 **왕복 0**, 끝 상태는
+  `stop` 의 명령 목록 맨 끝(트레이서 정지 · 원본 회수 · 종료 스냅샷 · 기기 시계 뒤)에 **한 줄**. 측정 창 안 0 그대로.
+- **schema 1.2.0 그대로** (미출시) — 그러나 **평소 세션 산출물도 키가 바뀌었습니다.** `target_app` 이 닫힌
+  객체라 캐시한 1.1.0 스키마는 평소 산출물도 거부합니다 (기능 문서 결정 7 · 진단 모드 결정 18 과 다른 길).
+  reason_code 는 넷이 늘어 43개입니다 — `dexopt_state_section_missing` · `_package_missing` · `_unparsable`
+  (줄 꼴을 모르면 추측하지 않고 null) · `_unavailable`(기기 끊김 · stop 전 extract). 넷 다 메트릭에는 안 실립니다.
+- 세션 중 base.apk 줄의 `status` · `reason` 이 바뀌면 경고 `compile_state_changed` 하나. README 에 경고 코드
+  목록(「`warnings`」)이 처음 생겼고, 코드의 `{ code, message }` 자리와 시험이 대조합니다.
+- 파서는 실기기 원문 셋(SM-S901N · sdk 36 — `dumpsys-package-dexopt-{youtube,restored,reset}.txt`)으로 시험합니다.
+  **확인하지 못한 것:** sdk 30–35 실기기의 `Dexopt state` 꼴 (기능 문서 열린 질문 1) — 꼴이 다르면 null + 코드로 납니다.
+
+### ✅ 진단 세션의 ART 칸 — `dalvik` · 컴파일 상태 slice · JIT 수 (2026-10-11, 기능 문서 baseline-profile BP-7 · diagnostic-mode DM-3 · DM-4 · DM-7)
+
+진단 세션 config 의 atrace 카테고리가 `am` · `wm` · `view` · `dalvik` 넷이 됐습니다 (옵션 없이 늘 — 진단 모드 결정 36).
+진단 블록에 대상 앱 프로세스의 **컴파일 상태 slice 목록**(`target_process_compile_state_slices` — `location` ·
+`status`(oat 파일 상태) · `filter`(compiler filter) · `reason`)과 **JIT slice 수**(`target_process_jit_slices`)가
+실립니다. 자리와 읽는 법은 README `diagnose` 절이 정본입니다.
+
+- **새 쿼리 없음** — 둘 다 slice 표가 이미 읽는 (원문 이름 × 갈래) 행에서 뽑습니다. 표의 `JIT compiling …` 행
+  count 합과 JIT 수가 어긋날 수 없습니다.
+- **못 재면 `null` + 코드, 블록 `status` 는 그대로.** reason_code 가 둘 늘어 45개입니다 — `dalvik_not_recorded`
+  (세션 기록에 `dalvik` 이 없는 원본 — 이 기능 전 진단 run 을 `extract` 한 경우) · `compile_state_slice_unparsable`
+  (`location=` 인데 네 칸으로 안 갈림 — 추측하지 않음). 표를 못 만든 경우는 블록과 같은 코드입니다.
+- **slice 표에서 클래스 디스크립터(`L…;`)를 한 행 `L*;` 로 접습니다** (진단 모드 결정 37). 실기기 원본 다섯
+  (SM-S901N · YouTube 21.40.161 15초 · research raw-baseline)에서 접은 표가 1,278 – 1,610행 — 이 규칙 없이는
+  6,227 – 27,335행이었습니다.
+- 그 다섯 원본에 블록 쿼리를 다시 돌려 이름 glob 으로 직접 센 값과 맞췄습니다 — JIT 39 · 52 · 54 · 297 · 0,
+  컴파일 상태 각 6줄. dalvik 을 안 켠 원본은 두 칸이 `null` + `dalvik_not_recorded`.
+- 문구 넷(cli `Diagnose` 라벨 줄 63칸 · gui 04 옵션 행 설명 · gui HANDOFF 옵션 표 · 디자인 문서 `## 문구`)에 `dalvik`.
+- **보고서:** 진단 탭 `slice 수` 카드에 ART 칸 두 행이 최소로 있습니다 — 라벨은 필드 경로 그대로, `null` 이면
+  `값 없음` + 코드, 컴파일 상태는 항목마다 `키=값` 한 줄(plan B26 · B27). 자리 · 모양(줄마다 나눈 표 · 라벨)은
+  baseline-profile BP-8 · bp-gui-report 가 디자인 문서대로 다듬습니다. **확인하지 못한 것:**
+  sdk ≤35 · 비디버그 앱에서 `dalvik` slice 가 앱 프로세스에 실리는지 (기능 문서 열린 질문 10 — 실측 sdk 36 하나).
+
+### ✅ 컴파일 상태를 맞춰 재기 — `start --compile` 의 core 쪽 (2026-10-11, 기능 문서 baseline-profile BP-4)
+
+`startSession` 이 `compile`(`reset` · `speed-profile` · `speed`)을 받으면 측정 창을 열기 전에 기기 컴파일 상태를
+바꾸고, `result.json` 의 `session.compile` 에 바꾼 기록(값 · 보낸 명령 원문 · 바꾸기 전 상태 · 걸린 ms)을 남깁니다.
+자리와 읽는 법 · 한계는 README 「`session.compile` — 바꾼 기록」 이 정본입니다. CLI 옵션 · 출력 줄 · 되돌림 줄은
+아래 「CLI 쪽」 입니다.
+
+- **기기 명령:** 설정 검증 뒤 · run 디렉토리 · 시작 스냅샷 · perfetto · force-stop **앞**에 `cmd package compile …`
+  한 줄과, 성공하면 바로 뒤 `dumpsys package <pkg>` 한 줄 — 그 출력이 시작 상태(바꾼 뒤)입니다. 평소 세션의 명령
+  목록은 그대로이고 `start.test.ts` 가 두 목록을 함께 고정합니다. 측정 창 안 0 그대로.
+- **거부는 기기 명령 0** — `--launch` 없음 · 받는 값 셋 밖은 `startSession` 맨 앞(`--force` 의 옛 세션 정리보다도
+  먼저)에서 거부합니다. cli 가 앱 해석 전에 부를 수 있게 같은 검사를 `checkCompileOption` 으로 내보냅니다.
+- **시간 한도 10분** — adb 호출 기본 한도 60초가 실측 67.5초(speed)를 끊던 것. runner 가 한도로 죽인 것을
+  `timedOut` 으로 따로 알려 종료 코드와 가릅니다. 실패(종료 코드 ≠ 0 · `Failure` · 한도)면 `CompileFailedError` —
+  세션을 열지 않고 실패 뒤 상태는 읽지 않습니다.
+- **compile 은 성공했는데 뒤 단계가 던지면** (run 디렉토리 · 스냅샷 · perfetto 시작 · 앱 실행 등) 원래 오류를
+  `CompileAppliedError` 로 감쌉니다 — 메시지 · code 는 원래 것, 원래 오류는 `cause`, 되돌림 재료는 `compile`
+  (plan B32). 감싸기만 하고 기기 명령은 더하지 않습니다.
+- **schema 1.2.0 그대로** — `session.compile` 은 optional 이고 `--compile` 세션에만 실립니다. `session` 이 닫힌
+  객체라 캐시한 1.1.0 스키마는 그 세션의 산출물을 거부합니다. 새 reason_code 없음.
+- 실기기 확인은 아래 「실기기 — 컴파일 상태 한 바퀴」 절입니다.
+- **확인하지 못한 것:** sdk ≤33 의 `cmd package compile`
+  출력 꼴 (열린 질문 10 — 실패 판정은 종료 코드 · 줄 머리 `Failure` · 한도 셋뿐).
+
+### ✅ 컴파일 상태를 맞춰 재기 — `start --compile` 의 CLI 쪽 (2026-10-11, 기능 문서 baseline-profile BP-4 · BP-5 · BP-6)
+
+`perftracker start --launch --compile <reset|speed-profile|speed>` 가 생겼습니다. 쓰는 법 · 줄 꼴은 README 「명령 전체」
+의 「컴파일 상태를 맞춰 재기」 가 정본이고, 새 문구는 `docs/design/baseline-profile.md` `## 문구` 표가 정본입니다.
+
+- **거부는 기기 명령 0** — `--launch` 없음 · 셋 밖의 값은 `runStart` 가 옛 세션 정리 · 앱 해석보다 먼저 core 의
+  `checkCompileOption` 으로 거부합니다. `--help` 설명은 80칸이라 `--launch` 와만이라는 조건을 싣지 않고, README ·
+  `packages/cli/AGENTS.md` 가 말합니다 (시험이 둘을 대조).
+- **표시는 `--compile` 세션에만** — `start` · `status` 의 `Compile` 줄(바꾸기 전 → 뒤 base.apk `status` · 걸린 ms),
+  `start` · `stop` 의 되돌림 줄, `status --json` 의 `compile`, `runs --json` 행의 `compile`(core `RunSummary` 에 칸을
+  더함 · plan B33). 평소 세션의 출력 · JSON 은 이 옵션 이전과 같습니다.
+- **되돌림 줄은 호스트 꼴 한 줄** (`adb -s <serial> shell cmd package compile -m <status> -f <pkg>` · 보조 dex 가 모두
+  같으면 `--secondary-dex` 한 줄 더) — 80칸 밖 · 자르지 않음 · 자동으로 실행하지 않음 · serial 은 셸이 해석하는
+  글자가 있을 때만 작은따옴표(IPv6 serial 이 zsh 에서 멈추던 것 — sh · zsh · bash 에 가짜 adb 로 쳐 보는 시험).
+  base.apk 와 보조 dex 는 따로 보고, 되돌릴 수 없는 쪽(바꾸기 전 `status` 가 `-m` 이 받는 셋 — `speed` ·
+  `speed-profile` · `verify`, sdk 36 도움말 실측 — 밖 · 모름 · 보조 dex 끼리 다름)은 침묵하지 않고 그 사실 한 줄
+  (plan B34 #5).
+  compile 실패(`CompileFailedError`) · compile 뒤 실패(`CompileAppliedError`)에도 상태 줄 · 되돌림 줄이 붙습니다.
+- 되돌림 줄을 실기기 호스트 셸에 그대로 넘겨 돈 것은 아래 「실기기 — 컴파일 상태 한 바퀴」 절입니다.
+- **확인하지 못한 것:** `stop` 이
+  `result.json` 산출에 실패할 때 · 화면이 세션을 멈출 때는 되돌림 줄이 안 나옵니다 (기능 문서 열린 질문 11).
+
+### ✅ 실기기 — 컴파일 상태 한 바퀴 (2026-10-11, 기능 문서 baseline-profile BP-9 · diagnostic-mode DM-16 회귀)
+
+SM-S901N(`R5CT0000001` · sdk 36 · user) · YouTube 21.40.161 로 `start --launch` → `--compile speed` → `--compile reset`
+→ 진단 + `--compile speed` → 되돌림 줄을 **글자 그대로** 실행, 을 온-디바이스 스펙 `baseline.test.ts`(6개)로 돌렸습니다.
+회마다 측정 창 안 adb 0. 무엇을 봤는지 · 수치는 README 「검증 환경」 의 「컴파일 상태(`--compile`)를 실기기가 검증한 것」 이 정본입니다.
+
+- **`npm run test:device` 27/27** (2026-10-11 · 대상 앱 YouTube) — 20 → 27 은 `baseline.test.ts` 6개와 진단 스펙의
+  ART 칸 하나(`DM-16 ART 칸` — 컴파일 상태 slice 의 base 줄 `filter` = 시작 상태 base.apk `status` · JIT 수 · 줄 수를
+  `trace_processor` 로 다시 세어 대조). 진단 스펙의 켠 카테고리 단언 · DM-3 config 대조에 `dalvik` 이 들어갔습니다.
+  화면이 잠긴 채 돈 앞 회는 25/27 (`RV Scroll` 행 · m0 포그라운드) — 스펙은 잠금이 풀린 기기를 전제합니다.
+- **되돌림 뒤 base.apk 는 처음 `status`(`speed-profile`) · `reason` 은 `cmdline`.** 보조 dex 는 처음(`verify` /
+  `cmdline` 셋)으로 돌아오지 않았습니다 — 회차 사이에 기기가 하나를 `bg-dexopt` 로 바꿔 바꾸기 전 보조 dex 가 서로
+  달랐고(→ 되돌림 줄 대신 사실 한 줄), `--reset` 이 바꾼 둘이 `run-from-apk` 로 남았습니다. 지시 밖 재컴파일은
+  하지 않았습니다.
+- **확인하지 못한 것:** sdk 30–35 기기 · YouTube 말고 다른 앱(`baseline.test.ts` 는 다른 앱이면 건너뜀) ·
+  현재 구성으로 5회 연속.
+- **보고서 글자 측정 RR-9 (기능 문서 report-readability · ffca69c)** — 같은 기기 YouTube 평소 · 진단 세션 보고서 10장(탭 × 1440 · 390): 12px 미만 0% ·
+  4.5:1 미만 0% · 층 31.68 > 18 > 15 > 13 · 타일 8 · 배지 0 = 미수집 카드 0 · 390 넘침 0 — 걸림 0. 배지는 0 = 0 으로만 봄 · `--compile` 실기기 보고서는 못 봄
+  (README 「검증 환경」 · `docs/design/report-readability.md` 「확인」).
 
 ### 그 밖의 후보 (우선순위 낮음)
 

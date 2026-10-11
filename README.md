@@ -98,6 +98,17 @@ npx perftracker doctor        # 설치 없이 바로 — 이 기기에서 뭘 �
 한 번의 adb 호출로 보냅니다. 앱을 콜드로 띄우는 것이 그 세션의 목적이므로 의도된 동작이지만,
 "트레이스 구간 안의 adb 호출이 0" 이라는 뜻은 아닙니다. 그 뒤로는 0 입니다.
 
+진단 세션(`--diagnose`)에서 `--launch` 를 주면 그 같은 호출의 맨 앞에 **atrace 켜짐 대기**가
+붙습니다 — `getprop` 으로 `debug.atrace.tags.enableflags` 와 `debug.atrace.app_number` 를 **읽기만**
+하며 둘 다 켜질 때까지 최대 5초 기다린 뒤 앱을 띄웁니다. 트레이스는 atrace 가 켜지기 전에
+시작하므로, 기다리지 않으면 그 사이에 뜬 앱의 `bindApplication` slice 가 빠집니다 (실기기에서
+기다리지 않은 회 0개 · 기다린 회 1개). adb 호출은 그대로 한 번이고, 평소 세션에는 붙지 않습니다.
+
+`--compile` 은 반대로 **기기를 일부러 바꿉니다** — 앱의 컴파일 상태를 맞춰 재려고 사람이 켜는 옵션이고, 그 변경은
+세션이 끝나도 남습니다. 그래서 측정 창 **밖**, 트레이스 · 시작 스냅샷보다 앞에서 끝내고, 바꾼 사실을
+`result.json` 의 [`session.compile`](#sessioncompile--바꾼-기록) 에 남깁니다. `--compile` 을 주지 않은 세션은
+컴파일 상태를 바꾸는 명령을 하나도 보내지 않습니다.
+
 이건 "그러려고 노력한다" 가 아니라 구조입니다. 세션이 살아 있는 동안 모든 adb 접근 경로에
 래치(`MeasurementWindow`)가 걸리고, 기기를 만지려는 명령은 예외로 막힙니다.
 세션 중에 `perftracker apps` 를 실행하면 이렇게 됩니다:
@@ -396,7 +407,7 @@ npx perftracker open -p 7333   # 포트를 고정하고 싶으면
 | `perftracker devices` | 연결된 기기와 스펙 요약 | 필요 |
 | `perftracker apps` | **열 수 있는** 앱을 런처 이름으로 (런처에 아이콘이 뜨는 것) | 필요 |
 | `perftracker schema` | `result.json` 의 JSON Schema 를 출력 | 불필요 |
-| `perftracker start` | 측정 시작 | 필요 |
+| `perftracker start` | 측정 시작 (`--diagnose` 면 진단 세션 · `--launch --compile <값>` 이면 컴파일 상태를 바꾼 뒤) | 필요 |
 | `perftracker mark <라벨>` | 측정 중인 세션에 마킹 | **접촉 안 함** |
 | `perftracker status` | 진행 중인 세션 | **접촉 안 함** |
 | `perftracker stop` | 종료 · 트레이스 회수 · `result.json` 생성 (`--report` 면 HTML 까지) | 필요 |
@@ -409,6 +420,79 @@ npx perftracker open -p 7333   # 포트를 고정하고 싶으면
 
 「접촉 안 함」은 기기가 연결돼 있어도 adb 를 **보내지 않는다**는 뜻입니다. 그래서 이 셋은
 측정 중에 불러도 안전합니다 — 마킹이 측정 결과를 바꾸지 않는 이유가 이것입니다.
+
+### 진단 세션 (`--diagnose`)
+
+평소 세션은 수치만 냅니다. 그 시간에 앱이 **무엇을** 했는지(atrace slice 이름)를 보려면
+진단 세션으로 엽니다.
+
+```bash
+npx perftracker doctor                       # diagnose: app slice 줄 — 이 기기에서 앱 slice 가 열리나
+npx perftracker start --app "네이버 웹툰" --launch --diagnose
+npx perftracker status                       # Diagnose 줄
+npx perftracker stop                         # 평소와 같습니다 — 경로와 보고서 명령만
+```
+
+- **기록하는 것** — atrace 카테고리 `am` · `wm` · `view` · `dalvik` 와 대상 앱 하나의 앱 slice 입니다.
+  `dalvik` 은 ART 가 남기는 slice(dex 를 열 때의 컴파일 상태 · JIT 컴파일 · 클래스 이름)이고, 그 가운데 컴파일
+  상태와 JIT 수가 진단 블록의 [ART 칸 둘](#diagnose)로 실립니다. gfx · input · sched 는 켜지 않습니다.
+- **최대 10분입니다** (평소 세션은 30분). `status` 의 최대 시간 넘음 안내도 진단 세션은 10분 기준입니다.
+- **평소 세션과 수치를 나란히 놓을 수 없습니다.** slice 하나를 남기는 비용은 앱 프로세스
+  자신에게 청구되고 `measurement_overhead` 에 잡히지 않습니다. 그래서 진단 세션은 눈에 띄게
+  갈립니다 — `start` · `status` 에 `Diagnose` 줄, `runs` 행 끝에 `진단`.
+  `status --json` · `runs --json` 도 **진단 세션에만** 진단 표시를 싣습니다
+  (`status` 는 `session.options.diagnose` · `session.diagnose`, `runs` 는 `diagnose: true`).
+  평소 세션의 JSON 은 키가 진단 모드 이전과 같습니다.
+- **앱 slice 가 열리는 조건** — sdk 31 이상이면 앱과 무관하게 열립니다. sdk 30 이하는
+  debuggable 앱만 열리고, 그 밖의 앱이면 세션은 열되 `start` 가 `앱 slice 열림 모름 — …`
+  줄을 냅니다. **실측은 sdk 35(에뮬레이터) · 36(SM-S901N) 뿐입니다** — sdk 31–34 와
+  sdk 30 이하는 안드로이드 문서(`profileable` 요소) 근거이고 실기기로 확인하지 않았습니다.
+  프레임워크 slice(`am` · `wm` · `view` · `dalvik`)는 그대로 실립니다. `doctor` 의
+  `diagnose: app slice` 줄이 기기 단위로 같은 판정을 미리 보여 줍니다 (✗ 여도 종료 코드 0).
+- `stop` · `extract` 의 출력은 평소와 같습니다 — slice 요약을 찍지 않습니다. slice 는
+  `result.json` 에 실리고(아래 「`result.json` 읽는 법」), 시간축으로 보려면 run 디렉토리의
+  `trace.perfetto-trace` 를 [Perfetto UI](https://ui.perfetto.dev) 로 엽니다.
+
+### 컴파일 상태를 맞춰 재기 (`--compile`)
+
+같은 앱이라도 컴파일 상태(`speed-profile` · `verify` · `speed` …)에 따라 콜드 스타트 · 스크롤 수치가 달라집니다.
+상태를 맞춰 다시 재려면 `--compile <reset|speed-profile|speed>` 를 줍니다. **`--compile` 은 `--launch` 와만 받습니다** —
+`--launch` 없이 주거나 셋 밖의 값을 주면 기기에 명령을 하나도 보내지 않고 거부합니다. 이미 떠 있는 앱은 옛 컴파일
+결과로 돌 수 있기 때문입니다. (`--help` 의 설명 줄은 80칸이라 이 조건을 싣지 않습니다.)
+
+```bash
+npx perftracker start --app com.google.android.youtube --launch --compile speed
+npx perftracker status                       # Compile 줄
+npx perftracker stop                         # 경로 · 보고서 명령 + 되돌림 줄
+```
+
+- **기기를 영구히 바꿉니다** — 세션이 끝나도 남습니다. 보낸 명령 · 바꾸기 전 상태 · 걸린 시간은
+  [`session.compile`](#sessioncompile--바꾼-기록) 에 남습니다.
+- `start` · `status` 에 `Compile   speed · base.apk speed-profile → speed · 67,500 ms` 줄이 붙습니다 — base.apk 줄의
+  바꾸기 전 → 뒤 `status`(compiler filter)와 상태를 바꾸는 데 걸린 시간입니다. 읽지 못한 쪽은 `모름` 입니다.
+  `status` 는 기기에 묻지 않고 run 디렉토리의 기록(`capture.json`)을 읽습니다.
+- **도구는 되돌리지 않고, 되돌림 명령 줄을 냅니다.** `start` 와 `stop` 출력에 — 상태 바꾸기가 실패했거나 바꾼 뒤
+  세션 시작이 실패해 오류로 끝날 때도 — 호스트에서 그대로 쳐서 도는 줄이 붙습니다:
+
+  ```
+  되돌림 · 실행 뒤 reason = cmdline · 기기가 다시 바꿀 수 있음
+    adb -s R5CT0000001 shell cmd package compile -m speed-profile -f com.google.android.youtube
+    adb -s R5CT0000001 shell cmd package compile -m verify -f --secondary-dex com.google.android.youtube
+  ```
+
+  바꾸기 전 base.apk 줄의 `status` 로 `-m` 을 채우고, 보조 dex 가 있고 그 `status` 가 모두 같으면 `--secondary-dex`
+  줄이 하나 더 붙습니다. `-m` 이 받는 값은 sdk 36 기기 도움말 실측의 `speed` · `speed-profile` · `verify` 셋입니다.
+  base.apk 와 보조 dex 는 **따로** 봅니다 — 어느 쪽이든 되돌릴 수 없으면(바꾸기 전 `status` 가 그 셋 밖 · 읽지 못함 ·
+  보조 dex 끼리 서로 다름) 명령 대신 **그 사실 한 줄**이 나오고, 다른 쪽 명령은 그대로 나옵니다. 되돌릴 수 없는
+  dex 가 있다는 사실을 줄로 남기는 것은, 줄이 없으면 다 되돌렸다고 믿게 되기 때문입니다. 대상 앱만 다루고, 명령
+  줄은 자르지 않아 80칸을 넘습니다. serial 에 셸이 해석하는 글자가 있으면(IPv6 `[fe80::1]:5555` 등) 작은따옴표로
+  감쌉니다. 되돌려도 처음과 똑같아지지 않는 이유는 [`session.compile` 의 한계](#sessioncompile--바꾼-기록)에 있습니다.
+- `stop` 이 `result.json` 산출에 실패해 오류로 끝나거나 화면(`open`)에서 세션을 멈추면 되돌림 줄이 나오지
+  않습니다 — 그때는 run 디렉토리 `session.json` 의 `compile.compile_state_before` 가 바꾸기 전 상태입니다.
+- `status --json` 은 `compile`(`value` · `baseStatusBefore` · `baseStatusAfter` · `elapsedMs`)을, `runs --json` 은
+  행마다 같은 꼴의 `compile` 을 **`--compile` 세션에만** 싣습니다 — 평소 세션의 JSON 은 키가 이 옵션 이전과
+  같습니다. 모르는 칸은 `null` 이고, `runs` 의 `baseStatusAfter` 는 `result.json` 이 있는 기록에서만 읽습니다.
+- `--compile` 없는 세션의 `start` · `stop` · `status` 출력은 이 옵션 이전과 같습니다.
 
 ### 기록 관리 (`runs`)
 
@@ -474,26 +558,33 @@ npx perftracker devices --json
 npx perftracker schema > result.schema.json
 ```
 
-`schema_version` 이 그 계약의 버전입니다 (현재 `1.1.0`).
+`schema_version` 이 그 계약의 버전입니다 (현재 `1.2.0`).
 
-> **다만 이 버전 하나로 "내 스키마가 최신인지" 를 판단할 수는 없습니다.** `1.1.0` 은 아직
-> 출시된 적이 없어서, 그 안에서 계약이 넓어질 때 이 도구는 버전을 올리지 않았습니다.
-> 스키마를 캐시해 두고 쓰신다면 아래 [스키마를 다시 꺼내야 하는 때](#스키마를-다시-꺼내야-하는-때)
-> 를 반드시 읽으세요.
+> **`1.2.0` 은 진단 세션의 자리와 컴파일 상태를 더한 minor 입니다.** 진단 세션(`start --diagnose`)에만
+> `session.options.diagnose` 와 [`diagnose`](#diagnose) 블록이 실리고, **모든 세션**의 `target_app` 에
+> [컴파일 상태](#target_app-의-컴파일-상태)(`compile_state_*`)가 실립니다. `start --compile` 세션에만
+> [바꾼 기록](#sessioncompile--바꾼-기록)(`session.compile`)이 실립니다. 그래서 **평소 세션의
+> `result.json` 도 `1.1.0` 과 키가 다릅니다** — `target_app` 이 닫힌 객체라 캐시해 둔 `1.1.0` 스키마는
+> 평소 세션 산출물도 거부합니다. `1.1.0` 은 npm 0.1.0 ~ 0.2.1 로 나간 버전인데, 개발 중에도 출시 뒤에도 같은
+> `1.1.0` 안에서 계약이 넓어졌습니다 — 0.2.0 이 `metrics.frame` 과 reason_code `no_frames` 를
+> 더했습니다. 스키마를 캐시해 두고 쓰신다면 아래
+> [스키마를 다시 꺼내야 하는 때](#스키마를-다시-꺼내야-하는-때)를 반드시 읽으세요.
 
 ### 최상위 구조
 
 | 필드 | 무엇인가 |
 | --- | --- |
 | `schema_version` | 이 파일 형식의 버전 |
+| `schema_help` | 이 파일을 해석하기 전에 읽을 곳 (값은 늘 같습니다 — 데이터가 아니라 안내) |
 | `tool` | 도구 이름·버전과 **이것을 돌린 컴퓨터**(`host.os` / `arch` / `node`) |
-| `session` | id, 이름, `state`, 시작/종료 시각, 길이, **시간축 기준 두 개**(아래 참고) |
+| `session` | id, 이름, `state`, 시작/종료 시각, 길이, **시간축 기준 두 개**(아래 참고), `options`(`launch` · 진단 세션이면 `diagnose: true`), **`--compile` 세션이면 바꾼 기록** `compile`([아래](#sessioncompile--바꾼-기록)) |
 | `device` | 기기 스펙(`static`)과 세션 전후 상태(`state_before` / `state_after`) |
-| `target_app` | 패키지, 라벨, 버전, 렌더 프로세스와 pid, **빌드 속성**(`debuggable` / `large_heap` / `min_sdk` / `target_sdk` / `primary_cpu_abi`) |
+| `target_app` | 패키지, 라벨, 버전, 렌더 프로세스와 pid, **빌드 속성**(`debuggable` / `large_heap` / `min_sdk` / `target_sdk` / `primary_cpu_abi`), **시작 · 끝 컴파일 상태**(`compile_state_start` / `compile_state_end` — [아래](#target_app-의-컴파일-상태)) |
 | `metrics` | 메트릭들. 키가 곧 수집기 id (`hwui` / `startup` / `cpu` / `memory` / `log` / `thermal` / `network`) |
+| `diagnose` | **진단 세션에만.** atrace slice 집계 — 켠 범위, 앱 slice 열림, slice 수, 이름별 표 ([아래](#diagnose)). 평소 세션에는 키가 없습니다 |
 | `measurement_overhead` | 이 측정이 기기에 개입한 정도의 **하한** (아래 참고) |
 | `references` | 구글 공개 기준치. **비교에 쓰이지 않고 기록만 된다** |
-| `warnings` | 관측된 사건 (평가 아님) |
+| `warnings` | 관측된 사건 (평가 아님 — [코드 목록](#warnings)) |
 | `artifacts` | 원본 파일들의 상대 경로 |
 
 > **아직 `stop` 하지 않은 세션에 `extract` 를 돌린 결과**(`session.state === "running"`)에는
@@ -550,6 +641,117 @@ clock_snapshot 이 없거나 기기 시계를 못 읽은 경우(`trace_start_off
 - `primary_cpu_abi` 는 이 앱이 **실제로 실행되는** ABI 로, `device.static.abis` 의 부분집합입니다.
   64비트 기기에서 32비트로 도는 앱이 여기서 갈립니다. 네이티브 코드가 없으면 `null` 입니다.
 
+### `target_app` 의 컴파일 상태
+
+**모든 세션**에 실립니다 — 같은 기기 · 같은 앱이라도 ART 가 앱을 어떤 상태로 컴파일해 두었느냐에 따라
+콜드 스타트 · 스크롤 수치가 크게 달라지기 때문입니다 (실측 SM-S901N · YouTube: TotalTime 중앙값
+speed-profile 471 · verify 618 · speed 665 ms). 두 세션의 수치가 다를 때 상태가 같았는지를 먼저 볼 수
+있게 **측정 조건의 사실**로 남깁니다. 이 도구는 상태를 비교하거나 좋고 나쁨을 말하지 않습니다.
+
+- **시작 상태**(`compile_state_start`)는 대상 앱을 해석할 때 이미 돌리던 `dumpsys package <pkg>` 출력에서
+  함께 읽습니다 — **기기 왕복이 늘지 않습니다.** `start --compile` 세션만은 다릅니다: 그 출력은 상태를 바꾸기
+  **전**이라, 바꾸는 명령 바로 뒤에 `dumpsys package <pkg>` 를 한 번 더 읽은 출력이 시작 상태(= 바꾼 뒤 상태)입니다.
+  바꾸기 전 상태는 [`session.compile`](#sessioncompile--바꾼-기록) 에 있습니다.
+- **끝 상태**(`compile_state_end`)는 `stop` 이 측정 창을 닫고 트레이스를 회수한 **뒤** `dumpsys package <pkg>`
+  한 번으로 읽습니다. 측정 창 안의 기기 접촉은 그대로 0 입니다.
+- 값은 그 출력의 `Dexopt state` 절 **원문 그대로**입니다. dex 줄마다 하나씩, base.apk 줄과 보조 dex 줄을
+  기기 순서대로 전부 싣습니다. 문서 표에 없는 값(`profile-utilization` · `vdex-dm` · `run-from-apk` ·
+  `unknown`)이 실측됐으므로 enum 으로 좁히지 않습니다. 컴파일 상태가 아닌 줄(`class loader context: …` 와
+  그 `=VaryingClassLoaderContexts=` 하위 줄 · `used by other apps: […]`)은 꼴을 알고 싣지 않습니다.
+
+| 필드 | 무엇 |
+| --- | --- |
+| `compile_state_start` · `compile_state_end` | dex 줄의 배열. **`null` 은 읽지 못했다는 뜻**이고 `[]` 는 쓰지 않습니다 |
+| `compile_state_start_reason_code` · `compile_state_end_reason_code` | 칸이 `null` 인 이유 (아래 넷 중 하나). 값이 있으면 `null` |
+| `compile_state_start_reason` · `compile_state_end_reason` | 그 이유의 사람용 문장. 매칭에는 코드를 쓰세요 |
+| `path` | dex 파일 경로 원문 — 비보조 dex 는 `path:` 줄의 값(`…/base.apk` · split), 보조 dex 는 그 줄에서 끝의 ` (public)` 표시를 뗀 나머지 |
+| `secondary_dex` | `known secondary dex files:` 아래 줄이면 `true` |
+| `public_dex` | 보조 dex 경로 줄 끝에 ` (public)` 표시가 있으면 `true`. 비보조 dex 에는 기기가 이 표시를 찍지 않아 늘 `false` |
+| `abi` | 그 줄 머리의 ABI (`arm64` 등). 한 dex 에 ABI 줄이 여럿일 수 있습니다 |
+| `status` | `[status=…]` — **compiler filter** 입니다 (`speed-profile` · `verify` · `speed` · `run-from-apk` …) |
+| `reason` | `[reason=…]` — 그 컴파일을 일으킨 까닭 (`install-dm` · `bg-dexopt` · `cmdline` · `profile-utilization` …) |
+| `primary_abi` | 그 줄에 `[primary-abi]` 가 있으면 `true` |
+| `location` | `[location is …]` 의 `…` 원문 — odex · vdex 경로, `error`, 공백 든 문장까지 그대로. 그 줄이 없으면 `null` |
+
+```json
+{
+  "path": "/data/app/~~j3NK…/com.google.android.youtube-_ZCw…/base.apk",
+  "secondary_dex": false,
+  "public_dex": false,
+  "abi": "arm64",
+  "status": "speed-profile",
+  "reason": "profile-utilization",
+  "primary_abi": true,
+  "location": "/data/app/~~j3NK…/com.google.android.youtube-_ZCw…/oat/arm64/base.odex"
+}
+```
+
+- **`status` 는 진단 블록의 컴파일 상태 slice 에 나오는 `status` 와 뜻이 다릅니다.** 여기의 `status` 는
+  compiler filter 이고, 그 slice 의 `status` 는 oat 파일 상태(`up-to-date` 등)이며 그쪽의 compiler filter 는
+  `filter` 칸입니다. 이름은 기기 원문이라 바꾸지 않았습니다.
+- **못 읽으면 `null` 이고 이유가 붙습니다** — `dexopt_state_section_missing`(출력에 `Dexopt state` 절이
+  없음) · `dexopt_state_package_missing`(절에 대상 패키지 줄이 없음) · `dexopt_state_unparsable`(절은 있는데
+  줄 꼴을 모름 — **꼴을 추측해 채우지 않습니다**) · `dexopt_state_unavailable`(그 시점의 출력이 없음 —
+  기기 끊김, 아직 `stop` 하지 않은 세션을 `extract` 한 경우, 또는 끝 상태를 읽기 전의 도구로 `stop` 한 run 을
+  다시 `extract` 한 경우). 실측한 출력 꼴은 sdk 36 기기 하나뿐입니다 — 그 기기의 전 패키지(635개) 출력에서는
+  dex 줄이 하나도 없는 패키지(오버레이 등 69개)만 `dexopt_state_unparsable` 이었고, 다른 기기 · 버전에서는
+  모르는 꼴 때문에 더 나올 수 있습니다.
+- **세션 중 바뀌었으면 경고가 하나 붙습니다.** 시작 · 끝 상태가 둘 다 있고 base.apk 줄(ABI 줄이 여럿이면
+  `[primary-abi]` 줄)의 `status` 또는 `reason` 문자열이 다르면 `warnings` 에 `compile_state_changed` 가
+  실립니다 — 백그라운드 dexopt · Play 업데이트 · 제조사 작업이 세션 중에 컴파일했다는 관측된 사건입니다.
+  어느 쪽이든 `null` 이면 경고는 없습니다.
+- 이 키들이 **아예 없는** `result.json` 은 이 기록이 생기기 전에 산출된 것입니다.
+
+### `session.compile` — 바꾼 기록
+
+`start --launch --compile <reset|speed-profile|speed>` 로 연 세션에만 있습니다 — 측정 창을 열기 전에 이 도구가
+**기기의 컴파일 상태를 바꿨다**는 기록입니다. 키가 없으면 그 세션은 상태를 바꾸지 않았습니다(`cmd package compile`
+0). 상태를 맞춰 다시 재려고 쓰는 옵션이고, 상태별 세션을 나란히 놓고 비교하는 것은 읽는 쪽의 몫입니다.
+
+| 필드 | 무엇 |
+| --- | --- |
+| `value` | `--compile` 에 준 값 — `reset` · `speed-profile` · `speed` 중 하나 (기기 낱말 그대로) |
+| `command` | 기기로 보낸 셸 명령 원문 — `reset` 은 `cmd package compile --reset '<pkg>'`, 그 밖은 `cmd package compile -m <값> -f '<pkg>'` |
+| `elapsed_ms` | 그 명령이 걸린 시간 — 호스트가 잰 adb 호출 왕복 (실측 SM-S901N · YouTube: `reset` 200 · `speed-profile` 18,640 · `speed` 67,500) |
+| `compile_state_before` | **바꾸기 전** 상태 — 대상 앱을 해석한 `dumpsys package` 출력의 dex 줄 전부. 꼴은 [`compile_state_start`](#target_app-의-컴파일-상태) 와 같습니다 |
+| `compile_state_before_reason_code` · `compile_state_before_reason` | 바꾸기 전 상태가 `null` 인 이유와 그 문장 (`dexopt_state_*` — 위와 같은 넷) |
+
+바꾼 **뒤** 상태는 여기 없습니다 — `target_app.compile_state_start` 가 그것입니다.
+
+- **순서:** 상태를 바꾸는 명령은 설정 검증 뒤, run 디렉토리 · 시작 스냅샷 · Perfetto 세션 · `am force-stop`
+  **앞**에 나갑니다. 컴파일의 발열이 시작 상태(`device.state_before` 의 배터리 온도 · thermal)에 섞이지 않고,
+  측정 창 안의 기기 접촉은 그대로 0 입니다. `--launch` 없이는 받지 않습니다 — 이미 떠 있는 앱은 옛 컴파일
+  결과로 돌 수 있어, 시작 상태와 실제로 돈 코드가 다를 수 있기 때문입니다.
+- **실패하면 세션을 열지 않습니다.** 종료 코드가 0 이 아니거나 · 출력에 `Failure` 가 있거나 · 10분 한도를
+  넘으면 run 디렉토리도 `result.json` 도 생기지 않습니다. 실패 뒤의 상태는 다시 읽지 않으므로 **기기가 어디까지
+  바꿨는지는 모릅니다** — 한도에 걸려 호스트가 adb 를 끊어도 기기는 계속 컴파일하고 있을 수 있습니다.
+- **상태는 바꿨는데 그 뒤에서 실패하면** (run 디렉토리 · 시작 스냅샷 · Perfetto 세션 시작 · 앱 실행 등) 세션은
+  열리지 않지만 **기기 컴파일 상태는 이미 바뀌어 있습니다.** 그 오류는 원래 문장 그대로 나오고 그 아래에
+  [되돌림 명령 줄](#컴파일-상태를-맞춰-재기---compile)이 붙습니다. 도구는 기기에 더 묻지 않습니다 (바뀐 뒤 상태를
+  다시 읽지도 되돌리지도 않습니다).
+- **한계 — 이 도구는 자동으로 되돌리지 않습니다.** 그리고 되돌려도 처음과 똑같아지지 않습니다:
+  - 되돌려도 `reason` 은 `cmdline` 으로 남습니다 (실측 `profile-utilization` → `cmdline`).
+  - `reset` 이 지운 로컬 프로파일은 되살리지 못합니다.
+  - 이후 백그라운드 dexopt 가 상태를 다시 바꿀 수 있습니다.
+  - 상태를 바꾸는 명령은 실측한 꼴 그대로이고 범위 옵션(`--primary-dex` 등)을 붙이지 않습니다 — 그래서 기기가
+    대상 앱의 **의존 패키지 · split · 보조 dex 까지** 바꿀 수 있습니다 (실측: `reset` 뒤 보조 dex 셋 중 둘이
+    `verify` → `run-from-apk`). 기록과 되돌림은 대상 앱만 다룹니다.
+
+### `warnings`
+
+관측된 사건만 담습니다 — 평가는 없습니다. 이 버전이 내는 `code` 는 아래가 전부입니다
+(옛 run 을 `extract` 하면 그때의 코드가 그대로 옮겨질 수 있어 스키마는 닫힌 enum 이 아닙니다).
+
+| `code` | 언제 |
+| --- | --- |
+| `charging_during_session` | 세션 시작 때 USB 충전 중이었음 |
+| `power_save_mode_on` | 세션 시작 때 저전력 모드가 켜져 있었음 |
+| `launcher_activity_ambiguous` | 런처 진입점이 여럿이라 이 도구가 하나를 골라 띄웠음 |
+| `app_launch_time_unmeasured` | `am start -W` 가 TotalTime 을 보고하지 않아 시작 시간을 못 쟀음 |
+| `trace_session_lost` | Perfetto 세션이 사라져 트레이스를 회수하지 못했음 (`session.state` 가 `aborted`) |
+| `session_still_running` | 아직 `stop` 하지 않은 세션을 `extract` 했음 — 부분 상태 |
+| `compile_state_changed` | 세션 중 base.apk 의 컴파일 상태(`status` · `reason`)가 바뀌었음 ([위](#target_app-의-컴파일-상태)) |
+
 ### `tool.host`
 
 이 도구를 **돌린 컴퓨터**입니다 (`os` / `arch` / `node`). 같은 앱·같은 기기인데 수치가 다른 두
@@ -587,23 +789,41 @@ clock_snapshot 이 없거나 기기 시계를 못 읽은 경우(`trace_start_off
   CI 매칭은 반드시 이걸로 하세요. (예: `sdk_too_low`, `no_log_entries`,
   `trace_missing`, `data_source_not_registered`, `query_failed`)
 
-  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **36개**입니다
-  > (`1.0.0` 은 6개였습니다). 그중 `process_name_stale_in_trace` 는 `1.0.0` 부터 있던
-  > `metrics.hwui` 에도 실립니다. 이 숫자는 테스트가 `METRIC_REASON_CODES` 와 대조해
-  > 고정하므로 코드보다 낡을 수 없습니다.
+  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **45개**입니다
+  > (`1.0.0` 은 6개, `1.1.0` 의 마지막 판인 npm 0.2.1 은 36개였습니다). 그중 `process_name_stale_in_trace` 는 `1.0.0` 부터 있던
+  > `metrics.hwui` 에도 실립니다. `1.2.0` 에 더한 아홉은 메트릭에는 실리지 않습니다 — 셋은 [`diagnose`](#diagnose)
+  > 블록에만 옵니다(`app_slices_open_unknown` 은 `app_slices_open_reason_code` 에,
+  > `ftrace_not_recorded` · `ftrace_setup_errors` 는 블록 `reason_code` 에). 넷(`dexopt_state_section_missing` ·
+  > `dexopt_state_package_missing` · `dexopt_state_unparsable` · `dexopt_state_unavailable`)은
+  > [`target_app` 의 컴파일 상태](#target_app-의-컴파일-상태) 칸의 `_reason_code` 에만 옵니다. 둘(`dalvik_not_recorded` ·
+  > `compile_state_slice_unparsable`)은 진단 블록 ART 칸(`target_process_compile_state_slices` ·
+  > `target_process_jit_slices`)의 `_reason_code` 에만 옵니다. 이 숫자는 테스트가
+  > `METRIC_REASON_CODES` 와 대조해 고정하므로 코드보다 낡을 수 없습니다.
 - `reason` — 사람이 읽는 한국어 문장. 다듬힐 수 있으니 매칭에 쓰지 마세요.
 - `data` — 메트릭별 본문. 수집되지 않았으면 `null`
 
 ### 스키마를 다시 꺼내야 하는 때
 
-**`schema_version` 만 보고 판단하면 안 됩니다.** `1.1.0` 은 아직 출시된 적이 없어서, 그 안에서
-계약이 넓어질 때 이 도구는 버전을 올리지 않았습니다. 그래서 **깨지는 소비자는 `1.0.0` 을
-고정한 쪽만이 아닙니다** — 지금 이 저장소가 만드는 산출물을 거부하는 가장 흔한 경우는
-`1.1.0` 시절 중간에 `perftracker schema` 를 한 번 받아 두고 그대로 쓰는 쪽입니다.
-그런데 `schema_version` 은 그때도 지금도 `1.1.0` 이라, **다시 꺼내라는 신호가 산출물 안에
+**`1.2.0` 부터는 `schema_version` 이 신호입니다.** 출시된 계약을 넓히면 minor 를 올립니다
+(`packages/core/src/schema/result.ts` 상단의 규칙표). 캐시해 둔 스키마를 꺼낸 때의 버전과
+산출물의 `schema_version` 이 다르면 다시 꺼내세요.
+
+- **`1.2.0` 산출물은 평소 세션의 것도 `1.1.0` 스키마가 거부합니다.** `target_app` 이
+  `additionalProperties: false` 라 모든 세션에 실리는 컴파일 상태(`compile_state_start` 등)가 거기
+  걸립니다. 진단 세션의 것은 하나 더 — 최상위 객체와 `session.options` 도 닫혀 있어
+  `diagnose` 키와 `options.diagnose` 가 걸립니다. `start --compile` 세션의 것도 하나 더 — `session` 이 닫혀
+  있어 `session.compile` 이 걸립니다.
+
+**`1.1.0` 끼리는 그 신호가 없습니다.** `1.1.0` 은 개발 중에도, 출시 뒤에도 계약이 넓어질 때 버전을
+올리지 않았습니다. npm 0.1.0(2026-08-20)의 스키마는 reason_code 35개에 `metrics.frame` 이 없었고,
+0.2.0(2026-08-31)이 같은 `1.1.0` 으로 `metrics.frame` 과 `no_frames` 를 더했습니다 — reason_code 가
+닫힌 enum 이라 0.1.0 때 받아 둔 스키마는 `no_frames` 가 실린 산출물을 거부합니다. 그래서 **깨지는
+소비자는 `1.0.0` 을 고정한 쪽만이 아닙니다** — `1.1.0` 시절 중간에 `perftracker schema` 를 한 번 받아
+두고 그대로 쓰는 쪽도 같은 `1.1.0` 산출물을 거부할 수 있습니다.
+그런데 `schema_version` 은 그때도 그 뒤도 `1.1.0` 이라, **`1.1.0` 산출물끼리는 다시 꺼내라는 신호가 산출물 안에
 존재하지 않습니다.**
 
-`z.toJSONSchema()` 출력에서 실제로 갈라지는 곳은 둘이고, 서로 독립적입니다:
+`1.1.0` 시절 중간에 받은 스키마와 `z.toJSONSchema()` 출력이 실제로 갈라지는 곳은 셋이고, 서로 독립적입니다:
 
 1. **`device.state_*.thermal_zones` 의 항목 노드가 `additionalProperties: false` 입니다.**
    예전 그 스키마는 `{ name, celsius }` 뿐이었고 지금 산출물은 `type` / `status` / `source`
@@ -1160,6 +1380,190 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
 - 누적 원값은 싣지 않습니다. 감사가 필요하면 `raw/netstats_{before,after}.txt` 원문이
   `artifacts.raw` 에 등재되어 있습니다.
 
+### `diagnose`
+
+**진단 세션(`start --diagnose`)에만 있는 블록입니다.** 평소 세션에는 키가 없고, 그 "없음" 이 곧
+"진단 세션이 아님" 입니다. `session.options.diagnose` 도 진단 세션에만 `true` 로 실립니다 —
+`false` 로 실리는 일은 없습니다. 진단 세션은 atrace(카테고리 `am` · `wm` · `view` · `dalvik` + 대상 앱 하나의
+앱 slice)를 켜고 최대 10분 돕니다. `dalvik` 은 2026-10-11(baseline-profile)에 더했습니다 — 그 전 진단 run 의
+`atrace_categories` 에는 없고, 그런 run 을 `extract` 로 다시 내면 ART 칸 둘이 `null` + `dalvik_not_recorded` 입니다.
+
+> **진단 세션의 수치는 평소 세션과 나란히 놓을 수 없습니다.** atrace slice 를 남기는 비용은 앱
+> 프로세스 자신에게 청구되고 `measurement_overhead` 에 잡히지 않습니다 ([아래](#measurement_overhead)).
+
+```json
+{
+  "atrace_categories": ["am", "wm", "view", "dalvik"],
+  "atrace_apps": ["com.google.android.youtube"],
+  "status": "collected",
+  "reason_code": null,
+  "reason": null,
+  "app_slices_open": true,
+  "app_slices_open_reason_code": null,
+  "app_slices_open_reason": null,
+  "trace_slices": 147462,
+  "target_process_slices": 134423,
+  "target_process_slices_unfinished": 2,
+  "ftrace_overrun_events": 0,
+  "trace_bytes": 12844952,
+  "target_process_slice_names_unfolded": 15388,
+  "target_process_slice_names": [
+    { "name": "Choreographer#doFrame *",
+      "main_thread": { "count": 1058, "sum_ms": 2390.124, "max_ms": 77.696 },
+      "other_threads": { "count": 16, "sum_ms": 2.837, "max_ms": 0.777 },
+      "async_tracks": null },
+    { "name": "L*;",
+      "main_thread": { "count": 1903, "sum_ms": 48.239, "max_ms": 2.1 },
+      "other_threads": { "count": 3767, "sum_ms": 185.436, "max_ms": 5.504 },
+      "async_tracks": null },
+    { "name": "bindApplication",
+      "main_thread": { "count": 1, "sum_ms": 56.169, "max_ms": 56.169 },
+      "other_threads": null, "async_tracks": null }
+  ],
+  "target_process_compile_state_slices": [
+    { "location": "/data/app/~~j3NK…/com.google.android.youtube-_ZCw…/oat/arm64/base.odex",
+      "status": "up-to-date", "filter": "speed-profile", "reason": "profile-utilization" },
+    { "location": "primary.vdex mapped directly in memory from /data/app/~~KFTc…/com.google.android.gms-tENA…/split_DynamiteLoader_installtime.dm",
+      "status": "up-to-date", "filter": "verify", "reason": "vdex-dm" }
+  ],
+  "target_process_compile_state_slices_reason_code": null,
+  "target_process_compile_state_slices_reason": null,
+  "target_process_jit_slices": 54,
+  "target_process_jit_slices_reason_code": null,
+  "target_process_jit_slices_reason": null
+}
+```
+
+(SM-S901N · Android 16 · YouTube 21.40.161 15초 원본 — `dalvik` 을 켠 회 — 을 이 블록의 쿼리로 다시 센 값입니다.
+표는 1,521행 가운데 셋만, 컴파일 상태는 6줄 가운데 둘만 옮겼고 경로의 해시는 줄였습니다.)
+
+| 필드 | 무엇 | `null` 이면 |
+| --- | --- | --- |
+| `atrace_categories` | 켠 atrace 카테고리 — 기기로 나간 config 에 실린 값 | `session.json` 에 그 기록이 없다 |
+| `atrace_apps` | 앱 slice 대상 패키지 (대상 앱 하나) | 같음 |
+| `status` · `reason_code` · `reason` | [메트릭과 같은 껍데기](#메트릭-하나의-모양) — **트레이스에서 읽은 칸**(수 · 표)의 상태 | — |
+| `app_slices_open` | **앱 slice 열림** — 앱 자신의 slice 가 실릴 수 있던 조건이었나. 앱이 실제로 남겼나가 아닙니다. `true` 또는 `null` (`false` 는 없음) | 모름 — 이유는 다음 칸 |
+| `app_slices_open_reason_code` · `app_slices_open_reason` | 열림이 `null` 인 이유 (`app_slices_open_unknown`) | 열림이 `true` |
+| `trace_slices` | 트레이스 전체(모든 프로세스)의 slice 수 | ftrace 가 원본에 안 남음 · 트레이스를 못 읽음 |
+| `target_process_slices` | 대상 앱 프로세스의 slice 수 = 표의 `count` 합 | 대상 앱 프로세스를 못 찾음 · ftrace 가 원본에 안 남음 · 트레이스를 못 읽음 |
+| `target_process_slices_unfinished` | 그중 끝나지 않은 slice 수 | 같음 |
+| `ftrace_overrun_events` | 커널 ftrace 링버퍼에서 잃은 이벤트 수 | 트레이스에 그 통계가 없음 (0 이 아님) |
+| `trace_bytes` | 원본(`artifacts.trace`) 크기 (바이트) | 원본이 없음 |
+| `target_process_slice_names_unfolded` | 접기 전 고유 이름 수 (표 행 수 이상) | `target_process_slices` 와 같음 |
+| `target_process_slice_names` | 접은 이름별 표 (아래) | 같음 — `[]` 는 "프로세스는 찾았고 slice 가 0개" |
+| `target_process_compile_state_slices` | **ART 칸 (1)** — 대상 앱 프로세스의 컴파일 상태 slice 목록 (아래) | `dalvik` 을 안 켠 원본 · 꼴을 모르는 `location=` slice · 표가 `null` 인 이유와 같음 — `[]` 는 "켰고 찾았는데 0줄" |
+| `target_process_compile_state_slices_reason_code` · `target_process_compile_state_slices_reason` | 목록이 `null` 인 이유 | 목록이 있음 |
+| `target_process_jit_slices` | **ART 칸 (2)** — 대상 앱 프로세스의 JIT 컴파일 slice 수 | `dalvik` 을 안 켠 원본 · 표가 `null` 인 이유와 같음 — `0` 은 "켰고 찾았는데 0개" |
+| `target_process_jit_slices_reason_code` · `target_process_jit_slices_reason` | 수가 `null` 인 이유 | 수가 있음 |
+
+표의 한 행:
+
+| 필드 | 무엇 |
+| --- | --- |
+| `name` | 접은 이름 |
+| `main_thread` | 메인 스레드(tid = pid) 갈래 |
+| `other_threads` | 대상 앱 프로세스의 나머지 스레드 갈래 |
+| `async_tracks` | 대상 앱 프로세스의 프로세스 트랙(비동기) 갈래 |
+| `count` | 그 갈래에서 그 이름으로 남은 slice 수 — 끝나지 않은 것도 셉니다 |
+| `sum_ms` | 끝난 slice 의 길이 합 (ms) |
+| `max_ms` | 끝난 slice 가운데 가장 긴 것 (ms) |
+
+- **atrace slice 만 셉니다** — 스레드 트랙 slice 와 프로세스 트랙(비동기) slice. frametimeline
+  트랙(Actual · Expected Timeline — 이름이 프레임 토큰 숫자)의 slice 는 수 · 표 · 이름 수 어디에도 들지 않습니다.
+- **대상 앱 프로세스는 `metrics` 와 같은 규칙으로 하나입니다.** 트레이스의 이름이 낡았으면 캡처 때 받아 둔
+  pid 로 찾고 `partial` + `process_name_stale_in_trace` 입니다 — 값은 다 있습니다
+  ([아래](#트레이스가-앱을-다른-이름으로-아는-경우-zygote64--pre-initialized)).
+- **표는 프레임워크 slice(am · wm · view · dalvik)와 앱 slice 를 가르지 않습니다.** atrace 마커에 가를 태그가
+  없습니다. 앱 slice 가 실릴 수 있었는지는 `app_slices_open` 이 따로 말합니다.
+- **이름 접기** — 숫자가 하나라도 든 영문 · 숫자 토큰(연속한 `[A-Za-z0-9]`)을 `*` 하나로 바꿉니다.
+  `Choreographer#doFrame 136993` → `Choreographer#doFrame *` · `tk-trace-id: 1001yo7d2xmcq` →
+  `tk-trace-id: *` · `VRI[Shell$HomeActivity]@a1b2c3` → `VRI[Shell$HomeActivity]@*`. 숫자가 없는 토큰은
+  단어와 가를 수 없어 그대로입니다 — `tk-trace-id: rlcyp` → `tk-trace-id: rlcyp`.
+  **이름 전체가 클래스 디스크립터**(`L` 로 시작해 `;` 로 끝나고 공백 없음)면 한 행 `L*;` 로 접습니다 —
+  `Lfvb;` → `L*;` · `Lcom/google/Foo$1;` → `L*;`. `dalvik` 이 남기는 이 이름은 숫자 없는 난독화 이름이
+  대부분이라 위 규칙으로는 안 접힙니다. 공백이 든 이름은 디스크립터가 아닙니다 — `Lock contention on a monitor lock` →
+  `Lock contention on a monitor lock`. 위 원본에서 15,388 → 1,521행이었습니다 (디스크립터 규칙 없이는 약 6,900행 ·
+  컴파일을 초기화한 verify 상태의 원본은 약 2만 7천 행).
+  원문 이름은 원본 트레이스에 그대로 있습니다.
+- **행을 자르지 않고 이름도 자르지 않습니다.** 순서는 이름의 UTF-16 코드 단위 순 하나입니다 (호스트
+  로캘과 무관 — `Z` 가 `a` 보다 앞). 순위 · 상위 N 은 없습니다 — 무엇이 길었는지 고르는 일은 읽는 쪽의 몫입니다.
+- **빈 갈래는 `null` 입니다** — 그 갈래에 그 이름의 slice 가 없었다는 뜻입니다. 0 으로 채우지 않는 것은
+  slice 가 없으면 최대가 0 이 아니라 없기 때문입니다.
+- **끝나지 않은 slice**(트레이스가 끝날 때 아직 열려 있던 것)는 `count` 에만 들고 `sum_ms` · `max_ms` 에서
+  빠집니다. 한 갈래의 slice 가 전부 끝나지 않았으면 그 칸의 `sum_ms` · `max_ms` 가 `null` 입니다.
+- **`sum_ms` 를 행끼리 더하지 마세요.** 안쪽 slice 도 각자 세므로 바깥 slice 의 시간과 겹칩니다
+  (같은 기기 · 앱 15초 원본 둘에서 대상 앱 스레드 slice 의 80.1% · 85.5% 가 안쪽이었습니다).
+- **`ftrace_overrun_events`** 는 stats 의 `ftrace_cpu_overrun_delta`(덮어써서) ·
+  `ftrace_cpu_commit_overrun_delta`(쓰는 중에 겹쳐서) · `ftrace_cpu_dropped_events_delta`(덮어쓰기를 끈 버퍼가
+  꽉 차서)를 CPU 마다 더한 값입니다. `measurement_overhead.trace_buffer_overrun` 은 perfetto 버퍼만 보므로 이 손실을
+  못 잡습니다 — 0 이 아니면 slice 가 그만큼 빠졌습니다.
+
+**ART 칸 둘** — `dalvik` 이 남긴 slice 가운데 둘을 표 밖에 따로 싣습니다. 둘 다 표와 **같은 원문 이름**(대상 앱
+프로세스 · atrace slice 만 · frametimeline 제외)에서 뽑으므로 같은 원본을 trace_processor 로 다시 세면 같은 값이
+나옵니다.
+
+- **`target_process_compile_state_slices`** — ART 가 dex 를 열 때 남기는
+  `location=<…> status=<…> filter=<…> reason=<…>` 이름의 slice 를 네 칸으로 가른 목록입니다. 같은 네 값은 한 줄로
+  (갈래 · 횟수와 무관하게) 싣고, 순서는 원문 이름의 UTF-16 코드 단위 순입니다. `location` 에는 공백이 들 수
+  있어(`primary.vdex mapped directly in memory from …`) 마지막 ` status=` · ` filter=` · ` reason=` 자리로 가릅니다.
+  대상 앱이 연 다른 패키지의 dex(WebView · GMS 모듈)도 그 프로세스 안의 일이라 함께 실립니다.
+- **`target_process_jit_slices`** — 이름이 `JIT compiling` 으로 시작하는 slice 의 수입니다. 표의 그 이름들 `count`
+  합과 같고, 끝나지 않은 slice 도 셉니다. 실측(SM-S901N · YouTube 15초)에서 speed-profile 39 · 52 · 54, verify 297,
+  speed 0 이었습니다. 이 도구는 이 수에 많고 적음을 매기지 않습니다.
+- **`status` 가 둘입니다.** 이 목록의 `status` 는 **oat 파일 상태**(`up-to-date` · `no-dex-code` …)이고
+  compiler filter 는 `filter` 칸입니다. [`target_app` 의 컴파일 상태](#target_app-의-컴파일-상태) 의 `status` 는
+  compiler filter 입니다 — 같은 낱말 다른 뜻이고, 이름은 기기 원문이라 바꾸지 않았습니다.
+- **못 재면 `null` 이고 이유가 붙습니다** — 블록 `status` 와 따로 갑니다.
+  `dalvik_not_recorded` 는 세션 기록(`atrace_categories`)에 `dalvik` 이 없거나 그 기록이 없는 원본입니다 (이 칸이
+  생기기 전 진단 run 을 `extract` 로 다시 낸 경우) — 표 · 수는 잰 그대로이고 블록은 `collected` 일 수 있습니다.
+  `compile_state_slice_unparsable` 은 `location=` 으로 시작하는데 네 칸으로 갈리지 않는 이름이 있는 경우로, 목록만
+  `null` 입니다 (**꼴을 추측해 채우지 않습니다**). 표를 못 만든 경우(대상 앱 프로세스를 못 찾음 · ftrace 가 원본에
+  안 남음 · 원본 없음 · 쿼리 실패 · 미등록)는 두 칸이 `null` 이고 이유 코드는 블록 `reason_code` 와 같습니다.
+- `dalvik` slice 가 앱 프로세스에 실리는지는 sdk 36 한 기기에서만 확인했습니다.
+
+컴파일 상태 slice 한 줄:
+
+| 필드 | 무엇 |
+| --- | --- |
+| `location` | `location=` 뒤 원문 — odex · vdex 경로, `none`, 공백 든 문장까지 그대로 |
+| `status` | `status=` — **oat 파일 상태** (`up-to-date` · `no-dex-code` …). compiler filter 가 아닙니다 |
+| `filter` | `filter=` — compiler filter (`speed-profile` · `verify` · `speed` · `unknown` …) |
+| `reason` | `reason=` — 그 컴파일을 일으킨 까닭 (`profile-utilization` · `install-dm` · `vdex-dm` · `unknown` …) |
+
+| `status` | `reason_code` | `null` 이 되는 칸 |
+| --- | --- | --- |
+| `collected` | `null` | 없음 |
+| `partial` | `process_not_in_trace` | `target_process_slices` · `target_process_slices_unfinished` · `target_process_slice_names_unfolded` · `target_process_slice_names` · `target_process_compile_state_slices` · `target_process_jit_slices` |
+| `partial` | `process_name_stale_in_trace` | 없음 |
+| `partial` | `ftrace_not_recorded` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` · `target_process_compile_state_slices` · `target_process_jit_slices` |
+| `partial` | `ftrace_setup_errors` | 없음 |
+| `unsupported` | `data_source_not_registered` · `data_source: linux.ftrace` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` · `target_process_compile_state_slices` · `target_process_jit_slices` |
+| `failed` | `trace_missing` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `trace_bytes` · `target_process_slice_names_unfolded` · `target_process_slice_names` · `target_process_compile_state_slices` · `target_process_jit_slices` |
+| `failed` | `query_failed` | `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `ftrace_overrun_events` · `target_process_slice_names_unfolded` · `target_process_slice_names` · `target_process_compile_state_slices` · `target_process_jit_slices` |
+
+ftrace 기록을 다 믿을 수 없는 경우는 코드 둘로 갈립니다 — 값이 있고 없음이 정반대라 `reason_code` 로 가르세요.
+
+- **`ftrace_not_recorded`** — 원본에 CPU 별 ftrace 통계(`ftrace_cpu_*`)가 한 행도 없습니다. ftrace 가
+  안 돌았으므로 slice 0개가 "없었다" 인지 "못 쟀다" 인지 모릅니다 — slice 칸과 잃은 이벤트 수가 `null` 입니다.
+- **`ftrace_setup_errors`** — ftrace 는 돌았는데 traced_probes 가 켜다 오류를 냈습니다. 오류가 atrace 의 것인지
+  다른 이벤트의 것인지 원본이 말하지 않아 일부가 빠졌을 수 있지만, **잰 수 · 표는 그대로 싣습니다** —
+  gfx · input 카테고리를 켠 실측 원본은 오류 28 에 slice 33만–38만이 실렸습니다.
+  대상 앱 프로세스를 못 찾았으면 그쪽(`process_not_in_trace`)이, 이름이 낡았을 뿐이면 이쪽이 블록의 코드입니다.
+
+**앱 slice 열림은 `status` 와 따로 갑니다.** 트레이스가 아니라 sdk 와 `target_app.debuggable` 로
+정해지는 조건이라 원본이 없어도(`failed`) 값이 있고, `null` 이어도 `status` 는 `collected` 일 수 있습니다.
+판정은 `doctor` 의 `diagnose: app slice` 줄과 같은 함수 하나입니다.
+
+| 기기 · 앱 | `app_slices_open` |
+| --- | --- |
+| sdk ≥31 | `true` |
+| sdk ≤30 · `debuggable: true` | `true` |
+| sdk ≤30 · `debuggable` 이 `false` 또는 `null` | `null` + `app_slices_open_unknown` (profileable 을 읽을 출처가 없습니다) |
+
+**다시 내기.** 원본은 평소처럼 run 디렉토리의 `trace.perfetto-trace` 하나(`artifacts.trace`)이고 진단
+세션이라고 다른 파일을 만들지 않습니다. `perftracker extract <run>` 이 기기 없이 같은 블록을 다시
+냅니다 — 같은 원본이면 바이트까지 같습니다. 시간축 그림은 이 블록에 없습니다. 원본을 Perfetto UI 로 여세요.
+
 ### `measurement_overhead`
 
 ```json
@@ -1209,6 +1613,11 @@ npx perftracker schema > result.schema.json   # 다시 꺼내 갱신하세요
   > 청구되므로 이 숫자에 들어오지 않습니다. 켜는 ftrace 이벤트를 줄이면 그 몫도 줄지만
   > 0 이 되지는 않습니다.
 
+  > **진단 세션(`session.options.diagnose: true`)은 atrace slice 비용이 앱 프로세스에 청구되어
+  > 여기 안 잡힙니다 — 평소 세션과 수치를 나란히 놓을 수 없습니다.** slice 하나를 남기는 비용(~5µs)은
+  > slice 를 남기는 앱 프로세스 자신의 몫이고, 이 세 필드는 트레이싱 프로세스만 셉니다. 두 종류를
+  > 섞어 비교하려면 `session.options.diagnose` 로 먼저 가르세요.
+
 ### `references`
 
 ```json
@@ -1245,7 +1654,7 @@ npm install
 npm run build     # 먼저 한 번 — 아래 테스트가 core 의 dist/ 를 씁니다
 npm test          # 유닛 테스트 (기기 불필요). 1초 남짓
 npm run typecheck # src + test 전체 타입체크
-npm run test:device   # 온-디바이스 스펙 (기기가 꽂혀 있어야 함) — 현재 11개
+npm run test:device   # 온-디바이스 스펙 (기기가 꽂혀 있어야 함) — 현재 20개
 ```
 
 **갓 클론한 저장소에서는 `npm run build` 가 먼저입니다.** `packages/cli` 의 테스트가
@@ -1277,8 +1686,11 @@ PERFTRACKER_TEST_APP=<패키지명> npm run test:device
 PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지명> npm run test:device
 ```
 
-**기기가 둘이면 지정하지 않은 채로는 11개가 전부 실패합니다** (`AmbiguousDeviceError`).
-한 대만 꽂혀 있으면 `PERFTRACKER_TEST_DEVICE` 는 필요 없습니다.
+**기기가 둘이면 지정하지 않은 채로는 스펙이 하나도 돌지 못합니다** (`AmbiguousDeviceError`).
+기기를 시험 안에서 잡는 11개는 실패로, 기기를 `beforeAll` 에서 잡는 진단 스펙(`diagnose.test.ts`) 9개는
+건너뜀으로 셉니다 — vitest 는 `beforeAll` 이 던지면 그 안의 시험을 건너뜀으로 세고 그 파일은 실패로 냅니다.
+실측(2026-10-08, 실기기 + 에뮬레이터를 같이 연결): `Test Files 5 failed (5)` · `Tests 11 failed | 9 skipped (20)` ·
+종료 코드 1. 한 대만 꽂혀 있으면 `PERFTRACKER_TEST_DEVICE` 는 필요 없습니다.
 
 고를 앱의 조건은 둘입니다.
 
@@ -1302,7 +1714,7 @@ PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지명> npm run tes
 그 밖에 새 기기에서 걸리는 것들:
 
 - **기기를 하나만 연결하세요.** 온-디바이스 스펙은 `createContext({})` 라 serial 을 넘기지
-  않습니다 — 에뮬레이터가 함께 켜져 있으면 `AmbiguousDeviceError` 로 전부 실패합니다.
+  않습니다 — 에뮬레이터가 함께 켜져 있으면 `AmbiguousDeviceError` 로 하나도 돌지 못합니다 (위).
 - **화면이 꺼지면 세션이 의미를 잃습니다.** 필요하면 `adb shell svc power stayon usb`,
   **끝나면 반드시 `false` 로 원복하세요.**
 - 스펙 파일들은 **직렬로** 돕니다 (`vitest.device.config.ts` 의 `fileParallelism: false`).
@@ -1313,10 +1725,12 @@ PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지명> npm run tes
 
 ## 검증 환경
 
-| 항목 | M0+M1 | M2 | M3 |
-|---|---|---|---|
-| 실기기 (SM-S901N, Android 16 / sdk 36) | ✅ | ✅ | ✅ |
-| 에뮬레이터 (sdk_gphone64_arm64, API 35, 4코어) | — | ✅ | ✅ |
+| 항목 | M0+M1 | M2 | M3 | 진단 세션 | 컴파일 상태 |
+|---|---|---|---|---|---|
+| 실기기 (SM-S901N, Android 16 / sdk 36) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 에뮬레이터 (sdk_gphone64_arm64, API 35, 4코어) | — | ✅ | ✅ | — | — |
+
+**보고서 글자 측정 (2026-10-11, SM-S901N `R5CT0000001` · sdk 36 · YouTube 21.40.161 · 기능 문서 report-readability RR-9)** — 평소 · 진단 세션 하나씩의 `perftracker report` 를 요약 · 기기 · 진단 탭 × 1440 · 390 폭 10장으로 재 보니 12px 미만 글자 0% · 4.5:1 미만 글자 0% · 글자 층 타일 값 31.68(390 26) > 섹션 18 > 카드 제목 15 > 본문 13 px · 요약 타일 8 · 레일 배지 0 = `수집 안 함`/`값 없음` 카드 0 · 390 가로 넘침 0 이었습니다. 배지는 0 = 0 으로만 맞았고(두 세션에 못 잰 블록이 없음), 두 세션 다 `--compile` 이 아니라 보낸 명령 줄은 실기기 보고서로 못 봤습니다 — 숫자 · 사진은 `docs/design/report-readability.md` 「확인」.
 
 실기기 검증(2026-07-27)은 두 단계로 나뉩니다. **숫자가 다른 이유를 함께 적습니다** —
 중간에 스펙이 하나 늘고 대상 앱이 바뀌었기 때문입니다.
@@ -1324,14 +1738,117 @@ PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지명> npm run tes
 | 언제 | 스펙 수 | 결과 | 대상 앱 |
 | --- | --- | --- | --- |
 | 실기기 검증 웨이브 | 10 | **5회 연속 10/10** | `com.android.settings` |
-| CPU·Log 앱 단위화 이후 (현재) | 11 | **1회 11/11** | `com.nhn.android.webtoon` |
+| CPU·Log 앱 단위화 이후 | 11 | **1회 11/11** | `com.nhn.android.webtoon` |
+| 진단 세션 스펙 추가 (2026-10-08) | 20 | **1회 20/20** | `com.google.android.youtube` |
+| 컴파일 상태 스펙 추가 (현재, 2026-10-11) | 27 | **1회 27/27** (화면이 잠긴 채 돈 앞 회는 25/27 — [아래](#컴파일-상태--compile를-실기기가-검증한-것-2026-10-11-sm-s901n--sdk-36)) | `com.google.android.youtube` |
 
 즉 **현재 스펙 구성으로 5회 연속을 돌린 적은 없습니다.** 5회 연속의 근거는 그 앞 구성의
-것이고, 늘어난 스펙 하나는 "세션 스펙의 대상 앱이 이 기기에 설치되어 있다"(`m0`)입니다.
+것이고, 10 → 11 로 늘어난 스펙 하나는 "세션 스펙의 대상 앱이 이 기기에 설치되어 있다"(`m0`)입니다.
 대상 앱을 바꾼 이유는 아래 "온-디바이스 테스트를 다른 기기에서 돌리기" 에 있습니다.
+11 → 20 은 진단 세션 스펙(`diagnose.test.ts`, 9개)이고, 그 회차의 대상 앱은 YouTube 입니다 —
+**20개를 웹툰으로 돌린 적은 없습니다** ([아래](#진단-세션--diagnose을-실기기가-검증한-것-2026-10-08-sm-s901n--sdk-36)).
+20 → 27 은 컴파일 상태 스펙(`baseline.test.ts`, 6개)과 진단 스펙의 ART 칸 하나입니다 — `baseline.test.ts` 는
+대상 앱이 YouTube 가 아니면 통째로 건너뜁니다 (그 앱의 컴파일 상태를 몰래 바꾸지 않으려고).
 
 유닛 테스트는 그 시점에 `npm test` **723/723**, `npm run typecheck` · `npm run build`
 클린이었습니다 (M3 당시의 수치입니다 — 지금은 더 늘었습니다).
+
+### 진단 세션(`--diagnose`)을 실기기가 검증한 것 (2026-10-08, SM-S901N / sdk 36)
+
+대상은 YouTube 21.29.366 이고 흐름은 사람이 하는 것과 같습니다 —
+`start --app com.google.android.youtube --launch --diagnose` → **다른 셸에서** `adb shell input swipe` 4회
+(홈 피드 스크롤) → `stop`. 스와이프는 perftracker 를 거치지 않는 시나리오 입력이라 측정 창 안 기기 접촉 0
+과 부딪히지 않습니다 — `adb_commands_during_session` 은 도구가 창 안에서 낸 명령 수입니다.
+
+수동 1회의 `result.json` (18.6초 세션):
+
+| 칸 | 값 |
+| --- | --- |
+| `session.options.diagnose` · `adb_commands_during_session` · `trace_buffer_overrun` | `true` · 0 · `false` |
+| `diagnose.status` · `app_slices_open` | `collected` · `true` |
+| `trace_slices` · `target_process_slices` · `target_process_slices_unfinished` | 123,772 · 116,165 · 1 |
+| `ftrace_overrun_events` · `trace_bytes` | 0 · 11,293,657 |
+| `target_process_slice_names_unfolded` → 표 행 | 8,314 → 1,088 |
+| `bindApplication` 행 | 메인 스레드 1회 · 115.2 ms |
+| `Choreographer#doFrame *` 행 | 메인 스레드 1,070회 |
+| `RV Scroll` 행 | 메인 스레드 795회 |
+
+- **frametimeline 은 실제로 빠졌습니다.** 같은 원본을 `trace_processor` 로 따로 세면 대상 앱 프로세스의
+  트랙에 slice 가 118,050개 있고 그중 1,885개가 Actual · Expected Timeline 입니다 — 블록의 116,165 는 그 차이와
+  같습니다. 고유 이름 9,219 → 8,314, 비동기 갈래 2,079 → 194 도 같은 방식으로 맞습니다.
+- **보고서** — `perftracker report` 로 낸 파일 하나의 진단 탭 slice 표가 1,088행(블록 표와 같음) ·
+  외부 요청 0 · 1440 폭 가로 넘침 0 이었습니다.
+- **끝난 뒤 기기** — `debug.atrace.tags.enableflags` 0 · `debug.atrace.app_number` 빈 값 · perfetto 세션 0 ·
+  그 세션의 원격 파일 0. `debug.atrace.app_0` 에는 `com.google.android.youtube` 가 남습니다 — perfetto 가 마지막
+  패키지를 남기는 것이고, 이 도구는 atrace 속성을 고치지 않습니다.
+- **같은 조건의 평소 세션** — `result.json` · `session.json` 에 진단 관련 키 0 · 최대 30분. 원본에 실린
+  TraceConfig(`trace_config_pbtxt`)를 꺼내 보면 진단 세션 것에서 `atrace_*` 네 줄이 빠지고 `duration_ms` 만
+  600000 → 1800000 으로 다를 뿐 나머지는 글자까지 같습니다. 평소 원본의 스레드 slice 는 0개입니다.
+
+온-디바이스 스펙 `packages/cli/test/on-device/diagnose.test.ts`(10개 — 2026-10-11 에 ART 칸 하나가 늘었습니다)가 같은 것을 봅니다. 수의 크기는 단언하지
+않고 관계를 단언합니다 — `trace_processor` 로 따로 센 수 = 블록의 수, 보고서 행 모델의 행 수 = 블록 표 행 수,
+`extract` 를 다시 돌린 블록 = `stop` 이 쓴 블록(바이트까지). 스펙 회차 가운데 한 번은 앱이 트레이스에
+낡은 이름으로 남아 블록이 `partial` + `process_name_stale_in_trace` 였고 값은 다 있었습니다
+([아래](#트레이스가-앱을-다른-이름으로-아는-경우-zygote64--pre-initialized)). 스펙은 값을 싣는 `partial` 둘
+(`process_name_stale_in_trace` · `ftrace_setup_errors`)을 받고 그 값이 `null` 이 아닌지 보며, 켜기 오류가 있던
+회에는 행(`bindApplication` 등)을 보지 않습니다 — 어느 카테고리가 빠졌는지 원본이 말하지 않기 때문입니다.
+
+**검증하지 못한 것:**
+
+- **sdk 31–34 · sdk 30 이하 기기.** 앱 slice 열림 조건 표의 그 칸은 안드로이드 문서 근거와 합성 시험뿐입니다.
+- **YouTube 말고 다른 앱.** 진단 스펙을 다른 앱으로 돌린 적이 없습니다. `RV Scroll` 행(androidx RecyclerView 가
+  남기는 앱 slice)은 대상 앱이 YouTube 일 때만 단언하고, 아니면 그 시험을 건너뜀으로 셉니다(요약 줄의
+  `skipped` · `--reporter=verbose` 면 이유까지) — 스와이프를 빼면 그 행이 사라지는 것은 봤습니다.
+- **켜기 오류(`ftrace_setup_errors`)가 있는 회차.** 이 기기에서 돈 진단 회차는 켜기 오류가 전부 0 이었습니다.
+  스펙이 그 갈래를 받는 것은 core 가 늘 켜기 오류로 내게 고친 빌드로만 돌려 봤습니다.
+- **`bindApplication` 행이 atrace 켜짐 대기 덕인지.** 대기를 뺀 빌드로 돌린 1회에서도 행이 잡혔습니다
+  (대기를 넣기 전 실측은 0/1). 경합이라 한 번으로는 못 가립니다 — 대기 자체는 유닛 시험(`D14 …`)이 지킵니다.
+- **ftrace 손실이 0 이 아닌 회차** · **10분짜리 진단 원본으로 낸 블록**(쿼리 시간 · `result.json` 크기) — 본 적이 없습니다.
+
+### 컴파일 상태(`--compile`)를 실기기가 검증한 것 (2026-10-11, SM-S901N / sdk 36)
+
+대상은 YouTube 21.40.161 (profileable 아님) · `R5CT0000001` · `ro.build.type=user` 이고, 에뮬레이터가 같이 꽂혀 있어
+모든 명령에 serial 을 줬습니다. 온-디바이스 스펙 `packages/cli/test/on-device/baseline.test.ts`(6개)가 한 바퀴를
+돕니다 — (a) 평소 `--launch` → (b) `--compile speed` → (c) `--compile reset` → (d) 진단 + `--compile speed`
+(스와이프 4회) → (e) (b) 가 낸 되돌림 줄을 **글자 그대로** 셸에 넘김. 앞 회의 끝이 뒤 회의 「바꾸기 전」 입니다.
+
+| 회 | 본 것 (회마다 `adb_commands_during_session` 0) |
+| --- | --- |
+| (a) | `compile_state_start` · `_end` 의 dex 줄 전부가 같은 순간 창 밖에서 읽은 `dumpsys package` 와 같음 (base.apk `speed-profile` / `cmdline`) |
+| (b) | 시작 상태 base.apk `speed` / `cmdline` · `session.compile.compile_state_before` 의 base 줄 = (a) 끝 · 걸린 69,468 · 19,405 ms · TotalTime 636 · 713 ms (두 회) · `start` 와 `stop` 이 같은 되돌림 줄을 냄 |
+| (c) | 시작 상태 base.apk `verify` / `vdex-dm` · `location` 이 공백 든 문장(`primary.vdex mapped directly in memory from …/base.dm`) · 보조 dex 셋이 `run-from-apk` / `unknown` 으로 바뀜 |
+| (d) | 컴파일 상태 slice 중 base 줄(dumpsys 의 base.apk `location` 과 같은 slice) `filter=speed` · `status=up-to-date` · JIT slice 0 · 접기 전 이름 25,233 · 34,398 → 표 927 · 1,442행(그중 `L*;` 한 행 · 화면 잠김 · 풀림 두 회) |
+| (e) | 되돌림 줄 실행 → `Success` · base.apk `speed-profile`(처음 값) / **`cmdline`** |
+
+- **보조 dex 는 처음으로 돌아오지 않았습니다.** 스펙 회차 사이에 기기가 보조 dex 하나를 스스로
+  `speed-profile` / `bg-dexopt` 로 바꿔 둔 상태에서 (b) 가 돌았고, 바꾸기 전 보조 dex 의 `status` 가 서로 달라
+  `--secondary-dex` 되돌림 줄 대신 그 사실 한 줄이 나왔습니다 (BP-5 그대로). 그 뒤 (c) 의 `--reset` 이 셋을
+  `run-from-apk` 로 바꿨고, 끝 상태는 `verify` / `vdex` 하나 · `run-from-apk` / `unknown` 둘입니다 — 처음
+  (`verify` / `cmdline` 셋)과 다릅니다. 두 번째 회는 그 상태에서 시작해 같은 상태로 끝났습니다(보조 dex 두 줄
+  `location` 이 `error`). 스펙 밖에서 다시 컴파일하지 않았습니다. 되돌림 블록의 실제 꼴:
+
+  ```
+  되돌림 · 실행 뒤 reason = cmdline · 기기가 다시 바꿀 수 있음
+    adb -s R5CT0000001 shell cmd package compile -m speed-profile -f com.google.android.youtube
+    보조 dex 3개 · status 서로 다름 · 보조 dex 되돌림 줄 없음
+  ```
+- **트레이스 안 slice 와 dumpsys 가 같은 말을 합니다** — 진단 세션(`--compile` 없음)의 컴파일 상태 slice 중 base
+  줄 `filter` 는 같은 세션 시작 상태 base.apk `status` 와 같고, JIT 수 · 컴파일 상태 줄 수는 같은 원본을
+  `trace_processor` 로 따로 센 수와 같습니다 (`diagnose.test.ts` 의 `DM-16 ART 칸`). `dalvik` 이 켜진 그 진단 세션
+  1회(잠금 푼 회): JIT 27 · 컴파일 상태 6줄 · 접기 전 이름 9,597 → 표 1,476행 · `RV Scroll` 행 있음 · 블록 `partial`
+  (`process_name_stale_in_trace` — 값은 다 있음).
+- **스펙이 기기 상태를 영구히 바꿉니다** — 돌릴 때마다 base.apk `reason` 이 `cmdline` 이 되고 보조 dex 가
+  바뀔 수 있습니다. (e) 에 닿기 전에 실패하면 `afterAll` 이 잡아 둔 되돌림 줄을 대신 돌립니다.
+- 측정 창 안 기기 접촉 0 은 그대로입니다 — 상태 바꾸기 · 다시 읽기는 창 열기 전, 끝 상태는 원본 회수 뒤입니다.
+
+**검증하지 못한 것:**
+
+- **sdk 30–35 기기의 `Dexopt state` · `cmd package compile` 출력 꼴** — 실측은 sdk 36 하나입니다.
+- **YouTube 말고 다른 앱.** `baseline.test.ts` 는 다른 앱이면 건너뜁니다.
+- **(b) · (d) 의 TotalTime · 표 행 수가 상태 몫인지** — 회마다 1회라 비교하지 않습니다 (도구는 비교하지 않습니다).
+- **화면이 잠긴 채 돈 회.** 첫 전체 실행은 기기가 보안 잠금 상태였고(모든 세션 hwui 프레임 1) `DM-16 RV Scroll 행` ·
+  `m0 포그라운드 패키지` 둘이 실패했습니다 — 스와이프가 피드를 못 굴렸고 포커스가 잠금 화면이었습니다. 사람이
+  잠금을 푼 뒤 같은 스펙이 27/27 이었습니다. 온-디바이스 스펙은 화면이 켜지고 잠금이 풀린 기기를 전제합니다.
 
 ### M3 에서 에뮬레이터가 **실제로 검증한** 것
 

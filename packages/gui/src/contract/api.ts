@@ -138,7 +138,8 @@ export interface AppDetailView {
   versionName: string | null
 }
 
-// ─── 진단 ──────────────────────────────────────────────────────────────────
+// ─── 환경 점검 (doctor) ────────────────────────────────────────────────────
+// 진단 **세션**(`start --diagnose`)과 다른 것이다 — 그쪽 칸은 `diagnose` 이름으로 세션 절에 있다.
 
 export interface DoctorCheckView {
   name: string
@@ -156,7 +157,29 @@ export interface StartRequest {
   name: string | null
   launch: boolean
   force: boolean
+  /**
+   * 진단 세션으로 연다 (`start --diagnose`). **켤 때만 싣는다** — `false` 를 보내지 않는다.
+   * 평소 세션의 요청은 이 칸이 없던 때와 같은 모양이고 (core 가 `session.json` 에 진단 키를
+   * 진단 세션에만 싣는 것과 같은 원칙), 타입이 `true` 하나뿐이라 웹이 늘 싣는 실수를 막는다.
+   */
+  diagnose?: true
   // outDir 은 없다 — 서버가 `EnvView.outDir` 로 이미 알고 있다. 위 주석 참조.
+}
+
+/**
+ * **진단 세션에만 붙는 칸.** 없음 = 평소 세션 (또는 이 칸이 없던 시절의 세션 — 둘 다 진단이 아니다).
+ * 시작 응답과 세션 목록이 같은 모양을 쓴다.
+ *
+ * 기록 범위(atrace 카테고리 · 대상 앱)는 싣지 않는다 — 화면은 그것을 고정 문구로 말하고
+ * (디자인 문서 `## 문구`), 값이 필요한 곳은 `result.json` 을 읽는 보고서다.
+ */
+export interface DiagnoseSessionView {
+  /**
+   * 앱 slice 열림이 "모름" 칸이면 그 고지 줄, 열리면 `null`. **core 가 쓴 문장 그대로다** —
+   * `start --diagnose` 가 터미널에 찍는 줄과 같은 글자여야 하므로 화면이 조립하지 않는다.
+   * 설정 화면은 앱의 debuggable 을 모르므로 이 줄은 측정 중에만 나온다 (DM-10).
+   */
+  notice: string | null
 }
 
 export interface StartedSessionView {
@@ -173,6 +196,8 @@ export interface StartedSessionView {
   startedAt: string
   /** 이 기기에서 못 재는 지표 — `start` 시점에 이미 아는 사실이다. */
   unsupported: { id: string; reason: string }[]
+  /** 진단 세션으로 열렸을 때만 있다. 요청이 아니라 **서버가 실제로 연 세션**을 말한다. */
+  diagnose?: DiagnoseSessionView
 }
 
 export interface StopRequest {
@@ -223,6 +248,11 @@ export interface ActiveSessionView {
   marks: MarkView[]
   /** 이 기기에서 못 재는 지표. `start` 때 확정된 사실을 그대로 들고 있다. */
   unsupported: { id: string; reason: string }[]
+  /**
+   * 진단 세션일 때만 있다. 새로고침 · CLI 로 연 세션도 이것으로 진단 표시와 고지를 되찾는다 —
+   * 화면의 기억이 아니라 포인터 파일이 정본이다.
+   */
+  diagnose?: DiagnoseSessionView
 }
 
 // ─── 기록 ──────────────────────────────────────────────────────────────────
@@ -244,6 +274,12 @@ export interface RunView {
   unsupportedCount: number
   warningCount: number
   markCount: number
+  /**
+   * **진단 세션 기록에만 있고 값은 언제나 true** — 기록 드로어가 이것으로 진단 태그를 단다.
+   * 평소 기록에는 키가 없다 (`runs --json` 과 같은 규칙). 진단 블록 자체는 보고서가
+   * `result.json` 에서 읽는다 — 목록에 실을 이유가 없다.
+   */
+  diagnose?: true
 }
 
 /**

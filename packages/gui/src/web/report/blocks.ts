@@ -1,18 +1,36 @@
 import type { FrameTimelineDto } from '../../contract/api.js'
 import type { Mark } from './axis.js'
+import { fillReportCopy } from './diagnose-copy.js'
 import type { Fmt } from './format.js'
-import { clock, fmtAxis, fmtValue, niceMax, nf, NONE_MISSING, NONE_NULL } from './format.js'
+import {
+  BADGED_STATUS,
+  clock,
+  fmtAxis,
+  fmtValue,
+  niceMax,
+  nf,
+  NONE_MISSING,
+  NONE_NULL,
+  STATUS_LABEL,
+} from './format.js'
 import type {
   BarsBlock,
   Block,
   DeltaBlock,
+  DexStatesBlock,
+  DexStatesSliceBlock,
+  DexStatesWhenBlock,
   DistributionBlock,
   FrameTimelineBlock,
   GaugeSpec,
   PairsBlock,
   SeriesBlock,
   StatBlock,
+  TabId,
+  TileSpec,
 } from './manifest.js'
+import { SECTIONS, TILES } from './manifest.js'
+import { READABILITY_COPY as RC } from './readability-copy.js'
 import { MISSING, type Read, readPath } from './read.js'
 
 /**
@@ -30,6 +48,12 @@ export interface NoneVm {
   none: true
   /** `수집 안 함 — <경로> 없음` 인지 `값 없음` 인지. 둘은 다른 사실이다. */
   label: string
+  /**
+   * 그 칸의 이유 코드 · 문장 — 블록 껍데기(`metric` · `statePath`)가 아닌 **그 값의 짝**이 있을 때만 (진단 컴파일
+   * 상태 slice 의 `_reason_code` · `_reason`). 없으면 렌더러가 블록 껍데기의 코드를 쓴다.
+   */
+  code?: string
+  title?: string
 }
 
 /** 데이터가 없을 때의 뷰모델. `MISSING` 과 `null` 을 여기서 마지막으로 가른다. */
@@ -44,11 +68,24 @@ function isEmptyArray(raw: Read): boolean {
   return !Array.isArray(raw) || raw.length === 0
 }
 
+/**
+ * **차트 카드의 `[]` — 재 봤더니 0건** (report-readability B22). 목록 카드의 `크래시 없음` 처럼 `<무엇> 없음` 을
+ * 그린다 — `값 없음`(null 글자)으로 그리면 못 잰 것처럼 읽히고 레일 배지가 센다. 배열이 아닌 것 · `null` ·
+ * 필드 없음은 그대로 `none` 이 가른다 (규칙 3 — 세 상태).
+ */
+function emptyOr(raw: Read, path: string | undefined, word: string): NoneVm {
+  return Array.isArray(raw) && raw.length === 0 ? { none: true, label: word } : none(raw, path)
+}
+
 /* ══════════════════ 시계열 ══════════════════ */
 
 export const SW = 300
 export const SH = 118
-export const SPAD = { l: 36, r: 8, t: 10, b: 26 }
+/**
+ * 왼쪽 여백 46 — 12 단위 눈금 `3,000` 이 여백 안에 든다 (36 이면 카드 안쪽 여백으로 흘렀다 · report-readability
+ * `## 크기` · rr-type 이 `overflow: visible` 로 먼저 막음).
+ */
+export const SPAD = { l: 46, r: 8, t: 10, b: 26 }
 
 export interface SeriesVm {
   none?: false
@@ -114,7 +151,7 @@ export function buildSeries(
   hoverT: number | null,
 ): SeriesVm | NoneVm {
   const raw = readPath(res, b.path)
-  if (raw === MISSING || raw === null || isEmptyArray(raw)) return none(raw, b.path)
+  if (raw === MISSING || raw === null || isEmptyArray(raw)) return emptyOr(raw, b.path, RC.emptySeries)
 
   const tf = b.transform ?? ((v: number) => v)
   const pts = new Map<number, number>()
@@ -274,7 +311,7 @@ export function buildDistribution(
   width: number,
 ): DistributionVm | NoneVm {
   const raw = readPath(res, b.path)
-  if (raw === MISSING || raw === null || isEmptyArray(raw)) return none(raw, b.path)
+  if (raw === MISSING || raw === null || isEmptyArray(raw)) return emptyOr(raw, b.path, RC.emptyFrames)
 
   const buckets = raw as Bucket[]
   const total = buckets.reduce((n, x) => n + x.count, 0)
@@ -372,9 +409,9 @@ export function buildDistribution(
     pLines,
     percentiles,
     share: buildShare(b.share, res),
-    // 각주는 **실제로 일어난 일**만 적는다 — 읽는 법을 설명하는 문장은 카드에 두지 않는다.
-    // 지금은 접지 않으므로(`breakAfterEmptyBuckets: Infinity`) 늘 빈 문자열이다.
-    footnote: collapsed > 0 ? `빈 버킷 ${collapsed}칸 접음` : '',
+    // 각주는 **실제로 일어난 일**만 단어로 적는다 — 읽는 법을 설명하는 문장은 카드에 두지 않는다 (RR-5 ·
+    // 결정 3). 프레임 수를 못 읽었으면 그 토막을 뺀다 — 0 이나 버킷 합으로 지어내지 않는다.
+    footnote: distFootnote(readPath(res, b.framesPath ?? ''), buckets.length, collapsed),
     tipOf: (idx) => {
       const bk = buckets[idx]
       if (bk === undefined) return null
@@ -385,6 +422,16 @@ export function buildDistribution(
       }
     },
   }
+}
+
+/** 분포 각주 — `{frames} 프레임 · 버킷 {buckets}칸` (+ 접었으면 `빈 버킷 N칸 접음`). */
+function distFootnote(frames: Read, buckets: number, collapsed: number): string {
+  const head =
+    typeof frames === 'number'
+      ? fillReportCopy(RC.distFootnote, { frames: nf(frames, 0), buckets: nf(buckets, 0) })
+      : // 프레임 수 토막만 뺀다 — 같은 모음의 뒤 토막 그대로.
+        fillReportCopy(RC.distFootnote.slice(RC.distFootnote.indexOf('버킷')), { buckets: nf(buckets, 0) })
+  return collapsed > 0 ? `${head} · 빈 버킷 ${collapsed}칸 접음` : head
 }
 
 /* ══════════════════ 프레임 시간축 ══════════════════ */
@@ -461,6 +508,8 @@ export interface FrameTimelineVm {
   markLines: { x: number; hot: boolean; label: string }[]
   /** 표본을 뽑았다는 사실. 전부 실었으면 `null` 이고 그때는 각주가 없다. */
   note: string | null
+  /** 막대 · 두 칸 · 가로가 무엇인지 — 단어 각주 (RR-5). 고정 문구라 수를 싣지 않는다. */
+  footnote: string
   tipOf: (idx: number) => { head: string; value: string; lines: string[] } | null
 }
 
@@ -486,10 +535,11 @@ export function buildFrameTimeline(
   if (raw === MISSING || raw === null || typeof raw !== 'object') return none(raw, b.path)
 
   const d = raw as Partial<FrameTimelineDto>
-  const rows = Array.isArray(d.samples) ? d.samples : []
-  // 표본이 비면 그릴 막대가 없다. **`수집 안 함` 과는 다른 문장이다** — 지표는 돌았고
-  // 프레임이 안 잡혔거나 다 걸러진 것이다.
-  if (rows.length === 0) return none(null, b.path)
+  // 표본이 `[]` 면 재 봤더니 0장이다 — `프레임 없음` (B22 · 배지에 안 셈). 표본 칸 자체가 배열이 아니면
+  // 못 읽은 것이라 `값 없음` 그대로.
+  if (!Array.isArray(d.samples)) return none(null, b.path)
+  const rows = d.samples
+  if (rows.length === 0) return { none: true, label: RC.emptyFrames }
 
   const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 
@@ -614,6 +664,7 @@ export function buildFrameTimeline(
         ? null
         : `화면에 나간 프레임 ${seen}${nf(bars.length, 0)}장 표본 ` +
           `(${bucket}구간마다 가장 오래 걸린 한 장)`,
+    footnote: RC.timelineFootnote,
     tipOf: (idx) => {
       const bar = bars[idx]
       if (bar === undefined) return null
@@ -641,7 +692,7 @@ export interface BarsVm {
 
 export function buildBars(b: BarsBlock, res: unknown): BarsVm | NoneVm {
   const raw = readPath(res, b.path)
-  if (raw === MISSING || raw === null || isEmptyArray(raw)) return none(raw, b.path)
+  if (raw === MISSING || raw === null || isEmptyArray(raw)) return emptyOr(raw, b.path, RC.emptyBars)
 
   const rows = raw as Record<string, unknown>[]
   const vals = rows.map((r) => r[b.valueField]).filter((v): v is number => typeof v === 'number')
@@ -729,7 +780,8 @@ export function buildDelta(b: DeltaBlock, res: unknown): DeltaVm | NoneVm {
   if (b.path === undefined) return { none: true, label: '매니페스트에 path 가 없습니다' }
 
   const raw = readPath(res, b.path)
-  if (raw === MISSING || raw === null || isEmptyArray(raw)) return none(raw, b.path)
+  // 재 봤더니 0개 — `항목 없음` (B37 · B22 와 같은 이유 · 배지에 안 셈).
+  if (raw === MISSING || raw === null || isEmptyArray(raw)) return emptyOr(raw, b.path, RC.emptyDelta)
   const labelField = b.labelField ?? 'name'
   return {
     rows: (raw as Record<string, unknown>[]).map((r) => {
@@ -745,14 +797,31 @@ export function buildDelta(b: DeltaBlock, res: unknown): DeltaVm | NoneVm {
   }
 }
 
+export interface PairsRowVm {
+  /** 라벨 — 경로 라벨이면 경로 원문 그대로(⌘F 가 닿는다). */
+  label: string
+  /** 경로 라벨의 단어 줄 (RR-6). 있으면 라벨이 두 줄 — 단어 위 · 경로 아래. 기기 원문 라벨에는 없다. */
+  word?: string
+  value: string
+  /** `share` 는 값과 **따로** 낸다. 한 문자열로 붙이면 개수와 비율이 눈에서 섞인다. */
+  share: string
+  /** 기계 이름 값 — 구분자 뒤에서 줄바꿈한다 (`<wbr>` · RR-7). 숫자 칸은 아니다 (`1,234` 가 쉼표에서 끊기지 않게). */
+  wrap: boolean
+  /** 기계값(경로) — 등폭으로 쓴다. */
+  mono?: true
+  /** 값이 `null` 인 이유 코드 (`why` 를 선언한 키만). 값이 있으면 없다. */
+  code?: string
+  /** 그 이유의 문장 — 행 툴팁. */
+  title?: string
+}
+
 export interface PairsVm {
   none?: false
-  /** `share` 는 값과 **따로** 낸다. 한 문자열로 붙이면 개수와 비율이 눈에서 섞인다. */
-  rows: { label: string; value: string; share: string; wrap: boolean }[]
+  rows: PairsRowVm[]
 }
 
 export function buildPairs(b: PairsBlock, res: unknown): PairsVm | NoneVm {
-  const raw = readPath(res, b.path)
+  const raw = readBlockRoot(res, b.path)
 
   if (b.arrayAs === 'list') {
     // 세 상태를 가른다: 필드가 없다 / 못 읽었다(null) / 재 봤더니 없었다([]).
@@ -772,7 +841,8 @@ export function buildPairs(b: PairsBlock, res: unknown): PairsVm | NoneVm {
   }
 
   if (b.arrayAs === 'freq') {
-    if (raw === MISSING || raw === null || isEmptyArray(raw)) return none(raw, b.path)
+    // 재 봤더니 0개 — `항목 없음` (B37 · 배지에 안 셈).
+    if (raw === MISSING || raw === null || isEmptyArray(raw)) return emptyOr(raw, b.path, RC.emptyFreq)
     // 같은 클러스터의 코어는 주파수가 같다. 8줄을 3줄로 접는다 — 같은 값 8번은 정보가 아니다.
     const groups = new Map<string, { cpus: number[]; f: Record<string, number> }>()
     for (const f of raw as Record<string, number>[]) {
@@ -802,9 +872,37 @@ export function buildPairs(b: PairsBlock, res: unknown): PairsVm | NoneVm {
         typeof v === 'number' && typeof d === 'number' && d > 0
           ? `${nf((v / d) * 100, 1)}%`
           : ''
-      return { label: k.l, value: fmtValue(v, k.f), share, wrap: k.f === 'wrap' }
+      const row: PairsRowVm = {
+        label: k.l,
+        value: fmtValue(v, k.f),
+        share,
+        wrap: WRAP_FMTS.includes(k.f),
+      }
+      if (k.w !== undefined) row.word = k.w
+      // 등폭은 기계값에만 — `값 없음` 은 문장이라 본문 글꼴 그대로다.
+      if (k.f === 'path' && v !== null && v !== MISSING) row.mono = true
+      // **값이 없을 때만** 이유를 단다 — stat 카드와 같은 관례다. 값이 있는데 사유를 달면 멀쩡한
+      // 값까지 의심하게 된다.
+      if (v === null && k.why !== undefined) {
+        const code = readPath(raw, k.why.code)
+        const reason = readPath(raw, k.why.reason)
+        if (typeof code === 'string') row.code = code
+        if (typeof reason === 'string') row.title = reason
+      }
+      return row
     }),
   }
+}
+
+/** 기계 이름을 내는 포맷 — 값이 구분자 뒤에서 줄바꿈한다 (RR-7). 숫자 포맷은 넣지 않는다. */
+const WRAP_FMTS: Fmt[] = ['wrap', 'path', 'list', 'dots']
+
+/**
+ * **블록 `path` 를 읽는다.** 빈 문자열은 문서 루트다 — 서로 다른 갈래의 값을 한 카드에 모으는
+ * 카드(진단 탭의 `원본`)가 라벨을 루트 경로 그대로 쓰게 하려는 것이다.
+ */
+function readBlockRoot(res: unknown, path: string): Read {
+  return path === '' ? (res ?? MISSING) : readPath(res, path)
 }
 
 export interface StatVm {
@@ -898,6 +996,218 @@ export function buildStat(b: StatBlock, res: unknown): StatVm {
   }
 }
 
+/* ══════════════════ dex 줄 표 (dexstates) ══════════════════ */
+
+/** 기록 칸 한 행 — 단어 줄 · 경로 줄 · 값 (+ 값이 없을 때만 코드 · 문장). */
+export interface DexRecordVm {
+  word: string
+  path: string
+  value: string
+  /** 기계값(명령 원문 · 바꾼 값) — 등폭. */
+  mono: boolean
+  /** 구분자 뒤 줄바꿈 (`<wbr>`) — 보낸 명령 원문. */
+  wrap: boolean
+  /**
+   * 보낸 명령을 공백으로 나눈 토막 — `keep` 이면 그 토막 안에서 줄을 바꾸지 않는다 (깃발 `-m` · `-f` · plan B40).
+   * 이어 붙이면 `value` 그대로 (글자를 넣지도 빼지도 않는다). 명령 칸에만 있다.
+   */
+  parts?: CommandPart[]
+  code?: string
+  title?: string
+}
+
+/** 때 행 하나. `cells` 가 `null` 이면 그 때 배열에 이 줄이 없다 — `줄 없음` (위치 행도 없다). */
+export interface DexRowVm {
+  /** 때 단어 (`바꾸기 전` · `시작` · `끝`). 진단 slice 는 때가 없다. */
+  when?: string
+  cells: string[] | null
+  /**
+   * 위치 행 — 원문 그대로 · `null` 이면 `값 없음`. 진단 slice · `줄 없음` · **위치가 줄에 한 번 선 때**(아래
+   * `DexLineVm.location`)에는 없다.
+   */
+  location?: string
+}
+
+/** dex 줄(앱) · slice(진단) 하나 — 머리 행 1(경로 원문) · 머리 행 2(필드 이름 · 값) · 값 행들. */
+export interface DexLineVm {
+  head: string
+  /** 머리 행 2. `word` 가 있으면 단어 줄을 이름 앞에 (진단 `oat 파일 상태`). */
+  fields: { word?: string; name: string; value: string }[]
+  /**
+   * 그 줄이 있는 때의 위치가 **글자 그대로 모두 같으면** 그 위치 하나 — 머리 행 아래 한 번 · 한 줄 라벨로 선다
+   * (plan B42). 하나라도 다르면 없고 때 행마다 `location` 이 선다. 진단 slice 에는 없다.
+   */
+  location?: string
+  rows: DexRowVm[]
+}
+
+export interface DexStatesVm {
+  none?: false
+  /** 위 기록 칸 — 진단 slice 는 비어 있다. */
+  records: DexRecordVm[]
+  /** 표 머리 칸 — 단어 · 경로 (때 칸은 경로가 없다). */
+  cols: { word: string; path?: string }[]
+  /** 위치 행 라벨 (앱 카드). */
+  locationLabel?: { word: string; path: string }
+  /** 기기 원문 순 · 처음 나온 자리 순. 색 · 굵기 · 순위 칸이 없다 (결정 6). */
+  lines: DexLineVm[]
+  /** 줄 없음 글자 — 렌더러가 칸 자리에 찍는다. */
+  lineMissing: string
+}
+
+/** 보낸 명령의 토막 하나 — 공백 덩어리도 토막이다 (이어 붙이면 원문). */
+export interface CommandPart {
+  text: string
+  /** 그 안에서 줄을 바꾸지 않는다 — `-` 로 시작하는 깃발 토큰 (`-m` · `-f` · `--reset`). */
+  keep: boolean
+}
+
+/**
+ * **보낸 명령을 토막 낸다** (plan B40). 브라우저는 하이픈 뒤에서도 줄을 바꿔 390 에서 `-m` 이 `-` / `m` 으로
+ * 갈렸다 — 깃발이 떨어지면 명령을 잘못 읽는다. 공백으로 나눈 토큰 가운데 `-` 로 시작하는 것만 통째로 두고, 나머지는
+ * 구분자 뒤 `<wbr>` 그대로(긴 패키지 이름이 칸 안에서 끊기게). 글자는 하나도 바꾸지 않는다.
+ */
+export function commandParts(s: string): CommandPart[] {
+  return s.split(/(\s+)/).filter((t) => t !== '').map((text) => ({ text, keep: text.startsWith('-') }))
+}
+
+/** dex 줄 원소에서 칸 하나를 문자열로 — 없는 칸 · `null` 도 그 말 그대로 (`fmtValue`). */
+function cell(row: Record<string, unknown>, field: string, f: Fmt): string {
+  return fmtValue(field in row ? (row[field] as Read) : MISSING, f)
+}
+
+function asRows(raw: Read): Record<string, unknown>[] {
+  return (raw as unknown[]).filter((x): x is Record<string, unknown> => x !== null && typeof x === 'object')
+}
+
+/**
+ * **진단 컴파일 상태 slice** — 원문 순 그대로 한 slice 가 한 줄. `null` 이면 그 칸의 이유 짝으로 `값 없음` + 코드
+ * (블록 껍데기가 아니다 — dalvik 안 켠 원본은 블록이 collected 다 · BP-7), `[]` 는 `컴파일 상태 slice 없음`.
+ */
+function buildDexSlices(b: DexStatesSliceBlock, res: unknown): DexStatesVm | NoneVm {
+  const raw = readPath(res, b.path)
+  if (raw === MISSING) return none(raw, b.path)
+  if (raw === null || !Array.isArray(raw)) {
+    const vm: NoneVm = { none: true, label: NONE_NULL }
+    const code = readPath(res, b.why.code)
+    const reason = readPath(res, b.why.reason)
+    if (typeof code === 'string') vm.code = code
+    if (typeof reason === 'string') vm.title = reason
+    return vm
+  }
+  if (raw.length === 0) return { none: true, label: b.emptyLabel }
+  return {
+    records: [],
+    cols: [b.cols.filter, b.cols.reason],
+    lines: asRows(raw).map((r) => ({
+      head: cell(r, 'location', 'raw'),
+      fields: [{ word: b.headField.word, name: b.headField.path, value: cell(r, b.headField.path, 'raw') }],
+      rows: [{ cells: [cell(r, b.cols.filter.path, 'raw'), cell(r, b.cols.reason.path, 'raw')] }],
+    })),
+    lineMissing: '',
+  }
+}
+
+/**
+ * **앱 컴파일 카드** (BP-8 · 결정 15 · 16 · 디자인 줄 맞춤).
+ *
+ * - 시작 키가 없으면 옛 파일 — 카드째 `수집 안 함` (배지에 셈).
+ * - 기록 칸: 바꾼 기록이 있으면 그 칸 셋, 없으면 `바꾸지 않음` (사실 · 배지 밖). 그 뒤 **배열이 `null` 인 때**마다
+ *   한 행 `값 없음` + 코드 (문장은 행 title) — 그 때 행은 모든 dex 줄에서 뺀다 (줄마다 되풀이하지 않는다).
+ * - 줄 맞춤: 키 `path` + `abi` · 때 순서로 훑어 **처음 나온 자리** (기기 순서 그대로 · 끝에만 있는 줄은 뒤에).
+ *   그 때 배열에 그 줄이 없으면 `줄 없음` — `null` 이 아니다.
+ */
+function buildDexWhen(b: DexStatesWhenBlock, res: unknown): DexStatesVm | NoneVm {
+  const start = readPath(res, b.path)
+  if (start === MISSING) return none(start, b.path)
+
+  const rec = readPath(res, b.record.path)
+  const records: DexRecordVm[] = []
+  if (rec === MISSING) {
+    records.push({ word: b.record.none.word, path: b.record.none.path, value: b.record.none.value, mono: false, wrap: false })
+  } else if (rec === null || typeof rec !== 'object') {
+    // 키는 있는데 값이 없다 — 규칙 3: `바꾸지 않음` 이 아니다.
+    records.push({ word: b.record.none.word, path: b.record.none.path, value: fmtValue(rec as Read, 'raw'), mono: false, wrap: false })
+  } else {
+    for (const f of b.record.fields) {
+      const v = readPath(rec, f.field)
+      const present = v !== MISSING && v !== null
+      const row: DexRecordVm = { word: f.word, path: f.field, value: fmtValue(v, f.fmt), mono: present && f.mono === true, wrap: present && f.fmt === 'wrap' }
+      if (row.wrap) row.parts = commandParts(row.value)
+      records.push(row)
+    }
+  }
+
+  const live: { word: string; rows: Record<string, unknown>[] }[] = []
+  for (const t of b.times) {
+    if (t.onlyIf !== undefined) {
+      const o = readPath(res, t.onlyIf)
+      if (o === MISSING || o === null || typeof o !== 'object') continue
+    }
+    const arr = readPath(res, t.path)
+    if (Array.isArray(arr)) {
+      live.push({ word: t.word, rows: asRows(arr) })
+      continue
+    }
+    // 못 읽은 때 — 기록 칸 한 행. 필드가 없으면(그 시절 도구) `수집 안 함`, `null` 이면 `값 없음` + 코드.
+    const row: DexRecordVm = { word: t.word, path: t.label, value: fmtValue(arr, 'raw'), mono: false, wrap: false }
+    if (arr === null) {
+      const code = readPath(res, t.code)
+      const reason = readPath(res, t.reason)
+      if (typeof code === 'string') row.code = code
+      if (typeof reason === 'string') row.title = reason
+    }
+    records.push(row)
+  }
+
+  const key = (r: Record<string, unknown>): string => `${String(r['path'])}\u0000${String(r['abi'])}`
+  const order: string[] = []
+  const first = new Map<string, Record<string, unknown>>()
+  for (const t of live) {
+    for (const r of t.rows) {
+      const k = key(r)
+      if (first.has(k)) continue
+      first.set(k, r)
+      order.push(k)
+    }
+  }
+
+  return {
+    records,
+    cols: [{ word: b.cols.when }, b.cols.status, b.cols.reason],
+    locationLabel: b.cols.location,
+    lines: order.map((k): DexLineVm => {
+      const head = first.get(k)!
+      const at = live.map((t) => t.rows.find((x) => key(x) === k))
+      // 위치가 같은가 — 그 줄이 있는 때끼리 **원문 그대로** 비교한다 (`null` 은 `null` 끼리 · 필드 없음은 없음끼리 ·
+      // 공백 · 대소문자를 고르지 않는다). 하나라도 다르면 때마다 그대로 (plan B42).
+      const locs = at.filter((r) => r !== undefined).map((r) => (b.cols.location.path in r ? r[b.cols.location.path] : MISSING))
+      const shared = locs.every((l) => l === locs[0])
+      const line: DexLineVm = {
+        head: cell(head, 'path', 'raw'),
+        fields: b.lineFields.map((f) => ({ name: f.field, value: cell(head, f.field, f.fmt) })),
+        rows: live.map((t, i): DexRowVm => {
+          const r = at[i]
+          if (r === undefined) return { when: t.word, cells: null }
+          const row: DexRowVm = {
+            when: t.word,
+            cells: [cell(r, b.cols.status.path, 'raw'), cell(r, b.cols.reason.path, 'raw')],
+          }
+          if (!shared) row.location = cell(r, b.cols.location.path, 'raw')
+          return row
+        }),
+      }
+      if (shared) line.location = fmtValue(locs[0] as Read, 'raw')
+      return line
+    }),
+    lineMissing: b.lineMissing,
+  }
+}
+
+export function buildDexStates(b: DexStatesBlock, res: unknown): DexStatesVm | NoneVm {
+  return b.rows === 'slice' ? buildDexSlices(b, res) : buildDexWhen(b, res)
+}
+
 /* ══════════════════ 지표 상태 ══════════════════ */
 
 export interface MetricState {
@@ -908,7 +1218,12 @@ export interface MetricState {
 
 export function metricState(res: unknown, metric: Block['metric']): MetricState {
   if (metric === undefined) return { status: null, reason: null, reasonCode: null }
-  const m = readPath(res, `metrics.${metric}`)
+  return shellState(res, `metrics.${metric}`)
+}
+
+/** `status` · `reason` · `reason_code` 껍데기 하나를 읽는다. 메트릭과 진단 블록이 같은 모양이다. */
+function shellState(res: unknown, path: string): MetricState {
+  const m = readPath(res, path)
   if (m === MISSING || m === null || typeof m !== 'object') {
     return { status: null, reason: null, reasonCode: null }
   }
@@ -918,4 +1233,194 @@ export function metricState(res: unknown, metric: Block['metric']): MetricState 
     reason: typeof o['reason'] === 'string' ? o['reason'] : null,
     reasonCode: typeof o['reason_code'] === 'string' ? o['reason_code'] : null,
   }
+}
+
+/**
+ * 블록 하나의 상태 — 지표면 `metrics.<id>`, 아니면 `statePath` 의 껍데기. 둘 다 없으면 상태가 없다
+ * (기기 정보 · 오버헤드 카드).
+ */
+export function blockState(res: unknown, b: Block): MetricState {
+  if (b.metric !== undefined) return metricState(res, b.metric)
+  if (b.statePath !== undefined) return shellState(res, b.statePath)
+  return { status: null, reason: null, reasonCode: null }
+}
+
+/**
+ * **빈 자리에 딸린 그 칸의 이유** (진단 컴파일 상태 slice). 카드 제목 title 은 그 문장, 값 자리 코드는 그 코드 —
+ * 배지(`status`)는 블록 껍데기 그대로다. 짝이 없는 뷰모델이면 껍데기를 그대로 돌려준다.
+ */
+export function cardState(shell: MetricState, vm: unknown): MetricState {
+  const n = vm as NoneVm | null
+  if (n === null || typeof n !== 'object' || n.none !== true) return shell
+  return {
+    ...shell,
+    reason: n.title ?? shell.reason,
+    reasonCode: n.code ?? shell.reasonCode,
+  }
+}
+
+/**
+ * 카드 제목 줄의 상태 배지. `unsupported` · `skipped` · `failed` 에만 — **`partial` 은 달지 않는다**
+ * (`format.ts` 의 `BADGED_STATUS`). 이유 문장은 배지가 없어도 제목 툴팁으로 닿는다.
+ */
+export function badgeOf(state: MetricState): string | null {
+  if (state.status === null || !BADGED_STATUS.includes(state.status)) return null
+  return STATUS_LABEL[state.status] ?? state.status
+}
+
+/**
+ * 카드 단위. 값이 단위를 정하는 카드(stat · slice 표)는 뷰모델의 것을, 나머지는 매니페스트의 것을
+ * 쓴다. **진단 세션이면 `diagnoseUnit` 이 이긴다** — 평소 세션에는 그 단위가 붙지 않는다.
+ */
+export function cardUnit(b: Block, vm: unknown, diagnose: boolean): string {
+  const isNone = (vm as NoneVm | null)?.none === true
+  if (!isNone && (b.kind === 'stat' || b.kind === 'slicetable')) return (vm as { unit: string }).unit
+  if (diagnose && b.diagnoseUnit !== undefined) return b.diagnoseUnit
+  return b.unit ?? ''
+}
+
+/* ══════════════════ 블록 하나 · 레일 배지 ══════════════════ */
+
+/**
+ * 매니페스트의 `kind` 하나가 빌더 하나로 간다. 지표 이름은 어디에도 안 나온다.
+ * `slicetable` 은 문서가 바뀔 때만 만들어 화면이 따로 넘긴다 (`ReportPage` 의 `sliceVms`).
+ */
+export function buildBlock(
+  b: Exclude<Block, { kind: 'slicetable' }>,
+  res: unknown,
+  maxT: number,
+  marks: Mark[],
+  hoverT: number | null,
+  distW: number,
+): unknown {
+  switch (b.kind) {
+    case 'series': return buildSeries(b, res, maxT, marks, hoverT)
+    case 'distribution': return buildDistribution(b, res, distW)
+    case 'frametimeline': return buildFrameTimeline(b, res, maxT, marks, hoverT)
+    case 'bars': return buildBars(b, res)
+    case 'delta': return buildDelta(b, res)
+    case 'pairs': return buildPairs(b, res)
+    case 'stat': return buildStat(b, res)
+    case 'dexstates': return buildDexStates(b, res)
+    default: {
+      // **exhaustiveness 체크.** `Block` 에 새 `kind` 가 늘거나 여기서 하나가 빠지면
+      // `b` 가 `never` 로 좁혀지지 않아 컴파일이 깨진다 — case 를 빠뜨려도 테스트를
+      // 전부 통과하며 카드가 조용히 사라지는 사고(2번 지적 사항)를 빌드 시점에 잡는다.
+      const _exhaustive: never = b
+      return _exhaustive
+    }
+  }
+}
+
+/**
+ * **카드가 값 자리에 그린 빈 칸 글자.** 값이 없는 카드의 `NoneBody` 글자(`label`)이거나, 값이 없는
+ * stat 카드의 큰 글자(`value`)다. 값을 그린 카드는 `null`.
+ *
+ * 레일 배지는 이 글자로 센다 — 렌더러가 그리는 바로 그 필드를 읽으니 셈과 그림이 다른 규칙을 쓸 수 없다.
+ */
+function placeholderOf(b: Block, vm: unknown): string | null {
+  const v = vm as { none?: unknown; label?: unknown; dim?: unknown; value?: unknown } | null
+  if (v === null || typeof v !== 'object') return null
+  if (v.none === true) return typeof v.label === 'string' ? v.label : null
+  if (b.kind === 'stat' && v.dim === true) return typeof v.value === 'string' ? v.value : null
+  // 컴파일 카드에 표가 없고 기록 칸이 `값 없음` 만 그렸으면(시작 · 끝 둘 다 못 읽음) 그 카드가 그린 것은 `값 없음`
+  // 뿐이다 — 센다. 표가 있으면 기록 칸의 `값 없음`(한 때만 못 읽음) · `바꾸지 않음` · `줄 없음` 은 세지 않는다
+  // (디자인 줄 맞춤 · 결정 15).
+  if (b.kind === 'dexstates') {
+    const d = vm as DexStatesVm
+    if (d.lines.length === 0 && d.records.some((r) => r.value === NONE_NULL)) return NONE_NULL
+  }
+  return null
+}
+
+/**
+ * **레일 배지가 세는 블록인가** (RR-8) — `수집 안 함` · `값 없음` 을 그린 블록.
+ *
+ * 재 봤더니 없음(`[]`)으로 `없음` 을 그린 블록(`크래시 없음` · `ANR 없음` · `경고 없음` · 차트 · 전/후 표 ·
+ * 주파수 카드의 `표본 없음` · `프레임 없음` · `항목 없음`)은 세지 않는다 — 그것은 잰 0 이다(규칙 3 · B22 · B37). 그 밖의 글자(`바꾸지 않음` 같은
+ * 사실 문장)도 같은 이유로 세지 않는다. 컴파일 카드는 표 없이 `값 없음` 만 그렸을 때만 센다 (`placeholderOf`).
+ * 요약 타일은 블록이 아니라 이 셈에 들어오지 않는다 — 같은 값의 카드가 이미 센다 (RR 결정 12).
+ */
+export function isUncollected(b: Block, vm: unknown): boolean {
+  const p = placeholderOf(b, vm)
+  return p !== null && (p === NONE_NULL || p.startsWith(NONE_MISSING))
+}
+
+/** 탭 하나의 레일 배지 수 — 그 탭 섹션의 블록 가운데 `isUncollected` 인 것. `0` 이면 배지를 안 그린다. */
+export function tabBadgeCount(items: readonly { block: Block; vm: unknown }[], tab: TabId): number {
+  return items.filter(
+    (x) => SECTIONS.find((s) => s.id === x.block.section)?.tab === tab && isUncollected(x.block, x.vm),
+  ).length
+}
+
+/* ══════════════════ 요약 타일 ══════════════════ */
+
+/**
+ * 타일 하나 (RR-4). **값이 바뀌어도 모양이 같다** — 색 · 굵기 · 아이콘을 정하는 칸이 없고, 클래스는 값이
+ * 있느냐 없느냐로만 갈린다(디자인 결정 2). 순위 · 등급 · 기준 비교 0.
+ */
+export interface TileVm {
+  metric: TileSpec['metric']
+  /** 단어 줄 (`앱 시작` …). */
+  word: string
+  /** 경로 줄 — 필드 경로 원문 (⌘F 가 닿는다). */
+  path: string
+  /** 카드와 같은 배지 — unsupported · skipped · failed 만 (partial 은 배지 없이 `title`). */
+  badge: string | null
+  /** 지표 `reason` 문장 — 툴팁. */
+  title: string | null
+  /**
+   * 값 — **아래 카드의 같은 값과 같은 문자열** (`1,234 ms` · `12.3 MB` · `NONE (0)`). 값이 없으면 `null` 이고
+   * 그때는 `none` 이 선다.
+   */
+  value: string | null
+  /** 그 문자열을 큰 숫자 · 작은 단위로 나눈 것 — 렌더만 쓴다. 이어 붙이면 `value` (+ 덧단위). */
+  big: string
+  small: string
+  /** 값 자리에 서는 말 — `값 없음` · `수집 안 함` · 배지 상태면 `reason_code`. 값이 있으면 `null`. */
+  none: string | null
+  /** `값 없음` 아래 코드 줄. */
+  code: string | null
+}
+
+/**
+ * 포맷된 값 끝의 영문 단위를 떼어 낸다 — `1,234 ms` → [`1,234`, `ms`]. 숫자 뒤 단위가 아니면 그대로
+ * (`NONE (0)` · `collected`). 글자는 하나도 바꾸지 않는다: 큰 글자 · 작은 글자로 나눌 뿐이다.
+ */
+export function splitUnit(s: string): [string, string] {
+  const m = /^(.*\d) ([A-Za-z]+)$/.exec(s)
+  return m === null ? [s, ''] : [m[1]!, m[2]!]
+}
+
+/**
+ * 타일 경로 읽기. `readPath` 는 중간이 `null` 이면 그 아래를 `MISSING` 으로 읽는데, 타일은 **아래 카드와 같은
+ * 상태**를 말해야 한다 — `cpu.data.app` 이 `null` 이면 `앱 CPU 시간` 카드가 `값 없음` 을 그리므로 타일도
+ * `값 없음` 이다 (`수집 안 함` 이면 필드가 없는 옛 세션처럼 읽힌다). 위가 `null` 이면 `null`, 위가 없으면 `MISSING`.
+ */
+function readTilePath(res: unknown, path: string): Read {
+  const v = readPath(res, path)
+  if (v !== MISSING) return v
+  const segs = path.split('.')
+  for (let i = 1; i < segs.length; i++) if (readPath(res, segs.slice(0, i).join('.')) === null) return null
+  return MISSING
+}
+
+export function buildTile(t: TileSpec, res: unknown): TileVm {
+  const st = metricState(res, t.metric)
+  const badge = badgeOf(st)
+  const base = { metric: t.metric, word: t.word, path: t.path, badge, title: st.reason }
+  const empty = { value: null, big: '', small: '' }
+  // 카드와 같은 관례 (디자인 결정 3) — 배지가 서면 값 자리에 그 이유 코드.
+  if (badge !== null) return { ...base, ...empty, none: st.reasonCode ?? NONE_NULL, code: null }
+  const v = readTilePath(res, t.path)
+  if (v === MISSING) return { ...base, ...empty, none: NONE_MISSING, code: null }
+  if (v === null) return { ...base, ...empty, none: NONE_NULL, code: st.reasonCode }
+  const value = fmtValue(v, t.fmt)
+  const [big, unit] = splitUnit(value)
+  return { ...base, value, big, small: t.unit ?? unit, none: null, code: null }
+}
+
+/** 요약 탭 첫 섹션의 타일 8 — `TILES` 순서 그대로 (값으로 고르거나 다시 세우지 않는다). */
+export function buildTiles(res: unknown): TileVm[] {
+  return TILES.map((t) => buildTile(t, res))
 }

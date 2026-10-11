@@ -167,13 +167,15 @@ export async function startSession(deps: EffectDeps, tab: Tab, outDir: string): 
     name: tab.name.trim() === '' ? null : tab.name.trim(),
     launch: tab.launch,
     force: tab.force,
+    // 진단은 켤 때만 싣는다 — 평소 세션의 요청은 이 칸이 없던 때와 같은 모양이다 (계약 주석).
+    ...(tab.diagnose ? { diagnose: true as const } : {}),
   }
 
   const session = await withLoading(
     deps,
     '세션을 시작하고 트레이스를 켜고 있습니다',
     // 오버레이에는 "무엇을 기다리는지" 만 띄운다. 실제로 실행된 줄은 응답이 알려 준다.
-    `perftracker start --app "${req.packageName}" -d ${req.serial} -o ${outDir}`,
+    `perftracker start${req.diagnose === true ? ' --diagnose' : ''} --app "${req.packageName}" -d ${req.serial} -o ${outDir}`,
     () => deps.api.start(req),
     (s) => s.command,
   )
@@ -189,6 +191,13 @@ export async function startSession(deps: EffectDeps, tab: Tab, outDir: string): 
     // 경과 시간은 **서버가 준 시작 시각**에서 센다. 브라우저 시계를 쓰면 두 탭이 서로 다른
     // 기준으로 세고, 새로 고치면 경과가 0 으로 돌아간다.
     startedAt: Date.parse(session.startedAt),
+  })
+  // 진단 표시와 고지는 **서버가 실제로 연 세션**을 따른다 — 토글이 아니라 응답이 정본이다.
+  // 고지는 core 의 문장 그대로라 여기서 조립하지 않는다 (DM-10). 평소 세션이면 둘 다 비운다.
+  deps.dispatch({
+    type: 'tab/patched',
+    key: tab.key,
+    patch: { diagnose: session.diagnose !== undefined, diagnoseNotice: session.diagnose?.notice ?? null },
   })
   // 기기 목록의 `measuring` 을 갱신해 다른 탭에서 이 기기를 못 고르게 한다.
   const devices = await deps.api.devices().catch(() => null)

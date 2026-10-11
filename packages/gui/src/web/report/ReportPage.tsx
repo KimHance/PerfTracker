@@ -1,16 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { INLINE_REPORT_GLOBAL, type ReportDocument } from '../../contract/api.js'
 import { computeMaxT, readMarks } from './axis.js'
 import {
-  buildBars,
-  buildDelta,
-  buildDistribution,
-  buildFrameTimeline,
-  buildPairs,
-  buildSeries,
-  buildStat,
-  metricState,
+  blockState,
+  buildBlock,
+  buildTiles,
+  cardState,
+  cardUnit,
+  type DexStatesVm,
   type NoneVm,
+  tabBadgeCount,
 } from './blocks.js'
 import { BlockCard, NoneBody } from './BlockCard.jsx'
 import {
@@ -20,15 +19,19 @@ import {
   FrameTimelineChart,
   PairsBody,
   Percentiles,
-  emphasize,
   SeriesChart,
   StatBody,
+  Tiles,
   type Tip,
   useWidth,
 } from './Charts.jsx'
+import { DexStatesBody } from './DexStates.jsx'
 import { clock } from './format.js'
-import { buildHeader } from './header.js'
-import { type Block, MANIFEST, SECTIONS, type TabId, TABS } from './manifest.js'
+import { buildHeader, isDiagnoseSession, tabsFor } from './header.js'
+import { type Block, MANIFEST, SECTIONS, type TabId } from './manifest.js'
+import { READABILITY_COPY } from './readability-copy.js'
+import { SliceTable } from './SliceTable.jsx'
+import { buildSliceTable, type SliceTableVm } from './slices.js'
 
 /**
  * **한 파일로 만 보고서가 심어 둔 데이터.** `perftracker report` 가 `result.json` 을 여기
@@ -50,15 +53,30 @@ function inlineReport(): ReportDocument | null {
  * 초를 가리키고, 마커를 짚어도 같은 값이 움직인다 — "CPU 가 튄 그 순간 메모리는" 을 눈을
  * 옮기지 않고 읽으라는 것이 이 화면의 요점이다.
  */
-export function ReportPage({ runId }: { runId: string }) {
-  const [doc, setDoc] = useState<ReportDocument | null>(null)
+export function ReportPage({ runId, initialTab = 'summary' }: {
+  runId: string
+  /** 처음 켜진 탭 — 화면은 늘 `summary` 다. 시험이 진단 탭을 첫 그림으로 그릴 때만 준다. */
+  initialTab?: TabId
+}) {
+  // 심겨 있으면 첫 그림부터 그 문서다 — 불러오는 중 화면을 거치지 않는다. 시험도 같은 길로 화면 전체를 그린다
+  // (`test/report.test.ts` 의 `react-dom/server` — 레일 배지 · 타일을 렌더 결과로 본다).
+  const [doc, setDoc] = useState<ReportDocument | null>(inlineReport)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<TabId>('summary')
+  const [tab, setTab] = useState<TabId>(initialTab)
   const [sub, setSub] = useState<Record<string, string>>({})
   const [hoverT, setHoverT] = useState<number | null>(null)
   const [hotBucket, setHotBucket] = useState<number | null>(null)
   const [tip, setTip] = useState<Tip | null>(null)
   const [distW, distRef] = useWidth()
+
+  // **slice 표는 문서가 바뀔 때만 만든다.** 나머지 블록은 렌더마다 다시 만드는데(호버 한 번이
+  // 시계열 전부를 다시 그린다), 1만 행짜리 표를 그 박자로 다시 포맷하면 요약 탭의 호버가 끈다.
+  const sliceVms = useMemo(() => {
+    const m = new Map<Block, unknown>()
+    if (doc === null) return m
+    for (const b of MANIFEST) if (b.kind === 'slicetable') m.set(b, buildSliceTable(b, doc))
+    return m
+  }, [doc])
 
   useEffect(() => {
     // 심겨 있으면 부를 곳이 없다 — `file://` 에서 `/api/…` 는 어차피 실패한다.
@@ -89,7 +107,7 @@ export function ReportPage({ runId }: { runId: string }) {
   if (error !== null) {
     return (
       <div className="rp-shell">
-        <Rail tab={tab} setTab={setTab} counts={{ summary: 0, device: 0 }} />
+        <Rail tabs={tabsFor(null)} tab={tab} setTab={setTab} counts={{}} />
         <main className="rp-main">
           <p className="rp-error">{error}</p>
         </main>
@@ -99,7 +117,7 @@ export function ReportPage({ runId }: { runId: string }) {
   if (doc === null) {
     return (
       <div className="rp-shell">
-        <Rail tab={tab} setTab={setTab} counts={{ summary: 0, device: 0 }} />
+        <Rail tabs={tabsFor(null)} tab={tab} setTab={setTab} counts={{}} />
         <main className="rp-main">
           <p className="rp-loading">불러오는 중…</p>
         </main>
@@ -110,20 +128,15 @@ export function ReportPage({ runId }: { runId: string }) {
   const head = buildHeader(doc)
   const marks = readMarks(doc)
   const maxT = computeMaxT(doc, marks)
+  const diagnose = isDiagnoseSession(doc)
+  const tabs = tabsFor(doc)
 
   const built = MANIFEST.map((b, i) => ({
     key: `b${i}`,
     block: b,
-    metric: metricState(doc, b.metric),
-    vm: buildOne(b, doc, maxT, marks, hoverT, distW),
+    metric: blockState(doc, b),
+    vm: b.kind === 'slicetable' ? sliceVms.get(b) : buildBlock(b, doc, maxT, marks, hoverT, distW),
   }))
-
-  const missingIn = (t: TabId): number =>
-    built.filter(
-      (x) =>
-        (x.vm as NoneVm).none === true &&
-        SECTIONS.find((s) => s.id === x.block.section)?.tab === t,
-    ).length
 
   const sections = SECTIONS.filter((s) => s.tab === tab)
     .map((s) => {
@@ -146,7 +159,12 @@ export function ReportPage({ runId }: { runId: string }) {
 
   return (
     <div className="rp-shell">
-      <Rail tab={tab} setTab={setTab} counts={{ summary: missingIn('summary'), device: missingIn('device') }} />
+      <Rail
+        tabs={tabs}
+        tab={tab}
+        setTab={setTab}
+        counts={Object.fromEntries(tabs.map((t) => [t.id, tabBadgeCount(built, t.id)]))}
+      />
 
       <main className="rp-main">
         <header className="rp-head">
@@ -154,6 +172,9 @@ export function ReportPage({ runId }: { runId: string }) {
             <span className="rp-sid mono">{head.id}</span>
             <h1 className="rp-name">{head.name}</h1>
             <span className={`rp-state${head.running ? ' rp-state-on' : ''}`}>{head.stateLabel}</span>
+            {head.diagnosePill !== null && (
+              <span className="rp-state rp-state-diagnose">{head.diagnosePill}</span>
+            )}
           </div>
           <div className="rp-meta">
             {head.meta.map((m) => (
@@ -182,6 +203,17 @@ export function ReportPage({ runId }: { runId: string }) {
           </div>
         )}
 
+        {/* 들어가는 자리 — 지표마다 타일 하나, 순서 고정 (RR-4). 블록이 아니라 레일 배지에 안 센다 (결정 12). */}
+        {tab === 'summary' && (
+          <section className="rp-section rp-section-tiles">
+            <h2 className="rp-section-head">
+              <span>{READABILITY_COPY.tilesSection}</span>
+              <i />
+            </h2>
+            <Tiles tiles={buildTiles(doc)} />
+          </section>
+        )}
+
         {sections.map((s) => (
           <section className="rp-section" key={s.id}>
             <h2 className="rp-section-head">
@@ -203,16 +235,18 @@ export function ReportPage({ runId }: { runId: string }) {
                 ))}
               </div>
             )}
-            {s.note !== undefined && <p className="rp-section-note">{emphasize(s.note)}</p>}
             <div className="rp-grid">
-              {s.items.map(({ key, block, metric, vm }) => {
+              {s.items.map(({ key, block, metric: shell, vm }) => {
                 const isNone = (vm as NoneVm).none === true
+                // 값에 딸린 이유 짝이 있는 빈 자리(진단 컴파일 상태 slice)는 그 문장이 제목 title · 그 코드가 값 자리
+                // 코드다 — 배지는 블록 껍데기 그대로 (`cardState`).
+                const metric = cardState(shell, vm)
                 const stat = block.kind === 'stat'
                 return (
                   <BlockCard
                     key={key}
                     title={block.title}
-                    unit={stat && !isNone ? (vm as { unit: string }).unit : (block.unit ?? '')}
+                    unit={cardUnit(block, vm, diagnose)}
                     span={block.span}
                     tone={block.tone}
                     metric={metric}
@@ -227,20 +261,20 @@ export function ReportPage({ runId }: { runId: string }) {
                         ? (vm as { readoutKind: 'idle' | 'value' | 'nosample' }).readoutKind
                         : undefined
                     }
-                    footnote={
+                    footnotes={
                       isNone
                         ? undefined
                         : block.kind === 'series' || block.kind === 'distribution'
-                          ? (vm as { footnote: string }).footnote
-                          : // 표본을 뽑았다는 사실. 전부 실었으면 `null` 이고 각주가 없다.
+                          ? [(vm as { footnote: string }).footnote]
+                          : // 단어 각주 + 표본을 뽑았다는 사실(전부 실었으면 `null` 이고 그 줄이 없다).
                             block.kind === 'frametimeline'
-                            ? ((vm as { note: string | null }).note ?? undefined)
+                            ? [
+                                (vm as { footnote: string }).footnote,
+                                (vm as { note: string | null }).note ?? '',
+                              ]
                             : undefined
                     }
                   >
-                    {block.note !== undefined && (
-                      <p className="rp-section-note">{emphasize(block.note)}</p>
-                    )}
                     <Body
                       block={block}
                       vm={vm}
@@ -284,14 +318,17 @@ export function ReportPage({ runId }: { runId: string }) {
   )
 }
 
+/** 레일. 탭 목록은 문서가 정한다 — `진단` 은 진단 세션에만 있다 (`header.ts` 의 `tabsFor`). */
 function Rail({
+  tabs,
   tab,
   setTab,
   counts,
 }: {
+  tabs: { id: TabId; label: string }[]
   tab: TabId
   setTab: (t: TabId) => void
-  counts: Record<TabId, number>
+  counts: Partial<Record<TabId, number>>
 }) {
   return (
     <nav className="rp-rail">
@@ -299,7 +336,7 @@ function Rail({
         <div className="rp-brand-1">PERFTRACKER</div>
         <div className="rp-brand-2">세션 데이터</div>
       </div>
-      {TABS.map((t) => (
+      {tabs.map((t) => (
         <button
           key={t.id}
           className={`rp-tab${tab === t.id ? ' rp-tab-on' : ''}`}
@@ -310,38 +347,11 @@ function Rail({
           }}
         >
           <span>{t.label}</span>
-          {counts[t.id] > 0 && <span className="rp-tab-count mono">{counts[t.id]}</span>}
+          {(counts[t.id] ?? 0) > 0 && <span className="rp-tab-count mono">{counts[t.id]}</span>}
         </button>
       ))}
     </nav>
   )
-}
-
-/** 매니페스트의 `kind` 하나가 빌더 하나로 간다. 지표 이름은 어디에도 안 나온다. */
-function buildOne(
-  b: Block,
-  doc: ReportDocument,
-  maxT: number,
-  marks: { t: number; label: string }[],
-  hoverT: number | null,
-  distW: number,
-): unknown {
-  switch (b.kind) {
-    case 'series': return buildSeries(b, doc, maxT, marks, hoverT)
-    case 'distribution': return buildDistribution(b, doc, distW)
-    case 'frametimeline': return buildFrameTimeline(b, doc, maxT, marks, hoverT)
-    case 'bars': return buildBars(b, doc)
-    case 'delta': return buildDelta(b, doc)
-    case 'pairs': return buildPairs(b, doc)
-    case 'stat': return buildStat(b, doc)
-    default: {
-      // **exhaustiveness 체크.** `Block` 에 새 `kind` 가 늘거나 여기서 하나가 빠지면
-      // `b` 가 `never` 로 좁혀지지 않아 컴파일이 깨진다 — case 를 빠뜨려도 테스트를
-      // 전부 통과하며 카드가 조용히 사라지는 사고(2번 지적 사항)를 빌드 시점에 잡는다.
-      const _exhaustive: never = b
-      return _exhaustive
-    }
-  }
 }
 
 function Body({
@@ -402,6 +412,8 @@ function Body({
     case 'delta': return <DeltaBody vm={vm as Parameters<typeof DeltaBody>[0]['vm']} />
     case 'pairs': return <PairsBody vm={vm as Parameters<typeof PairsBody>[0]['vm']} />
     case 'stat': return <StatBody vm={vm as Parameters<typeof StatBody>[0]['vm']} title={block.title} />
+    case 'slicetable': return <SliceTable vm={vm as SliceTableVm} />
+    case 'dexstates': return <DexStatesBody vm={vm as DexStatesVm} />
     default: {
       // **exhaustiveness 체크.** `case` 하나가 빠지면(예: `frametimeline` 삭제) `block` 이
       // `never` 로 안 좁혀져 컴파일이 깨진다 — 안 그러면 그 카드는 테스트를 다 통과한 채

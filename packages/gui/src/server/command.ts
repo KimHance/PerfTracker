@@ -14,7 +14,11 @@ import type { StartRequest } from '../contract/api.js'
  */
 
 export function startCommandLine(req: StartRequest, outDir: string): string {
-  const parts = ['perftracker start', `--app "${req.packageName}"`]
+  const parts = ['perftracker start']
+  // `--diagnose` 는 `start` **바로 뒤**다. CLI 로그는 한 줄이고 넘치면 끝이 잘리는데(924 폭에서
+  // 실제로 잘린다), 진단 세션이라는 사실이 그 잘린 꼬리에 묻히면 안 된다 — 시작 바 예고도 같은 자리다.
+  if (req.diagnose === true) parts.push('--diagnose')
+  parts.push(`--app "${req.packageName}"`)
   if (req.name !== null && req.name.trim() !== '') parts.push(`--name "${req.name.trim()}"`)
   parts.push(`-d ${req.serial}`)
   if (req.launch) parts.push('--launch')

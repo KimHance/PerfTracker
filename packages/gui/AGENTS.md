@@ -31,7 +31,7 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
 | `src/report/` | 빌드된 화면 + `result.json` → **파일 하나짜리 HTML** (`perftracker report`) | 서버를 모른다. 읽는 것은 `dist-web` 과 넘겨받은 문서뿐 |
 | `src/server/` | HTTP · 라우팅 · core 호출 | 웹을 모른다. `view.ts` 가 core → 계약 번역의 **유일한** 자리다 |
 | `src/web/state/` | 전역 상태 · 리듀서 · 파생값 | React 를 모른다 (`StoreContext.tsx` 만 예외). DOM 없이 테스트된다 |
-| `src/web/format/` | 시간 · 스펙 문자열 · 시작 **예고** | 순수 함수. 상태도 API 도 모른다. 실행된 명령은 서버가 적는다 |
+| `src/web/format/` | 시간 · 스펙 문자열 · 시작 **예고** · 세션 표시 줄(`session.ts` — 탭 배지 · 측정 중 킥커 · 진단 고지 · 각주 · 기록 메타 줄) · 측정 화면 진단 문구(`diagnose.ts` — 정본은 `docs/design/diagnostic-mode.md` `## 문구`) | 순수 함수. 상태도 API 도 모른다. 실행된 명령은 서버가 적는다. 화면에 찍히는 글자를 DOM 없이 시험하는 자리 — 컴포넌트는 부르기만 한다 |
 | `src/web/api/` | `ApiClient` 인터페이스 + `http` / `mock` 두 구현 | 화면을 모른다 |
 | `src/web/effects/` | **기기에 닿는 모든 흐름** | 컴포넌트를 모른다. 결과를 액션으로만 되돌린다 |
 | `src/web/components/` | 표시 | `fetch` 를 모른다. `useStore()` 로 상태를 읽고 effects 를 부른다 |
@@ -41,9 +41,12 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
 
 ## 보고서는 팩토리다
 
-`src/web/report/` 는 지표마다 컴포넌트를 만들지 않는다. 데이터 모양이 일곱 가지뿐이고
-(`stat` `distribution` `series` `bars` `delta` `pairs` `frametimeline`), **각 지표가
+`src/web/report/` 는 지표마다 컴포넌트를 만들지 않는다. 데이터 모양이 아홉 가지뿐이고
+(`stat` `distribution` `series` `bars` `delta` `pairs` `frametimeline` `slicetable` `dexstates`), **각 지표가
 `manifest.ts` 에서 자기 모양과 데이터 위치를 선언**하면 렌더러는 모양만 안다.
+`slicetable` 은 진단 세션의 slice 이름별 표다 — 이름 한 줄에 갈래 셋 × 수 셋, 정렬은 보는 사람이
+열 머리를 누를 때만 (아래 「진단 탭」). `dexstates` 는 dex 줄마다 머리 행 + 값 행인 표다 — 요약 탭 맥락 끝
+`컴파일 상태 (전 → 후)`(때 셋 · 위 기록 칸)와 진단 탭 `컴파일 상태 slice` 가 같은 종류다 (baseline-profile BP-8).
 
     지표가 늘어난다  →  manifest.ts 에 한 줄
     새 모양이 나온다 →  그때만 kind 를 하나 늘린다
@@ -56,7 +59,10 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
 | `read.ts` | 경로 읽기. **필드 부재 / `null` / 값** 세 상태를 가른다 | 나머지 전부 |
 | `format.ts` | 포맷터 · 상태 라벨 | 데이터 구조 |
 | `manifest.ts` | 블록 선언 — **유일한 확장 지점** | 렌더링 |
-| `axis.ts` `blocks.ts` `header.ts` | 기하 계산 · 결측 판정 (**순수 함수**) | React · DOM · 이벤트 |
+| `axis.ts` `blocks.ts` `header.ts` `slices.ts` | 기하 계산 · 결측 판정 · 표 행 모델 · 정렬 (**순수 함수**) | React · DOM · 이벤트 |
+| `diagnose-copy.ts` | 진단 모드가 보고서에 새로 내는 문구 — 정본은 디자인 문서 `## 문구` 표 | 나머지 전부 |
+| `readability-copy.ts` | 보고서 가독성이 새로 내는 문구 · 경로 라벨의 단어 — 정본은 `docs/design/report-readability.md` `## 문구` | 나머지 전부 |
+| `compile-copy.ts` | 컴파일 상태가 보고서에 새로 내는 낱말 — 정본은 `docs/design/baseline-profile.md` `## 문구` gui 줄 | 나머지 전부 |
 | `*.tsx` | 그리기만 | 계산. 좌표는 받아서 쓴다 |
 
 화면은 `?report=<run id>` 로 뜬다 (`web/main.tsx`). 라우터를 들이지 않은 것은 경로가 둘뿐이기
@@ -105,13 +111,20 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
   이미 같은 규칙이다 — 프레임워크의 `6ms=155` 는 `[5, 6)` 이고 첫 칸 `5ms` 는 `[0, 5)` 다.
   **첫 칸을 더 쪼갤 수는 없다**: `dumpsys gfxinfo` 가 5ms 이하를 한 칸으로만 준다.
   칸 폭이 왜 고르지 않은지(첫 칸만 5ms)는 `README.md` 에 적혀 있고 **카드에는 적지 않는다.**
-- **카드에 읽는 법을 설명하지 않는다.** 각주는 실제로 일어난 일(`빈 버킷 N칸 접음`)만 적고,
-  "이건 프레임 수가 아니다" 같은 해설은 두지 않는다 — 카드마다 한 줄씩 붙으면 화면이 글이 된다.
-  지표의 성질은 `README.md` 가 정본이다.
+- **카드에 읽는 법을 설명하지 않는다.** 각주는 실제로 일어난 일을 단어로만 적고(`7,531 프레임 · 버킷 61칸` ·
+  `빈 버킷 N칸 접음` · 시간별 프레임의 `막대 = 프레임 · …`), "이건 프레임 수가 아니다" 같은 해설 문장은 두지
+  않는다 — 카드마다 한 줄씩 붙으면 화면이 글이 된다. 블록 · 섹션에 읽는 법 문장 칸(`note`)은 없다
+  (report-readability 결정 3). 지표의 성질은 `README.md` 가 정본이다.
 - **옮겨 적은 이름은 대조를 끊는다.** `dumpsys gfxinfo` 의 `Slow issue draw commands` 를
-  "그리기 명령" 으로 쓰면 원문에서 grep 되지 않고, 우리 스키마 필드를 "앱 warn" 으로 쓰면
-  `result.json` 에서 찾을 수 없다. 기기가 영어로 준 이름은 **그 이름 그대로**, 우리 필드는
-  **경로 그대로** 싣는다 (`logcat 줄 수` 카드가 그렇다). 우리말은 카드 제목에만 쓴다.
+  "그리기 명령" 으로 쓰면 원문에서 grep 되지 않는다 — 기기가 영어로 준 이름은 **그 이름 그대로 한 줄**이다.
+  우리 필드는 **우리말 단어 한 줄 + 경로 원문 한 줄**로 싣는다 (report-readability 결정 2 · RR-6 —
+  `logcat 줄 수` · 기기 · 앱 · 진단 카드). 경로 줄은 지금 라벨 글자 그대로라 `result.json` 에서 그대로
+  찾히고, 단어 줄은 읽히게 한다 — 경로를 지우거나 줄이지 않는다(공통 머리말도 그대로). 매니페스트의
+  `keys[].w` 가 단어이고 정본은 디자인 문서 `## 문구` 의 라벨 단어 표다 (`test/report-copy.test.ts` 가 대조).
+- **긴 기계 이름은 자르지 않고 구분자 뒤에서 줄을 바꾼다** (RR-7 · 결정 5). `/ : $ . ; , _` 뒤에 `<wbr>`
+  (`BlockCard.tsx` 의 `Wbr` · `format.ts` 의 `breakAfterSeparators`) + CSS `overflow-wrap: break-word` —
+  `anywhere` · `break-all` 은 토막 가운데서 먼저 끊어 `HomeA / ctivity` 를 만든다. `<wbr>` 는 글자가 아니라
+  복사하면 원문이다. 숫자 칸에는 두지 않는다(`1,234` 가 쉼표에서 끊긴다).
 - **제목은 무엇의 값인지 말한다.** `우선순위별` 은 무엇의 우선순위인지도 앱 것인지 기기
   것인지도 말하지 않았다. `무엇이 느렸나` 도 같은 이유로 바꿨다.
 - **같은 값이 나온다고 한쪽을 지우지 않는다.** `Janky frames` 와 `Frame deadline missed` 는
@@ -191,6 +204,13 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
 - **세 상태를 세 문장으로 낸다.** 목록 카드(`arrayAs: 'list'`)는 `[]`(재 봤더니 없었다) ·
   `null`(못 읽었다) · 필드 부재(수집 안 함)를 각각 다르게 말한다. sdk 30 처럼 logdr 접근이
   막힌 기기에서 크래시 배열이 `null` 인데 "크래시 없음" 이라고 하면 **없던 사실을 만든다.**
+  차트 카드도 같다 — `[]` 는 `표본 없음`(시계열) · `프레임 없음`(분포 · 시간별 프레임) · `항목 없음`(막대)이고
+  레일 배지가 세지 않는다 (B22). `값 없음` 으로 그리면 잰 0 이 못 잰 것으로 읽힌다.
+- **요약 타일은 블록이 아니다** (report-readability RR-4 · 결정 9 · 10 · 12). 요약 탭 맨 위 `지표` 섹션에
+  지표마다 하나 · 보고서 섹션 순 · 값이 바뀌어도 순서 · 수 그대로 (`manifest.ts` 의 `TILES` · `blocks.ts` 의
+  `buildTiles`). 값은 아래 카드의 같은 값과 **같은 문자열**이고(시험이 맞댄다) `frame` 만 수집 상태다. 값으로
+  색 · 굵기 · 아이콘을 바꾸지 않는다. `MANIFEST` 밖이라 레일 배지에 세지 않는다 — 같은 값의 카드가 이미 센다.
+  같은 값을 두 번 크게 쓰지 않으므로 앱 시작 카드는 큰 숫자 없이 게이지만 그린다.
 - **평소엔 아무 뜻이 없고 이상할 때만 뜻이 생기는 값은 카드에 두지 않는다.** `hal_ready` ·
   `status_override` · `launcher_activity_candidates` 가 그렇다 — 실측 4세션 내내 `예/아니오`
   이거나 `값 없음` 이라 읽는 사람에게 할 일을 주지 않는다. 그런 것은 **경고**(`warnings[]`)나
@@ -204,6 +224,39 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
   숫자와 함께 그대로 쓴다(`NONE (0)`) — 우리가 좋고 나쁨을 매긴 것이 아니고, 숫자가 있어야
   `dumpsys thermalservice` 와 대조된다. 모르는 값은 지어내지 않고 숫자만 낸다.
 - **매니페스트에 없는 지표는 개수를 남긴다.** 조용히 버리면 새 지표가 생겨도 아무도 모른다.
+- **글자 바닥은 보고서 CSS 에서만 지킨다** (report-readability RR-1 · RR-2 · RR-3). 모든 글자 12px 이상 · 표 ·
+  카드 본문 13px 이상 · 섹션 제목 18 > 카드 제목 15 > 본문 13 · 글자 색은 `--color-neutral-600` 이상 ·
+  계열색은 막대에만. 토큰 값과 `styles/` 는 측정 화면이 같이 싣으므로 고치지 않고, `report.css` 의 선택자는
+  전부 `.rp-` 를 거친다 — 그래야 보고서 글자를 키워도 측정 화면 글자가 그대로다. 키 · 숫자는
+  `docs/design/report/HANDOFF.md` §5 「글자 바닥」 이 정본이고 `test/report-css.test.ts` 가 대조한다.
+  렌더한 글자 크기 · 대비(SVG 배율 포함)는 브라우저 시험이 없어 수동 글자 측정으로 본다
+  (`labs/report-readability-design/v1/measure.js`).
+
+### 진단 탭 (진단 세션에만)
+
+`session.options.diagnose === true` 인 문서에만 머리 `진단` pill · 레일 세 번째 탭 `진단` · 측정 비용
+카드 단위 `앱 프로세스 몫 미포함`(`diagnoseUnit`)이 붙는다. 기준은 그 칸 하나다(`header.ts` 의
+`isDiagnoseSession`) — 진단 블록의 유무로 가르지 않는다. 평소 보고서는 탭 둘 그대로다.
+
+- **블록 껍데기는 지표처럼 끌어온다.** 진단 블록은 `metrics` 밖에 있지만 같은 `status` · `reason_code` ·
+  `reason` 을 쓴다. 매니페스트의 `statePath: 'diagnose'` 가 `metric` 과 같은 일을 한다 — 배지
+  (`unsupported` · `skipped` · `failed`), 카드 제목 툴팁(문장), 표 자리가 `null` 일 때의 코드.
+- **앱 slice 열림은 블록 `status` 와 따로 간다** (README). 그래서 그 행만 자기 이유를 단다 — 값이
+  `null` 이면 `값 없음` 옆에 코드, 문장은 행 툴팁 (`PairsBlock.keys[].why`). 그 밖의 `null` 칸은
+  `값 없음` 만 낸다.
+- **컴파일 상태 slice · JIT 수도 블록 `status` 와 따로 간다** (baseline-profile BP-7 · BP-8). dalvik 을 안 켠
+  원본은 블록이 collected 인데 두 칸만 `null` 이다 — 그래서 `컴파일 상태 slice` 카드(dexstates)는 `값 없음` 옆
+  코드 · 제목 title 을 블록 껍데기가 아니라 그 칸의 짝(`_reason_code` · `_reason`)에서 읽고(`NoneVm.code` ·
+  `title`), JIT 행은 `why` 짝이다. 레일 배지는 그린 `값 없음` 카드 수 그대로라 대상 앱이 없으면 2 (표 · 컴파일
+  상태 slice · plan B30).
+- **slice 표는 판정하지 않는다.** 행을 자르지 않고(1만 행도 다 그린다 — 창 안 행만 그리지 않는다),
+  이름을 자르지 않고(줄바꿈), 처음 순서는 이름의 **코드 단위** 순이다(`localeCompare` 가 아니다).
+  행마다 색 · 굵기 · 아이콘이 같다 — 행 뷰모델에 이름과 칸 말고는 없다. 순서는 보는 사람이 열 머리를
+  누를 때만 바뀌고(숫자 첫 누름 내림 · 이름 오름 · 빈 칸은 늘 끝 · 같은 값은 이름 순) 저장하지 않는다.
+- **카드에 읽는 법을 쓰지 않는다.** "합 ms 를 행끼리 더하지 말 것" 은 스키마 설명과 README 몫이다.
+- 새 문구는 `diagnose-copy.ts` 에만 있고 정본은 디자인 문서 `## 문구` 표다 — `test/report-copy.test.ts`
+  가 표의 보고서 줄과 양방향으로 대조한다. 카드 안 라벨의 경로 줄은 필드 경로 그대로라 그 표 밖이고, 그 위
+  단어 줄은 `readability-copy.ts` (report-readability 디자인 문서의 라벨 단어 표)다. 카드 단위 칸은 비운다.
 
 ## 깨면 안 되는 것
 
@@ -256,6 +309,13 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
 14. **끝나지 않은 세션은 기록이 아니다.** `start` 가 run 디렉토리를 먼저 만들기 때문에,
    그냥 훑으면 진행 중인 세션이 `길이 0ms · 경고 0` 인 완료된 기록처럼 목록에 뜬다.
    기준은 `endedAt` 이고 규칙은 core 의 `session/runs.ts` 에 있다 (CLI 의 `runs` 와 공유한다).
+15. **진단 세션 칸(`diagnose`)은 진단일 때만 있다.** 계약의 `diagnose` 는 요청이든 뷰든 평소
+   세션 · 기록에는 키가 없다 — `false` 도 싣지 않는다. core 가 `session.json` · `result.json` 에
+   진단 키를 진단 세션에만 싣는 것(plan D12)과 같은 원칙이고, `test/server.test.ts` ·
+   `effects.test.ts` 가 평소 모양의 키를 고정한다. 진단 여부의 정본은 core 의
+   `options.diagnose` 이고, 화면에 오는 것은 진단 여부와 **core 가 쓴 고지 줄 그대로**뿐이다
+   (`server/view.ts` 의 `toDiagnoseView`) — 앱 slice 가 열리나를 화면이 다시 판정하지 않는다 (6 과 같은 이유).
+   목업은 core 를 import 하지 않아 그 문장을 다시 적었으므로 `test/mock.test.ts` 가 core 와 대조한다.
 
 ## 상태
 
@@ -272,9 +332,9 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
 
 | | |
 | --- | --- |
-| 서버엔 있는데 화면엔 없음 | 탭을 되살린다 (새로고침 복구 · CLI 로 연 세션 표시) |
-| 화면은 측정 중인데 서버엔 없음 | 밖에서 끝났다. 탭을 설정 화면으로 되돌린다 |
-| 둘 다 있음 | 마킹·미지원 지표를 갱신한다 (`perftracker mark` 가 여기로 들어온다) |
+| 서버엔 있는데 화면엔 없음 | 탭을 되살린다 (새로고침 복구 · CLI 로 연 세션 표시) — 진단 세션이면 진단 표시 · 고지도 |
+| 화면은 측정 중인데 서버엔 없음 | 밖에서 끝났다. 탭을 설정 화면으로 되돌린다 (정지 뒤처럼 `--diagnose` 는 꺼진다) |
+| 둘 다 있음 | 마킹·미지원 지표·진단 칸을 갱신한다 (`perftracker mark` 가 여기로 들어온다) |
 
 **여러 번 불려도 결과가 같아야 한다** — 기기(serial)로 짝을 맞추는 이유다. 이게 깨지면
 3초마다 탭이 늘어난다.

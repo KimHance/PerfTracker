@@ -72,7 +72,7 @@ describe('M2 기기 통합', () => {
 
     // 원본이 남아 있으므로 기기 없이 재산출된다.
     const result = await extractRun(active!.runDir, {})
-    expect(result.schema_version).toBe('1.1.0')
+    expect(result.schema_version).toBe('1.2.0')
 
     // M2 의 다섯 메트릭이 **산출물에** 자리를 갖는다 — 값이든 사유든. 예전에는 이것을 터미널
     // 요약의 글자로 확인했는데, 그러면 렌더링이 지키던 것이 산출물의 계약처럼 읽힌다.

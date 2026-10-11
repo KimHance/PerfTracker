@@ -27,6 +27,10 @@
 - 지표 · 스키마 · 수집 경로 변경 → `README.md`(정본) + `docs/STATUS.md`
 - **명령 · 옵션 추가/이름 변경 → `README.md` 의 「명령 전체」 + `packages/cli/AGENTS.md`**
 - GUI 화면 · 카피 · 토큰 변경 → `docs/design/gui/HANDOFF.md` 와 어긋나지 않는지 확인
+- 기능 문서가 있는 기능의 동작 · 받아들임 기준이 바뀜 → `docs/spec/<기능>.md` 의 그 항목 행 ·
+  `### 결정` · `## 바뀐 기록`. 지표 · 스키마 · 명령의 정본은 그대로 README 다
+- 그 기능의 새 사용자 문구 → `docs/design/<기능>.md` 의 `## 문구` 표가 정본이다. 코드의 문구 모음
+  (예 `packages/core/src/copy/diagnose.ts`)을 표에 맞추고, 표를 먼저 고친다
 
 문서가 코드에 대해 **숫자로** 말하거나 **목록으로** 말하면 그것을 코드와 대조하는 테스트를
 같이 넣는다 — `packages/core/test/schema/readme.test.ts`(버킷·지표 개수)와
@@ -42,6 +46,20 @@
 | [packages/core/src/collectors](packages/core/src/collectors/AGENTS.md) | 지표 8개. data/domain 4계층 |
 | [packages/cli](packages/cli/AGENTS.md) | commander 진입점. core 를 부르고 사람이 읽는 문장으로 바꾼다 |
 | [packages/gui](packages/gui/AGENTS.md) | 로컬호스트 웹 화면. `perftracker open` 이 띄우는 HTTP 서버 + 화면 |
+| [docs/spec](docs/spec/) | 기능 문서 — 기능마다 `<기능>.md` 하나. 항목 ID(예 `DM-4`) · 받아들임 기준 · 결정 · 안 바뀔 것 |
+| [docs/design](docs/design/) | 디자인 문서 — `<기능>.md` 는 그 기능의 화면 · 상태 · 새 문구 정본. `gui/` · `report/` 의 HANDOFF 는 화면 전체의 지금 모양 |
+
+## 기능 작업 — 기능 문서에서 시작한다
+
+새 기능이나 기능을 바꾸는 작업은 기능 문서 `docs/spec/<기능>.md` 의 항목 ID 로 시작한다
+(오피스 워크플로우 — 기능 문서 · 작업 요청서 → 실현성 검토 → 디자인 문서 → 단위 구현 → 검수 → 합치기).
+
+- **바꾸는 기능만 쓴다.** 기능 문서가 없는 옛 기능을 거꾸로 채우지 않는다.
+- **시험 이름에 항목 ID 를 넣는다** (`DM-4 거부는 perfetto · force-stop · 스냅샷 전`). 작업 요청서 ·
+  구현 의도 같은 작업 중 문서는 레포 밖에 두고 끝나면 지운다 — 남는 것은 기능 문서 · 디자인 문서 ·
+  시험 이름이다. 그 사이의 결정은 기능 문서 `### 결정` 으로 옮긴다.
+- 받아들임 기준과 코드가 어긋나면 어느 쪽이 틀렸는지 먼저 정한다 — 코드에 맞춰 기준을 조용히
+  고치지 않는다.
 
 ## 작업 규약
 

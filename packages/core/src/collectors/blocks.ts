@@ -117,6 +117,29 @@ export const FTRACE_POWER_BLOCK =
   'data_sources { config { name: "linux.ftrace" ftrace_config { ' +
   'ftrace_events: "power/cpu_frequency" } } }'
 
+/** 진단 세션이 켜는 atrace 범위. 카테고리 · 앱 slice 대상 (DM-3). */
+export interface AtraceScope {
+  categories: readonly string[]
+  apps: readonly string[]
+}
+
+/**
+ * **진단 세션의 `linux.ftrace` 블록.** atrace 는 별도 데이터소스가 아니라 `linux.ftrace` 의
+ * 키라서, 소스 하나 · 블록 하나 규칙 아래에서는 `FTRACE_POWER_BLOCK` 과 **같은 블록 안에**
+ * 들어가야 한다. 그래서 그 블록을 대신하는 텍스트를 여기서 만든다 — 주인은 이 파일이다.
+ *
+ * `withPowerEvents` 는 평소 세션이 그 블록을 요청했는가다 (`collectTraceConfigBlocks`).
+ * 진단 세션의 `ftrace_events` 는 **평소 세션과 같은 집합**이어야 한다 (DM-3) — cpu 가
+ * 미지원이라 평소에 이벤트가 없는 기기에서 여기서 이벤트를 켜면 아무도 읽지 않는 이벤트가 된다.
+ * 이벤트 부분은 `FTRACE_POWER_BLOCK` 과 글자까지 같다 (시험이 둘을 대조한다).
+ */
+export function diagnoseFtraceBlock(scope: AtraceScope, withPowerEvents: boolean): string {
+  const events = withPowerEvents ? 'ftrace_events: "power/cpu_frequency" ' : ''
+  const categories = scope.categories.map((c) => `atrace_categories: "${c}" `).join('')
+  const apps = scope.apps.map((a) => `atrace_apps: "${a}" `).join('')
+  return `data_sources { config { name: "linux.ftrace" ftrace_config { ${events}${categories}${apps}} } }`
+}
+
 /**
  * WARN 이상만 받는다. 자바 크래시(`FATAL EXCEPTION`), 네이티브 크래시(`Fatal signal`), ANR
  * (`ANR in ...`)은 전부 ERROR 이상이라 다 잡히고, I/D/V 를 빼면 logd 소켓으로 흐르는 양이

@@ -5,6 +5,13 @@ export const DEFAULT_FLUSH_PERIOD_MS = 30_000
 export const DEFAULT_FILE_WRITE_PERIOD_MS = 30_000
 /** 세션 상한. 사람이 stop 을 잊어도 무한히 돌지 않게 한다. */
 export const DEFAULT_MAX_DURATION_MS = 1_800_000
+/**
+ * 진단 세션(`--diagnose`)의 상한 (plan D11 · DM-17). 평소 세션은 위 30분 그대로다.
+ *
+ * atrace 를 켜면 원본이 15초에 6.5–8.1 MiB 로 평소의 약 7–9배다 (SM-S901N · YouTube 실측).
+ * 30분이면 0.8–1.0 GB 라 호스트 trace_processor 적재와 slice 표 행 수가 함께 커진다.
+ */
+export const DIAGNOSE_MAX_DURATION_MS = 600_000
 
 /**
  * ftrace 이벤트 **허용 목록**. 여기 없는 이벤트는 config 에 들어갈 수 없다.
@@ -27,6 +34,36 @@ export const ALLOWED_FTRACE_EVENTS: readonly string[] = [
   'power/cpu_frequency',
 ]
 
+/**
+ * 진단 세션이 켜는 atrace 카테고리이자 **허용 목록** (DM-3 · DM-4). 여기 없는 카테고리는
+ * 진단 세션이어도 config 에 들어갈 수 없다.
+ *
+ * 왜 이 넷인가 (SM-S901N · YouTube 15초 실측, 2026-10-07): am · wm · view 에 대상 앱 slice 를
+ * 더한 원본이 6.5–8.1 MiB 다. **gfx** 를 더하면 37 MiB · slice 38만으로 늘고 늘어난 몫은 대부분
+ * surfaceflinger · HWC composer 다 (plan D21). **input** 은 gfx 와 함께 33 MiB 였고 몫을 떼지
+ * 못했다. **sched** 는 고빈도라 `ALLOWED_FTRACE_EVENTS` 와 같은 이유로 막는다.
+ * **dalvik** 은 2026-10-11 에 더했다 (diagnostic-mode 결정 36 · baseline-profile BP-7) — 트레이스 안에서
+ * 컴파일 상태(`location=… status=… filter=… reason=…`) · JIT slice 를 읽는 유일한 길이고, 15초에 slice
+ * 약 1.4만(전 프로세스)을 더했지만 원본 크기 · traced_probes CPU 차이는 회차 변동 안이었다 (research B).
+ *
+ * atrace slice 의 비용은 커널 ftrace 와 달리 **slice 를 남기는 프로세스 자신**에게 청구된다.
+ * 그래서 평소 세션에는 하나도 켜지 않는다 — `assertLowOverheadConfig` 가 `atrace_` 키를 본다.
+ */
+export const DIAGNOSE_ATRACE_CATEGORIES: readonly string[] = ['am', 'wm', 'view', 'dalvik']
+
+/**
+ * 진단 config 에 들어갈 수 있는 `atrace_` 키. **이 둘 밖은 진단 세션이어도 거부한다.**
+ *
+ * 키를 금지 목록이 아니라 허용 목록으로 두는 이유는 `ALLOWED_FTRACE_EVENTS` 와 같다 —
+ * `atrace_categories_prefer_sdk` 처럼 나중에 생기는 키가 검사 없이 지나가지 않게.
+ */
+const ALLOWED_ATRACE_KEYS: readonly string[] = ['atrace_categories', 'atrace_apps']
+
+/** 진단 세션의 config 를 검사할 때 필요한 것. `atrace_apps` 가 가리켜도 되는 패키지 하나. */
+export interface DiagnoseConfigCheck {
+  packageName: string
+}
+
 const MIN_POLL_PERIOD_MS = 1000
 /** Global Constraint: 파일 쓰기 주기가 짧으면 세션 내내 I/O 가 측정 대상에 섞인다. */
 const MIN_FILE_WRITE_PERIOD_MS = 30_000
@@ -37,6 +74,8 @@ export interface TraceConfigOptions {
   bufferSizeKb?: number
   flushPeriodMs?: number
   fileWritePeriodMs?: number
+  /** 진단 세션이면 그 대상 패키지. 없으면 평소 세션이고 `atrace_` 키가 하나도 허용되지 않는다. */
+  diagnose?: DiagnoseConfigCheck
 }
 
 export function buildTraceConfig(opts: TraceConfigOptions): string {
@@ -56,15 +95,20 @@ export function buildTraceConfig(opts: TraceConfigOptions): string {
   ]
 
   const text = `${lines.join('\n')}\n`
-  assertLowOverheadConfig(text)
+  assertLowOverheadConfig(text, opts.diagnose ?? null)
   return text
 }
 
 /**
  * 관찰자 효과를 만드는 설정이 config 에 들어가지 못하게 막는다.
  * 이 함수가 통과시킨 config 만 기기로 나간다.
+ *
+ * `diagnose` 가 없으면(기본) 평소 세션이다 — `atrace_` 키가 하나라도 있으면 거부한다.
+ * 있으면 진단 세션이고 그 키를 `assertAtraceKeys` 의 범위 안에서만 허용한다.
  */
-export function assertLowOverheadConfig(text: string): void {
+export function assertLowOverheadConfig(text: string, diagnose: DiagnoseConfigCheck | null = null): void {
+  const scanned = scanConfigText(text)
+
   for (const m of text.matchAll(/ftrace_events:\s*"([^"]+)"/g)) {
     const event = m[1]!
     if (ALLOWED_FTRACE_EVENTS.includes(event)) continue
@@ -119,6 +163,126 @@ export function assertLowOverheadConfig(text: string): void {
     throw new PerfettoSessionError(
       `file_write_period_ms 가 ${fileWrite[1]}ms 입니다 — ${MIN_FILE_WRITE_PERIOD_MS}ms 이상이어야 합니다.`,
     )
+  }
+
+  assertAtraceKeys(scanned, diagnose)
+}
+
+/** `scanConfigText` 의 결과. */
+interface ScannedConfig {
+  /** 문자열 리터럴마다 `"<번호>"` 로 바꾼 텍스트 — 따옴표 밖(키 · 구두점 · 숫자)만 남는다. */
+  bare: string
+  /** 번호 자리의 따옴표 안 원문. 이스케이프는 풀지 않는다 — 비교는 원문 그대로 한다. */
+  strings: string[]
+}
+
+/**
+ * config 를 perfetto 텍스트 파서와 **같은 경계로** 앞에서부터 한 번 훑는다 — `"…"` 가 문자열이고
+ * 그 안의 `\` 는 다음 글자를 묶는다.
+ *
+ * **따옴표 밖의 `#` 는 거부한다.** perfetto 는 `#` 를 줄 끝까지 주석으로 읽는데, 주석 안의 따옴표를
+ * 문자열로 읽는 검증기는 그 뒤의 진짜 키를 문자열 안으로 착각한다 — 예전 검증기는
+ * `# it"s` 다음 줄의 `atrace_categories: "gfx"` 를 통과시켰다 (코드 검수 #2). 주석의 뜻을 흉내 내는
+ * 대신 막는다: 이 도구가 만드는 config 에는 주석이 없으므로, 있다면 그것 자체가 손으로 고친 흔적이다.
+ * 앞에서부터 훑으므로 처음 만나는 따옴표 밖 `#` 까지는 perfetto 와 경계가 같다.
+ * 닫히지 않은 따옴표도 같은 이유로 거부한다.
+ */
+function scanConfigText(text: string): ScannedConfig {
+  let bare = ''
+  const strings: string[] = []
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text[i]!
+    if (c === '#') {
+      throw new PerfettoSessionError(
+        `config 의 ${i}번째 글자에 따옴표 밖 '#'(주석)이 있습니다 — 이 도구가 만드는 config 에는 주석이 없습니다.\n` +
+          `주석 안의 따옴표가 검사의 문자열 경계를 흐리므로 주석이 있는 config 는 내보내지 않습니다.`,
+      )
+    }
+    if (c !== '"') {
+      bare += c
+      continue
+    }
+    let raw = ''
+    let j = i + 1
+    while (j < text.length && text[j] !== '"') {
+      if (text[j] === '\\' && j + 1 < text.length) {
+        raw += text[j]! + text[j + 1]!
+        j += 2
+        continue
+      }
+      raw += text[j]!
+      j += 1
+    }
+    if (j >= text.length) {
+      throw new PerfettoSessionError(`config 의 ${i}번째 글자에서 연 따옴표가 닫히지 않았습니다.`)
+    }
+    bare += `"${strings.length}"`
+    strings.push(raw)
+    i = j
+  }
+  return { bare, strings }
+}
+
+/**
+ * atrace 의 문. 예전에는 이 검증기가 `ftrace_events` 만 봐서 atrace 카테고리 · 앱은 검사 없이
+ * 통과했다 (기능 문서 「왜」). 그 구멍을 키 단위로 막는다.
+ *
+ * **키는 따옴표 밖에서 센다** (`scanConfigText`). 따옴표 안(데이터소스 이름 · 패키지 이름)은 키가 아니다.
+ * 그다음 키마다 `key: "값"` 한 쌍이어야 한다 — textproto 의 리스트 문법
+ * (`atrace_categories: ["am", "gfx"]`)은 값 검사를 건너뛰는 길이라 꼴 자체를 거부한다.
+ */
+function assertAtraceKeys({ bare, strings }: ScannedConfig, diagnose: DiagnoseConfigCheck | null): void {
+  const keys = [...bare.matchAll(/\batrace_\w*/g)].map((m) => m[0])
+  if (keys.length === 0) return
+
+  if (diagnose === null) {
+    throw new PerfettoSessionError(
+      `평소 세션 config 에 ${keys[0]} 가 있습니다 — atrace 는 진단 세션(--diagnose)에서만 켭니다.\n` +
+        `atrace slice 의 비용은 앱 프로세스 자신에게 청구되고 measurement_overhead 에 잡히지 않습니다.`,
+    )
+  }
+
+  const outside = keys.find((k) => !ALLOWED_ATRACE_KEYS.includes(k))
+  if (outside !== undefined) {
+    throw new PerfettoSessionError(
+      `진단 config 의 ${outside} 는 허용한 키가 아닙니다 — ${ALLOWED_ATRACE_KEYS.join(' · ')} 만 씁니다.`,
+    )
+  }
+
+  const pairs = [...bare.matchAll(/\b(atrace_\w*)\s*:\s*"(\d+)"/g)].map((m) => ({
+    key: m[1]!,
+    value: strings[Number(m[2])]!,
+  }))
+  if (pairs.length !== keys.length) {
+    throw new PerfettoSessionError(
+      `진단 config 의 atrace 키는 \`키: "값"\` 꼴이어야 합니다 — 키 ${keys.length}개 중 ${pairs.length}개만 그 꼴입니다.`,
+    )
+  }
+
+  for (const { key, value } of pairs) {
+    if (key === 'atrace_categories' && !DIAGNOSE_ATRACE_CATEGORIES.includes(value)) {
+      throw new PerfettoSessionError(
+        `atrace 카테고리 "${value}" 는 허용 목록에 없습니다 — ${DIAGNOSE_ATRACE_CATEGORIES.join(' · ')} 만 켭니다 ` +
+          `(perfetto/config.ts 의 DIAGNOSE_ATRACE_CATEGORIES).`,
+      )
+    }
+  }
+
+  const apps = pairs.filter((p) => p.key === 'atrace_apps').map((p) => p.value)
+  if (apps.length > 1) {
+    throw new PerfettoSessionError(`진단 config 의 atrace_apps 가 ${apps.length}개입니다 — 대상 앱 하나만 씁니다.`)
+  }
+  for (const app of apps) {
+    if (app.includes('*')) {
+      throw new PerfettoSessionError(
+        `atrace_apps "${app}" 에 와일드카드가 있습니다 — 모든 앱의 slice 비용을 각 앱에 청구하게 됩니다.`,
+      )
+    }
+    if (app !== diagnose.packageName) {
+      throw new PerfettoSessionError(
+        `atrace_apps "${app}" 는 대상 앱(${diagnose.packageName})이 아닙니다 — 대상 앱 하나만 씁니다.`,
+      )
+    }
   }
 }
 

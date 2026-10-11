@@ -4,6 +4,12 @@ export interface ProcessResult {
   stdout: Buffer
   stderr: string
   code: number
+  /**
+   * 호출자가 준 시간 한도(`timeoutMs`)에 걸려 **이 쪽이 프로세스를 죽였다** — 그때 `code` 는 1 이라
+   * 종료 코드만으로는 "명령이 1 로 끝남" 과 가를 수 없다. 죽인 적이 없으면 키가 없다.
+   * 호스트의 adb 를 죽여도 기기 쪽 작업은 계속될 수 있다 (예: `cmd package compile`).
+   */
+  timedOut?: true
 }
 
 export interface ProcessRunOptions {
@@ -36,9 +42,14 @@ export const nodeProcessRunner: ProcessRunner = {
           maxBuffer: opts.maxBufferBytes ?? DEFAULT_MAX_BUFFER,
         },
         (error, stdout, stderr) => {
-          const raw = (error as { code?: number | string } | null)?.code
+          const e = error as { code?: number | string | null; killed?: boolean } | null
+          const raw = e?.code
           const code = typeof raw === 'number' ? raw : error ? 1 : 0
-          resolve({ stdout, stderr: stderr.toString('utf8'), code })
+          // `killed` 는 이 쪽(execFile 의 한도 타이머)이 죽였다는 뜻이다. 신호(`signal`)로는 가르지 않는다 —
+          // 밖에서 SIGTERM 으로 죽은 adb 도 같은 신호를 갖는다. maxBuffer 넘침도 이 쪽이 죽이지만 그 오류에는
+          // `killed` 가 실리지 않는다 (실측 node 25: `{ code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' }` 뿐).
+          const timedOut = e?.killed === true
+          resolve({ stdout, stderr: stderr.toString('utf8'), code, ...(timedOut ? { timedOut: true as const } : {}) })
         },
       )
       if (opts.input !== undefined) child.stdin?.end(opts.input)

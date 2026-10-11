@@ -8,10 +8,26 @@ function patchTab(state: AppState, key: string, patch: Partial<Tab>): AppState {
   return { ...state, tabs: state.tabs.map((t) => (t.key === key ? { ...t, ...patch } : t)) }
 }
 
+/** 진단 칸을 비운 모양 — 평소 세션 · 설정 화면의 기본값 (`newTab` 과 같다). */
+const NOT_DIAGNOSE = { diagnose: false, diagnoseNotice: null } as const satisfies Partial<Tab>
+
+/**
+ * 서버 세션의 진단 칸 → 탭의 진단 칸. 서버가 정본이다: 진단 세션이면 켜고 core 의 고지 줄을
+ * 그대로 들고, 평소 세션이면 둘 다 비운다 (start 응답을 받는 `effects` 와 같은 번역).
+ */
+function diagnoseFromSession(session: ActiveSessionView): Pick<Tab, 'diagnose' | 'diagnoseNotice'> {
+  return session.diagnose === undefined ? NOT_DIAGNOSE : { diagnose: true, diagnoseNotice: session.diagnose.notice }
+}
+
 /**
  * 측정을 끝낸 탭은 **설정 화면으로 되돌아간다**. 기기와 `--launch`/`--force` 는 남기고
  * 앱·이름·마킹은 비운다: 같은 기기로 조건만 바꿔 다시 재는 것이 가장 흔한 다음 행동이고,
  * 이름과 마킹을 물려받으면 직전 세션의 흔적이 새 기록에 섞인다.
+ *
+ * **진단은 남기지 않는다** (`--diagnose` 토글 · 고지 둘 다). `--launch`/`--force` 와 달리 진단은
+ * 수치의 성질을 바꾸는 옵션이라 — slice 비용이 앱 프로세스 몫이고 평소 세션과 비교할 수 없다 —
+ * 다음 세션이 말없이 진단으로 열리면 평소 기록인 줄 알고 나란히 놓게 된다. CLI 도 `start` 마다
+ * `--diagnose` 를 줘야 진단이다.
  */
 function resetAfterStop(tab: Tab): Tab {
   return {
@@ -24,6 +40,7 @@ function resetAfterStop(tab: Tab): Tab {
     appQuery: '',
     marks: [],
     markDraft: '',
+    ...NOT_DIAGNOSE,
   }
 }
 
@@ -84,6 +101,8 @@ function tabFromSession(key: string, session: ActiveSessionView): Tab {
     sessionId: session.id,
     unsupported: session.unsupported,
     marks: session.marks,
+    // 새로고침 · CLI 로 연 진단 세션도 진단 표시와 고지를 되찾는다 — 화면의 기억이 아니라 포인터 파일.
+    ...diagnoseFromSession(session),
   }
 }
 
@@ -107,14 +126,23 @@ function syncSessions(state: AppState, sessions: ActiveSessionView[]): AppState 
       const session = bySerial.get(tab.serial)!
       matched.add(tab.serial)
       if (tab.phase === 'running') {
-        return { ...tab, marks: session.marks, unsupported: session.unsupported }
+        return { ...tab, marks: session.marks, unsupported: session.unsupported, ...diagnoseFromSession(session) }
       }
       // 설정 화면인데 그 기기에 세션이 있다 = 이 탭이 잃어버린 세션이다. 되살린다.
       return tabFromSession(tab.key, session)
     }
     // 측정 중이었는데 서버에 없다 = 밖에서 끝났거나 버려졌다.
     if (tab.phase === 'running') {
-      return { ...tab, phase: 'setup' as const, startedAt: null, sessionId: null, marks: [], unsupported: [] }
+      return {
+        ...tab,
+        phase: 'setup' as const,
+        startedAt: null,
+        sessionId: null,
+        marks: [],
+        unsupported: [],
+        // 정지 뒤와 같은 이유로 진단을 물려주지 않는다 (`resetAfterStop`).
+        ...NOT_DIAGNOSE,
+      }
     }
     return tab
   })

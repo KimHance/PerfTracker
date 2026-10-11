@@ -1,4 +1,5 @@
 import { POLL_PERIOD_MS } from '../collectors/blocks.js'
+import { DIAGNOSE_COPY, fillCopy } from '../copy/diagnose.js'
 
 /**
  * 메트릭이 왜 수집되지 않았는지를 **안정적인 기계 키**로 말한다.
@@ -232,6 +233,84 @@ export const METRIC_REASON_CODES = [
    * detail: uid, package
    */
   'uid_not_in_package_list',
+  /**
+   * **진단 블록 전용** — 메트릭에는 실리지 않고 `diagnose.app_slices_open_reason_code` 에만 온다.
+   *
+   * 앱 slice(`atrace_apps` 가 여는 앱 자신의 slice)가 **실릴 수 있던 조건이었는지 모른다.**
+   * sdk ≤30 에서 앱 slice 는 debuggable 또는 profileable 앱에만 열리는데, 이 앱은 debuggable 이
+   * 아니거나(`false`) 그것을 읽지 못했고(`null`), profileable 은 읽을 출처가 없다
+   * (기능 문서 열린 질문 3). 판정은 `session/diagnose.ts` 의 `appSliceOpen` 하나다.
+   *
+   * 앱이 slice 를 **남겼는지가 아니다** — 그것은 트레이스가 말하고, atrace 마커에 태그가 없어
+   * 프레임워크 slice 와 가를 수도 없다 (결정 8). 그래서 이 코드가 붙어도 slice 수 · 표는 잰 그대로다.
+   * detail: sdk_int, debuggable(false | null)
+   */
+  'app_slices_open_unknown',
+  /**
+   * **진단 블록 전용** — 블록 `reason_code` 에만 온다 (plan D35).
+   *
+   * 원본에 CPU 별 `ftrace_cpu_*` 통계가 0행이다 — ftrace 가 안 돌았다. slice 0개는 "재 봤더니
+   * 없었다" 가 아니므로 블록은 `partial` 이고 slice 수 · 표 · 잃은 이벤트 수가 null 이다.
+   * 켜기 오류만 있고 ftrace 는 돈 경우는 이 코드가 아니라 `ftrace_setup_errors` 다 (plan D38 — 값이
+   * 있음 · 없음이 정반대인 둘을 한 코드로 두면 기계가 가를 수 없다).
+   * detail: ftrace_cpu_stats(0), setup_errors
+   */
+  'ftrace_not_recorded',
+  /**
+   * **진단 블록 전용** — 블록 `reason_code` 에만 온다 (plan D37 · D38).
+   *
+   * ftrace 는 돌았는데(CPU 별 통계가 있다) traced_probes 가 켜다 오류를 냈다(`ftrace_setup_errors` > 0).
+   * 오류가 atrace 의 것인지 다른 이벤트의 것인지 원본이 말하지 않아 일부가 빠졌을 수 있다.
+   * **잰 수 · 표는 그대로다** — `process_name_stale_in_trace` 처럼 값 있는 `partial`. 실측: gfx · input
+   * 카테고리를 켠 원본은 벤더 gfx 이벤트(`mdss` · `dpu` · `sde` …) 28개가 이 기기에 없어 오류 28 인데
+   * slice 33만–38만이 실렸다.
+   * detail: setup_errors, ftrace_cpu_stats
+   */
+  'ftrace_setup_errors',
+  /**
+   * **`target_app` 컴파일 상태 전용** — 메트릭에는 실리지 않고 `target_app.compile_state_{start,end}_reason_code`
+   * 에만 온다 (기능 문서 baseline-profile BP-2).
+   *
+   * `dumpsys package <pkg>` 출력에 `Dexopt state:` 절이 없다. 그 안드로이드 버전 · 벤더 출력에 절이
+   * 아예 없을 수 있다 (실측 꼴은 sdk 36 하나 — 열린 질문 1).
+   */
+  'dexopt_state_section_missing',
+  /**
+   * **`target_app` 컴파일 상태 전용.** `Dexopt state:` 절은 있는데 대상 패키지의 `[<pkg>]` 줄이 없다.
+   * detail: package
+   */
+  'dexopt_state_package_missing',
+  /**
+   * **`target_app` 컴파일 상태 전용.** 절도 패키지 줄도 있는데 dex 줄의 꼴을 모른다 — **형식을 추측해
+   * 채우지 않는다** (결정 12). 모르는 줄이 하나라도 있거나 dex 줄이 하나도 없으면 이 코드다.
+   * `snapshot_unparsable` 과 같은 정신이다.
+   * detail: line (모르는 첫 줄 원문 · dex 줄이 하나도 없었으면 null)
+   */
+  'dexopt_state_unparsable',
+  /**
+   * **`target_app` 컴파일 상태 전용.** 그 시점의 `dumpsys package` 출력이 없다 — 명령이 실패했거나
+   * (기기 끊김), 아직 `stop` 하지 않은 세션을 `extract` 했거나, 끝 상태를 기록하지 않은 도구가 멈춘 run 이다.
+   * detail: phase('start' | 'end'), cause('command_failed' | 'session_running' | 'not_recorded'), (있으면) exit_code
+   */
+  'dexopt_state_unavailable',
+  /**
+   * **진단 블록 ART 칸 전용** — `diagnose.target_process_compile_state_slices_reason_code` ·
+   * `diagnose.target_process_jit_slices_reason_code` 에만 온다 (기능 문서 baseline-profile BP-7).
+   *
+   * 세션 기록(`session.json`)의 켠 카테고리에 `dalvik` 이 없거나 그 기록이 없다 — 이 기능 전 진단 run 을
+   * `extract` 로 다시 낸 경우다. 컴파일 상태 slice · JIT slice 는 `dalvik` 이 켜져야 남으므로 0개는
+   * "없었다" 가 아니다. **블록 `status` 는 이것 때문에 바뀌지 않는다** (표 · 수는 잰 그대로).
+   * detail: atrace_categories (기록된 값 · 없으면 null)
+   */
+  'dalvik_not_recorded',
+  /**
+   * **진단 블록 ART 칸 전용** — `diagnose.target_process_compile_state_slices_reason_code` 에만 온다
+   * (BP-7). 이름이 `location=` 으로 시작하는 slice 가 `location=… status=… filter=… reason=…` 꼴로
+   * 갈리지 않는다 — **꼴을 추측해 채우지 않는다** (`dexopt_state_unparsable` 과 같은 정신).
+   * 갈리지 않는 한 줄을 빼고 내면 목록이 빠진 줄을 "없었다" 로 말한다.
+   * detail: name (갈리지 않은 첫 이름 원문)
+   */
+  'compile_state_slice_unparsable',
 ] as const
 
 export type MetricReasonCode = (typeof METRIC_REASON_CODES)[number]
@@ -426,6 +505,40 @@ const RENDERERS: Record<MetricReasonCode, (d: Record<string, unknown>) => string
     `측정 대상(${String(d['package'])}) 자신도 그 uid 로 등재되어 있지 않습니다. ` +
     `목록은 이 uid 의 안드로이드 user 를 열거했으므로 "못 봤다" 가 아니라 "없다" 입니다. ` +
     `값은 전부 실었지만 이 숫자를 그 패키지의 것이라고 말할 근거를 확인하지 못했습니다.`,
+  // 진단 모드의 새 문구라 단어형이다 (DM-15) — 문장은 이 표가 아니라 문구 모음이 주인이고
+  // 정본은 디자인 문서 `## 문구` 표다. 기존 사유 문장(합쇼체)은 그대로 둔다 (plan D10).
+  app_slices_open_unknown: (d) =>
+    fillCopy(
+      d['debuggable'] === false ? DIAGNOSE_COPY.reasonNotDebuggable : DIAGNOSE_COPY.reasonDebuggableUnknown,
+      d['sdk_int'] !== undefined ? { sdk: String(d['sdk_int']) } : {},
+    ),
+  ftrace_not_recorded: () => DIAGNOSE_COPY.reasonFtraceNoStats,
+  ftrace_setup_errors: (d) =>
+    fillCopy(DIAGNOSE_COPY.reasonFtraceSetupErrors, d['setup_errors'] != null ? { count: String(d['setup_errors']) } : {}),
+  // baseline-profile 의 새 문구도 단어형이다 (BP-6 · DM-15 규칙) — 평가 낱말 · 권유 0.
+  dexopt_state_section_missing: () =>
+    'dumpsys package 출력에 Dexopt state 절 없음 — 이 기기 · 안드로이드 버전의 출력 꼴이 다를 수 있음 · 꼴을 추측해 채우지 않음',
+  dexopt_state_package_missing: (d) =>
+    `Dexopt state 절에 ${String(d['package'])} 줄 없음 — 꼴을 추측해 채우지 않음`,
+  dexopt_state_unparsable: (d) =>
+    d['line'] != null
+      ? `Dexopt state 절에 꼴을 모르는 줄 있음 (${JSON.stringify(String(d['line']).trim())}) — 꼴을 추측해 채우지 않음`
+      : 'Dexopt state 절에 대상 패키지의 dex 줄 없음 — 꼴을 추측해 채우지 않음',
+  dexopt_state_unavailable: (d) => {
+    const when = d['phase'] === 'start' ? '세션 시작' : '세션 끝'
+    if (d['cause'] === 'session_running') return `아직 stop 하지 않은 세션 — ${when} 컴파일 상태를 읽지 않음`
+    if (d['cause'] === 'not_recorded') return `이 run 에 ${when} 컴파일 상태 기록 없음 — 그것을 읽기 전의 도구가 멈춘 run`
+    const code = d['exit_code'] != null ? ` (종료 코드 ${String(d['exit_code'])})` : ''
+    return `${when} dumpsys package 출력을 받지 못함${code} — 기기 연결이 끊겼을 수 있음`
+  },
+  dalvik_not_recorded: (d) => {
+    const cats = Array.isArray(d['atrace_categories']) ? (d['atrace_categories'] as unknown[]).map(String) : null
+    return cats === null
+      ? '세션 기록에 켠 atrace 카테고리 없음 — dalvik 을 켰는지 모름 · 컴파일 상태 · JIT slice 수 모름'
+      : `세션 기록의 atrace 카테고리에 dalvik 없음 (${cats.join(' · ')}) — 컴파일 상태 · JIT slice 수 모름`
+  },
+  compile_state_slice_unparsable: (d) =>
+    `꼴을 모르는 location= slice 있음 (${JSON.stringify(String(d['name']))}) — 꼴을 추측해 채우지 않음`,
 }
 
 /** 코드 → 한국어 문장. 모르는 코드는 조용히 비우지 않고 코드 자체를 남긴다. */

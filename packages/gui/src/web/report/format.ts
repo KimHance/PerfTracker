@@ -9,8 +9,33 @@ import { MISSING, type Read } from './read.js'
  */
 export type Fmt =
   | 'int' | 'ms0' | 'pct0' | 'pct2' | 'c1' | 'hz'
-  | 'mb0' | 'mb1' | 'gb1' | 'ghz2' | 'bytes' | 'bool' | 'list'
-  | 'mbTriple' | 'wrap' | 'raw' | 'n0' | 'n1' | 'thermal'
+  | 'mb0' | 'mb1' | 'gb1' | 'ghz2' | 'bytes' | 'bool' | 'list' | 'dots'
+  | 'mbTriple' | 'wrap' | 'path' | 'raw' | 'n0' | 'n1' | 'thermal'
+
+/**
+ * **긴 기계 이름의 줄바꿈 자리** (report-readability RR-7 · 결정 5). 이 글자들 **뒤에서** 먼저 줄을 바꾼다 —
+ * `…Shell$HomeActivity` 가 `HomeA / ctivity` 처럼, `…_unfolded` 가 토막 가운데서 끊기지 않게. 공백은 원래
+ * 줄바꿈 자리라 넣지 않는다. 토막이 칸보다 넓을 때만 CSS `overflow-wrap: break-word` 가 토막 안에서 끊는다.
+ */
+export const BREAK_AFTER = '/:$.;,_'
+
+/**
+ * 이름을 구분자 **뒤에서** 토막 낸다 — 렌더러가 토막 사이에 `<wbr>` 를 둔다. **이어 붙이면 원문 그대로**다:
+ * 글자를 넣지도 빼지도 않으므로 복사하면 원문이다 (보이지 않는 글자 0 · RR-7).
+ */
+export function breakAfterSeparators(s: string): string[] {
+  const out: string[] = []
+  let cur = ''
+  for (const ch of s) {
+    cur += ch
+    if (BREAK_AFTER.includes(ch)) {
+      out.push(cur)
+      cur = ''
+    }
+  }
+  if (cur !== '' || out.length === 0) out.push(cur)
+  return out
+}
 
 export const NONE_MISSING = '수집 안 함'
 export const NONE_NULL = '값 없음'
@@ -55,6 +80,10 @@ export function fmtValue(v: Read, f: Fmt | undefined): string {
   if (f === 'bool') return v === true ? '예' : v === false ? '아니오' : String(v)
   if (f === 'list') {
     return Array.isArray(v) ? (v.length === 0 ? '없음' : v.join(', ')) : String(v)
+  }
+  // 짧은 이름 목록(atrace 카테고리 `am · wm · view`). CLI 의 진단 라벨 줄과 같은 구분자다.
+  if (f === 'dots') {
+    return Array.isArray(v) ? (v.length === 0 ? '없음' : v.join(' · ')) : String(v)
   }
   if (f === 'mbTriple') {
     if (typeof v !== 'object') return NONE_NULL

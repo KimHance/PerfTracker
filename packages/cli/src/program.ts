@@ -1,6 +1,7 @@
 import { CLI_VERSION } from './version.js'
 import { Command } from 'commander'
 import {
+  checkCompileOption,
   hasBlockingFailure,
   listDeviceSummaries,
   listRuns,
@@ -16,10 +17,12 @@ import { formatDoctor } from './commands/doctor.js'
 import { formatDevices } from './commands/devices.js'
 import { runExtract } from './commands/extract.js'
 import { runSchema } from './commands/schema.js'
-import { runStart } from './commands/start.js'
+import { runStart, type StartCliOptions } from './commands/start.js'
 import { runStatus, statusData } from './commands/status.js'
 import { runStop } from './commands/stop.js'
 import { createContext } from './context.js'
+import { COMPILE_CLI_COPY } from './copy/compile.js'
+import { DIAGNOSE_CLI_COPY } from './copy/diagnose.js'
 
 /**
  * 명령 등록. **실행(`parseAsync`)은 하지 않는다** — 그것은 `index.ts` 의 몫이다.
@@ -98,7 +101,21 @@ export function buildProgram(): Command {
     .option('--launch', '앱을 콜드 상태로 실행하고 시작 시간을 측정한다', false)
     .option('-o, --out <dir>', '결과를 저장할 디렉토리', 'runs')
     .option('--force', '이 기기의 기존 세션을 버리고 시작한다', false)
-    .action(async (opts: { app?: string; name?: string; launch: boolean; out: string; force: boolean; device?: string }) => {
+    /**
+     * 진단 세션 — atrace slice 를 평소 측정과 갈라 기록한다 (기능 문서 diagnostic-mode · DM-1).
+     * **기본값을 주지 않는다** — `false` 를 주면 도움말에 `(default: false)` 가 붙어 문구 정본
+     * (`docs/design/diagnostic-mode.md` `## 문구`)과 달라진다. 안 주면 `undefined` 이고 평소 세션이다.
+     */
+    .option('--diagnose', DIAGNOSE_CLI_COPY.helpDiagnose)
+    /**
+     * 기기 컴파일 상태를 바꾸고 잰다 (기능 문서 baseline-profile BP-4). **`--launch` 와만 받는다** (결정 8) —
+     * 도움말은 80칸이라 그 조건을 싣지 않고, 거부 줄 · README 「명령 전체」 · cli AGENTS 가 말한다
+     * (디자인 문서 `## 정한 것` 4). 기본값이 없는 이유는 `--diagnose` 와 같다.
+     */
+    .option('--compile <값>', COMPILE_CLI_COPY.helpCompile)
+    .action(async (opts: StartCliOptions & { device?: string }) => {
+      // `--compile` 거부는 adb 를 찾거나 기기 목록을 묻기 **전**에 (BP-4 — 기기 명령 0 · 기기가 없어도 같은 거부).
+      checkCompileOption({ launch: opts.launch, compile: opts.compile })
       const ctx = await createContext({ ...program.opts(), device: opts.device })
       console.log(await runStart(ctx, opts))
     })

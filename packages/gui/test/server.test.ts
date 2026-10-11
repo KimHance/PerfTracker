@@ -1,10 +1,19 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative as relativePath } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { ApiErrorBody, EnvView, RunsView } from '../src/contract/api.js'
-import { listRuns, renameRun } from '@perftracker/core'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type {
+  ActiveSessionView,
+  ApiErrorBody,
+  EnvView,
+  ReportDocument,
+  RunsView,
+  StartRequest,
+} from '../src/contract/api.js'
+import { diagnoseNotice, listRuns, renameRun } from '@perftracker/core'
+import { startOptions } from '../src/server/api.js'
 import { startGuiServer, type GuiServer } from '../src/server/index.js'
+import { toDiagnoseView, toStartedSessionView } from '../src/server/view.js'
 
 /**
  * 서버는 실제로 띄운다 — 라우팅·정적 서빙·오류 형식은 함수를 직접 불러서는 확인되지 않는다.
@@ -177,6 +186,216 @@ describe('기록', () => {
 
   it('이름 변경 대상이 없으면 null 이다', async () => {
     expect(await renameRun(out, '없음', 'x')).toBeNull()
+  })
+})
+
+/**
+ * **진단 세션은 진단일 때만 칸이 생긴다.** 평소 세션 · 기록의 뷰는 진단 모드 이전과 키가 같다 —
+ * core 가 `session.json` · `result.json` 에 진단 키를 진단 세션에만 싣는 것(plan D12)과 같은 원칙이다.
+ * 진단 세션을 여는 경로(`start`)는 기기가 필요해 여기서 부르지 않고, 요청 → core 옵션을
+ * 순수 함수(`startOptions`)로 본다.
+ */
+describe('진단 세션', () => {
+  /** 이 칸들이 생기기 전의 뷰 모양. 평소 세션 · 기록은 이것과 키까지 같아야 한다. */
+  const RUN_VIEW_KEYS = [
+    'appLabel', 'appVersion', 'at', 'durationMs', 'id', 'launch', 'markCount', 'model', 'name',
+    'packageName', 'runDir', 'serial', 'unsupportedCount', 'warningCount',
+  ]
+  const SESSION_VIEW_KEYS = [
+    'id', 'launch', 'marks', 'name', 'packageName', 'runDir', 'serial', 'startedAt', 'unsupported',
+  ]
+
+  const req: StartRequest = {
+    serial: 'S1',
+    packageName: 'com.google.android.youtube',
+    name: null,
+    launch: true,
+    force: false,
+  }
+  const now = new Date('2026-10-08T03:00:00.000Z')
+
+  let home: string
+  beforeEach(async () => {
+    home = await mkdtemp(join(tmpdir(), 'perftracker-home-'))
+    vi.stubEnv('PERFTRACKER_HOME', home)
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  /** 활성 세션 포인터 — `start` 가 `~/.perftracker/active/<serial>.json` 에 쓰는 것과 같은 모양. */
+  async function writePointer(serial: string, extra: Record<string, unknown>): Promise<void> {
+    await mkdir(join(home, 'active'), { recursive: true })
+    await writeFile(
+      join(home, 'active', `${serial}.json`),
+      JSON.stringify({
+        version: 1,
+        id: `id-${serial}`,
+        name: `세션 ${serial}`,
+        serial,
+        packageName: 'com.google.android.youtube',
+        runDir: join(out, serial),
+        perfettoKey: 'k',
+        remoteTracePath: '/data/misc/perfetto-traces/x',
+        startedAt: '2026-10-08T03:00:00.000Z',
+        configuredDurationMs: 1_800_000,
+        options: { launch: true },
+        startup: null,
+        marks: [],
+        ...extra,
+      }),
+      'utf8',
+    )
+  }
+
+  /** 끝난 run 하나 — `session.json` + `result.json`. */
+  async function writeFinishedRun(dir: string, id: string, result: Record<string, unknown>): Promise<void> {
+    await writeSession(dir, { id, name: id, startedAt: '2026-10-08T03:00:00', endedAt: '2026-10-08T03:00:16' })
+    await writeFile(join(out, dir, 'result.json'), JSON.stringify(result), 'utf8')
+  }
+
+  it('DM-2 진단 토글 → 시작 요청 — 켜면 core 에 diagnose: true 가 간다', () => {
+    expect(startOptions({ ...req, diagnose: true }, 'runs', now)).toEqual({
+      launch: true,
+      outDir: 'runs',
+      force: false,
+      now,
+      diagnose: true,
+    })
+  })
+
+  it('DM-2 진단 토글 → 시작 요청 — 끄면 core 로 가는 옵션이 이 칸이 없던 때와 키까지 같다', () => {
+    const opts = startOptions(req, 'runs', now)
+
+    expect(opts).toEqual({ launch: true, outDir: 'runs', force: false, now })
+    expect(Object.keys(opts)).not.toContain('diagnose')
+    expect(startOptions({ ...req, name: '홈 스크롤' }, 'runs', now)).toEqual({
+      name: '홈 스크롤',
+      launch: true,
+      outDir: 'runs',
+      force: false,
+      now,
+    })
+  })
+
+  it('DM-2 진단 토글 → 시작 요청 — 요청 본문의 true 만 믿는다 (false · 문자열은 평소 세션)', () => {
+    // 본문은 브라우저가 보낸 JSON 이다 — 타입은 `true` 하나지만 서버는 그것을 믿을 수 없다.
+    for (const stray of [false, 'true', 1, null]) {
+      const opts = startOptions({ ...req, diagnose: stray as never }, 'runs', now)
+      expect(Object.keys(opts)).not.toContain('diagnose')
+    }
+  })
+
+  it('DM-6 진단 기록에만 diagnose — 평소 기록의 뷰는 키가 그대로다', async () => {
+    await writeFinishedRun('diag', 'diag1', { session: { id: 'diag1', options: { launch: true, diagnose: true } } })
+    await writeFinishedRun('plain', 'plain1', { session: { id: 'plain1', options: { launch: true } } })
+
+    const { runs } = (await (await fetch(`${server.url}/api/runs`)).json()) as RunsView
+    const diag = runs.find((r) => r.id === 'diag1')!
+    const plain = runs.find((r) => r.id === 'plain1')!
+
+    expect(diag.diagnose).toBe(true)
+    expect(Object.keys(diag).sort()).toEqual([...RUN_VIEW_KEYS, 'diagnose'].sort())
+    expect(Object.keys(plain).sort()).toEqual(RUN_VIEW_KEYS)
+  })
+
+  it('DM-6 진단 세션에만 diagnose — 평소 세션의 뷰는 키가 그대로고 core 의 범위 칸을 흘리지 않는다', async () => {
+    await writePointer('DIAG', {
+      configuredDurationMs: 600_000,
+      options: { launch: true, diagnose: true },
+      diagnose: { atraceCategories: ['am', 'wm', 'view'], atraceApps: ['com.google.android.youtube'], notice: null },
+    })
+    await writePointer('PLAIN', {})
+
+    const sessions = (await (await fetch(`${server.url}/api/sessions`)).json()) as ActiveSessionView[]
+    const diag = sessions.find((s) => s.serial === 'DIAG')!
+    const plain = sessions.find((s) => s.serial === 'PLAIN')!
+
+    // 화면이 쓰는 것은 진단 여부와 고지뿐이다 — core 의 `atraceCategories` 를 그대로 싣지 않는다 (규칙 4).
+    expect(diag.diagnose).toEqual({ notice: null })
+    expect(Object.keys(diag).sort()).toEqual([...SESSION_VIEW_KEYS, 'diagnose'].sort())
+    expect(Object.keys(plain).sort()).toEqual(SESSION_VIEW_KEYS)
+  })
+
+  it('DM-10 running 고지 필드 — 모름 칸이면 core 의 고지 줄 그대로, 열리면 null', async () => {
+    const notice = diagnoseNotice(30, false)
+    expect(notice).not.toBeNull()
+    await writePointer('SDK30', {
+      options: { launch: true, diagnose: true },
+      diagnose: { atraceCategories: ['am', 'wm', 'view'], atraceApps: ['com.x'], notice },
+    })
+    await writePointer('SDK36', {
+      options: { launch: true, diagnose: true },
+      diagnose: { atraceCategories: ['am', 'wm', 'view'], atraceApps: ['com.x'], notice: diagnoseNotice(36, false) },
+    })
+
+    const sessions = (await (await fetch(`${server.url}/api/sessions`)).json()) as ActiveSessionView[]
+
+    expect(sessions.find((s) => s.serial === 'SDK30')!.diagnose).toEqual({ notice })
+    expect(sessions.find((s) => s.serial === 'SDK36')!.diagnose).toEqual({ notice: null })
+  })
+
+  it('DM-10 running 고지 필드 — 진단 여부는 options.diagnose 가 정한다', () => {
+    const block = { atraceCategories: [], atraceApps: [], notice: '앱 slice 열림 모름 — sdk 30 · debuggable 모름' }
+
+    expect(toDiagnoseView({ options: { launch: false, diagnose: true }, diagnose: block })).toEqual({
+      notice: block.notice,
+    })
+    expect(toDiagnoseView({ options: { launch: true } })).toBeUndefined()
+    // 정본은 `options.diagnose` 다 (core 의 `listRuns` · `extract` 와 같은 기준) — 블록만 있다고 진단이 아니다.
+    expect(toDiagnoseView({ options: { launch: true }, diagnose: block })).toBeUndefined()
+  })
+
+  it('DM-10 running 고지 필드 — 시작 응답도 진단 세션에만 고지 칸을 싣고, 평소 응답은 키가 그대로다', async () => {
+    // 시작 응답과 세션 목록이 같은 번역을 지난다 — 둘이 다르면 새로고침 전후로 표시가 바뀐다.
+    // 기기가 필요한 `start` 대신 core 가 돌려준 세션(포인터와 같은 모양)을 그대로 넣는다.
+    const notice = diagnoseNotice(30, null)
+    await writePointer('DIAG', {
+      options: { launch: true, diagnose: true },
+      diagnose: { atraceCategories: ['am', 'wm', 'view'], atraceApps: ['com.x'], notice },
+    })
+    await writePointer('PLAIN', {})
+    const [diag, plain] = await Promise.all(
+      ['DIAG', 'PLAIN'].map(async (serial) => JSON.parse(await readFile(join(home, 'active', `${serial}.json`), 'utf8'))),
+    )
+
+    expect(toStartedSessionView(diag, 'DIAG', 'perftracker start --diagnose …').diagnose).toEqual({ notice })
+    expect(Object.keys(toStartedSessionView(plain, 'PLAIN', 'perftracker start …')).sort()).toEqual(
+      ['command', 'id', 'name', 'runDir', 'serial', 'startedAt', 'unsupported'].sort(),
+    )
+  })
+
+  it('DM-6 보고서는 진단 블록을 그대로 싣는다 — 평소 보고서엔 없다', async () => {
+    // 보고서의 입력은 `result.json` 그대로다 (계약의 `ReportDocument`). 진단 블록이 서버를
+    // 지나며 하나라도 바뀌면 보고서와 파일이 다른 숫자를 말한다.
+    const diagnose = {
+      atrace_categories: ['am', 'wm', 'view'],
+      atrace_apps: ['com.google.android.youtube'],
+      status: 'partial',
+      reason_code: 'process_name_stale_in_trace',
+      reason: '이름 낡음',
+      app_slices_open: null,
+      app_slices_open_reason_code: 'app_slices_open_unknown',
+      app_slices_open_reason: 'sdk 30 · debuggable 아님 · profileable 읽을 출처 없음',
+      trace_slices: 131_610,
+      target_process_slices: null,
+      ftrace_overrun_events: 0,
+      trace_bytes: 12_614_058,
+      target_process_slice_names: [
+        { name: 'Choreographer#doFrame *', main_thread: { count: 3, sum_ms: 12.5, max_ms: 6.25 }, other_threads: null, async_tracks: null },
+      ],
+    }
+    const diagResult = { schema_version: '1.2.0', session: { id: 'diag1', options: { launch: true, diagnose: true } }, diagnose }
+    const plainResult = { schema_version: '1.2.0', session: { id: 'plain1', options: { launch: true } } }
+    await writeFinishedRun('diag', 'diag1', diagResult)
+    await writeFinishedRun('plain', 'plain1', plainResult)
+
+    const diag = (await (await fetch(`${server.url}/api/runs/diag1/report`)).json()) as ReportDocument
+    const plain = (await (await fetch(`${server.url}/api/runs/plain1/report`)).json()) as ReportDocument
+
+    expect(diag).toEqual(diagResult)
+    expect(plain).toEqual(plainResult)
+    expect(Object.keys(plain)).not.toContain('diagnose')
   })
 })
 

@@ -1,0 +1,372 @@
+{
+ "note": "합성 표본 — gen_sample.py 머리 주석",
+ "table_rows_total": 1055,
+ "rows_by_name": [
+  {
+   "name": "<missing root>",
+   "main": null,
+   "other": [
+    1500,
+    7574.2,
+    2011.3
+   ],
+   "async": null
+  },
+  {
+   "name": "<missing root>:BS.getBrowseData",
+   "main": null,
+   "other": [
+    90,
+    277.4,
+    59.1
+   ],
+   "async": null
+  },
+  {
+   "name": "<missing root>:fut elements",
+   "main": null,
+   "other": [
+    2017,
+    552.0,
+    76.4
+   ],
+   "async": null
+  },
+  {
+   "name": "<missing root>:initMediaInitializer",
+   "main": null,
+   "other": [
+    33,
+    260.3,
+    167.0
+   ],
+   "async": null
+  },
+  {
+   "name": "ARVSLC#onScrolled",
+   "main": [
+    490,
+    318.3,
+    31.0
+   ],
+   "other": [
+    364,
+    41.9,
+    3.2
+   ],
+   "async": null
+  },
+  {
+   "name": "Choreographer#doFrame *",
+   "main": [
+    550,
+    3035.0,
+    75.3
+   ],
+   "other": null,
+   "async": null
+  },
+  {
+   "name": "Choreographer#doFrame - resynced to * in *ms",
+   "main": [
+    65,
+    753.6,
+    75.1
+   ],
+   "other": null,
+   "async": null
+  },
+  {
+   "name": "IPLC.attemptTransition:PLAYING",
+   "main": [
+    198,
+    172.8,
+    65.7
+   ],
+   "other": [
+    211,
+    1282.3,
+    331.0
+   ],
+   "async": null
+  },
+  {
+   "name": "Intenting into MainActivity",
+   "main": [
+    9,
+    177.9,
+    97.9
+   ],
+   "other": null,
+   "async": null
+  },
+  {
+   "name": "Lifecycle.Started MainActivity",
+   "main": null,
+   "other": null,
+   "async": [
+    7,
+    2056.4,
+    2009.1
+   ]
+  },
+  {
+   "name": "MountState.mount treeid=* rematerializationCount=*",
+   "main": [
+    787,
+    233.2,
+    18.2
+   ],
+   "other": null,
+   "async": null
+  },
+  {
+   "name": "OpenDexFilesFromOat(/data/app/~~*==/com.google.android.youtube-*==/base.apk)",
+   "main": null,
+   "other": [
+    1,
+    41.2,
+    41.2
+   ],
+   "async": null
+  },
+  {
+   "name": "RV Scroll",
+   "main": [
+    364,
+    432.8,
+    21.6
+   ],
+   "other": null,
+   "async": null
+  },
+  {
+   "name": "Record View#draw()",
+   "main": [
+    453,
+    153.3,
+    10.8
+   ],
+   "other": null,
+   "async": null
+  },
+  {
+   "name": "VRI[Shell$HomeActivity]@*",
+   "main": [
+    64,
+    336.4,
+    39.9
+   ],
+   "other": null,
+   "async": null
+  },
+  {
+   "name": "View#onTouchEvent",
+   "main": [
+    71,
+    257.5,
+    25.3
+   ],
+   "other": null,
+   "async": null
+  },
+  {
+   "name": "ViewPostImeInputStage id=*",
+   "main": [
+    50,
+    317.8,
+    25.6
+   ],
+   "other": null,
+   "async": null
+  },
+  {
+   "name": "activityStart",
+   "main": [
+    1,
+    175.0,
+    175.0
+   ],
+   "other": null,
+   "async": null
+  },
+  {
+   "name": "animation",
+   "main": [
+    495,
+    830.2,
+    24.9
+   ],
+   "other": null,
+   "async": null
+  },
+  {
+   "name": "bindApplication",
+   "main": [
+    1,
+    86.1,
+    86.1
+   ],
+   "other": null,
+   "async": null
+  },
+  {
+   "name": "clientTransactionExecuted",
+   "main": [
+    5,
+    204.8,
+    203.8
+   ],
+   "other": null,
+   "async": null
+  },
+  {
+   "name": "deliverInputEvent src=* eventTimeNano=* id=*",
+   "main": [
+    50,
+    361.7,
+    31.9
+   ],
+   "other": null,
+   "async": null
+  },
+  {
+   "name": "doSomeWork",
+   "main": null,
+   "other": [
+    518,
+    836.0,
+    101.2
+   ],
+   "async": null
+  },
+  {
+   "name": "draw-VRI[Shell$HomeActivity]@*",
+   "main": [
+    456,
+    1377.9,
+    45.3
+   ],
+   "other": null,
+   "async": null
+  },
+  {
+   "name": "first thumb complete",
+   "main": null,
+   "other": null,
+   "async": [
+    125,
+    103.0,
+    17.0
+   ]
+  },
+  {
+   "name": "input",
+   "main": [
+    64,
+    342.9,
+    40.0
+   ],
+   "other": null,
+   "async": null
+  },
+  {
+   "name": "onAccountReady",
+   "main": null,
+   "other": null,
+   "async": [
+    62,
+    2099.0,
+    2007.0
+   ]
+  },
+  {
+   "name": "postAndWait",
+   "main": [
+    453,
+    1170.8,
+    44.0
+   ],
+   "other": null,
+   "async": null
+  },
+  {
+   "name": "startActivity: Intent { act=android.intent.action.VIEW dat=vnd.youtube:* flg=* cmp=com.google.android.youtube/com.google.android.apps.youtube.app.watchwhile.WatchWhileActivity (has extras) }",
+   "main": [
+    1,
+    12.4,
+    12.4
+   ],
+   "other": null,
+   "async": null
+  },
+  {
+   "name": "tk-trace-id: *",
+   "main": [
+    312,
+    341.4,
+    98.0
+   ],
+   "other": [
+    8506,
+    18232.6,
+    2011.0
+   ],
+   "async": null
+  },
+  {
+   "name": "traceFirstFrame",
+   "main": null,
+   "other": null,
+   "async": [
+    1,
+    836.0,
+    836.0
+   ]
+  },
+  {
+   "name": "traversal",
+   "main": [
+    456,
+    1822.3,
+    61.1
+   ],
+   "other": null,
+   "async": null
+  }
+ ],
+ "rows_by_main_sum_desc": [
+  "Choreographer#doFrame *",
+  "traversal",
+  "draw-VRI[Shell$HomeActivity]@*",
+  "postAndWait",
+  "animation",
+  "Choreographer#doFrame - resynced to * in *ms",
+  "RV Scroll",
+  "deliverInputEvent src=* eventTimeNano=* id=*",
+  "input",
+  "tk-trace-id: *",
+  "VRI[Shell$HomeActivity]@*",
+  "ARVSLC#onScrolled",
+  "ViewPostImeInputStage id=*",
+  "View#onTouchEvent",
+  "MountState.mount treeid=* rematerializationCount=*",
+  "clientTransactionExecuted",
+  "Intenting into MainActivity",
+  "activityStart",
+  "IPLC.attemptTransition:PLAYING",
+  "Record View#draw()",
+  "bindApplication",
+  "startActivity: Intent { act=android.intent.action.VIEW dat=vnd.youtube:* flg=* cmp=com.google.android.youtube/com.google.android.apps.youtube.app.watchwhile.WatchWhileActivity (has extras) }",
+  "<missing root>",
+  "<missing root>:BS.getBrowseData",
+  "<missing root>:fut elements",
+  "<missing root>:initMediaInitializer",
+  "Lifecycle.Started MainActivity",
+  "OpenDexFilesFromOat(/data/app/~~*==/com.google.android.youtube-*==/base.apk)",
+  "doSomeWork",
+  "first thumb complete",
+  "onAccountReady",
+  "traceFirstFrame"
+ ]
+}

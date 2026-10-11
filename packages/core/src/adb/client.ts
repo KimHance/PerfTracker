@@ -36,9 +36,14 @@ export class AdbClient {
   async raw(
     args: string[],
     opts: ProcessRunOptions = {},
-  ): Promise<{ stdout: string; stderr: string; code: number }> {
+  ): Promise<{ stdout: string; stderr: string; code: number; timedOut?: true }> {
     const r = await this.rawBinary(args, opts)
-    return { stdout: r.stdout.toString('utf8'), stderr: r.stderr, code: r.code }
+    return {
+      stdout: r.stdout.toString('utf8'),
+      stderr: r.stderr,
+      code: r.code,
+      ...(r.timedOut === true ? { timedOut: true as const } : {}),
+    }
   }
 
   /** 실패를 예외로 올리는 래퍼. */

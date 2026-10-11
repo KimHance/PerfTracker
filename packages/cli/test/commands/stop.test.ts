@@ -1,4 +1,6 @@
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { formatStopResult } from '../../src/commands/stop.js'
 
@@ -72,5 +74,30 @@ describe('formatStopResult', () => {
     })
     expect(out.split('\n')[0]).toContain('중단된 상태')
     expect(out).toContain(`${inDefaultOut}/result.json`)
+  })
+})
+
+/**
+ * **진단 세션도 `stop` · `extract` 는 요약을 찍지 않는다** (DM-11 · 안 바뀔 것). slice 표가 아무리
+ * 커도 산출물은 `result.json` 하나이고, 무엇을 앞에 둘지 고르는 순간 그것이 판정이 된다.
+ */
+describe('DM-11 stop 출력 그대로', () => {
+  it('DM-11 stop 출력 그대로 — 진단 세션 기록도 경로와 보고서 명령 두 줄뿐이다', () => {
+    const diagnoseRun = resolve('runs', '2026-10-08T00-29-11_유튜브-진단_a1b2c3')
+
+    expect(
+      formatStopResult({ runDir: diagnoseRun, id: 'a1b2c3', state: 'completed', reportPath: null }),
+    ).toBe(`→ ${diagnoseRun}/result.json\n  perftracker report a1b2c3 로 보고서를 엽니다`)
+  })
+
+  /**
+   * 위 함수는 세션 종류를 입력으로 받지 않으므로, 진단 표시가 끼어들 길은 두 명령이 진단 블록을
+   * 읽기 시작하는 것뿐이다. 그 길을 막아 둔다 — 붙이려면 이 시험을 먼저 지워야 하고 그것이 의사 표시다.
+   */
+  it('DM-11 stop 출력 그대로 — stop · extract 는 진단 블록 · 진단 문구를 읽지 않는다', () => {
+    for (const file of ['stop.ts', 'extract.ts']) {
+      const source = readFileSync(fileURLToPath(new URL(`../../src/commands/${file}`, import.meta.url)), 'utf8')
+      expect(source, file).not.toMatch(/diagnos|slice|진단/i)
+    }
   })
 })

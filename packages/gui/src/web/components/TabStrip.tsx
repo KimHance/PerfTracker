@@ -1,4 +1,4 @@
-import { formatElapsed } from '../format/time.js'
+import { tabBadge } from '../format/session.js'
 import { elapsedMs, runningCount } from '../state/derive.js'
 import type { Tab } from '../state/model.js'
 import { useStore } from '../state/StoreContext.jsx'
@@ -39,7 +39,7 @@ export function TabStrip() {
           <span className={tab.phase === 'running' ? 'dot dot-live' : 'dot'} aria-hidden />
           <span className="tab-label">{tab.name.trim() === '' ? '새 세션' : tab.name}</span>
           <span className="mono" style={{ fontSize: 10, color: 'var(--color-neutral-600)' }}>
-            {tab.phase === 'running' ? formatElapsed(elapsedMs(tab, state.now)) : '준비'}
+            {tabBadge(tab, elapsedMs(tab, state.now))}
           </span>
           <button
             className="tab-close"

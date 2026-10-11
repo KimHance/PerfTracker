@@ -1,16 +1,29 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { MeasurementWindowViolationError, SessionStateError } from '../../src/errors.js'
+import { compileStateFields, parseDexoptState } from '../../src/app/dexopt.js'
+import {
+  CompileAppliedError,
+  CompileFailedError,
+  MeasurementWindowViolationError,
+  PerfTrackerError,
+  PerfettoSessionError,
+  SessionStateError,
+} from '../../src/errors.js'
 import type { CaptureManifest } from '../../src/session/manifest.js'
 import {
   AM_START_PIDOF_MARKER,
   buildWarnings,
+  checkCompileOption,
+  COMPILE_TIMEOUT_MS,
+  compileCommand,
   parseAmStart,
   parsePidof,
   splitAmStartPidof,
   startSession,
 } from '../../src/session/start.js'
+import { ATRACE_READY_WAIT } from '../../src/session/diagnose.js'
 import { readActiveSession, writeActiveSession } from '../../src/session/state.js'
 import {
   clientFor,
@@ -532,5 +545,607 @@ describe('startSession — --force 는 기기 쪽 세션도 정리한다 (I3)', 
 
     await expect(h.result).rejects.toBeInstanceOf(SessionStateError)
     expect(runner.commands).toEqual([])
+  })
+})
+
+/**
+ * 진단 세션 (기능 문서 diagnostic-mode). atrace slice 의 비용은 앱 프로세스 자신에게 청구되고
+ * `measurement_overhead` 에 잡히지 않으므로, 평소 세션과 **갈라서** 연다. 평소 세션은 이
+ * 옵션이 생기기 전과 기기로 나가는 것이 글자 하나 달라지면 안 된다.
+ */
+describe('startSession — 진단 세션', () => {
+  /**
+   * 이 옵션이 생기기 **전** 코드(HEAD a61dab8)가 fake 기기(sdk 36)에 보낸 config 원문.
+   * 지금 코드에서 다시 만들어 비교하면 같은 코드끼리 비교하는 셈이라 아무것도 지키지 못한다.
+   */
+  const NORMAL_CONFIG_BEFORE =
+    'buffers { size_kb: 65536 fill_policy: RING_BUFFER }\n' +
+    'data_sources { config { name: "android.surfaceflinger.frametimeline" } }\n' +
+    'data_sources { config { name: "linux.process_stats" process_stats_config { proc_stats_poll_ms: 1000 scan_all_processes_on_start: true record_process_runtime: true } } }\n' +
+    'data_sources { config { name: "linux.sys_stats" sys_stats_config { stat_period_ms: 1000 stat_counters: STAT_CPU_TIMES meminfo_period_ms: 1000 meminfo_counters: MEMINFO_MEM_TOTAL meminfo_counters: MEMINFO_MEM_FREE meminfo_counters: MEMINFO_MEM_AVAILABLE meminfo_counters: MEMINFO_BUFFERS meminfo_counters: MEMINFO_CACHED meminfo_counters: MEMINFO_SWAP_CACHED meminfo_counters: MEMINFO_SWAP_TOTAL meminfo_counters: MEMINFO_SWAP_FREE } } }\n' +
+    'data_sources { config { name: "linux.ftrace" ftrace_config { ftrace_events: "power/cpu_frequency" } } }\n' +
+    'write_into_file: true\nfile_write_period_ms: 30000\nflush_period_ms: 30000\nduration_ms: 1800000\n'
+
+  function diagStart(opts: { diagnose?: boolean; launch?: boolean; runner?: ReturnType<typeof startableDevice>; app?: Parameters<typeof targetApp>[0] } = {}) {
+    const dirs = tempDirs()
+    const runner = opts.runner ?? startableDevice()
+    const adb = clientFor(runner)
+    const result = startSession({ adb, serial: SERIAL }, targetApp(opts.app ?? {}), {
+      launch: opts.launch ?? true,
+      outDir: dirs.out,
+      force: false,
+      now: NOW,
+      home: dirs.home,
+      ...(opts.diagnose !== undefined ? { diagnose: opts.diagnose } : {}),
+    })
+    return { adb, runner, dirs, result }
+  }
+
+  const sentConfig = (runner: ReturnType<typeof startableDevice>): string =>
+    runner.calls.find((c) => c.args.join(' ').includes('--detach=perftracker_'))?.input ?? ''
+
+  it('DM-1 core — 안 주면 평소 세션이고 기기로 나가는 config 가 지금과 글자 하나 다르지 않다', async () => {
+    for (const diagnose of [undefined, false]) {
+      const h = diagStart(diagnose === undefined ? {} : { diagnose })
+      const session = await h.result
+
+      expect(sentConfig(h.runner)).toBe(NORMAL_CONFIG_BEFORE)
+      expect(session.options).toEqual({ launch: true })
+      expect(Object.keys(session)).not.toContain('diagnose')
+      const stored = JSON.parse(readFileSync(join(session.runDir, 'session.json'), 'utf8')) as Record<string, unknown>
+      expect(Object.keys(stored)).not.toContain('diagnose')
+      expect(stored['options']).toEqual({ launch: true })
+    }
+  })
+
+  it('DM-1 core — diagnose 를 주면 진단 세션으로 열리고 session.json 에 범위가 남는다', async () => {
+    const h = diagStart({ diagnose: true })
+    const session = await h.result
+
+    expect(session.options).toEqual({ launch: true, diagnose: true })
+    expect(session.diagnose).toEqual({
+      atraceCategories: ['am', 'wm', 'view', 'dalvik'],
+      atraceApps: ['com.nhn.android.webtoon'],
+      notice: null,
+    })
+    const stored = JSON.parse(readFileSync(join(session.runDir, 'session.json'), 'utf8')) as typeof session
+    expect(stored.options).toEqual({ launch: true, diagnose: true })
+    expect(stored.diagnose).toEqual(session.diagnose)
+  })
+
+  it('DM-3 진단 config 범위 — start 가 보낸 config 의 atrace 는 am · wm · view · dalvik + 대상 앱 하나다', async () => {
+    const h = diagStart({ diagnose: true })
+    await h.result
+    const text = sentConfig(h.runner)
+    const values = (key: string): string[] =>
+      [...text.matchAll(new RegExp(`${key}:\\s*"([^"]+)"`, 'g'))].map((m) => m[1]!)
+
+    expect(new Set(values('atrace_categories'))).toEqual(new Set(['am', 'wm', 'view', 'dalvik']))
+    expect(values('atrace_categories')).toHaveLength(4)
+    expect(values('atrace_apps')).toEqual(['com.nhn.android.webtoon'])
+    expect(values('ftrace_events')).toEqual(['power/cpu_frequency'])
+    // atrace 를 빼면 평소 config 와 duration 말고는 같다 — 다른 데이터소스는 늘지도 줄지도 않는다.
+    expect(text.replace(/atrace_\w+: "[^"]*" /g, '').replace('duration_ms: 600000', 'duration_ms: 1800000')).toBe(
+      NORMAL_CONFIG_BEFORE,
+    )
+  })
+
+  it('DM-17 진단 최대 10분 · 평소 30분 — config 의 duration_ms 와 세션의 상한이 같은 값이다', async () => {
+    const diag = diagStart({ diagnose: true })
+    const diagSession = await diag.result
+    expect(sentConfig(diag.runner)).toContain('duration_ms: 600000\n')
+    expect(diagSession.configuredDurationMs).toBe(600_000)
+
+    const normal = diagStart()
+    const normalSession = await normal.result
+    expect(sentConfig(normal.runner)).toContain('duration_ms: 1800000\n')
+    expect(normalSession.configuredDurationMs).toBe(1_800_000)
+  })
+
+  /**
+   * 안 바뀔 것 「측정 창 안 기기 접촉 0 — 진단 세션도」. 진단 세션은 기기 명령을 하나도 더하지
+   * 않는다 — atrace 는 config 안의 키이고, 켜고 끄는 일은 perfetto(traced_probes)가 한다 (plan D15).
+   */
+  it('DM 진단 세션 창 안 명령 0 — 명령 목록 · 순서가 평소와 같고 창이 열린 뒤엔 하나도 못 나간다', async () => {
+    const normal = diagStart()
+    const normalSession = await normal.result
+    const diag = diagStart({ diagnose: true })
+    const diagSession = await diag.result
+
+    // 다른 것은 앱 실행 호출 앞의 atrace 대기 조각 하나뿐이다 (D14) — 호출 수 · 순서는 같다.
+    const strip = (cmds: string[], id: string): string[] =>
+      cmds.map((c) => c.replaceAll(id, '<id>').replace(ATRACE_READY_WAIT, ''))
+    expect(strip(diag.runner.commands, diagSession.id)).toEqual(strip(normal.runner.commands, normalSession.id))
+
+    const detach = diag.runner.commands.findIndex((c) => c.includes('--detach=perftracker_'))
+    expect(diag.runner.commands.slice(detach + 1)).toHaveLength(1)
+    expect(diag.adb.window.isOpen).toBe(true)
+    await expect(diag.adb.shell('getprop debug.atrace.tags.enableflags')).rejects.toBeInstanceOf(
+      MeasurementWindowViolationError,
+    )
+  })
+
+  /**
+   * 설정 검증이 거부할 config 라면 **기기에 아무 일도 시키기 전에** 거부한다. 예전에는 config 를
+   * force-stop 뒤에 만들어서 거부되면 앱만 죽은 채로 남았다 (실현성 검토 개발 #5).
+   * 실제 패키지 이름에는 `*` 가 올 수 없으니, 와일드카드 검사가 start 경로에서 걸리는지로 본다.
+   */
+  it('DM-4 거부는 perfetto · force-stop · 스냅샷 전 — 그때까지 나간 것은 probe 뿐이다', async () => {
+    const h = diagStart({ diagnose: true, app: { package: 'com.nhn.android.*' } })
+
+    await expect(h.result).rejects.toBeInstanceOf(PerfettoSessionError)
+    expect(h.runner.commands).toEqual([
+      `-s ${SERIAL} shell which perfetto`,
+      `-s ${SERIAL} shell perfetto --query`,
+      `-s ${SERIAL} shell getprop ro.build.version.sdk`,
+    ])
+    // run 디렉토리도 만들지 않는다 — 거부된 세션의 빈 폴더가 기록 목록 정리 대상으로 남지 않게.
+    expect(readdirSync(h.dirs.out)).toEqual([])
+    expect(await readActiveSession(SERIAL, h.dirs.home)).toBeNull()
+  })
+
+  /**
+   * plan D14 — 실기기(SM-S901N · YouTube)로 정했다. `--detach` 는 세션을 연 즉시 돌아오고 atrace 는
+   * 그 뒤에 켜진다. 기다리지 않은 1회는 앱 slice 12,042개 가운데 `bindApplication` 이 0개였고,
+   * 기다린 1회는 1개(68.2 ms)였다. 기다림은 앱 실행과 **같은 셸 호출** 안이라 트레이스 시작과
+   * 래치 무장 사이의 왕복은 그대로 1회다 (위 「adb 호출이 정확히 하나다」 와 같은 계약).
+   */
+  it('D14 진단 --launch 는 같은 호출 안에서 atrace 가 켜지길 기다린 뒤 앱을 띄운다', async () => {
+    const h = diagStart({ diagnose: true })
+    await h.result
+
+    const detach = h.runner.commands.findIndex((c) => c.includes('--detach=perftracker_'))
+    const inWindow = h.runner.commands.slice(detach + 1)
+    expect(inWindow).toHaveLength(1)
+    const call = inWindow[0]!
+    expect(call.startsWith(`-s ${SERIAL} shell ${ATRACE_READY_WAIT}am start -W -n `)).toBe(true)
+    // 읽기만 한다 — setprop 은 없다 (plan D15). 상한이 있어 기기가 답하지 않아도 세션이 서지 않는다.
+    expect(ATRACE_READY_WAIT).toContain('getprop debug.atrace.tags.enableflags')
+    expect(ATRACE_READY_WAIT).toContain('getprop debug.atrace.app_number')
+    expect(ATRACE_READY_WAIT).toMatch(/while \[ \$i -lt 50 \]/)
+    expect(ATRACE_READY_WAIT).not.toMatch(/setprop/)
+  })
+
+  it('D14 대기 조각이 붙어도 앱 실행 결과(TotalTime · pid)는 평소처럼 읽힌다', async () => {
+    const session = await diagStart({ diagnose: true }).result
+
+    expect(session.startup?.totalTimeMs).toBe(1842)
+    expect(session.appPid).toBe(24193)
+  })
+
+  it('D14 평소 세션 · --launch 없는 진단 세션은 atrace 속성을 읽지 않는다', async () => {
+    const normal = diagStart()
+    await normal.result
+    const noLaunch = diagStart({ diagnose: true, launch: false })
+    await noLaunch.result
+
+    for (const runner of [normal.runner, noLaunch.runner]) {
+      expect(runner.commands.some((c) => c.includes('debug.atrace'))).toBe(false)
+    }
+  })
+
+  describe('DM-10 start 고지 — 조건 표의 "모름" 칸이면 세션은 열고 고지 줄을 싣는다', () => {
+    const sdk = (n: number) =>
+      startableDevice((r) => {
+        r.on(`-s ${SERIAL} shell getprop ro.build.version.sdk`, { stdout: `${n}\n` })
+      })
+
+    it('DM-10 start 고지 — sdk ≤30 · debuggable 아님', async () => {
+      const session = await diagStart({ diagnose: true, runner: sdk(30), app: { debuggable: false } }).result
+      expect(session.diagnose?.notice).toBe('앱 slice 열림 모름 — sdk 30 · debuggable 아님')
+    })
+
+    it('DM-10 start 고지 — sdk ≤30 · debuggable 모름 (null · 필드 없음)', async () => {
+      for (const app of [{ debuggable: null }, {}]) {
+        const session = await diagStart({ diagnose: true, runner: sdk(30), app }).result
+        expect(session.diagnose?.notice).toBe('앱 slice 열림 모름 — sdk 30 · debuggable 모름')
+      }
+    })
+
+    it('DM-10 start 고지 — 열리는 칸이면 고지가 없다 (sdk ≥31 · sdk ≤30 + debuggable)', async () => {
+      expect((await diagStart({ diagnose: true, runner: sdk(31), app: { debuggable: false } }).result).diagnose?.notice).toBeNull()
+      expect((await diagStart({ diagnose: true, runner: sdk(30), app: { debuggable: true } }).result).diagnose?.notice).toBeNull()
+    })
+
+    it('DM-10 start 고지 — 평소 세션엔 고지 자리도 없다', async () => {
+      const session = await diagStart({ runner: sdk(30), app: { debuggable: false } }).result
+      expect(session.diagnose).toBeUndefined()
+    })
+  })
+})
+
+/**
+ * `--compile` (기능 문서 baseline-profile BP-4 core 쪽). 기기 원문은 실측 픽스처 — 바꾸기 전은 YouTube 해석 출력
+ * (`speed-profile` / `profile-utilization`), 바꾼 뒤는 `--reset` 직후 출력(`verify` / `vdex-dm`)이다.
+ */
+describe('startSession — --compile (BP-4)', () => {
+  const YT = 'com.google.android.youtube'
+  const fixture = (n: string): string =>
+    readFileSync(fileURLToPath(new URL(`../fixtures/${n}`, import.meta.url)), 'utf8')
+  const BEFORE = fixture('dumpsys-package-dexopt-youtube.txt')
+  const AFTER = fixture('dumpsys-package-dexopt-reset.txt')
+  const DUMPSYS = `-s ${SERIAL} shell dumpsys package '${YT}'`
+  /** 대상 앱 해석이 낸 것과 같은 `target_app` — 시작 칸이 바꾸기 전 출력에서 온다. */
+  const ytApp = {
+    package: YT,
+    launcher_activity: 'com.google.android.apps.youtube.app.watchwhile.MainActivity',
+    ...compileStateFields('start', parseDexoptState(BEFORE, YT)),
+  }
+
+  function compileDevice(
+    compile: { stdout?: string; stderr?: string; code?: number; timedOut?: true } = { stdout: 'Success\n' },
+    dumpsys: { stdout?: string; code?: number } = { stdout: AFTER },
+  ) {
+    return startableDevice((r) => r.onMatch(/shell cmd package compile /, compile).on(DUMPSYS, dumpsys))
+  }
+
+  function compileStart(
+    opts: {
+      compile?: string
+      /** true 면 `compile` 키 자체를 넘기지 않는다 — 평소 세션. */
+      noCompile?: true
+      launch?: boolean
+      diagnose?: boolean
+      force?: boolean
+      runner?: ReturnType<typeof startableDevice>
+      app?: Parameters<typeof targetApp>[0]
+      home?: string
+      out?: string
+    } = {},
+  ) {
+    const dirs = tempDirs()
+    if (opts.out !== undefined) dirs.out = opts.out
+    const home = opts.home ?? dirs.home
+    const runner = opts.runner ?? compileDevice()
+    const adb = clientFor(runner)
+    const result = startSession({ adb, serial: SERIAL }, targetApp(opts.app ?? ytApp), {
+      launch: opts.launch ?? true,
+      outDir: dirs.out,
+      force: opts.force ?? false,
+      now: NOW,
+      home,
+      ...(opts.diagnose !== undefined ? { diagnose: opts.diagnose } : {}),
+      ...(opts.noCompile === true ? {} : { compile: opts.compile ?? 'speed' }),
+    })
+    return { adb, runner, dirs, home, result }
+  }
+
+  const manifestOf = (runDir: string): CaptureManifest =>
+    JSON.parse(readFileSync(join(runDir, 'capture.json'), 'utf8')) as CaptureManifest
+
+  const PROBE = [
+    `-s ${SERIAL} shell which perfetto`,
+    `-s ${SERIAL} shell perfetto --query`,
+    `-s ${SERIAL} shell getprop ro.build.version.sdk`,
+  ]
+
+  it('BP-4 명령 꼴 그대로 — reset 은 --reset · 그 밖은 -m <값> -f · 범위 옵션 없음', () => {
+    expect(compileCommand('reset', YT)).toBe(`cmd package compile --reset '${YT}'`)
+    expect(compileCommand('speed-profile', YT)).toBe(`cmd package compile -m speed-profile -f '${YT}'`)
+    expect(compileCommand('speed', YT)).toBe(`cmd package compile -m speed -f '${YT}'`)
+    for (const v of ['reset', 'speed-profile', 'speed'] as const) {
+      expect(compileCommand(v, YT)).not.toMatch(/--primary-dex|--secondary-dex|--include-dependencies|--split/)
+    }
+  })
+
+  /**
+   * 평소 세션 목록(위 「기기로 나가는 명령 전체가 이 목록과 정확히 같다」)에 **probe 바로 뒤 두 줄**만 끼고
+   * 그 밖 줄 · 순서는 같다. compile 은 설정 검증(probe 뒤 config 조립) 뒤, 기기 스펙 · 시작 스냅샷 · force-stop ·
+   * perfetto 앞이다.
+   */
+  it('BP-4 compile 은 DM-4 뒤 · 시작 스냅샷 · perfetto · force-stop 전 — 명령 목록에 probe 뒤 두 줄만 낀다', async () => {
+    const normal = start({ launch: true, app: ytApp })
+    const normalSession = await normal.result
+    const plain = normal.runner.commands.map((c) => c.replaceAll(normalSession.id, '<id>'))
+
+    const h = compileStart({ compile: 'speed' })
+    const session = await h.result
+    const commands = h.runner.commands.map((c) => c.replaceAll(session.id, '<id>'))
+
+    expect(commands).toEqual([
+      ...PROBE,
+      `-s ${SERIAL} shell cmd package compile -m speed -f '${YT}'`,
+      DUMPSYS,
+      ...plain.slice(PROBE.length),
+    ])
+    expect(plain.slice(0, PROBE.length)).toEqual(PROBE)
+    const at = (needle: string) => commands.findIndex((c) => c.includes(needle))
+    expect(at('cmd package compile')).toBeLessThan(at('getprop $p'))
+    expect(at('cmd package compile')).toBeLessThan(at('dumpsys battery'))
+    expect(at('cmd package compile')).toBeLessThan(at('am force-stop'))
+    expect(at('cmd package compile')).toBeLessThan(at('--detach=perftracker_'))
+  })
+
+  it('BP-4 compile 은 DM-4 뒤 — 설정 검증이 거부하면 compile 도 0 · 나간 것은 probe 뿐', async () => {
+    const h = compileStart({ compile: 'speed', diagnose: true, app: { ...ytApp, package: 'com.google.*' } })
+
+    await expect(h.result).rejects.toBeInstanceOf(PerfettoSessionError)
+    // compile 전 실패라 감싸지 않는다 (B32).
+    await expect(h.result).rejects.not.toBeInstanceOf(CompileAppliedError)
+    expect(h.runner.commands).toEqual(PROBE)
+    expect(readdirSync(h.dirs.out)).toEqual([])
+  })
+
+  it('BP-4 --launch 없으면 거부 — 기기 명령 0 · run 디렉토리 0', async () => {
+    const h = compileStart({ compile: 'speed', launch: false })
+
+    await expect(h.result).rejects.toThrow(new SessionStateError('--compile 은 --launch 와만 · 기기 명령 0'))
+    expect(h.runner.commands).toEqual([])
+    expect(readdirSync(h.dirs.out)).toEqual([])
+    expect(await readActiveSession(SERIAL, h.home)).toBeNull()
+  })
+
+  it('BP-4 --launch 없으면 거부 — --force 의 옛 세션 정리(기기 명령)보다도 먼저', async () => {
+    const dirs = tempDirs()
+    const old = await start({ home: dirs.home }).result
+    await writeActiveSession(old, dirs.home)
+
+    const h = compileStart({ compile: 'reset', launch: false, force: true, home: dirs.home })
+
+    await expect(h.result).rejects.toBeInstanceOf(SessionStateError)
+    expect(h.runner.commands).toEqual([])
+    expect((await readActiveSession(SERIAL, dirs.home))?.id).toBe(old.id)
+  })
+
+  it('BP-4 허용 밖 값 거부 — 기기 명령 0 · 받는 값 셋을 말한다', async () => {
+    for (const value of ['verify', 'SPEED', '', 'speed -f --secondary-dex', 'speed-profile ']) {
+      const h = compileStart({ compile: value })
+
+      await expect(h.result).rejects.toThrow(
+        new SessionStateError(`--compile ${value} · 받는 값 reset · speed-profile · speed · 기기 명령 0`),
+      )
+      expect(h.runner.commands).toEqual([])
+      expect(readdirSync(h.dirs.out)).toEqual([])
+    }
+  })
+
+  it('BP-4 허용 밖 값 거부 — 입구 검사는 기기 없이 값 · --launch 를 본다 (cli 가 앱 해석 전에 부른다)', () => {
+    expect(checkCompileOption({ launch: true })).toBeNull()
+    expect(checkCompileOption({ launch: false })).toBeNull()
+    expect(checkCompileOption({ launch: true, compile: 'reset' })).toBe('reset')
+    expect(checkCompileOption({ launch: true, compile: 'speed-profile' })).toBe('speed-profile')
+    expect(checkCompileOption({ launch: true, compile: 'speed' })).toBe('speed')
+    expect(() => checkCompileOption({ launch: true, compile: 'verify' })).toThrow(SessionStateError)
+    expect(() => checkCompileOption({ launch: false, compile: 'speed' })).toThrow(SessionStateError)
+  })
+
+  it('BP-4 compile 시간 한도 — compile 호출에만 10분을 넘기고 다른 호출은 기본 한도 그대로', async () => {
+    const h = compileStart({ compile: 'speed' })
+    await h.result
+
+    expect(COMPILE_TIMEOUT_MS).toBe(600_000)
+    // 실측 67.5초(speed)보다 길어야 한다 — 기본 60초면 기기는 계속 컴파일하는데 세션만 실패로 끝난다.
+    expect(COMPILE_TIMEOUT_MS).toBeGreaterThan(67_500)
+    const limited = h.runner.calls.filter((c) => c.timeoutMs !== undefined)
+    expect(limited.map((c) => [c.args.join(' '), c.timeoutMs])).toEqual([
+      [`-s ${SERIAL} shell cmd package compile -m speed -f '${YT}'`, 600_000],
+    ])
+  })
+
+  describe('BP-4 실패하면 세션 안 엶 · run 디렉토리 0', () => {
+    const cases = [
+      { name: '종료 코드 ≠ 0', reply: { code: 255, stderr: 'cmd: Failure calling service package\n' }, exit: 255, timedOut: false },
+      { name: '종료 코드 0 · 출력 Failure', reply: { stdout: 'Failure: package com.google.android.youtube could not be compiled\n' }, exit: 0, timedOut: false },
+      { name: '종료 코드 0 · stderr Failure', reply: { stdout: '', stderr: 'Failure: package com.google.android.youtube could not be compiled\n' }, exit: 0, timedOut: false },
+      { name: '한도 넘음', reply: { code: 1, timedOut: true as const }, exit: null, timedOut: true },
+    ]
+    for (const c of cases) {
+      it(`BP-4 실패하면 세션 안 엶 · run 디렉토리 0 — ${c.name}`, async () => {
+        const h = compileStart({ compile: 'speed', runner: compileDevice(c.reply) })
+
+        const err = await h.result.then(
+          () => null,
+          (e: unknown) => e,
+        )
+        expect(err).toBeInstanceOf(CompileFailedError)
+        // compile 자체 실패는 감싸지 않는다 — 기기가 바뀌었는지 모르는 자리라 B32 의 "이미 바뀌었다" 가 거짓이 된다.
+        expect(err).not.toBeInstanceOf(CompileAppliedError)
+        const f = err as CompileFailedError
+        expect(f.value).toBe('speed')
+        expect(f.command).toBe(`cmd package compile -m speed -f '${YT}'`)
+        expect(f.exitCode).toBe(c.exit)
+        expect(f.timedOut).toBe(c.timedOut)
+        expect(f.message.split('\n')[0]).toBe(
+          c.timedOut ? '컴파일 한도 10분 넘음 · 세션 안 엶' : `컴파일 실패 · 세션 안 엶 · exit ${String(c.exit)}`,
+        )
+        // probe 와 compile 뿐 — 실패 뒤 상태 읽기(dumpsys) · 스펙 · 스냅샷 · force-stop · perfetto 0.
+        expect(h.runner.commands).toEqual([...PROBE, `-s ${SERIAL} shell cmd package compile -m speed -f '${YT}'`])
+        expect(readdirSync(h.dirs.out)).toEqual([])
+        expect(await readActiveSession(SERIAL, h.home)).toBeNull()
+        expect(h.adb.window.isOpen).toBe(false)
+      })
+    }
+
+    it('BP-4 실패하면 세션 안 엶 — 출력 Success 는 실패가 아니다 (Failure 는 줄 머리에서만)', async () => {
+      const h = compileStart({ compile: 'speed', runner: compileDevice({ stdout: 'Success\n' }) })
+      await expect(h.result).resolves.toBeDefined()
+    })
+  })
+
+  it('BP-4 바꾼 뒤 상태는 다시 읽은 dumpsys — compile 바로 다음 줄 · 시작 상태가 그 출력', async () => {
+    const h = compileStart({ compile: 'reset' })
+    const session = await h.result
+
+    const compileAt = h.runner.commands.indexOf(`-s ${SERIAL} shell cmd package compile --reset '${YT}'`)
+    expect(compileAt).toBe(PROBE.length)
+    expect(h.runner.commands[compileAt + 1]).toBe(DUMPSYS)
+    expect(h.runner.commands.filter((c) => c === DUMPSYS)).toHaveLength(1)
+
+    const app = manifestOf(session.runDir).target_app
+    expect(app.compile_state_start).toEqual(parseDexoptState(AFTER, YT).lines)
+    expect(app.compile_state_start?.[0]).toMatchObject({ status: 'verify', reason: 'vdex-dm' })
+    expect(app.compile_state_start_reason_code).toBeNull()
+    expect(app.compile_state_start_reason).toBeNull()
+    // 바꾸기 전 값(대상 앱 해석의 출력)이 시작 자리에 남지 않는다.
+    expect(app.compile_state_start).not.toEqual(ytApp.compile_state_start)
+  })
+
+  it('BP-4 바꾼 뒤 상태는 다시 읽은 dumpsys — 그 줄이 실패하면 시작 상태는 null + 코드 · 세션은 열린다', async () => {
+    const h = compileStart({ compile: 'speed', runner: compileDevice({ stdout: 'Success\n' }, { code: 1 }) })
+    const session = await h.result
+
+    const app = manifestOf(session.runDir).target_app
+    expect(app.compile_state_start).toBeNull()
+    expect(app.compile_state_start_reason_code).toBe('dexopt_state_unavailable')
+    expect(app.compile_state_start_reason).toBe('세션 시작 dumpsys package 출력을 받지 못함 (종료 코드 1) — 기기 연결이 끊겼을 수 있음')
+  })
+
+  it('BP-4 바꾼 기록 — 값 · 보낸 명령 원문 · 바꾸기 전 상태 · 걸린 ms 가 세션 기록에 실린다', async () => {
+    const h = compileStart({ compile: 'speed-profile' })
+    const session = await h.result
+
+    expect(session.compile).toEqual({
+      value: 'speed-profile',
+      command: `cmd package compile -m speed-profile -f '${YT}'`,
+      elapsed_ms: expect.any(Number) as number,
+      compile_state_before: ytApp.compile_state_start,
+      compile_state_before_reason_code: null,
+      compile_state_before_reason: null,
+    })
+    expect(Number.isInteger(session.compile?.elapsed_ms)).toBe(true)
+    expect(session.compile?.elapsed_ms).toBeGreaterThanOrEqual(0)
+    // 바꾸기 전 = 대상 앱 해석의 출력 그대로 (실측 speed-profile / profile-utilization).
+    expect(session.compile?.compile_state_before?.[0]).toMatchObject({ status: 'speed-profile', reason: 'profile-utilization' })
+    // 보낸 명령 원문은 실제로 기기로 나간 문자열과 같다.
+    expect(h.runner.commands).toContain(`-s ${SERIAL} shell ${session.compile?.command ?? ''}`)
+
+    const stored = JSON.parse(readFileSync(join(session.runDir, 'session.json'), 'utf8')) as Record<string, unknown>
+    expect(stored['compile']).toEqual(session.compile)
+    expect((await readActiveSession(SERIAL, h.home))?.compile).toEqual(session.compile)
+  })
+
+  it('BP-4 바꾼 기록 — 바꾸기 전 상태를 못 읽었던 앱이면 그 null 과 코드를 그대로 옮긴다', async () => {
+    const unread = { ...ytApp, ...compileStateFields('start', parseDexoptState('Packages:\n', YT)) }
+    const session = await compileStart({ compile: 'speed', app: unread }).result
+
+    expect(session.compile?.compile_state_before).toBeNull()
+    expect(session.compile?.compile_state_before_reason_code).toBe('dexopt_state_section_missing')
+    expect(session.compile?.compile_state_before_reason).toBe(unread.compile_state_start_reason)
+  })
+
+  it('BP-4 --compile 없으면 기록 키 0 — cmd package compile 0 · target_app 은 해석한 그대로', async () => {
+    const h = compileStart({ noCompile: true })
+    const session = await h.result
+
+    expect('compile' in session).toBe(false)
+    const stored = JSON.parse(readFileSync(join(session.runDir, 'session.json'), 'utf8')) as Record<string, unknown>
+    expect('compile' in stored).toBe(false)
+    expect(h.runner.commands.some((c) => c.includes('cmd package compile'))).toBe(false)
+    expect(h.runner.commands).not.toContain(DUMPSYS)
+    expect(manifestOf(session.runDir).target_app).toEqual(targetApp(ytApp))
+  })
+})
+
+/**
+ * compile 은 성공했는데 같은 start 의 뒤 단계가 던진 경우 (plan B32). 세션은 안 열렸지만 기기는 이미 바뀌었다 —
+ * 그 사실과 되돌림 재료를 오류에 싣는다. 감싸기만 하고 기기 명령은 더하지 않는다.
+ */
+describe('startSession — compile 뒤 실패 (B32)', () => {
+  const YT = 'com.google.android.youtube'
+  const fixture = (n: string): string =>
+    readFileSync(fileURLToPath(new URL(`../fixtures/${n}`, import.meta.url)), 'utf8')
+  const BEFORE = fixture('dumpsys-package-dexopt-youtube.txt')
+  const DUMPSYS = `-s ${SERIAL} shell dumpsys package '${YT}'`
+  const COMPILE = `-s ${SERIAL} shell cmd package compile -m speed -f '${YT}'`
+  const ytApp = {
+    package: YT,
+    launcher_activity: 'com.google.android.apps.youtube.app.watchwhile.MainActivity',
+    ...compileStateFields('start', parseDexoptState(BEFORE, YT)),
+  }
+  /** perfetto 세션 시작이 실패하는 기기 — compile · 다시 읽기는 성공한다. */
+  const perfettoFails = () =>
+    startableDevice((r) =>
+      r
+        .onMatch(/shell cmd package compile /, { stdout: 'Success\n' })
+        .on(DUMPSYS, { stdout: fixture('dumpsys-package-dexopt-reset.txt') })
+        .onMatch(/--detach=perftracker_/, { code: 1, stderr: 'perfetto: failed to connect to traced\n' }),
+    )
+
+  function run(opts: { compile?: string; runner?: ReturnType<typeof startableDevice>; out?: string; app?: Parameters<typeof targetApp>[0] }) {
+    const dirs = tempDirs()
+    const runner = opts.runner ?? perfettoFails()
+    const adb = clientFor(runner)
+    const result = startSession({ adb, serial: SERIAL }, targetApp(opts.app ?? ytApp), {
+      launch: true,
+      outDir: opts.out ?? dirs.out,
+      force: false,
+      now: NOW,
+      home: dirs.home,
+      ...(opts.compile !== undefined ? { compile: opts.compile } : {}),
+    })
+    const error = result.then(
+      () => null,
+      (e: unknown) => e,
+    )
+    return { adb, runner, dirs, error }
+  }
+
+  it('B32 perfetto 시작이 던지면 감싼 오류에 "이미 바뀌었다" 와 되돌림 재료 — 원래 오류는 cause · 메시지 · code 그대로', async () => {
+    const h = run({ compile: 'speed' })
+    const err = await h.error
+
+    expect(err).toBeInstanceOf(CompileAppliedError)
+    expect(err).toBeInstanceOf(PerfTrackerError)
+    const e = err as CompileAppliedError
+    expect(e.cause).toBeInstanceOf(PerfettoSessionError)
+    const cause = e.cause as PerfettoSessionError
+    expect(e.message).toBe(cause.message)
+    expect(e.code).toBe(cause.code)
+    expect(e.compile).toEqual({
+      value: 'speed',
+      command: `cmd package compile -m speed -f '${YT}'`,
+      elapsed_ms: expect.any(Number) as number,
+      compile_state_before: ytApp.compile_state_start,
+      compile_state_before_reason_code: null,
+      compile_state_before_reason: null,
+    })
+  })
+
+  it('B32 감싸기만 한다 — 실패 뒤 기기 명령 0 (다시 읽기 · 되돌리기 없음) · 세션 포인터 0 · 창 닫힘', async () => {
+    const h = run({ compile: 'speed' })
+    await h.error
+
+    const detach = h.runner.commands.findIndex((c) => c.includes('--detach=perftracker_'))
+    expect(detach).toBe(h.runner.commands.length - 1)
+    expect(h.runner.commands.filter((c) => c === COMPILE)).toHaveLength(1)
+    expect(h.runner.commands.filter((c) => c === DUMPSYS)).toHaveLength(1)
+    expect(await readActiveSession(SERIAL, h.dirs.home)).toBeNull()
+    expect(h.adb.window.isOpen).toBe(false)
+  })
+
+  it('B32 run 디렉토리를 못 만들어도 감싼다 — PerfTrackerError 가 아닌 원래 오류는 cause 로 · code START_FAILED_AFTER_COMPILE', async () => {
+    // 파일 자리에 run 디렉토리를 만들려 하면 mkdir 이 ENOTDIR 로 던진다 — compile 바로 다음 단계다.
+    const dirs = tempDirs()
+    const file = join(dirs.out, 'not-a-dir')
+    writeFileSync(file, '')
+    const h = run({ compile: 'reset', out: file, runner: startableDevice((r) => r.onMatch(/shell cmd package compile /, { stdout: 'Success\n' }).on(DUMPSYS, { stdout: BEFORE })) })
+    const err = await h.error
+
+    expect(err).toBeInstanceOf(CompileAppliedError)
+    const e = err as CompileAppliedError
+    expect(e.cause).toBeInstanceOf(Error)
+    expect(e.cause).not.toBeInstanceOf(PerfTrackerError)
+    expect(e.message).toBe((e.cause as Error).message)
+    expect(e.code).toBe('START_FAILED_AFTER_COMPILE')
+    expect(e.compile.value).toBe('reset')
+    expect(e.compile.command).toBe(`cmd package compile --reset '${YT}'`)
+    // 스펙 · 스냅샷 이후는 하나도 안 나갔다 — compile 과 다시 읽기 뿐.
+    expect(h.runner.commands.slice(3)).toEqual([`-s ${SERIAL} shell cmd package compile --reset '${YT}'`, DUMPSYS])
+  })
+
+  it('B32 compile 전 실패는 감싸지 않는다 — 런처 없음 (설정 검증 거부는 위 「BP-4 compile 은 DM-4 뒤」)', async () => {
+    const h = run({ compile: 'speed', app: { ...ytApp, launcher_activity: null } })
+    const err = await h.error
+
+    expect(err).toBeInstanceOf(SessionStateError)
+    expect(err).not.toBeInstanceOf(CompileAppliedError)
+    expect(h.runner.commands.some((c) => c.includes('cmd package compile'))).toBe(false)
+  })
+
+  it('B32 --compile 없는 세션의 뒤 단계 실패는 원래 오류 그대로', async () => {
+    const err = await run({ runner: perfettoFails() }).error
+
+    expect(err).toBeInstanceOf(PerfettoSessionError)
+    expect(err).not.toBeInstanceOf(CompileAppliedError)
   })
 })

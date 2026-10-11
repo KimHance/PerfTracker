@@ -4,6 +4,8 @@ export interface FakeResponse {
   stdout?: string | Buffer
   stderr?: string
   code?: number
+  /** 실제 runner 가 한도로 프로세스를 죽였을 때의 표시 (`ProcessResult.timedOut`). */
+  timedOut?: true
 }
 
 function toResults(responses: FakeResponse[]): ProcessResult[] {
@@ -11,12 +13,14 @@ function toResults(responses: FakeResponse[]): ProcessResult[] {
     stdout: Buffer.isBuffer(r.stdout) ? r.stdout : Buffer.from(r.stdout ?? '', 'utf8'),
     stderr: r.stderr ?? '',
     code: r.code ?? 0,
+    ...(r.timedOut === true ? { timedOut: true as const } : {}),
   }))
 }
 
 /** args 를 공백으로 이어붙인 문자열을 키로 응답을 돌려주는 ProcessRunner 스텁. */
 export class FakeProcessRunner implements ProcessRunner {
-  readonly calls: { file: string; args: string[]; input?: string }[] = []
+  /** `timeoutMs` 는 호출자가 runner 에 넘긴 한도 — 넘기지 않았으면 키가 없다 (기본 한도는 실제 runner 몫). */
+  readonly calls: { file: string; args: string[]; input?: string; timeoutMs?: number }[] = []
   readonly #responses = new Map<string, ProcessResult[]>()
   readonly #patterns: { pattern: RegExp; queue: ProcessResult[] }[] = []
 
@@ -47,7 +51,12 @@ export class FakeProcessRunner implements ProcessRunner {
 
   async run(file: string, args: string[], opts: ProcessRunOptions = {}): Promise<ProcessResult> {
     const key = args.join(' ')
-    this.calls.push({ file, args, input: opts.input?.toString() })
+    this.calls.push({
+      file,
+      args,
+      input: opts.input?.toString(),
+      ...(opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}),
+    })
 
     const queue = this.#responses.get(key) ?? this.#patterns.find((p) => p.pattern.test(key))?.queue
     if (!queue || queue.length === 0) {

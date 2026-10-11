@@ -1,0 +1,258 @@
+{
+ "summary-1440": {
+  "chars": 3719,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": 31.68,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "inner_scroll": [],
+  "hits": []
+ },
+ "missing-1440": {
+  "chars": 3596,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": 31.68,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "inner_scroll": [],
+  "hits": []
+ },
+ "compile-1440": {
+  "chars": 4199,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": 31.68,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "inner_scroll": [],
+  "hits": []
+ },
+ "end-null-1440": {
+  "chars": 3748,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": 31.68,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "inner_scroll": [],
+  "hits": []
+ },
+ "legacy-1440": {
+  "chars": 2588,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": 31.68,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "inner_scroll": [],
+  "hits": []
+ },
+ "device-1440": {
+  "chars": 806,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": null,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "inner_scroll": [],
+  "hits": []
+ },
+ "diag-1440": {
+  "chars": 2199,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": null,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "inner_scroll": [],
+  "hits": []
+ },
+ "diag-noapp-1440": {
+  "chars": 702,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": null,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "inner_scroll": [],
+  "hits": []
+ },
+ "summary-390": {
+  "chars": 3719,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": 26,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "inner_scroll": [],
+  "hits": []
+ },
+ "missing-390": {
+  "chars": 3596,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": 26,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "inner_scroll": [],
+  "hits": []
+ },
+ "compile-390": {
+  "chars": 4199,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": 26,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "inner_scroll": [],
+  "hits": []
+ },
+ "end-null-390": {
+  "chars": 3748,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": 26,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "inner_scroll": [],
+  "hits": []
+ },
+ "legacy-390": {
+  "chars": 2588,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": 26,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "inner_scroll": [],
+  "hits": []
+ },
+ "device-390": {
+  "chars": 806,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": null,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "inner_scroll": [],
+  "hits": []
+ },
+ "diag-390": {
+  "chars": 2199,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": null,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "inner_scroll": [],
+  "hits": []
+ },
+ "diag-noapp-390": {
+  "chars": 702,
+  "under12_pct": 0,
+  "under45_pct": 0,
+  "min_px": 12,
+  "min_ratio": 5.48,
+  "layers": {
+   "tile_value": null,
+   "section": 18,
+   "card_title": 15,
+   "body": 13
+  },
+  "overflow_x": 0,
+  "inner_scroll": [],
+  "hits": []
+ }
+}

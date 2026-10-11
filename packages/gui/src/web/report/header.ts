@@ -1,5 +1,8 @@
+import { COMPILE_REPORT_COPY } from './compile-copy.js'
+import { DIAGNOSE_REPORT_COPY, fillReportCopy } from './diagnose-copy.js'
 import { fmtValue, fmtWhen } from './format.js'
-import { KNOWN_METRICS, MANIFEST, NOT_DRAWN_METRICS, SCHEMA_MAJOR } from './manifest.js'
+import { KNOWN_METRICS, MANIFEST, NOT_DRAWN_METRICS, SCHEMA_MAJOR, type TabId, TABS } from './manifest.js'
+import { READABILITY_COPY } from './readability-copy.js'
 import { MISSING, readPath } from './read.js'
 
 /**
@@ -17,13 +20,33 @@ import { MISSING, readPath } from './read.js'
  * | 주사율 `null` | 기기 탭의 화면 표 |
  * | 매니페스트에 없는 지표 | 푸터 |
  * | 스키마 메이저 불일치 | 푸터 (`schema_version` 이 이미 거기 있다) |
+ * | 진단 세션 | 상태 pill 옆 `진단` pill + 레일의 `진단` 탭 — 세션의 종류라 플래그가 아니다 |
  */
+
+/**
+ * **진단 세션인가.** 기준은 `session.options.diagnose === true` 하나다 — core 가 진단 세션에만
+ * `true` 로 싣고(`false` 로 싣는 일은 없다) 기록 목록 · 측정 화면도 같은 칸을 본다. 진단 블록의
+ * 유무로 가르지 않는다: 같은 사실을 두 칸이 말하면 둘이 갈리는 날 화면마다 답이 달라진다.
+ *
+ * 평소 세션 · 옛 문서는 키가 없고, 그 "없음" 이 곧 진단 세션이 아니라는 뜻이다 (README).
+ */
+export function isDiagnoseSession(res: unknown): boolean {
+  return readPath(res, 'session.options.diagnose') === true
+}
+
+/** 레일에 세울 탭. `진단` 은 진단 세션에만 — 평소 보고서는 탭이 둘 그대로다. */
+export function tabsFor(res: unknown): { id: TabId; label: string }[] {
+  const diagnose = isDiagnoseSession(res)
+  return TABS.filter((t) => t.onlyDiagnose !== true || diagnose).map(({ id, label }) => ({ id, label }))
+}
 
 export interface HeaderVm {
   id: string
   name: string
   stateLabel: string
   running: boolean
+  /** 상태 pill 옆 pill. 진단 세션이 아니면 `null` 이고 아무것도 그리지 않는다. */
+  diagnosePill: string | null
   meta: { k: string; v: string }[]
   /** 이 화면이 아는 스키마 메이저와 파일이 다른가. 값이 아니라 화면의 한계다. */
   schemaMismatch: boolean
@@ -32,6 +55,19 @@ export interface HeaderVm {
   footerIgnored: string
   /** 매니페스트에 없어서 안 그린 지표. 조용히 버리면 새 지표가 생겨도 아무도 모른다. */
   ignored: string[]
+}
+
+/**
+ * 머리 `옵션` 칸 — `--launch` 또는 `attach`, `--compile` 세션이면 뒤에 `--compile <값>` (baseline-profile BP-8 ·
+ * 결정 16). 기준은 `session.options.compile` 이 문자열인가 하나 — 바꾼 기록(`session.compile`)의 유무로 가르지
+ * 않는다 (옵션은 사람이 준 것 · 기록은 기기가 한 것).
+ */
+function optionsLine(res: unknown): string {
+  const head = readPath(res, 'session.options.launch') === true ? '--launch' : 'attach'
+  const compile = readPath(res, 'session.options.compile')
+  return typeof compile === 'string'
+    ? `${head} ${fillReportCopy(COMPILE_REPORT_COPY.headOption, { value: compile })}`
+    : head
 }
 
 export function buildHeader(res: unknown): HeaderVm {
@@ -77,9 +113,10 @@ export function buildHeader(res: unknown): HeaderVm {
         `(sdk ${fmtValue(readPath(res, 'device.static.sdk_int'), 'int')})`,
     },
     { k: '시작', v: fmtWhen(readPath(res, 'session.started_at')) },
-    // 측정 중이면 길이가 없다. 0 이 아니고, "세션 길이" 라고 부르지도 않는다.
-    { k: 'duration', v: running ? '측정 중' : fmtValue(dur, 'ms0') },
-    { k: '옵션', v: readPath(res, 'session.options.launch') === true ? '--launch' : 'attach' },
+    // 측정 중이면 길이가 없다. 0 이 아니고, "세션 길이" 라고 부르지도 않는다. 라벨은 우리말 — 영어 필드
+    // 이름(`duration`)을 머리에 쓰지 않는다 (RR-6 · HANDOFF 와 같은 `길이`).
+    { k: READABILITY_COPY.headDuration, v: running ? '측정 중' : fmtValue(dur, 'ms0') },
+    { k: '옵션', v: optionsLine(res) },
   ]
 
   return {
@@ -87,6 +124,7 @@ export function buildHeader(res: unknown): HeaderVm {
     name: fmtValue(readPath(res, 'session.name'), 'raw'),
     stateLabel: running ? '측정 중' : fmtValue(state, 'raw'),
     running,
+    diagnosePill: isDiagnoseSession(res) ? DIAGNOSE_REPORT_COPY.headPill : null,
     meta,
     schemaMismatch,
     footerTool:

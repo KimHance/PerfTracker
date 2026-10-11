@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { PerfTrackerError } from '@perftracker/core'
 import { buildProgram } from './program.js'
+import { unexpectedErrorText } from './unexpected.js'
 
 /**
  * 진입점. **등록은 `program.ts` 가 하고 여기는 실행과 오류 처리만 한다** —
@@ -15,7 +16,6 @@ try {
   } else {
     // 알려지지 않은 오류도 unhandled rejection 으로 흘리지 않는다 — 사용자가 보는 첫 줄은
     // 한국어 문장이어야 하고, 진단용 스택은 그 뒤에 붙인다.
-    console.error('예상치 못한 오류가 발생했습니다. 아래 내용과 함께 이슈로 알려주세요.')
-    console.error(e instanceof Error ? (e.stack ?? e.message) : String(e))
+    console.error(unexpectedErrorText(e))
   }
 }

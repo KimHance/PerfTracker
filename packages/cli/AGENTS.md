@@ -9,14 +9,22 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
 | --- | --- |
 | `src/program.ts` | 명령 11개 등록 (`runs` 는 하위 셋). **실행하지 않는다** |
 | `src/index.ts` | bin 진입점 — `parseAsync` 와 최상위 오류 처리뿐 |
+| `src/unexpected.ts` | 예상 못 한 오류의 머리 문장 · 꼴 — 진입점과 compile 뒤 실패(`commands/compile.ts`)가 같이 부른다 |
 
 **`dist/index.js` 는 매 빌드마다 실행 권한을 잃는다.** `npm install` 이 붙여 준 권한을
 `tsc --build` 가 파일을 다시 쓰면서 떨어뜨리고, 그러면 `npx perftracker` 가 `Permission denied`
 로 죽는다. 루트 `build` 스크립트가 빌드 뒤에 다시 `chmod` 한다 — 잊고 지우면 조용히 재발한다.
 | `src/context.ts` | `--adb` / `--device` 를 core 의 컨텍스트로 |
-| `src/commands/` | 명령 하나당 파일 하나 (`browser.ts` 만 예외 — 브라우저 여는 헬퍼를 `open`·`report` 가 나눠 쓴다) |
-| `test/readme.test.ts` | 등록된 명령이 전부 README 에 있는지 대조 |
+| `src/commands/` | 명령 하나당 파일 하나 (예외 둘 — `browser.ts` 는 브라우저 여는 헬퍼를 `open`·`report` 가, `compile.ts` 는 `--compile` 세션의 컴파일 줄 · 되돌림 줄을 `start`·`stop`·`status` 가 나눠 쓴다) |
+| `src/copy/diagnose.ts` | 진단 모드가 새로 내는 cli 문구 모음 — 정본은 `docs/design/diagnostic-mode.md` `## 문구` 표 |
+| `src/copy/compile.ts` | `start --compile` 의 cli 문구 모음 — 정본은 `docs/design/baseline-profile.md` `## 문구` 표 |
+| `test/readme.test.ts` | 등록된 명령이 전부 README 에 있는지 · `start` 옵션이 전부 README 에 있는지 대조 |
+| `test/copy/diagnose.test.ts` | cli 진단 문구 ↔ 디자인 문서 `## 문구` 표 양방향 대조 · 단어형 규칙 (DM-15) |
+| `test/copy/compile.test.ts` | `--compile` 문구 ↔ 디자인 문서 `## 문구` 표 양방향 대조 · core 가 내는 거부 · 실패 문구 대조 · 단어형 · 80칸 (BP-6) |
+| `test/preview-flag.test.ts` | GUI 가 적는 `start` 줄(시작 바 예고 · 서버 실행 줄)의 플래그가 commander 에 등록된 `start` 옵션과 같은지 대조 (DM-2) |
 | `test/on-device/` | **실기기가 있어야 도는 스펙.** `npm run test:device` 로만 실행 |
+
+**gui 소스를 상대 경로(`…/gui/src/…`)로 import 하는 cli 시험은 지금 둘뿐인 예외다** — `test/preview-flag.test.ts`(예고 함수) · `test/on-device/diagnose.test.ts`(보고서 slice 표 행 모델). gui exports 는 서버 진입점(`.`) 하나라 둘 다 패키지로 못 읽고, 방향이 cli → gui 라 규칙 4 안이다 (gui 는 cli 를 모르므로 이 대조는 cli 쪽에만 둘 수 있다). `src/` 는 이 길을 쓰지 않는다.
 
 **등록과 실행을 가른 이유는 테스트다.** 진입점이 곧 실행이면 import 하는 순간 `process.argv`
 를 파싱해 버려서, 명령 목록을 확인하려면 소스를 정규식으로 긁는 수밖에 없다. `program.ts` 를
@@ -31,7 +39,10 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
 
 **명령을 늘리면 README 의 「명령 전체」도 같은 커밋에서 고친다.** `runs` 셋이 한동안 문서에
 없었다 — 틀린 것이 아니라 빠진 것이라 읽는 사람은 알 길이 없었다. `test/readme.test.ts` 가
-이제 그것을 막는다.
+이제 그것을 막는다. **`start` 의 옵션도 같다** — 등록된 옵션(`--app` `--name` `--device`
+`--launch` `--out` `--force` `--diagnose` `--compile`)이 README 어딘가에, `--diagnose` · `--compile` 은
+「명령 전체」 절 안에 있어야 한다. **`--compile` 은 `--launch` 와만** 받는다는 조건은 `--help` 설명(80칸)에 없으므로
+README 「명령 전체」와 이 파일이 말한다 — 시험(`BP-4 README 옵션 대조`)이 둘 다 본다.
 
 ## 제약
 
@@ -92,6 +103,31 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
   됐다. 지금은 `--no-browser` 하나이고 `open`·`report`·`stop --report` 가 같은 이름을 쓴다.
 - **core 의 판정을 다시 구현하지 않는다.** `doctor` 의 지표 지원 여부도 collector 의
   `supports()` 를 그대로 부른다. 출처가 둘이면 "된다" 고 한 것이 실제로는 안 되는 상태가 생긴다.
+- **진단 세션(`start --diagnose`)은 진단 세션에만 표시한다.** `start` · `status` 의 `Diagnose`
+  줄, `runs` 행 끝의 `진단`, `status --json` · `runs --json` 의 진단 키 — 평소 세션에는 하나도
+  없고 JSON 에 `false` 도 싣지 않는다 (평소 세션의 출력이 진단 모드 이전과 같다).
+  `--diagnose` 에 기본값을 주지 않는 것도 같은 이유다 — 안 주면 core 로 가는 옵션 객체에
+  `diagnose` 키가 없다(`startSessionOptions`). 기본값을 주면 도움말에 `(default: false)` 도 붙는다.
+  `stop` · `extract` 는 진단 세션이어도 그대로다 — slice 요약을 찍지 않는다.
+  앱 slice 열림 판정과 그 문구(doctor 줄 · start 고지 줄)의 주인은 core 다(`appSliceOpen` ·
+  `DIAGNOSE_COPY`) — cli 는 core 가 세션에 실은 `diagnose.notice` 를 그대로 찍는다.
+- **진단 모드의 새 cli 문구는 `src/copy/diagnose.ts` 한 곳에 둔다.** 정본은 디자인 문서
+  `## 문구` 표이고 `test/copy/diagnose.test.ts` 가 표의 cli 줄과 양방향으로 대조한다. 문구를 바꾸려면
+  표를 먼저 고친다. 꼴은 단어형(끝 글자 `다`/`요` · 권유 · 평가 낱말 없음)이고 기존 문구는 대상이
+  아니다 (plan D10). 새 줄은 80칸 안 — 시험이 표시 폭(한글 2칸)으로 잰다.
+- **`start --compile` (기능 문서 baseline-profile BP-4 ~ BP-6) 은 그 세션에만 표시한다.** `--compile` 은
+  `--launch` 와만 받고, 거부(`--launch` 없음 · 허용 밖 값)는 **기기 명령 0** 이다 — `runStart` 가 옛 세션 정리 ·
+  앱 해석보다 먼저 core 의 `checkCompileOption` 을 부른다 (판정을 다시 쓰지 않는다). `--diagnose` 처럼 기본값이 없고
+  안 주면 core 옵션 객체에 `compile` 키가 없다. 그 세션이면 `start` · `status` 에 `Compile` 줄(80칸 안) ·
+  `start` · `stop` 에 되돌림 줄 · `status --json` 의 `compile` · `runs --json` 행의 `compile`(core `RunSummary`) —
+  아닌 세션에는 하나도 없다. 바꾼 뒤 상태는 `capture.json` 에서 읽는다 (호스트 파일 · 기기 0).
+- **되돌림 줄은 호스트에서 그대로 쳐서 도는 한 줄이다** (`adb -s <serial> shell cmd package compile …`). 80칸
+  규칙 밖이고 자르지 않는다. 도구는 자동으로 되돌리지 않는다. compile 이 낀 실패 두 종류(`CompileFailedError` ·
+  `CompileAppliedError`)도 `compileFailure` 가 상태 줄 · 되돌림 줄을 붙여 같은 code 로 다시 던진다 — 기기가 바뀌었을
+  수 있는데 그 사실과 되돌림 명령이 빠지면 안 된다. 문구는 `src/copy/compile.ts` 한 곳 (위 진단 문구와 같은 규율).
+  base.apk 와 보조 dex 는 따로 보고, **되돌릴 수 없는 쪽은 침묵하지 않고 그 사실 한 줄**을 낸다 (plan B34 #5).
+  serial 은 셸이 해석하는 글자가 있을 때만 작은따옴표로 감싼다 (`shellWord`) — 시험이 sh · zsh · bash 에 가짜 adb 로
+  실제로 쳐 본다.
 
 ## 온-디바이스 스펙
 
@@ -102,8 +138,21 @@ CLI 출력을 고쳤으면 `test/on-device/` 를 함께 grep 할 것.
 PERFTRACKER_TEST_DEVICE=<serial> PERFTRACKER_TEST_APP=<패키지> npm run test:device
 ```
 
-기기가 둘 이상이면 `PERFTRACKER_TEST_DEVICE` 가 없으면 11개가 전부 실패한다.
+기기가 둘 이상인데 `PERFTRACKER_TEST_DEVICE` 가 없으면 스펙이 하나도 돌지 못한다 (`AmbiguousDeviceError`).
+시험 안에서 기기를 잡는 11개는 실패, 기기를 `beforeAll` 에서 잡는 `diagnose.test.ts` 9개는 건너뜀으로 센다 —
+vitest 는 `beforeAll` 이 던지면 그 안의 시험을 skip 으로 세고 파일은 실패로 낸다
+(실측 2026-10-08 실기기 + 에뮬레이터: `Tests 11 failed | 9 skipped (20)` · 종료 코드 1).
 대상 앱이 없으면 **조용히 건너뛰지 않고 실패한다** — 건너뛴 스펙은 통과한 스펙과 같은 색이다.
+
+**`diagnose.test.ts`(진단 세션 · DM-16 · DM-5)는 측정 창 안에서 화면을 스와이프한다** — 4회, adb 를 직접
+불러서. 기능 문서 diagnostic-mode 결정 2 가 허용한 시나리오 입력이고 perftracker(`AdbClient`)를 거치지
+않는다 (거치면 래치가 막는다 — 막는 것이 옳다). 그 때문에 대상 앱 화면이 스크롤된다.
+`RV Scroll` 행(앱 slice)은 따로 뗀 it 이 대상 앱이 YouTube 이고 앱 slice 가 열리고 켜기 오류가 없을 때만
+단언하고, 아니면 `ctx.skip(<이유>)` 로 건너뛴다 — 요약 줄에 `skipped` 로 세고 `--reporter=verbose` 면 이유가
+찍힌다 (기본 리포터는 이름을 안 찍는다). 다른 앱으로는 돌려 보지 않았다.
+블록 `partial` 은 값을 싣는 둘(`process_name_stale_in_trace` · `ftrace_setup_errors`)을 받고 값이 null 아님을
+본다. 켜기 오류 회에는 행을 보지 않는다 — 어느 카테고리가 빠졌는지 원본이 말하지 않으므로 행이 없어도 결함인지
+못 가린다.
 
 ### 못 재는 기기에서 실패시키지 않는다
 

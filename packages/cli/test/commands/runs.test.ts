@@ -1,9 +1,11 @@
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { listRuns } from '@perftracker/core'
 import { displayWidth, padDisplay, runRunsList, runRunsRemove, runRunsRename } from '../../src/commands/runs.js'
+import { DIAGNOSE_CLI_COPY } from '../../src/copy/diagnose.js'
+import { buildProgram } from '../../src/program.js'
 
 let out: string
 
@@ -113,5 +115,78 @@ describe('삭제', () => {
 
   it('id 도 --all 도 없으면 무엇을 해야 하는지 말한다', async () => {
     await expect(runRunsRemove(undefined, { out, all: false, yes: false })).rejects.toThrow(/id|--all/)
+  })
+})
+
+/** 끝난 기록 하나 — `session.json` 만 (산출 전). 진단 세션이면 core 가 쓰는 `options.diagnose` 를 싣는다. */
+async function stored(
+  dir: string,
+  fields: { id: string; name: string; at: string; diagnose?: true; marks?: number },
+): Promise<void> {
+  const runDir = join(out, dir)
+  await mkdir(runDir, { recursive: true })
+  await writeFile(
+    join(runDir, 'session.json'),
+    JSON.stringify({
+      version: 1,
+      id: fields.id,
+      name: fields.name,
+      serial: 'S1',
+      packageName: 'com.google.android.youtube',
+      startedAt: fields.at,
+      endedAt: fields.at,
+      options: fields.diagnose === true ? { launch: true, diagnose: true } : { launch: true },
+      marks: Array.from({ length: fields.marks ?? 0 }, (_, i) => ({ offsetMs: i * 1000, label: `m${i}` })),
+    }),
+    'utf8',
+  )
+}
+
+describe('DM-11 runs 태그 · --json', () => {
+  it('DM-11 runs 태그 · --json — 진단 기록 행 꼬리 맨 끝에 진단 · 평소 기록엔 없다', async () => {
+    await stored('a', { id: 'a1b2c3', name: '유튜브 진단', at: '2026-10-08T00:29:11', diagnose: true })
+    await stored('b', { id: '9f8e7d', name: '유튜브 평소', at: '2026-10-08T00:25:00' })
+    await stored('c', { id: 'b7c8d9', name: '스크롤 진단', at: '2026-10-07T23:10:00', diagnose: true, marks: 4 })
+
+    const rows = (await runRunsList({ out })).split('\n')
+    const row = (id: string): string => rows.find((r) => r.startsWith(id)) ?? ''
+
+    expect(row('a1b2c3').endsWith(`경고 0 · ${DIAGNOSE_CLI_COPY.runsTag}`)).toBe(true)
+    expect(row('9f8e7d').endsWith('경고 0')).toBe(true)
+    expect(row('9f8e7d')).not.toContain(DIAGNOSE_CLI_COPY.runsTag)
+    // 기존 꼬리 뒤에 붙는다 — 기존 꼬리의 순서 · 문구는 그대로 (디자인 시안 cli 블록 7).
+    expect(row('b7c8d9').endsWith(`경고 0 · 마킹 4 · ${DIAGNOSE_CLI_COPY.runsTag}`)).toBe(true)
+  })
+
+  /**
+   * 80칸 기준 (plan D20 · 디자인 재검토 #5): `경고 N` 만 있는 행 + 진단. 이름 20칸 · 모델 12칸을
+   * 꽉 채운 행이 77칸이다. 기존 꼬리(`미지원` · `마킹`)로 이미 넘치는 행은 기준이 아니다.
+   */
+  it('DM-11 runs 태그 · --json — 경고 N 만 있는 행에 진단을 붙여도 80칸 안', async () => {
+    await stored('a', { id: 'd4e5f6', name: '가나다라마바사아자차', at: '2026-10-08T00:41:02', diagnose: true })
+
+    const row = (await runRunsList({ out })).split('\n')[0]!
+
+    expect(row.endsWith(`경고 0 · ${DIAGNOSE_CLI_COPY.runsTag}`)).toBe(true)
+    expect(displayWidth(row)).toBe(77)
+  })
+
+  it('DM-11 runs 태그 · --json — runs --json 은 진단 기록에만 diagnose: true · 평소 기록엔 키가 없다', async () => {
+    await stored('a', { id: 'a1b2c3', name: '유튜브 진단', at: '2026-10-08T00:29:11', diagnose: true })
+    await stored('b', { id: '9f8e7d', name: '유튜브 평소', at: '2026-10-08T00:25:00' })
+
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    let printed: Record<string, unknown>[]
+    try {
+      await buildProgram().parseAsync(['--json', 'runs', '-o', out], { from: 'user' })
+      printed = JSON.parse(String(log.mock.calls.at(-1)?.[0]))
+    } finally {
+      log.mockRestore()
+    }
+
+    const byId = new Map(printed.map((r) => [r['id'], r]))
+    expect(byId.get('a1b2c3')?.['diagnose']).toBe(true)
+    expect(Object.keys(byId.get('9f8e7d') ?? {})).not.toContain('diagnose')
+    expect(byId.size).toBe(2)
   })
 })

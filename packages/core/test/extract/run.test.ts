@@ -1,12 +1,22 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { SCHEMA_HELP, type NetworkData, type ThermalData } from '../../src/schema/result.js'
+import {
+  ResultSchema,
+  SCHEMA_HELP,
+  type NetworkData,
+  type SessionCompile,
+  type TargetApp,
+  type ThermalData,
+} from '../../src/schema/result.js'
+import { compileStateFields, parseDexoptState } from '../../src/app/dexopt.js'
 import { CPU_TIMES_SQL } from '../../src/collectors/cpu/index.js'
 import { SessionStateError } from '../../src/errors.js'
 import { BUFFER_STATS_SQL, extractRun, readSnapshots } from '../../src/extract/run.js'
+import { appProcessSql } from '../../src/collectors/appProcess.js'
+import { DIAGNOSE_TOTALS_SQL, diagnoseSlicesSql, type SliceGroupRow } from '../../src/extract/diagnose.js'
 import { TRACING_OVERHEAD_SQL } from '../../src/extract/overhead.js'
 import { writeCaptureManifest } from '../../src/session/manifest.js'
 import { type ActiveSession, writeActiveSession, writeRunSession } from '../../src/session/state.js'
@@ -84,6 +94,14 @@ async function makeRun(
     appUid?: number | null
     /** `capture.json` 의 `device.state_*.thermal_zones` 에 넣을 값. */
     thermalZones?: { name: string; celsius: number }[]
+    /** 진단 세션으로 만든다 — session.json 에 `options.diagnose` 와 기록된 atrace 범위가 생긴다. */
+    diagnose?: boolean
+    /** `capture.json` 의 `target_app.debuggable`. 주지 않으면 그 키가 없는 옛 매니페스트다. */
+    debuggable?: boolean | null
+    /** `capture.json` 의 `target_app` 에 더할 칸 (컴파일 상태 등). 주지 않으면 그 키들이 없는 옛 매니페스트다. */
+    targetApp?: Partial<TargetApp>
+    /** session.json 의 바꾼 기록 (`start --compile`). 주지 않으면 키가 없다. */
+    compile?: SessionCompile
   } = {},
 ): Promise<string> {
   const runDir = mkdtempSync(join(tmpdir(), 'pt-extract-'))
@@ -117,10 +135,16 @@ async function makeRun(
       remoteTracePath: '/data/misc/perfetto-traces/perftracker_a3f9c1.pftrace',
       startedAt: '2026-07-25T14:32:10.000Z',
       configuredDurationMs: 1_800_000,
-      options: { launch: overrides.launch ?? true },
+      options: overrides.diagnose
+        ? { launch: overrides.launch ?? true, diagnose: true }
+        : { launch: overrides.launch ?? true },
+      ...(overrides.diagnose
+        ? { diagnose: { atraceCategories: ['am', 'wm', 'view'], atraceApps: [PKG], notice: null } }
+        : {}),
       startup:
         (overrides.launch ?? true) ? { totalTimeMs: 1842, launchState: 'COLD' } : null,
       ...(overrides.appPid !== undefined ? { appPid: overrides.appPid } : {}),
+      ...(overrides.compile !== undefined ? { compile: overrides.compile } : {}),
     },
     {
       ...(endedAt !== null ? { endedAt } : {}),
@@ -164,6 +188,8 @@ async function makeRun(
       install_source: 'com.android.vending',
       launcher_activity: 'com.naver.webtoon.splash.SplashActivity',
       pid: null,
+      ...(overrides.debuggable !== undefined ? { debuggable: overrides.debuggable } : {}),
+      ...overrides.targetApp,
     },
     env: {
       sdkInt: overrides.sdkInt ?? 36,
@@ -204,7 +230,7 @@ describe('extractRun', () => {
       toolVersion: '0.1.0',
     })
 
-    expect(result.schema_version).toBe('1.1.0')
+    expect(result.schema_version).toBe('1.2.0')
     expect(result.session.duration_ms).toBe(42_735)
     expect(result.target_app.label).toBe('네이버 웹툰')
     expect(result.device.static.model).toBe('SM-S931N')
@@ -221,7 +247,7 @@ describe('extractRun', () => {
     })
 
     const written = JSON.parse(readFileSync(join(runDir, 'result.json'), 'utf8')) as Record<string, unknown>
-    expect(written['schema_version']).toBe('1.1.0')
+    expect(written['schema_version']).toBe('1.2.0')
 
     /**
      * **이 파일만 받은 사람에게 어디를 봐야 하는지 알려 준다.**
@@ -796,5 +822,219 @@ describe('아직 stop 하지 않은 run 에 extract 를 돌렸을 때', () => {
     })
 
     expect(result.measurement_overhead.adb_commands_during_session).toBe(3)
+  })
+})
+
+/**
+ * 진단 세션의 결과 자리 (기능 문서 DM-6 · DM-8). 블록 안의 칸 하나하나는 `diagnose.test.ts` 가
+ * 보고, 여기는 **result.json 에 실리는가 · 안 실리는가** 와 **다시 내면 같은가** 만 본다.
+ */
+describe('진단 세션의 result.json', () => {
+  const APP_PID = 4242
+  const UPID = 7
+  /** 1.1.0 시절 평소 세션 result.json 의 최상위 키 — 진단 모드가 하나도 늘리면 안 된다. */
+  const LEGACY_TOP_KEYS = [
+    'schema_version',
+    'schema_help',
+    'tool',
+    'session',
+    'device',
+    'target_app',
+    'metrics',
+    'measurement_overhead',
+    'references',
+    'warnings',
+    'artifacts',
+  ]
+  const GROUPS: SliceGroupRow[] = [
+    { name: 'Choreographer#doFrame 101', branch: 'main', count: 3, finished: 3, sum_ns: 30_000_000, max_ns: 12_000_000 },
+    { name: 'Choreographer#doFrame 102', branch: 'main', count: 2, finished: 1, sum_ns: 5_000_000, max_ns: 5_000_000 },
+    { name: 'RV Scroll', branch: 'main', count: 4, finished: 4, sum_ns: 8_000_000, max_ns: 3_000_000 },
+    { name: 'tk-trace-id: 1001yo7d2xmcq', branch: 'other', count: 1, finished: 1, sum_ns: 1_500_000, max_ns: 1_500_000 },
+    { name: 'first thumb complete', branch: 'async', count: 1, finished: 1, sum_ns: 2_000_000, max_ns: 2_000_000 },
+  ]
+
+  const json = (v: unknown) => ({ stdout: `"j"\n"${JSON.stringify(v)}"\n` })
+  function diagnoseRunner(trace: string, groups: SliceGroupRow[]): FakeProcessRunner {
+    return runner(trace)
+      .on(`query ${trace} ${DIAGNOSE_TOTALS_SQL}`, json({ trace_slices: 120, ftrace_overrun_events: 0, ftrace_cpu_stats: 96, ftrace_setup_errors: 0 }))
+      .on(`query ${trace} ${appProcessSql(PKG, APP_PID)}`, json([{ upid: UPID, pid: APP_PID, name: PKG }]))
+      .on(`query ${trace} ${diagnoseSlicesSql(UPID, APP_PID)}`, json(groups))
+  }
+
+  it('DM-6 진단 세션만 진단 키 — options.diagnose 와 최상위 diagnose 블록이 함께 실리고 파일에도 있다', async () => {
+    const runDir = await makeRun({ diagnose: true, appPid: APP_PID })
+    const trace = join(runDir, 'trace.perfetto-trace')
+
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: diagnoseRunner(trace, GROUPS),
+    })
+
+    expect(result.session.options).toEqual({ launch: true, diagnose: true })
+    expect(result.diagnose?.status).toBe('collected')
+    expect(result.diagnose?.atrace_categories).toEqual(['am', 'wm', 'view'])
+    expect(result.diagnose?.atrace_apps).toEqual([PKG])
+    expect(result.diagnose?.trace_slices).toBe(120)
+    expect(result.diagnose?.target_process_slices).toBe(11)
+    expect(result.diagnose?.target_process_slice_names?.map((r) => r.name)).toEqual([
+      'Choreographer#doFrame *',
+      'RV Scroll',
+      'first thumb complete',
+      'tk-trace-id: *',
+    ])
+    // 원본 크기는 run 디렉토리의 그 파일 그대로다 (makeRun 이 'fake' 4바이트를 쓴다).
+    expect(result.diagnose?.trace_bytes).toBe(4)
+
+    const written = JSON.parse(readFileSync(join(runDir, 'result.json'), 'utf8')) as Record<string, any>
+    expect(written['session'].options).toEqual({ launch: true, diagnose: true })
+    expect(written['diagnose']).toEqual(result.diagnose)
+  })
+
+  it('DM-6 평소 result.json 진단 키 0 — 최상위 · session.options 에 진단 키가 없다 ("diagnose" 0)', async () => {
+    const runDir = await makeRun()
+    const trace = join(runDir, 'trace.perfetto-trace')
+
+    await extractRun(runDir, { traceProcessorPath: process.execPath, runner: runner(trace) })
+
+    const text = readFileSync(join(runDir, 'result.json'), 'utf8')
+    const written = JSON.parse(text) as Record<string, any>
+    expect(Object.keys(written).sort()).toEqual([...LEGACY_TOP_KEYS].sort())
+    expect(Object.keys(written['session'].options)).toEqual(['launch'])
+    // 없음 = 진단 아님. false 로라도 실리면 캐시된 1.1.0 스키마가 모든 평소 파일을 거부한다 (D12).
+    expect(text).not.toContain('"diagnose"')
+    expect(text).not.toContain('app_slices_open')
+  })
+
+  it('DM-8 extract 가 같은 블록 — 같은 원본을 두 번 돌리면 블록이 바이트까지 같고 원본 말고 파일이 늘지 않는다', async () => {
+    const runDir = await makeRun({ diagnose: true, appPid: APP_PID })
+    const trace = join(runDir, 'trace.perfetto-trace')
+    const before = readdirSync(runDir).sort()
+
+    const first = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: diagnoseRunner(trace, GROUPS) })
+    const afterFirst = readdirSync(runDir).sort()
+    const firstText = JSON.stringify(
+      (JSON.parse(readFileSync(join(runDir, 'result.json'), 'utf8')) as Record<string, unknown>)['diagnose'],
+    )
+    // trace_processor 가 행을 다른 순서로 내도 같은 블록이어야 한다 — 정렬은 우리가 한다.
+    const second = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: diagnoseRunner(trace, [...GROUPS].reverse()),
+    })
+    const secondText = JSON.stringify(
+      (JSON.parse(readFileSync(join(runDir, 'result.json'), 'utf8')) as Record<string, unknown>)['diagnose'],
+    )
+
+    expect(JSON.stringify(second.diagnose)).toBe(JSON.stringify(first.diagnose))
+    expect(secondText).toBe(firstText)
+    // 진단 세션이라고 원본 말고 다른 파일을 만들지 않는다 — 늘어난 것은 result.json 하나다.
+    expect(afterFirst).toEqual([...before, 'result.json'].sort())
+    expect(readdirSync(runDir).sort()).toEqual(afterFirst)
+  })
+})
+
+/**
+ * 컴파일 상태 (기능 문서 baseline-profile BP-1 · BP-2). 정본은 capture.json 이고 extract 는 옮기기만 한다 —
+ * 기기에 묻지 않는다. 끝 상태가 아직 없으면 그 칸을 null + 코드로 채운다.
+ */
+describe('extractRun — target_app 컴파일 상태', () => {
+  const YT_FIXTURE = (name: string): string =>
+    fixture(name).replaceAll('[com.google.android.youtube]', `[${PKG}]`)
+  const start = compileStateFields('start', parseDexoptState(YT_FIXTURE('dumpsys-package-dexopt-youtube.txt'), PKG))
+  const end = compileStateFields('end', parseDexoptState(YT_FIXTURE('dumpsys-package-dexopt-restored.txt'), PKG))
+
+  it('BP-1 extract 가 시작 · 끝 상태를 capture.json 에서 그대로 옮긴다', async () => {
+    const runDir = await makeRun({ trace: null, targetApp: { ...start, ...end } })
+    const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: new FakeProcessRunner() })
+
+    expect(result.target_app).toMatchObject({ ...start, ...end })
+    expect(result.target_app.compile_state_start).toHaveLength(4)
+    expect(result.target_app.compile_state_end?.[0]?.reason).toBe('cmdline')
+  })
+
+  it('BP-2 extract 는 끝 상태 null — stop 전 세션은 null + dexopt_state_unavailable (session_running)', async () => {
+    const runDir = await makeRun({ trace: null, state: 'running', endedAt: null, targetApp: start })
+    const result = await extractRun(runDir, {
+      traceProcessorPath: process.execPath,
+      runner: new FakeProcessRunner(),
+      home: mkdtempSync(join(tmpdir(), 'pt-home-')),
+    })
+
+    expect(result.target_app.compile_state_start).toHaveLength(4)
+    expect(result.target_app.compile_state_end).toBeNull()
+    expect(result.target_app.compile_state_end_reason_code).toBe('dexopt_state_unavailable')
+    expect(result.target_app.compile_state_end_reason).toContain('stop')
+  })
+
+  it('BP-2 extract 는 끝 상태 null — 끝 상태를 기록하지 않은 도구가 멈춘 run 은 not_recorded', async () => {
+    const runDir = await makeRun({ trace: null, targetApp: start })
+    const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: new FakeProcessRunner() })
+
+    expect(result.target_app.compile_state_end).toBeNull()
+    expect(result.target_app.compile_state_end_reason_code).toBe('dexopt_state_unavailable')
+    expect(result.target_app.compile_state_end_reason).toContain('기록 없음')
+  })
+
+  it('BP-1 옛 run (시작 키 없음) 은 컴파일 상태 키를 만들지 않는다 — 키 없음 = 이 기록 이전', async () => {
+    const runDir = await makeRun({ trace: null })
+    await extractRun(runDir, { traceProcessorPath: process.execPath, runner: new FakeProcessRunner() })
+
+    const text = readFileSync(join(runDir, 'result.json'), 'utf8')
+    expect(text).not.toContain('compile_state')
+  })
+})
+
+/** 바꾼 기록 (기능 문서 baseline-profile BP-4) — session.json 의 것을 result.json `session.compile` 로 옮기기만 한다. */
+describe('--compile 세션의 result.json', () => {
+  const YT = 'com.google.android.youtube'
+  const before = parseDexoptState(fixture('dumpsys-package-dexopt-youtube.txt'), YT).lines
+  const RECORD: SessionCompile = {
+    value: 'speed',
+    command: `cmd package compile -m speed -f '${YT}'`,
+    elapsed_ms: 67_500,
+    compile_state_before: before,
+    compile_state_before_reason_code: null,
+    compile_state_before_reason: null,
+  }
+
+  it('BP-4 바꾼 기록 — session.compile 에 값 · 보낸 명령 원문 · 바꾸기 전 상태 · 걸린 ms 가 그대로 실리고 스키마를 통과한다', async () => {
+    const runDir = await makeRun({ compile: RECORD })
+    const trace = join(runDir, 'trace.perfetto-trace')
+
+    const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: runner(trace) })
+
+    expect(result.session.compile).toEqual(RECORD)
+    expect(result.session.compile?.compile_state_before?.[0]).toMatchObject({ status: 'speed-profile', reason: 'profile-utilization' })
+    const written = JSON.parse(readFileSync(join(runDir, 'result.json'), 'utf8')) as Record<string, any>
+    expect(written['session'].compile).toEqual(RECORD)
+    expect(ResultSchema.safeParse(written).success).toBe(true)
+    // 켠 옵션 표시(options)는 그대로 — 값은 기록 쪽 한 자리에만 있다.
+    expect(written['session'].options).toEqual({ launch: true })
+  })
+
+  it('BP-4 바꾼 기록 — session.json 에 붙은 모르는 칸은 따라 나가지 않는다', async () => {
+    const runDir = await makeRun({ compile: { ...RECORD, extra: 'x' } as SessionCompile })
+    const trace = join(runDir, 'trace.perfetto-trace')
+
+    const result = await extractRun(runDir, { traceProcessorPath: process.execPath, runner: runner(trace) })
+
+    expect(result.session.compile).toEqual(RECORD)
+  })
+
+  it('BP-4 --compile 없으면 기록 키 0 — result.json session 에 compile 키가 없다', async () => {
+    const runDir = await makeRun()
+    const trace = join(runDir, 'trace.perfetto-trace')
+
+    await extractRun(runDir, { traceProcessorPath: process.execPath, runner: runner(trace) })
+
+    const written = JSON.parse(readFileSync(join(runDir, 'result.json'), 'utf8')) as Record<string, any>
+    expect('compile' in written['session']).toBe(false)
+  })
+
+  it('BP-4 바꾼 기록 — 스키마는 받는 값 셋 밖을 거부한다', () => {
+    const shape = ResultSchema.shape.session.shape.compile
+    expect(shape.safeParse(RECORD).success).toBe(true)
+    expect(shape.safeParse({ ...RECORD, value: 'verify' }).success).toBe(false)
+    expect(shape.safeParse(undefined).success).toBe(true)
   })
 })

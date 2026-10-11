@@ -1,6 +1,34 @@
 import { access, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
+import { baseDexLine } from '../app/dexopt.js'
+import type { DexoptLine, SessionCompile } from '../schema/result.js'
 import { listActiveSessions } from './state.js'
+
+/**
+ * `start --compile` 세션의 바꾼 기록 요약 (기능 문서 baseline-profile BP-6 · plan B33) — 바꾼 값 · base.apk 줄
+ * (`[primary-abi]` 줄 · `baseDexLine`)의 바꾸기 전 → 뒤 `status` · 걸린 ms. `runs --json` 의 `compile` 과
+ * cli `start` · `status` 의 `Compile` 줄이 이 하나에서 나온다. **base 줄을 하나로 못 고르거나 상태를 못 읽었으면
+ * null** 이다 — 추측하지 않고 빈 문자열로 채우지 않는다. 판정하지 않는다: 문자열을 그대로 옮긴다.
+ */
+export interface CompileSummary {
+  value: SessionCompile['value']
+  baseStatusBefore: string | null
+  baseStatusAfter: string | null
+  elapsedMs: number
+}
+
+/** 바꾼 기록 + 바꾼 뒤 상태(= `target_app.compile_state_start`) → 요약. */
+export function summarizeCompile(
+  compile: Pick<SessionCompile, 'value' | 'elapsed_ms' | 'compile_state_before'>,
+  after: readonly DexoptLine[] | null | undefined,
+): CompileSummary {
+  return {
+    value: compile.value,
+    baseStatusBefore: baseDexLine(compile.compile_state_before)?.status ?? null,
+    baseStatusAfter: baseDexLine(after)?.status ?? null,
+    elapsedMs: compile.elapsed_ms,
+  }
+}
 
 /**
  * 끝난 세션 하나. `result.json` 이 있으면 그것이 정본이고, 없으면 `session.json` 으로
@@ -22,6 +50,19 @@ export interface RunSummary {
   unsupportedCount: number
   warningCount: number
   markCount: number
+  /**
+   * **진단 세션 기록에만 있고 값은 언제나 true** 다 (plan D12) — `runs --json` 과 기록 드로어가
+   * 이것으로 진단 태그를 단다. 평소 기록에는 키가 없다: `false` 를 실으면 평소 기록의 JSON 이
+   * 진단 모드 이전과 달라진다. 없음 = 평소 또는 옛 기록 = 둘 다 진단 아님.
+   */
+  diagnose?: true
+  /**
+   * **`start --compile` 기록에만 있다** (BP-6 · plan B33) — 진단 태그와 같은 이유로 평소 기록에는 키가 없다.
+   * 바꾼 기록은 `result.json` 의 `session.compile` 이 정본이고, 산출이 실패한 run 은 `session.json` 이 말한다.
+   * 바꾼 뒤 상태는 `result.json` 의 `target_app.compile_state_start` 에서만 읽는다 — 그 파일이 없는 run 은
+   * `baseStatusAfter: null` (capture.json 을 따로 열지 않는다).
+   */
+  compile?: CompileSummary
 }
 
 /**
@@ -46,8 +87,9 @@ interface StoredSessionFile {
   startedAt?: string
   endedAt?: string
   runDir?: string
-  options?: { launch?: boolean }
+  options?: { launch?: boolean; diagnose?: boolean }
   marks?: unknown[]
+  compile?: SessionCompile
 }
 
 interface ResultFile {
@@ -57,11 +99,17 @@ interface ResultFile {
     started_at?: string
     ended_at?: string | null
     duration_ms?: number | null
-    options?: { launch?: boolean }
+    options?: { launch?: boolean; diagnose?: boolean }
     marks?: unknown[]
+    compile?: SessionCompile
   }
   device?: { serial?: string; static?: { model?: string } }
-  target_app?: { package?: string; label?: string; version_name?: string | null }
+  target_app?: {
+    package?: string
+    label?: string
+    version_name?: string | null
+    compile_state_start?: DexoptLine[] | null
+  }
   metrics?: Record<string, { status?: string } | undefined>
   warnings?: unknown[]
 }
@@ -121,6 +169,7 @@ export async function listRuns(dir: string): Promise<RunSummary[]> {
 
     const durationMs =
       result?.session?.duration_ms ?? Date.parse(endedAt) - Date.parse(startedAt)
+    const compile = result?.session?.compile ?? session.compile
 
     runs.push({
       id: result?.session?.id ?? session.id ?? entry,
@@ -137,6 +186,13 @@ export async function listRuns(dir: string): Promise<RunSummary[]> {
       unsupportedCount: countUnsupported(result?.metrics),
       warningCount: result?.warnings?.length ?? 0,
       markCount: (result?.session?.marks ?? session.marks ?? []).length,
+      // result.json 이 정본이고, 산출이 실패한 run 은 session.json 이 말한다 (`launch` 와 같다).
+      ...((result?.session?.options?.diagnose ?? session.options?.diagnose) === true
+        ? { diagnose: true as const }
+        : {}),
+      ...(compile !== undefined
+        ? { compile: summarizeCompile(compile, result?.target_app?.compile_state_start ?? null) }
+        : {}),
     })
   }
 

@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { AmStartResult } from '../collectors/types.js'
+import type { SessionCompile } from '../schema/result.js'
 import { perfTrackerHome } from './paths.js'
 
 export interface ActiveSession {
@@ -16,7 +17,31 @@ export interface ActiveSession {
   remoteTracePath: string
   startedAt: string
   configuredDurationMs: number
-  options: { launch: boolean }
+  /**
+   * `diagnose` 는 **진단 세션에만 있고 값은 언제나 true** 다 (plan D12). 평소 세션에 `false` 를
+   * 싣지 않는 이유: 이 객체는 `status --json` 으로 그대로 나가고, 평소 세션의 키가 늘면 그것을
+   * 읽는 쪽이 깨진다. 없음 = 평소 세션 또는 이 필드가 없던 시절의 세션 — 둘 다 진단이 아니다.
+   */
+  options: { launch: boolean; diagnose?: true }
+  /**
+   * **진단 세션에만 있다** (`options.diagnose` 와 짝). 기기로 나간 atrace 범위와 시작 고지.
+   *
+   *   - `atraceCategories` · `atraceApps`: config 에 실제로 실린 값. extract 가 이것을
+   *     "켠 것" 으로 옮긴다 — 상수에서 다시 만들면 상수가 바뀐 뒤 옛 run 을 다시 낼 때 거짓이 된다.
+   *   - `notice`: 앱 slice 열림이 "모름" 칸이면 그 고지 줄 (`diagnoseNotice`), 열리면 null.
+   *     CLI 가 시작 때 찍고 측정 화면이 running 에 같은 줄을 띄운다 — 문구의 주인은 core 다.
+   */
+  diagnose?: {
+    atraceCategories: string[]
+    atraceApps: string[]
+    notice: string | null
+  }
+  /**
+   * **`start --compile` 세션에만 있다** (기능 문서 baseline-profile BP-4) — 측정 창을 열기 전에 기기 컴파일
+   * 상태를 바꾼 기록. extract 가 `result.json` 의 `session.compile` 로 옮기므로 그 꼴(snake_case) 그대로 둔다.
+   * 없음 = 상태를 바꾸지 않은 세션 또는 이 필드가 없던 시절의 세션.
+   */
+  compile?: SessionCompile
   startup: AmStartResult | null
   /**
    * `am start -W` 직후 `pidof` 가 알려 준 앱 프로세스의 pid. `--launch` 없이 시작했거나

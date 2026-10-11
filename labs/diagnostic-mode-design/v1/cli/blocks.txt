@@ -1,0 +1,114 @@
+# 진단 모드 CLI 글자 시안 v1 — gen_cli.py 가 만든다. 첫 칸 표식: + 새 줄(80칸 안) · * 새 꼬리(기존 꼬리로 넘침) · ~ 값만 바뀜 · 빈칸 기존
+
+### 1 · doctor — 진단 앱 slice ✓ (SM-S901N · sdk 36)
+  $ perftracker doctor
+  ✓ adb                                    /Users/me/Library/Android/sdk/platform-tools/adb (ANDROID_HOME)
+  ✓ adb version                            Android Debug Bridge version 1.0.41
+  ✓ device                                 R5CT0000001 SM-S901N
+  ✓ perfetto                               /system/bin/perfetto 사용 가능
+  ✓ data source: linux.process_stats       등록됨
+  ✓ data source: linux.sys_stats           등록됨
+  ✓ metric: hwui                           측정 가능
+  ✓ metric: frame                          측정 가능
+  ✓ metric: startup                        측정 가능
+  ✓ metric: cpu                            측정 가능
+  ✓ metric: memory                         측정 가능
+  ✓ metric: log                            측정 가능
+  ✓ metric: thermal                        측정 가능
+  ✓ metric: network                        측정 가능
++ ✓ diagnose: app slice                    sdk 36 · 열림
+  ✓ trace_processor                        캐시됨: /Users/me/.perftracker/bin/trace_processor
+
+### 2 · doctor — 진단 앱 slice ✗ (SM-A405S · sdk 30)
+  $ perftracker doctor -d R38M20ABCDE
+  ✓ adb                                    /Users/me/Library/Android/sdk/platform-tools/adb (ANDROID_HOME)
+  ✓ adb version                            Android Debug Bridge version 1.0.41
+  ✓ device                                 R38M20ABCDE SM-A405S
+  ✓ perfetto                               /system/bin/perfetto 사용 가능
+  ✓ data source: linux.process_stats       등록됨
+  ✓ data source: linux.sys_stats           등록됨
+  ✓ metric: hwui                           측정 가능
+  ✗ metric: frame                          이 기기에서는 측정할 수 없습니다 — 이 기기의 sdk_int=30 로는 수집할 수 없습니다 (최소 sdk_int=31, Android 12).
+  ✓ metric: startup                        측정 가능
+  ✓ metric: cpu                            측정 가능
+  ✓ metric: memory                         측정 가능
+  ✓ metric: log                            측정 가능
+  ✓ metric: thermal                        측정 가능
+  ✗ metric: network                        이 기기에서는 측정할 수 없습니다 — 이 기기의 sdk_int=30 로는 수집할 수 없습니다 (최소 sdk_int=34, Android 14).
++ ✗ diagnose: app slice                    sdk 30 · debuggable 앱만 열림
+  ✓ trace_processor                        캐시됨: /Users/me/.perftracker/bin/trace_processor
+
+### 3 · start --diagnose — 앱 slice 열림 (sdk 36)
+  $ perftracker start --diagnose --app com.google.android.youtube --name "유튜브 진단" --launch
+  측정을 시작했습니다.
+  Session   유튜브 진단  (a1b2c3)
+  App       YouTube  com.google.android.youtube
+  Run dir   runs/2026-10-08T00-29-11_유튜브-진단_a1b2c3
++ Diagnose  atrace am · wm · view + 앱 slice · 최대 10분
+  Startup   TotalTime 719ms · COLD
+
+  기기에서 앱을 조작한 뒤 perftracker stop 을 실행하세요.
+  측정 중에는 기기에 어떤 명령도 보내지 않습니다.
+
+### 4 · start --diagnose — 앱 slice 열림 모름 고지 (sdk 30 · debuggable 아님)
+  $ perftracker start --diagnose --app com.google.android.youtube --name "유튜브 진단" --launch -d R38M20ABCDE
+  측정을 시작했습니다.
+  Session   유튜브 진단  (d4e5f6)
+  App       YouTube  com.google.android.youtube
+  Run dir   runs/2026-10-08T00-41-02_유튜브-진단_d4e5f6
++ Diagnose  atrace am · wm · view + 앱 slice · 최대 10분
+  Startup   TotalTime 1204ms · COLD
+
+  이 기기에서 측정할 수 없는 지표 2개 — 나머지는 정상 수집됩니다:
+    ✗ frame    이 기기의 sdk_int=30 로는 수집할 수 없습니다 (최소 sdk_int=31, Android 12).
+    ✗ network  이 기기의 sdk_int=30 로는 수집할 수 없습니다 (최소 sdk_int=34, Android 14).
++
++ 앱 slice 열림 모름 — sdk 30 · debuggable 아님
+
+  기기에서 앱을 조작한 뒤 perftracker stop 을 실행하세요.
+  측정 중에는 기기에 어떤 명령도 보내지 않습니다.
+
+### 5 · status — 진단 세션
+  $ perftracker status
+  Session   유튜브 진단  (a1b2c3)
+  App       com.google.android.youtube
+  Elapsed   03:12
+  Run dir   runs/2026-10-08T00-29-11_유튜브-진단_a1b2c3
++ Diagnose  atrace am · wm · view + 앱 slice · 최대 10분
+  Marks     2개 · 마지막 02:40
+
+### 6 · status — 진단 세션 최대 시간 넘김 (기존 문구 · 값 10:00)
+  $ perftracker status
+  Session   유튜브 진단  (a1b2c3)
+  App       com.google.android.youtube
+  Elapsed   10:24
+  Run dir   runs/2026-10-08T00-29-11_유튜브-진단_a1b2c3
++ Diagnose  atrace am · wm · view + 앱 slice · 최대 10분
+
+~ 설정된 최대 측정 시간(10:00)을 넘었습니다. 트레이스 버퍼가 넘쳤을 수 있으며, 실제 여부는 stop 후 result.json 에 기록됩니다.
+
+### 7 · runs — 진단 · 평소 섞인 목록
+  $ perftracker runs
++ d4e5f6  유튜브 진단           SM-A405S      10/08 00:41  00:58  경고 0 · 진단
++ a1b2c3  유튜브 진단           SM-S901N      10/08 00:29  01:42  경고 0 · 진단
+  9f8e7d  유튜브 평소           SM-S901N      10/08 00:25  01:38  경고 0
+* b7c8d9  스크롤 진단           SM-S901N      10/07 23:10  04:11  경고 1 · 마킹 4 · 진단
+  c3b2a1  홈 스크롤             SM-S901N      10/07 16:12  02:02  경고 1 · 마킹 2
+
+  5건 · runs
+
+### 8 · start --help — --diagnose 줄
+  $ perftracker start --help
+  Usage: perftracker start [options]
+
+  측정 세션을 시작한다
+
+  Options:
+    -a, --app <라벨|패키지>     대상 앱 (생략 시 포그라운드 앱)
+    -n, --name <이름>        세션 이름
+    -d, --device <serial>  대상 기기 serial
+    --launch               앱을 콜드 상태로 실행하고 시작 시간을 측정한다 (default: false)
+    -o, --out <dir>        결과를 저장할 디렉토리 (default: "runs")
+    --force                이 기기의 기존 세션을 버리고 시작한다 (default: false)
++   --diagnose             진단 세션 — atrace slice 기록 · 최대 10분
+    -h, --help             display help for command

@@ -4,6 +4,12 @@
  *
  * 색은 **계열 구분에만** 쓴다. 빨강/초록으로 좋고 나쁨을 칠하지 않는다 — 이 화면은
  * 판정하지 않는다.
+ *
+ * **글자 바닥** (RR-1 · RR-2 · RR-3 · 결정 8 · 11): 모든 글자 12px 이상 · 표 · 카드 본문 13px 이상 ·
+ * 층은 섹션 제목 18 > 카드 제목 15 > 본문 13. 글자 색은 `--color-neutral-600` 이상(bg 6.13 ·
+ * surface 5.48 · neutral-200 4.84) — `neutral-500` 이하는 그림(띠 · 보조선 · 참고선)에만.
+ * 토큰 값은 고치지 않는다 — 측정 화면이 같은 토큰을 싣는다. 이 파일의 규칙은 전부 `.rp-` 안이라
+ * 측정 화면 글자에 닿지 않는다. 지키는 시험: `packages/gui/test/report-css.test.ts`.
  */
 
 .rp-shell {
@@ -41,7 +47,7 @@
 .rp-brand-2 { font-size: 12px; color: var(--color-neutral-600); margin-top: 2px; }
 
 .rp-tab {
-  font: inherit; font-size: 13.5px; text-align: left; cursor: pointer;
+  font: inherit; font-size: 14px; text-align: left; cursor: pointer;
   display: flex; align-items: center; justify-content: space-between; gap: var(--space-2);
   width: 100%; padding: 8px var(--space-4);
   border: 0; border-left: 2px solid transparent; border-radius: 0 99px 99px 0;
@@ -55,8 +61,8 @@
   color: var(--color-accent-800);
 }
 .rp-tab-count {
-  font-size: 9.5px; padding: 1px 5px; border-radius: 99px;
-  background: var(--color-neutral-200); color: var(--color-neutral-700);
+  font-size: 12px; padding: 1px 5px; border-radius: 99px;
+  background: var(--color-neutral-200); color: var(--color-neutral-800);
 }
 
 /* ── 본문 ──────────────────────────────────────────────────── */
@@ -67,25 +73,33 @@
 .rp-head { padding-bottom: var(--space-4); border-bottom: 1px solid var(--color-divider); }
 .rp-head-top { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
 .rp-sid {
-  font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-700);
+  font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-700);
 }
 .rp-name {
   font-family: var(--font-heading); font-weight: 600;
   font-size: clamp(26px, 3.4vw, 34px); margin: 0; letter-spacing: -0.01em;
 }
 .rp-state {
-  font-family: ui-monospace, Menlo, monospace; font-size: 10px;
+  font-family: ui-monospace, Menlo, monospace; font-size: 12px;
   letter-spacing: 0.1em; text-transform: uppercase;
   padding: 3px 10px; border-radius: 99px; flex: none;
   background: var(--color-neutral-200); color: var(--color-neutral-700);
 }
 .rp-state-on { background: var(--color-accent); color: var(--color-bg); }
+/*
+ * 진단 세션 pill. **상태 pill 과 모양으로만 갈린다** — 바탕 없이 테두리 한 줄. 색에 뜻을 싣지 않는다
+ * (규칙 2): 진단 세션은 나쁜 세션이 아니라 다른 종류의 세션이다.
+ */
+.rp-state-diagnose {
+  background: transparent; color: var(--color-neutral-700);
+  box-shadow: inset 0 0 0 1px var(--color-divider);
+}
 
 .rp-meta {
   display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4);
-  margin-top: var(--space-3); font-size: 12.5px; color: var(--color-neutral-700);
+  margin-top: var(--space-3); font-size: 13px; color: var(--color-neutral-700);
 }
-.rp-meta-item i { font-style: normal; color: var(--color-neutral-500); margin-right: 6px; }
+.rp-meta-item i { font-style: normal; font-size: 12px; color: var(--color-neutral-600); margin-right: 6px; }
 
 /*
  * **스크롤을 따라온다.** 마커는 시계열을 읽는 내내 참조하는 값이라, 화면 위로 사라지면
@@ -99,7 +113,7 @@
   border-top: 1px solid var(--color-divider); border-bottom: 1px solid var(--color-divider);
 }
 .rp-marks-label {
-  font-family: ui-monospace, Menlo, monospace; font-size: 10px;
+  font-family: ui-monospace, Menlo, monospace; font-size: 12px;
   letter-spacing: 0.16em; text-transform: uppercase; color: var(--color-neutral-600);
 }
 /*
@@ -128,7 +142,7 @@
   color: var(--color-accent-800);
 }
 .rp-mark-at {
-  font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--color-neutral-600);
+  font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--color-neutral-600);
 }
 .rp-mark:hover .rp-mark-at { color: var(--color-neutral-800); }
 .rp-mark-on .rp-mark-at { color: var(--color-accent-700); }
@@ -137,8 +151,8 @@
 .rp-section { margin-top: var(--space-4); }
 .rp-section-head {
   display: flex; align-items: center; gap: var(--space-3);
-  font-family: ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 400;
-  letter-spacing: 0.16em; text-transform: uppercase; color: var(--color-neutral-600);
+  font-family: var(--font-heading); font-size: 18px; font-weight: 600;
+  letter-spacing: 0.02em; text-transform: uppercase; color: var(--color-neutral-800);
   margin: 0 0 var(--space-3);
 }
 .rp-section-head i { flex: 1; height: 1px; background: var(--color-divider); }
@@ -158,8 +172,12 @@
 .rp-grid {
   display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--space-2);
 }
-/* 좁아지면 12칸을 6칸으로 접는다 — span 2 짜리 타일이 3개씩 두 줄이 된다. */
-@media (max-width: 1180px) { .rp-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+/* 좁아지면 12칸을 6칸으로 접는다. 6칸보다 넓은 카드(span 12)는 한 줄을 다 쓴다 — 안 그러면 암묵 칸이
+   생겨 그리드가 카드 밖으로 넓어진다. */
+@media (max-width: 1180px) {
+  .rp-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .rp-span-wide { grid-column: 1 / -1 !important; }
+}
 @media (max-width: 760px) { .rp-grid { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .rp-card { grid-column: 1 / -1 !important; } }
 
@@ -168,40 +186,51 @@
   border-radius: var(--radius-md); padding: var(--space-3); min-width: 0;
 }
 .rp-card-head { display: flex; align-items: baseline; gap: var(--space-2); margin-bottom: var(--space-2); }
-.rp-card-title { font-family: var(--font-heading); font-weight: 600; font-size: 12.5px; margin: 0; }
-.rp-card-unit { font-size: 10px; color: var(--color-neutral-500); }
+.rp-card-title { font-family: var(--font-heading); font-weight: 600; font-size: 15px; margin: 0; }
+.rp-card-unit { font-size: 12px; color: var(--color-neutral-600); }
 .rp-badge {
-  font-family: ui-monospace, Menlo, monospace; font-size: 9.5px;
+  font-family: ui-monospace, Menlo, monospace; font-size: 12px;
   letter-spacing: 0.08em; text-transform: uppercase;
   padding: 2px 8px; border-radius: 99px; flex: none; white-space: nowrap;
   background: var(--color-neutral-200); color: var(--color-neutral-800);
 }
 
-.rp-readout { font-size: 11px; margin: -2px 0 var(--space-2); color: var(--color-neutral-700); }
+.rp-readout { font-size: 12px; margin: -2px 0 var(--space-2); color: var(--color-neutral-700); }
 .rp-readout-value { font-weight: 600; color: var(--color-accent-700); }
-.rp-readout-nosample { color: var(--color-neutral-500); }
+.rp-readout-nosample { color: var(--color-neutral-600); }
 
-.rp-none { font-size: 11.5px; color: var(--color-neutral-700); padding: var(--space-2) 0; }
+.rp-none {
+  font-size: 13px; color: var(--color-neutral-700); padding: var(--space-2) 0; overflow-wrap: break-word;
+}
 .rp-none-code {
   display: block; margin-top: 6px;
-  font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--color-neutral-500);
+  font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--color-neutral-600);
+  overflow-wrap: break-word;
 }
-.rp-footnote { font-size: 10.5px; color: var(--color-neutral-600); margin: var(--space-2) 0 0; }
+.rp-footnote { font-size: 12px; color: var(--color-neutral-600); margin: var(--space-2) 0 0; }
 
 /* ── 차트 ──────────────────────────────────────────────────── */
 .rp-gridline { stroke: var(--color-divider); stroke-width: 0.6; }
 .rp-axis { stroke: var(--color-neutral-400); stroke-width: 0.8; }
 /*
  * SVG 안의 글자는 viewBox 배율만큼 커진다. 분포는 컨테이너 폭을 그대로 viewBox 로 쓰므로
- * 1배지만, **시계열은 viewBox 가 300 고정**이라 카드 폭 420px 에서 1.4배가 된다 —
- * 같은 12px 이 한쪽은 12px, 한쪽은 17px 로 보인다. 그래서 시계열만 따로 줄인다.
+ * 1배지만, **시계열은 viewBox 가 300 고정**이라 카드 폭만큼 커진다 (390 ≈ 1.1배 · 1440 ≈ 1.2배).
+ * 줄이지 않는다 — 12 단위면 RR-1 이 재는 폭에서 렌더 12px 이상이다 (390 ≈ 13.1 · 1440 ≈ 14.8 · 결정 13:
+ * 렌더 상자로 잰다). 카드가 viewBox 보다 좁아지는 ≈ 362px 미만 창에서는 12 아래다 (360 ≈ 11.9 — 측정 폭 밖).
  */
 .rp-tick {
-  fill: var(--color-neutral-700); font-size: 11px;
+  fill: var(--color-neutral-700); font-size: 12px;
   font-family: ui-monospace, Menlo, monospace;
 }
-.rp-series .rp-tick { font-size: 8.5px; }
-.rp-tick-dim { fill: var(--color-neutral-500); font-size: 10px; }
+.rp-series .rp-tick { font-size: 12px; }
+.rp-tick-dim { fill: var(--color-neutral-600); font-size: 12px; }
+/*
+ * 분포 viewBox 는 최소 360 이다 (`blocks.ts` 의 `Math.max(360, width)`) — 그보다 좁은 카드(≈ 422px 미만 창)에서는
+ * 줄어 그려져 12 단위 눈금이 390 에서 10.9px 가 된다. 그 폭에서만 단위를 키워 렌더 12px 이상을 지킨다
+ * (390 ≈ 12.7 · 375 ≈ 12.1). 그보다 좁으면 다시 12 아래다 (360 ≈ 11.5 — RR-1 측정 폭 1440 · 390 밖).
+ * viewBox 가 잰 폭을 그대로 쓰게 되면 이 규칙은 지운다.
+ */
+@media (max-width: 422px) { .rp-dist .rp-tick { font-size: 14px; } }
 
 .rp-line { fill: none; stroke: var(--color-accent); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
 .rp-subline { fill: none; stroke: var(--color-neutral-500); stroke-width: 1.1; stroke-dasharray: 3 3; }
@@ -211,7 +240,9 @@
 .rp-markline { stroke: var(--color-neutral-600); stroke-width: 1; stroke-dasharray: 2 3; }
 .rp-cursor { stroke: var(--color-accent); stroke-width: 1; }
 .rp-cursor-dot { fill: var(--color-bg); stroke: var(--color-accent); stroke-width: 2; }
-.rp-series { display: block; }
+/* 왼쪽 여백 `SPAD.l` 46 이 12 단위 눈금 `3,000` 을 담는다. 그보다 긴 눈금(`12,000`)이 오면 잘리지 않고
+   카드 안쪽 여백으로 흐르게 둔다 — 잘리면 `,000` 이 다른 값으로 읽힌다. */
+.rp-series { display: block; overflow: visible; }
 
 .rp-dist { display: block; }
 .rp-bar { fill: var(--color-accent); }
@@ -233,7 +264,7 @@
 
 .rp-ftl-legend {
   display: flex; flex-wrap: wrap; gap: var(--space-3);
-  margin-bottom: var(--space-2); font-size: 11px; color: var(--color-neutral-700);
+  margin-bottom: var(--space-2); font-size: 12px; color: var(--color-neutral-700);
 }
 .rp-ftl-key { display: inline-flex; align-items: center; gap: 5px; }
 .rp-ftl-sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
@@ -244,14 +275,14 @@
 
 .rp-pcts { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-bottom: var(--space-2); }
 .rp-pct-k {
-  display: block; font-family: ui-monospace, Menlo, monospace; font-size: 10px;
+  display: block; font-family: ui-monospace, Menlo, monospace; font-size: 12px;
   letter-spacing: 0.12em; color: var(--color-neutral-600);
 }
 .rp-pct b {
-  font-family: var(--font-heading); font-size: clamp(15px, 1.3vw, 18px); font-weight: 600;
+  font-family: var(--font-heading); font-size: clamp(18px, 1.4vw, 22px); font-weight: 600;
   letter-spacing: 0.01em;
 }
-.rp-pct-u { font-size: 11px; font-weight: 400; color: var(--color-neutral-600); margin-left: 3px; }
+.rp-pct-u { font-size: 12px; font-weight: 400; color: var(--color-neutral-600); margin-left: 3px; }
 /* 백분위(ms)와 마감 비율(%)은 다른 것이다 — 같은 줄에 두되 눈으로 갈린다. */
 .rp-pct-sep { padding-left: var(--space-4); border-left: 1px solid var(--color-border); }
 
@@ -262,17 +293,17 @@
  * 섞여 5.2 를 값으로 읽는 일이 생겼다. 크기·색·자리를 전부 다르게 해서 갈라 놓는다.
  */
 .rp-share {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-neutral-600);
   text-align: right;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.rp-card-alt .rp-share { color: var(--color-alt-400); }
+.rp-card-alt .rp-share { color: var(--color-neutral-600); }
 .rp-table td.rp-share { width: 1%; padding-left: var(--space-3); }
 .rp-bar-row {
   display: grid; grid-template-columns: minmax(72px, auto) minmax(24px, 1fr) 52px 44px;
-  align-items: center; gap: var(--space-2); font-size: 11.5px;
+  align-items: center; gap: var(--space-2); font-size: 13px;
 }
 .rp-bar-label { color: var(--color-neutral-700); }
 .rp-bar-track {
@@ -282,34 +313,148 @@
 .rp-bar-value { text-align: right; color: var(--color-neutral-800); }
 
 /* ── 표 ────────────────────────────────────────────────────── */
-.rp-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.rp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+/*
+ * 라벨 · 값은 줄바꿈한다 — 13px 에서 `target_process_slice_names_unfolded` 같은 경로 라벨이나 공백 없는
+ * 긴 값(dex 경로)이 한 줄이면 표가 카드 밖으로 밀어 페이지가 옆으로 넘친다 (1440 · 390 넘침 0 그대로).
+ * 줄바꿈 자리는 구분자(`/ : $ . ; , _`) 뒤의 `<wbr>` 다 (RR-7 · `Wbr`). `break-word` 는 토막 하나가 칸보다
+ * 넓을 때만 그 토막 안에서 끊는다 — `anywhere` · `break-all` 은 쓰지 않는다 (토막 가운데서 먼저 끊는다). 키/값 표는 라벨 열에
+ * 45% 를 잡아 둔다 — 안 잡으면 긴 값이 폭을 다 가져가 라벨이 한 글자씩 선다. 전/후 · slice 표는 열 폭을
+ * 따로 정하므로 빼놓는다. **특정도는 `th` 하나(0,0,1)** — `:where()` 로 낮춰, 다른 표(진단 dex 표 같은)가
+ * 자기 클래스로 `width` · `vertical-align` 을 정하면 그쪽이 이긴다.
+ */
 .rp-table th {
-  text-align: left; font-weight: 400; color: var(--color-neutral-600);
-  padding: 4px 0; border-bottom: 1px solid var(--color-divider); white-space: nowrap;
+  text-align: left; font-weight: 400; color: var(--color-neutral-700);
+  padding: 4px var(--space-3) 4px 0; border-bottom: 1px solid var(--color-divider);
+  white-space: normal; overflow-wrap: break-word;
 }
+:where(.rp-table:not(.rp-delta):not(.rp-slice)) th { width: 45%; vertical-align: top; }
 .rp-table td {
   padding: 4px 0; border-bottom: 1px solid var(--color-divider);
-  text-align: right; color: var(--color-neutral-800);
+  text-align: right; color: var(--color-neutral-800); overflow-wrap: break-word;
 }
 .rp-table tr:last-child th, .rp-table tr:last-child td { border-bottom: 0; }
-.rp-wrap { word-break: break-all; }
+.rp-wrap { overflow-wrap: break-word; word-break: normal; }
+/*
+ * 기계 이름 값의 안쪽 상자. **칸 폭을 정하는 데 끼지 않는다**(폭 0 · 최소 폭 = 칸) — 구분자가 없는 긴 토막
+ * (dex 경로의 40자 해시 `59F779C9…`)이 표의 최소 폭을 밀어 390 에서 카드 밖으로 넘치던 것을 막는다. 칸 폭은
+ * 라벨 열 45% 와 나머지로 정해지고, 그 안에서 토막이 칸보다 넓을 때만 `break-word` 가 토막 안에서 끊는다
+ * (RR-7 — `anywhere` 없이).
+ */
+.rp-table td.rp-wrap > .rp-wrap-in { display: block; width: 0; min-width: 100%; }
+/* 경로 라벨 두 줄 (RR-6 · 결정 2) — 우리말 단어 위 · 경로 원문 아래. 경로 줄도 구분자 뒤에서 줄바꿈한다. */
+.rp-lbl { display: block; font-size: 13px; color: var(--color-neutral-700); }
+.rp-lbl-path {
+  display: block; font-family: var(--font-mono); font-size: 12px; line-height: 1.4;
+  color: var(--color-neutral-600); overflow-wrap: break-word; word-break: normal;
+}
+/* 기계값(원본 경로). 자르지 않고 줄바꿈한다 — 경로 끝(파일 이름)이 가장 쓸모 있다. */
+.rp-table td.rp-path { font-family: var(--font-mono); font-size: 13px; }
+.rp-table td .rp-none-code { margin-top: 2px; }
 .rp-delta .rp-before { color: var(--color-neutral-700); }
-.rp-delta .rp-arrow { text-align: center; color: var(--color-neutral-500); width: 24px; }
+.rp-delta .rp-arrow { text-align: center; color: var(--color-neutral-600); width: 24px; }
 /* 차이. 판정이 아니라 세 번째 숫자라 색으로 좋고 나쁨을 말하지 않는다 (규칙 2) —
    증감을 빨강/초록으로 칠하면 온도가 내려간 것이 "좋다" 가 된다. */
 .rp-delta .rp-delta-v {
   color: var(--color-neutral-600); padding-left: var(--space-3); white-space: nowrap;
 }
 
-/* ── stat ──────────────────────────────────────────────────── */
-.rp-stat-title { font-size: 11px; color: var(--color-neutral-600); }
-.rp-stat-value {
-  font-family: var(--font-heading); font-size: clamp(17px, 1.5vw, 21px); font-weight: 600;
-  letter-spacing: 0.01em; line-height: 1.1; margin-top: 2px; white-space: nowrap;
+/* ── slice 표 (진단 탭) ──────────────────────────────────────
+   **행을 가르지 않는다** — 줄무늬 · 굵기 · 색 · 아이콘 없이 모든 행이 같다 (DM-13 · 규칙 2).
+   빈 칸(`—`)만 한 단계 옅고, 그것도 모든 행에 같은 규칙이다.
+   상자 안에서 위아래 · 옆으로 스크롤한다. 머리 두 줄은 위에, 이름 열은 왼쪽에 붙는다 — 그래서
+   칸마다 바탕을 칠한다(붙은 칸 밑으로 지나가는 행이 비치지 않게). 페이지는 옆으로 밀리지 않는다. */
+.rp-slice-scroll {
+  max-height: min(70vh, 640px); overflow: auto;
+  border-top: 1px solid var(--color-divider);
 }
-.rp-stat-dim { font-size: 16px; color: var(--color-neutral-500); }
-.rp-stat-unit { font-size: 12px; font-weight: 400; color: var(--color-neutral-600); margin-left: 4px; }
-.rp-stat-sub { font-size: 10.5px; color: var(--color-neutral-600); margin-top: 4px; }
+/* 가로 · 세로 스크롤바가 함께 서면(≤760) 만나는 구석이 브라우저 기본 흰색이다 — 바탕을 비운다.
+   app.css 의 전역 스크롤바 규칙은 측정 화면 몫이라 이 상자에만 둔다. */
+.rp-slice-scroll::-webkit-scrollbar-corner { background: transparent; }
+.rp-slice { border-collapse: separate; border-spacing: 0; }
+.rp-slice th, .rp-slice td {
+  padding: 4px 8px; border-bottom: 1px solid var(--color-divider);
+  background: var(--color-surface);
+}
+/* `.rp-table` 의 마지막 줄 규칙이 머리 둘째 줄의 밑줄까지 지운다 — 머리는 늘 밑줄이 있다. */
+.rp-slice thead tr:last-child th { border-bottom: 1px solid var(--color-divider); }
+.rp-slice thead th {
+  position: sticky; top: 0; z-index: 2;
+  line-height: 18px; white-space: nowrap; vertical-align: bottom;
+}
+/* 머리 첫 줄 높이 = 4 + 18 + 4 + 밑줄 1. 둘째 줄은 그만큼 내려 붙는다 — 재는 코드 없이 고정한다. */
+.rp-slice thead tr + tr th { top: 27px; }
+.rp-slice-group {
+  text-align: center !important; color: var(--color-neutral-600);
+  border-left: 1px solid var(--color-divider);
+}
+.rp-slice .rp-slice-gs { border-left: 1px solid var(--color-divider); }
+.rp-slice-name-h, .rp-slice-name {
+  position: sticky; left: 0; width: 38%;
+  border-right: 1px solid var(--color-divider);
+}
+.rp-slice-name-h { z-index: 3 !important; }
+.rp-slice .rp-slice-name {
+  z-index: 1;
+  font-family: var(--font-mono); font-size: 13px; font-weight: 400;
+  text-align: left; color: var(--color-neutral-800);
+  white-space: normal; overflow-wrap: break-word; word-break: normal;
+}
+.rp-slice td { white-space: nowrap; color: var(--color-neutral-800); }
+.rp-slice td.rp-slice-nil { color: var(--color-neutral-600); }
+.rp-slice tbody tr:last-child th, .rp-slice tbody tr:last-child td { border-bottom: 0; }
+/* 좌우 3px 는 포커스 링 자리다 — 같은 만큼 바깥으로 빼서 글자 자리는 그대로 둔다. */
+.rp-slice-sort {
+  font: inherit; color: var(--color-neutral-600);
+  background: transparent; border: 0; padding: 0 3px; margin: 0 -3px; cursor: pointer;
+  width: calc(100% + 6px); text-align: right; white-space: nowrap; border-radius: var(--radius-sm);
+}
+.rp-slice-name-h .rp-slice-sort { text-align: left; }
+.rp-slice-sort:hover { color: var(--color-text); }
+/* 상자 위 끝에 붙은 머리라 바깥으로 그린 링은 상자에 잘린다 — 안쪽으로 그린다. */
+.rp-slice-sort:focus-visible { outline-offset: -2px; }
+.rp-slice-mark:not(:empty) { margin-left: 3px; }
+/* 좁으면 표가 제 폭을 갖고 상자 안에서 옆으로 스크롤한다. 이름 열은 폭을 고정한다. */
+@media (max-width: 760px) {
+  .rp-slice { width: max-content; min-width: 100%; }
+  .rp-slice-name-h, .rp-slice-name { width: 140px; min-width: 140px; max-width: 140px; }
+}
+
+/* ── dex 줄 표 (dexstates · 컴파일 카드 · 진단 컴파일 상태 slice) ─────────
+   **칠하지 않는다** (baseline-profile 결정 6) — 상태 문자열 · 불 값은 모든 행이 같은 `neutral-800` 등폭 13px ·
+   같은 굵기. 새 색 0. 상자 스크롤 0 — 경로 · 위치는 칸 전부를 쓰는 행에서 구분자 뒤 줄바꿈, 값 칸은 `nowrap`
+   (19자 `profile-utilization` 까지 390 에서 카드 안 · 디자인 `## 넘침`). 시안 `report-rr.css` 의 `.rp-dex*` 그대로 —
+   키/값 표의 라벨 열 규칙은 `:where()` 라 `.rp-dex thead th` 가 이긴다. */
+.rp-dex { table-layout: auto; }
+.rp-dex thead th { vertical-align: bottom; width: auto; max-width: none; }
+.rp-dex th, .rp-dex td { text-align: left; padding: 4px 4px 4px 0; overflow-wrap: break-word; word-break: normal; }
+.rp-dex-when thead th:first-child, .rp-dex-row th { width: 72px; min-width: 72px; max-width: 72px; }
+.rp-dex td.rp-dex-v { white-space: nowrap; }
+.rp-dex td:last-child, .rp-dex th:last-child { padding-right: 0; }
+.rp-dex-kvs { display: flex; flex-wrap: wrap; gap: 2px 14px; margin-top: 2px; }
+.rp-dex-kv { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.rp-dex-w { font-family: var(--font-body); font-size: 13px; color: var(--color-neutral-700); }
+.rp-dex-k { font-family: var(--font-mono); font-size: 12px; color: var(--color-neutral-600); }
+.rp-dex-val { font-family: var(--font-mono); font-size: 13px; color: var(--color-neutral-800); }
+.rp-dex td.mono { font-size: 13px; }
+.rp-dex-head td {
+  font-family: var(--font-mono); font-size: 13px; color: var(--color-neutral-800);
+  padding-top: var(--space-3); border-bottom: 1px solid var(--color-divider);
+}
+.rp-dex-loc td { font-family: var(--font-mono); font-size: 12px; color: var(--color-neutral-600); }
+.rp-dex-row th, .rp-dex-row td { border-bottom: 0; }
+/* 때마다 같은 위치는 머리 행 바로 아래 한 줄 (plan B42) — 머리 행의 밑줄을 그 아래로 옮겨 경로 · 필드 · 위치가 한 덩어리. */
+.rp-dex-head:has(+ .rp-dex-loc-one) td { border-bottom: 0; }
+.rp-dex-loc-one td { padding-top: 0; }
+/* 보낸 명령의 깃발 토큰 — 그 안에서 줄을 바꾸지 않는다 (`-m` 이 `-` / `m` 으로 갈리지 않게 · plan B40). */
+.rp-nobr { white-space: nowrap; }
+/* 기록 칸(키/값 표) 아래에 표가 오면 사이를 띄운다. */
+.rp-table + .rp-dex { margin-top: var(--space-3); }
+
+/* ── stat (앱 시작) ─────────────────────────────────────────
+   큰 숫자가 없다 — 숫자는 요약 타일에 (결정 10). 값이 없으면 `.rp-none` 본문 크기 + 코드. */
+.rp-stat-title { font-size: 13px; color: var(--color-neutral-700); }
+.rp-stat-sub { font-size: 13px; color: var(--color-neutral-800); margin-top: 4px; }
 /* ── 기준선 막대 ────────────────────────────────────────────
    이 화면에서 **색이 좋고 나쁨을 말하는 유일한 자리**다 (규칙 2 의 의도적 예외).
    경계는 구글이 정한 것을 옮겨 적었고 그 출처가 축 라벨 툴팁에 있다.
@@ -322,7 +467,7 @@
 .rp-gauge-fill { height: 100%; border-radius: 3px; min-width: 2px; }
 .rp-gauge-axis {
   display: flex; justify-content: space-between; margin-top: 4px;
-  font-size: 10px; color: var(--color-neutral-600);
+  font-size: 12px; color: var(--color-neutral-600);
 }
 /* 채도를 낮춰 화면의 나머지(청색 계열)와 같은 온도로 둔다. 신호는 색상(hue)이 준다. */
 .rp-gauge-l0 { background: #6f9e7a; }
@@ -339,10 +484,36 @@
   );
 }
 
-/* 값이 없는 이유(reason_code). 스키마 식별자라 본문 글꼴이 아니라 등폭으로 쓴다. */
-.rp-stat-why {
-  font-family: ui-monospace, Menlo, monospace; font-size: 10.5px;
-  color: var(--color-neutral-600); margin-top: 5px;
+/* ── 요약 타일 (RR-4) ──────────────────────────────────────
+   지표마다 하나 · 순서 고정 · 1440 4열 × 2줄 · ≤760 2열 × 4줄 (1열이면 첫 화면이 타일로 참 — 카드 1열 규칙의
+   예외). **값으로 아무것도 바꾸지 않는다** — 크기는 값이 있나(26–32) 없나(18)로만 갈린다 (디자인 결정 2).
+   타일 값 > 섹션 제목 18 (RR-3). */
+.rp-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); }
+@media (max-width: 760px) { .rp-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.rp-tile {
+  display: flex; flex-direction: column; min-width: 0;
+  background: var(--color-surface); border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md); padding: var(--space-3);
+}
+.rp-tile-top { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-1) var(--space-2); }
+.rp-tile-word { font-size: 13px; color: var(--color-neutral-700); }
+.rp-tile-value {
+  font-family: var(--font-heading); font-size: clamp(26px, 2.2vw, 32px); font-weight: 600;
+  line-height: 1.15; margin-top: 2px; color: var(--color-text); overflow-wrap: break-word;
+}
+/* 숫자는 한 줄 — 단위만 다음 줄로 내려갈 수 있다 (`## 넘침`). */
+.rp-tile-num { white-space: nowrap; }
+.rp-tile-unit { font-family: var(--font-body); font-size: 13px; font-weight: 400; color: var(--color-neutral-600); }
+.rp-tile-none {
+  font-family: var(--font-heading); font-size: 18px; font-weight: 600; line-height: 1.3;
+  margin-top: 8px; color: var(--color-neutral-700); overflow-wrap: break-word;
+}
+.rp-tile-code {
+  font-family: var(--font-mono); font-size: 12px; color: var(--color-neutral-600); overflow-wrap: break-word;
+}
+.rp-tile-path {
+  margin-top: auto; padding-top: 6px; line-height: 1.4;
+  font-family: var(--font-mono); font-size: 12px; color: var(--color-neutral-600); overflow-wrap: break-word;
 }
 
 /* ── 툴팁 · 푸터 ───────────────────────────────────────────── */
@@ -352,34 +523,25 @@
   box-shadow: var(--shadow-md); padding: 8px 11px;
   border-radius: var(--radius-md); min-width: 150px;
 }
-.rp-tip-head { font-size: 11px; color: var(--color-neutral-600); }
+.rp-tip-head { font-size: 12px; color: var(--color-neutral-600); }
 .rp-tip-value { font-size: 16px; font-weight: 600; margin-top: 2px; }
-.rp-tip-sub { font-size: 11.5px; color: var(--color-neutral-700); margin-top: 2px; }
+.rp-tip-sub { font-size: 12px; color: var(--color-neutral-700); margin-top: 2px; }
 
 .rp-footer {
   display: flex; flex-wrap: wrap; gap: var(--space-4);
   margin-top: var(--space-8); padding-top: var(--space-4);
   border-top: 1px solid var(--color-divider);
-  font-size: 11px; color: var(--color-neutral-500);
+  font-size: 12px; color: var(--color-neutral-600);
 }
 .rp-footer-warn { color: var(--color-accent-700); }
 
 /*
  * 두 번째 계열색. **경고가 아니라 구분이다** — 이 화면은 판정하지 않으므로 색으로 좋고
  * 나쁨을 말하지 않는다. 지금 쓰는 곳은 프레임 꼬리표 하나이고, 그것이 우리가 계산한 값이
- * 아니라 기기가 붙여 둔 것이라는 표시다.
+ * 아니라 기기가 붙여 둔 것이라는 표시다. **계열색은 막대에만** — 제목 · 값 · 비율 글자는 다른 카드와
+ * 같은 중립 토큰이다 (RR-5 · 결정 6). 글자까지 칠하면 이 카드만 눈에 걸려 색이 순서가 된다.
  */
 .rp-card-alt .rp-bar-track i { background: var(--color-alt-500); }
-.rp-card-alt .rp-bar-value { color: var(--color-alt-700); }
-.rp-card-alt .rp-card-title { color: var(--color-alt-700); }
-.rp-card-alt .rp-table td.num { color: var(--color-alt-700); }
-
-/* 섹션 설명. 값이 아니라 **읽는 법**이라 카드 밖, 제목 바로 아래에 둔다. */
-.rp-section-note {
-  margin: calc(var(--space-2) * -1) 0 var(--space-3);
-  max-width: 78ch;
-  font-size: 12px;
-  line-height: 1.65;
-  color: var(--color-neutral-700);
-}
-.rp-section-note b { color: var(--color-neutral-900); font-weight: 600; }
+.rp-card-alt .rp-bar-value { color: var(--color-neutral-800); }
+.rp-card-alt .rp-card-title { color: var(--color-text); }
+.rp-card-alt .rp-table td.num { color: var(--color-neutral-800); }
