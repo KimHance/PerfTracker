@@ -6,6 +6,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import {
   type ActiveSession,
   appSliceOpen,
+  baseDexLine,
   compareCodeUnits,
   createAdbContext,
   type DiagnoseBlock,
@@ -204,7 +205,8 @@ describe('DM-16 실기기 — 진단 세션 (start --launch --diagnose → 스�
 
     const d = r.diagnose!
     expect(d, '진단 세션인데 diagnose 블록이 없다').toBeDefined()
-    expect(d.atrace_categories).toEqual(['am', 'wm', 'view'])
+    // 켠 카테고리는 core 의 허용 목록 그대로 — ART(`dalvik`)가 baseline-profile BP-7 로 더해졌다.
+    expect(d.atrace_categories).toEqual(['am', 'wm', 'view', 'dalvik'])
     expect(d.atrace_apps).toEqual([DEVICE_TARGET_APP])
 
     // 앱 slice 열림은 core 판정 그대로 — 이 기기 sdk 와 대상 앱 debuggable 로 정해진다.
@@ -349,6 +351,38 @@ describe('DM-16 실기기 — 진단 세션 (start --launch --diagnose → 스�
     expect(d.target_process_slice_names!.map((r) => r.name)).not.toContain('*')
   })
 
+  it('DM-16 ART 칸 — 컴파일 상태 slice 의 base 줄 filter = 시작 상태 base status · trace_processor 로 다시 센 JIT 수 · 컴파일 상태 줄 수가 블록과 같다', async () => {
+    const d = diag.result.diagnose!
+    if (!caps.dataSources.includes('linux.ftrace')) {
+      expect(d.target_process_compile_state_slices).toBeNull()
+      expect(d.target_process_jit_slices).toBeNull()
+      return
+    }
+    const states = d.target_process_compile_state_slices
+    expect(states, `컴파일 상태 slice null: ${d.target_process_compile_state_slices_reason ?? ''}`).not.toBeNull()
+    expect(d.target_process_jit_slices, `JIT 수 null: ${d.target_process_jit_slices_reason ?? ''}`).not.toBeNull()
+
+    // 같은 순간 dumpsys 가 말한 base.apk 의 compiler filter 를 트레이스 안 slice 의 `filter` 도 말한다 (결정 14 —
+    // 저쪽 `status` 가 이쪽 `filter`). base 줄 = dumpsys base.apk 줄과 같은 location 을 연 slice.
+    const start = baseDexLine(diag.result.target_app.compile_state_start)
+    expect(start, '시작 상태 base.apk 줄이 없다').not.toBeNull()
+    const baseSlices = states!.filter((s) => s.location === start!.location)
+    expect(baseSlices.length, `location ${start!.location ?? 'null'} 의 slice 가 없다`).toBeGreaterThan(0)
+    expect(baseSlices.map((s) => s.filter)).toEqual(baseSlices.map(() => start!.status))
+
+    // 블록 쿼리를 부르지 않고 따로 센다 — 대상 앱 = 캡처한 pid 의 프로세스 (위 frametimeline 대조와 같은 범위).
+    const pid = diag.result.target_app.pid
+    const x = await tp.queryJson<{ jit: number; states: number }>(
+      `with u as (select upid from process where pid = ${pid}), ` +
+        'tr as (select tt.id from thread_track tt join thread t using (utid) where t.upid in (select upid from u) ' +
+        'union all select pt.id from process_track pt where pt.upid in (select upid from u)) ' +
+        "select json_object('jit', (select count(*) from slice where track_id in tr and name glob 'JIT compiling*'), " +
+        "'states', (select count(distinct name) from slice where track_id in tr and name glob 'location=*')) as j",
+    )
+    expect(d.target_process_jit_slices).toBe(x.jit)
+    expect(states!.length).toBe(x.states)
+  })
+
   it('DM-16 보고서 행 모델의 행 수 = 블록 표 행 수', () => {
     const d = diag.result.diagnose!
     const vm = buildSliceTable(SLICE_CARD, diag.result)
@@ -391,7 +425,7 @@ describe('DM-16 실기기 — 진단 세션 (start --launch --diagnose → 스�
       expect(normal.result.measurement_overhead.adb_commands_during_session).toBe(0)
     })
 
-    it('DM-3 기기로 나간 config — 평소는 atrace 0 · 진단은 같은 config 에 atrace 넷 · 최대 시간만 다르다', async () => {
+    it('DM-3 기기로 나간 config — 평소는 atrace 0 · 진단은 같은 config 에 atrace 다섯 · 최대 시간만 다르다', async () => {
       const normalTp = new TraceProcessor(
         await ensureTraceProcessor(),
         join(normal.active.runDir, 'trace.perfetto-trace'),
@@ -407,6 +441,7 @@ describe('DM-16 실기기 — 진단 세션 (start --launch --diagnose → 스�
         'atrace_categories: "am"',
         'atrace_categories: "wm"',
         'atrace_categories: "view"',
+        'atrace_categories: "dalvik"',
         `atrace_apps: "${DEVICE_TARGET_APP}"`,
       ])
       const dWithoutAtrace = d
