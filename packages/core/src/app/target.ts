@@ -2,6 +2,7 @@ import type { AdbContext } from '../adb/context.js'
 import { AppNotFoundError } from '../errors.js'
 import type { TargetApp } from '../schema/result.js'
 import { getAppDetail } from './detail.js'
+import { compileStateFields } from './dexopt.js'
 import { loadLabelCache } from './label/cache.js'
 import { resolveAppLabel } from './label/resolve.js'
 import { loadLabeledApps } from './labeled.js'
@@ -68,5 +69,8 @@ export async function resolveTargetApp(ctx: AdbContext, query?: string): Promise
     min_sdk: detail.minSdk,
     target_sdk: detail.targetSdk,
     primary_cpu_abi: detail.primaryCpuAbi,
+    // 시작 컴파일 상태도 같은 출력에서 온다 (BP-1 — 기기 명령 목록 그대로). 끝 상태는 `stop` 이 채운다.
+    // `--compile` 세션은 바꾼 뒤 다시 읽은 출력이 이 자리를 덮는다 (BP-4 · 다른 단위).
+    ...compileStateFields('start', detail.compileState),
   }
 }

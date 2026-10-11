@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AdbClient } from '../adb/client.js'
+import { compileStateChangeWarning, compileStateFields, readDexoptState } from '../app/dexopt.js'
 import { collectSnapshotSpecs } from '../collectors/registry.js'
 import { measureDeviceClockSkewMs } from '../device/clock.js'
 import { collectDeviceState, runSnapshots } from '../device/state.js'
@@ -113,6 +114,9 @@ export async function stopSession(
   const afterSnapshots = await runSnapshots(ctx.adb, snapshotSpecs)
   // 마킹과 시계열을 같은 축에 놓기 위한 값. 자세한 이유는 `device/clock.ts` 에 있다.
   const deviceClockSkewMs = await measureDeviceClockSkewMs(ctx.adb)
+  // 끝 컴파일 상태 (BP-1) — 목록 맨 끝에 한 줄. 기존 명령 문자열 · 순서는 그대로다
+  // (`stop.test.ts` 「기기로 나가는 명령 전체」). 못 읽어도 던지지 않는다 — 트레이스를 이미 지웠다.
+  const compileEnd = await readDexoptState(ctx.adb, manifest.target_app.package)
   const rawFiles = [...manifest.artifacts.raw]
   for (const [key, text] of Object.entries({ ...after.raw, ...afterSnapshots })) {
     const rel = join('raw', `${key}_after.txt`)
@@ -121,6 +125,9 @@ export async function stopSession(
   }
 
   const warnings = [...manifest.warnings]
+  // 시작 · 끝 base.apk 줄이 다르면 그 사실 하나 (BP-3). 어느 쪽이든 못 읽었으면 경고 0.
+  const changed = compileStateChangeWarning(manifest.target_app.compile_state_start, compileEnd.lines)
+  if (changed !== null) warnings.push(changed)
   if (state === 'aborted') {
     warnings.push({
       code: 'trace_session_lost',
@@ -131,6 +138,7 @@ export async function stopSession(
   await writeCaptureManifest(session.runDir, {
     ...manifest,
     device: { ...manifest.device, state_after: after.state },
+    target_app: { ...manifest.target_app, ...compileStateFields('end', compileEnd) },
     warnings,
     adb_commands_during_session: adbCallsDuringSession,
     artifacts: { ...manifest.artifacts, trace: traceRelative, raw: rawFiles },

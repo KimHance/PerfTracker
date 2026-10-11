@@ -513,9 +513,11 @@ npx perftracker schema > result.schema.json
 
 `schema_version` 이 그 계약의 버전입니다 (현재 `1.2.0`).
 
-> **`1.2.0` 은 진단 세션의 자리를 더한 minor 입니다.** 평소 세션의 `result.json` 은 `1.1.0` 과
-> 키가 같고, 진단 세션(`start --diagnose`)에만 `session.options.diagnose` 와 [`diagnose`](#diagnose)
-> 블록이 실립니다. `1.1.0` 은 npm 0.1.0 ~ 0.2.1 로 나간 버전인데, 개발 중에도 출시 뒤에도 같은
+> **`1.2.0` 은 진단 세션의 자리와 컴파일 상태를 더한 minor 입니다.** 진단 세션(`start --diagnose`)에만
+> `session.options.diagnose` 와 [`diagnose`](#diagnose) 블록이 실리고, **모든 세션**의 `target_app` 에
+> [컴파일 상태](#target_app-의-컴파일-상태)(`compile_state_*`)가 실립니다. 그래서 **평소 세션의
+> `result.json` 도 `1.1.0` 과 키가 다릅니다** — `target_app` 이 닫힌 객체라 캐시해 둔 `1.1.0` 스키마는
+> 평소 세션 산출물도 거부합니다. `1.1.0` 은 npm 0.1.0 ~ 0.2.1 로 나간 버전인데, 개발 중에도 출시 뒤에도 같은
 > `1.1.0` 안에서 계약이 넓어졌습니다 — 0.2.0 이 `metrics.frame` 과 reason_code `no_frames` 를
 > 더했습니다. 스키마를 캐시해 두고 쓰신다면 아래
 > [스키마를 다시 꺼내야 하는 때](#스키마를-다시-꺼내야-하는-때)를 반드시 읽으세요.
@@ -529,12 +531,12 @@ npx perftracker schema > result.schema.json
 | `tool` | 도구 이름·버전과 **이것을 돌린 컴퓨터**(`host.os` / `arch` / `node`) |
 | `session` | id, 이름, `state`, 시작/종료 시각, 길이, **시간축 기준 두 개**(아래 참고), `options`(`launch` · 진단 세션이면 `diagnose: true`) |
 | `device` | 기기 스펙(`static`)과 세션 전후 상태(`state_before` / `state_after`) |
-| `target_app` | 패키지, 라벨, 버전, 렌더 프로세스와 pid, **빌드 속성**(`debuggable` / `large_heap` / `min_sdk` / `target_sdk` / `primary_cpu_abi`) |
+| `target_app` | 패키지, 라벨, 버전, 렌더 프로세스와 pid, **빌드 속성**(`debuggable` / `large_heap` / `min_sdk` / `target_sdk` / `primary_cpu_abi`), **시작 · 끝 컴파일 상태**(`compile_state_start` / `compile_state_end` — [아래](#target_app-의-컴파일-상태)) |
 | `metrics` | 메트릭들. 키가 곧 수집기 id (`hwui` / `startup` / `cpu` / `memory` / `log` / `thermal` / `network`) |
 | `diagnose` | **진단 세션에만.** atrace slice 집계 — 켠 범위, 앱 slice 열림, slice 수, 이름별 표 ([아래](#diagnose)). 평소 세션에는 키가 없습니다 |
 | `measurement_overhead` | 이 측정이 기기에 개입한 정도의 **하한** (아래 참고) |
 | `references` | 구글 공개 기준치. **비교에 쓰이지 않고 기록만 된다** |
-| `warnings` | 관측된 사건 (평가 아님) |
+| `warnings` | 관측된 사건 (평가 아님 — [코드 목록](#warnings)) |
 | `artifacts` | 원본 파일들의 상대 경로 |
 
 > **아직 `stop` 하지 않은 세션에 `extract` 를 돌린 결과**(`session.state === "running"`)에는
@@ -591,6 +593,80 @@ clock_snapshot 이 없거나 기기 시계를 못 읽은 경우(`trace_start_off
 - `primary_cpu_abi` 는 이 앱이 **실제로 실행되는** ABI 로, `device.static.abis` 의 부분집합입니다.
   64비트 기기에서 32비트로 도는 앱이 여기서 갈립니다. 네이티브 코드가 없으면 `null` 입니다.
 
+### `target_app` 의 컴파일 상태
+
+**모든 세션**에 실립니다 — 같은 기기 · 같은 앱이라도 ART 가 앱을 어떤 상태로 컴파일해 두었느냐에 따라
+콜드 스타트 · 스크롤 수치가 크게 달라지기 때문입니다 (실측 SM-S901N · YouTube: TotalTime 중앙값
+speed-profile 471 · verify 618 · speed 665 ms). 두 세션의 수치가 다를 때 상태가 같았는지를 먼저 볼 수
+있게 **측정 조건의 사실**로 남깁니다. 이 도구는 상태를 비교하거나 좋고 나쁨을 말하지 않습니다.
+
+- **시작 상태**(`compile_state_start`)는 대상 앱을 해석할 때 이미 돌리던 `dumpsys package <pkg>` 출력에서
+  함께 읽습니다 — **기기 왕복이 늘지 않습니다.**
+- **끝 상태**(`compile_state_end`)는 `stop` 이 측정 창을 닫고 트레이스를 회수한 **뒤** `dumpsys package <pkg>`
+  한 번으로 읽습니다. 측정 창 안의 기기 접촉은 그대로 0 입니다.
+- 값은 그 출력의 `Dexopt state` 절 **원문 그대로**입니다. dex 줄마다 하나씩, base.apk 줄과 보조 dex 줄을
+  기기 순서대로 전부 싣습니다. 문서 표에 없는 값(`profile-utilization` · `vdex-dm` · `run-from-apk` ·
+  `unknown`)이 실측됐으므로 enum 으로 좁히지 않습니다. 컴파일 상태가 아닌 줄(`class loader context: …` 와
+  그 `=VaryingClassLoaderContexts=` 하위 줄 · `used by other apps: […]`)은 꼴을 알고 싣지 않습니다.
+
+| 필드 | 무엇 |
+| --- | --- |
+| `compile_state_start` · `compile_state_end` | dex 줄의 배열. **`null` 은 읽지 못했다는 뜻**이고 `[]` 는 쓰지 않습니다 |
+| `compile_state_start_reason_code` · `compile_state_end_reason_code` | 칸이 `null` 인 이유 (아래 넷 중 하나). 값이 있으면 `null` |
+| `compile_state_start_reason` · `compile_state_end_reason` | 그 이유의 사람용 문장. 매칭에는 코드를 쓰세요 |
+| `path` | dex 파일 경로 원문 — 비보조 dex 는 `path:` 줄의 값(`…/base.apk` · split), 보조 dex 는 그 줄에서 끝의 ` (public)` 표시를 뗀 나머지 |
+| `secondary_dex` | `known secondary dex files:` 아래 줄이면 `true` |
+| `public_dex` | 보조 dex 경로 줄 끝에 ` (public)` 표시가 있으면 `true`. 비보조 dex 에는 기기가 이 표시를 찍지 않아 늘 `false` |
+| `abi` | 그 줄 머리의 ABI (`arm64` 등). 한 dex 에 ABI 줄이 여럿일 수 있습니다 |
+| `status` | `[status=…]` — **compiler filter** 입니다 (`speed-profile` · `verify` · `speed` · `run-from-apk` …) |
+| `reason` | `[reason=…]` — 그 컴파일을 일으킨 까닭 (`install-dm` · `bg-dexopt` · `cmdline` · `profile-utilization` …) |
+| `primary_abi` | 그 줄에 `[primary-abi]` 가 있으면 `true` |
+| `location` | `[location is …]` 의 `…` 원문 — odex · vdex 경로, `error`, 공백 든 문장까지 그대로. 그 줄이 없으면 `null` |
+
+```json
+{
+  "path": "/data/app/~~j3NK…/com.google.android.youtube-_ZCw…/base.apk",
+  "secondary_dex": false,
+  "public_dex": false,
+  "abi": "arm64",
+  "status": "speed-profile",
+  "reason": "profile-utilization",
+  "primary_abi": true,
+  "location": "/data/app/~~j3NK…/com.google.android.youtube-_ZCw…/oat/arm64/base.odex"
+}
+```
+
+- **`status` 는 진단 블록의 컴파일 상태 slice 에 나오는 `status` 와 뜻이 다릅니다.** 여기의 `status` 는
+  compiler filter 이고, 그 slice 의 `status` 는 oat 파일 상태(`up-to-date` 등)이며 그쪽의 compiler filter 는
+  `filter` 칸입니다. 이름은 기기 원문이라 바꾸지 않았습니다.
+- **못 읽으면 `null` 이고 이유가 붙습니다** — `dexopt_state_section_missing`(출력에 `Dexopt state` 절이
+  없음) · `dexopt_state_package_missing`(절에 대상 패키지 줄이 없음) · `dexopt_state_unparsable`(절은 있는데
+  줄 꼴을 모름 — **꼴을 추측해 채우지 않습니다**) · `dexopt_state_unavailable`(그 시점의 출력이 없음 —
+  기기 끊김, 아직 `stop` 하지 않은 세션을 `extract` 한 경우, 또는 끝 상태를 읽기 전의 도구로 `stop` 한 run 을
+  다시 `extract` 한 경우). 실측한 출력 꼴은 sdk 36 기기 하나뿐입니다 — 그 기기의 전 패키지(635개) 출력에서는
+  dex 줄이 하나도 없는 패키지(오버레이 등 69개)만 `dexopt_state_unparsable` 이었고, 다른 기기 · 버전에서는
+  모르는 꼴 때문에 더 나올 수 있습니다.
+- **세션 중 바뀌었으면 경고가 하나 붙습니다.** 시작 · 끝 상태가 둘 다 있고 base.apk 줄(ABI 줄이 여럿이면
+  `[primary-abi]` 줄)의 `status` 또는 `reason` 문자열이 다르면 `warnings` 에 `compile_state_changed` 가
+  실립니다 — 백그라운드 dexopt · Play 업데이트 · 제조사 작업이 세션 중에 컴파일했다는 관측된 사건입니다.
+  어느 쪽이든 `null` 이면 경고는 없습니다.
+- 이 키들이 **아예 없는** `result.json` 은 이 기록이 생기기 전에 산출된 것입니다.
+
+### `warnings`
+
+관측된 사건만 담습니다 — 평가는 없습니다. 이 버전이 내는 `code` 는 아래가 전부입니다
+(옛 run 을 `extract` 하면 그때의 코드가 그대로 옮겨질 수 있어 스키마는 닫힌 enum 이 아닙니다).
+
+| `code` | 언제 |
+| --- | --- |
+| `charging_during_session` | 세션 시작 때 USB 충전 중이었음 |
+| `power_save_mode_on` | 세션 시작 때 저전력 모드가 켜져 있었음 |
+| `launcher_activity_ambiguous` | 런처 진입점이 여럿이라 이 도구가 하나를 골라 띄웠음 |
+| `app_launch_time_unmeasured` | `am start -W` 가 TotalTime 을 보고하지 않아 시작 시간을 못 쟀음 |
+| `trace_session_lost` | Perfetto 세션이 사라져 트레이스를 회수하지 못했음 (`session.state` 가 `aborted`) |
+| `session_still_running` | 아직 `stop` 하지 않은 세션을 `extract` 했음 — 부분 상태 |
+| `compile_state_changed` | 세션 중 base.apk 의 컴파일 상태(`status` · `reason`)가 바뀌었음 ([위](#target_app-의-컴파일-상태)) |
+
 ### `tool.host`
 
 이 도구를 **돌린 컴퓨터**입니다 (`os` / `arch` / `node`). 같은 앱·같은 기기인데 수치가 다른 두
@@ -628,11 +704,13 @@ clock_snapshot 이 없거나 기기 시계를 못 읽은 경우(`trace_start_off
   CI 매칭은 반드시 이걸로 하세요. (예: `sdk_too_low`, `no_log_entries`,
   `trace_missing`, `data_source_not_registered`, `query_failed`)
 
-  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **39개**입니다
+  > `reason_code` 는 **닫힌 enum** 입니다. 이 버전의 reason_code 값은 **43개**입니다
   > (`1.0.0` 은 6개, `1.1.0` 의 마지막 판인 npm 0.2.1 은 36개였습니다). 그중 `process_name_stale_in_trace` 는 `1.0.0` 부터 있던
-  > `metrics.hwui` 에도 실립니다. `1.2.0` 에 더한 셋은 메트릭에는 실리지 않고 [`diagnose`](#diagnose)
-  > 블록에만 옵니다 — `app_slices_open_unknown` 은 `app_slices_open_reason_code` 에,
-  > `ftrace_not_recorded` · `ftrace_setup_errors` 는 블록 `reason_code` 에. 이 숫자는 테스트가
+  > `metrics.hwui` 에도 실립니다. `1.2.0` 에 더한 일곱은 메트릭에는 실리지 않습니다 — 셋은 [`diagnose`](#diagnose)
+  > 블록에만 옵니다(`app_slices_open_unknown` 은 `app_slices_open_reason_code` 에,
+  > `ftrace_not_recorded` · `ftrace_setup_errors` 는 블록 `reason_code` 에). 넷(`dexopt_state_section_missing` ·
+  > `dexopt_state_package_missing` · `dexopt_state_unparsable` · `dexopt_state_unavailable`)은
+  > [`target_app` 의 컴파일 상태](#target_app-의-컴파일-상태) 칸의 `_reason_code` 에만 옵니다. 이 숫자는 테스트가
   > `METRIC_REASON_CODES` 와 대조해 고정하므로 코드보다 낡을 수 없습니다.
 - `reason` — 사람이 읽는 한국어 문장. 다듬힐 수 있으니 매칭에 쓰지 마세요.
 - `data` — 메트릭별 본문. 수집되지 않았으면 `null`
@@ -643,9 +721,10 @@ clock_snapshot 이 없거나 기기 시계를 못 읽은 경우(`trace_start_off
 (`packages/core/src/schema/result.ts` 상단의 규칙표). 캐시해 둔 스키마를 꺼낸 때의 버전과
 산출물의 `schema_version` 이 다르면 다시 꺼내세요.
 
-- **`1.2.0` 산출물 가운데 진단 세션의 것은 `1.1.0` 스키마가 거부합니다.** 최상위 객체와
-  `session.options` 가 `additionalProperties: false` 라 `diagnose` 키와 `options.diagnose` 가
-  거기 걸립니다. 평소 세션 산출물은 키가 `1.1.0` 과 같아 그대로 통과합니다.
+- **`1.2.0` 산출물은 평소 세션의 것도 `1.1.0` 스키마가 거부합니다.** `target_app` 이
+  `additionalProperties: false` 라 모든 세션에 실리는 컴파일 상태(`compile_state_start` 등)가 거기
+  걸립니다. 진단 세션의 것은 하나 더 — 최상위 객체와 `session.options` 도 닫혀 있어
+  `diagnose` 키와 `options.diagnose` 가 걸립니다.
 
 **`1.1.0` 끼리는 그 신호가 없습니다.** `1.1.0` 은 개발 중에도, 출시 뒤에도 계약이 넓어질 때 버전을
 올리지 않았습니다. npm 0.1.0(2026-08-20)의 스키마는 reason_code 35개에 `metrics.frame` 이 없었고,

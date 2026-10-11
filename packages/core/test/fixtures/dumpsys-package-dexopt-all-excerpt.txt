@@ -1,0 +1,288 @@
+Dexopt state:
+  [com.google.android.gms]
+    path: /data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/oat/arm64/base.vdex]
+      used by other apps: [com.google.android.apps.maps (isa=arm64), com.google.android.gm (isa=arm64), com.google.android.gms (isolated) (isa=arm64), com.google.android.syncadapters.calendar (isa=arm64), com.google.android.videos (isa=arm64), com.osp.app.signin (isa=arm64), com.samsung.android.rubin.app (isa=arm64)]
+    path: /data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/split_AdsDynamite_installtime.apk
+      arm64: [status=verify] [reason=vdex-dm] [primary-abi]
+        [location is primary.vdex mapped directly in memory from /data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/split_AdsDynamite_installtime.dm]
+      used by other apps: [com.sec.spp.push (isa=arm64)]
+    path: /data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/split_CronetDynamite_installtime.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/oat/arm64/split_CronetDynamite_installtime.vdex]
+      used by other apps: [com.google.android.apps.photos (isa=arm64)]
+    path: /data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/split_DynamiteLoader_installtime.apk
+      arm64: [status=verify] [reason=vdex-dm] [primary-abi]
+        [location is primary.vdex mapped directly in memory from /data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/split_DynamiteLoader_installtime.dm]
+      used by other apps: [com.android.vending (isa=arm64), com.github.android (isa=arm64), com.google.android.apps.maps (isa=arm64), com.google.android.apps.photos (isa=arm64), com.google.android.apps.restore (isa=arm64), com.google.android.apps.tachyon (isa=arm64), com.google.android.apps.youtube.music (isa=arm64), com.google.android.googlequicksearchbox (isa=arm64), com.google.android.projection.gearhead (isa=arm64), com.google.android.verifier (isa=arm64), com.google.android.youtube (isa=arm64), com.google.audio.hearing.visualization.accessibility.scribe (isa=arm64), com.nhn.android.webtoon (isa=arm64), com.osp.app.signin (isa=arm64), com.samsung.android.app.parentalcare (isa=arm64), com.samsung.android.app.smartcapture (isa=arm64), com.samsung.android.dkey (isa=arm64), com.samsung.android.fmm (isa=arm64), com.samsung.android.rubin.app (isa=arm64), com.samsung.android.waterplugin (isa=arm64), com.sec.spp.push (isa=arm64), com.skt.skaf.A000Z00040 (isa=arm64), com.skt.skaf.OA00018282 (isa=arm64)]
+    path: /data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/split_DynamiteModulesA_installtime.apk
+      arm64: [status=verify] [reason=vdex-dm] [primary-abi]
+        [location is primary.vdex mapped directly in memory from /data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/split_DynamiteModulesA_installtime.dm]
+    path: /data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/split_DynamiteModulesC_installtime.apk
+      arm64: [status=verify] [reason=vdex-dm] [primary-abi]
+        [location is primary.vdex mapped directly in memory from /data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/split_DynamiteModulesC_installtime.dm]
+      used by other apps: [com.google.android.youtube (isa=arm64)]
+    path: /data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/split_GoogleCertificates_installtime.apk
+      arm64: [status=verify] [reason=vdex-dm] [primary-abi]
+        [location is primary.vdex mapped directly in memory from /data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/split_GoogleCertificates_installtime.dm]
+      used by other apps: [com.android.vending (isa=arm64), com.google.android.apps.maps (isa=arm64), com.google.android.apps.photos (isa=arm64), com.google.android.apps.restore (isa=arm64), com.google.android.apps.tachyon (isa=arm64), com.google.android.projection.gearhead (isa=arm64), com.google.android.verifier (isa=arm64)]
+    path: /data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/split_MapsDynamite_installtime.apk
+      arm64: [status=verify] [reason=vdex-dm] [primary-abi]
+        [location is primary.vdex mapped directly in memory from /data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/split_MapsDynamite_installtime.dm]
+    path: /data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/split_MeasurementDynamite_installtime.apk
+      arm64: [status=verify] [reason=vdex-dm] [primary-abi]
+        [location is primary.vdex mapped directly in memory from /data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/split_MeasurementDynamite_installtime.dm]
+      used by other apps: [com.github.android (isa=arm64), com.google.android.apps.maps (isa=arm64), com.google.android.apps.photos (isa=arm64), com.google.audio.hearing.visualization.accessibility.scribe (isa=arm64), com.nhn.android.webtoon (isa=arm64), com.osp.app.signin (isa=arm64), com.samsung.android.app.parentalcare (isa=arm64), com.samsung.android.dkey (isa=arm64), com.samsung.android.fmm (isa=arm64), com.samsung.android.waterplugin (isa=arm64), com.skt.skaf.A000Z00040 (isa=arm64), com.skt.skaf.OA00018282 (isa=arm64)]
+    known secondary dex files:
+      /data/user/0/com.google.android.gms/app_dg_cache/8348DD80A734238B4413C219FE27351BE6B49361/the.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user/0/com.google.android.gms/app_dg_cache/8348DD80A734238B4413C219FE27351BE6B49361/oat/arm64/the.vdex]
+        class loader context: PCL[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user/150/com.google.android.gms/app_dg_cache/8348DD80A734238B4413C219FE27351BE6B49361/the.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user/150/com.google.android.gms/app_dg_cache/8348DD80A734238B4413C219FE27351BE6B49361/oat/arm64/the.vdex]
+        class loader context: PCL[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user_de/0/com.google.android.gms/app_chimera/m/0000079c/dl-AdsFdrDynamite.integ_261710500100000.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/0/com.google.android.gms/app_chimera/m/0000079c/oat/arm64/dl-AdsFdrDynamite.integ_261710500100000.vdex]
+        class loader context: =VaryingClassLoaderContexts=
+          com.samsung.android.rubin.app: DLC[];PCL[/data/app/~~VCd_vDhX7hogGZIONcOnUg==/com.samsung.android.rubin.app-a2Z11luL49Oi2WjVCWeZvA==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+          com.sec.spp.push: DLC[];PCL[/data/app/~~hubPrQqCZHJMDDHak6e57g==/com.sec.spp.push-s6GpWYc0zJX0GsNnJUJzaw==/base.apk]
+        used by other apps: [com.samsung.android.rubin.app (isa=arm64), com.sec.spp.push (isa=arm64)]
+      /data/user_de/0/com.google.android.gms/app_chimera/m/000007b1/dl-TfliteDynamiteDynamite.integ_262730502100400.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/0/com.google.android.gms/app_chimera/m/000007b1/oat/arm64/dl-TfliteDynamiteDynamite.integ_262730502100400.vdex]
+        class loader context: DLC[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user_de/0/com.google.android.gms/app_chimera/m/000007b7/dl-MlkitOcrCommon.optional_263737100400.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/0/com.google.android.gms/app_chimera/m/000007b7/oat/arm64/dl-MlkitOcrCommon.optional_263737100400.vdex]
+        class loader context: =VaryingClassLoaderContexts=
+          com.google.android.gms: DLC[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+          com.samsung.android.app.smartcapture: DLC[];PCL[/system/app/SmartCapture/SmartCapture.apk]{PCL[/system/framework/saiv.jar]#PCL[/system/framework/SmpsManager.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+        used by other apps: [com.samsung.android.app.smartcapture (isa=arm64)]
+      /data/user_de/0/com.google.android.gms/app_chimera/m/000007b9/dl-PlayCloudSearch.optional_263737100000.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/0/com.google.android.gms/app_chimera/m/000007b9/oat/arm64/dl-PlayCloudSearch.optional_263737100000.vdex]
+        class loader context: DLC[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user_de/0/com.google.android.gms/app_chimera/m/000007ba/dl-Games.optional_263737100000.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/0/com.google.android.gms/app_chimera/m/000007ba/oat/arm64/dl-Games.optional_263737100000.vdex]
+        class loader context: DLC[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user_de/0/com.google.android.gms/app_chimera/m/000007bb/dl-BrellaDynamite.optional_263737100400.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/0/com.google.android.gms/app_chimera/m/000007bb/oat/arm64/dl-BrellaDynamite.optional_263737100400.vdex]
+        class loader context: DLC[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user_de/0/com.google.android.gms/app_chimera/m/000007bc/dl-Fastpair.optional_263737100000.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/0/com.google.android.gms/app_chimera/m/000007bc/oat/arm64/dl-Fastpair.optional_263737100000.vdex]
+        class loader context: DLC[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user_de/0/com.google.android.gms/app_chimera/m/000007be/dl-IdentityCredentialsPlatform.optional_263737100400.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/0/com.google.android.gms/app_chimera/m/000007be/oat/arm64/dl-IdentityCredentialsPlatform.optional_263737100400.vdex]
+        class loader context: DLC[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user_de/0/com.google.android.gms/app_chimera/m/000007bf/dl-VisionOcr.optional_263737100000.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/0/com.google.android.gms/app_chimera/m/000007bf/oat/arm64/dl-VisionOcr.optional_263737100000.vdex]
+        class loader context: DLC[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user_de/0/com.google.android.gms/app_chimera/m/000007c0/dl-Appsearch.optional_263737100400.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/0/com.google.android.gms/app_chimera/m/000007c0/oat/arm64/dl-Appsearch.optional_263737100400.vdex]
+        class loader context: DLC[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user_de/0/com.google.android.gms/app_chimera/m/000007c1/dl-HealthTracking.optional_263737100000.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/0/com.google.android.gms/app_chimera/m/000007c1/oat/arm64/dl-HealthTracking.optional_263737100000.vdex]
+        class loader context: DLC[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user_de/0/com.google.android.gms/app_chimera/m/000007c2/dl-Dck.optional_263737150400.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/0/com.google.android.gms/app_chimera/m/000007c2/oat/arm64/dl-Dck.optional_263737150400.vdex]
+        class loader context: DLC[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user_de/0/com.google.android.gms/app_chimera/m/000007c3/dl-MlkitDocscanUi.optional_263737100400.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/0/com.google.android.gms/app_chimera/m/000007c3/oat/arm64/dl-MlkitDocscanUi.optional_263737100400.vdex]
+        class loader context: DLC[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user_de/0/com.google.android.gms/app_chimera/m/000007c6/dl-MlkitOcrKorean.optional_263737100000.apk (public)
+        arm64: [status=run-from-apk] [reason=unknown] [primary-abi]
+          [location is error]
+        class loader context: DLC[];PCL[/system/app/SmartCapture/SmartCapture.apk]{PCL[/system/framework/saiv.jar]#PCL[/system/framework/SmpsManager.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+        used by other apps: [com.samsung.android.app.smartcapture (isa=arm64)]
+      /data/user_de/0/com.google.android.gms/app_chimera/m/000007c7/dl-MlkitBarcodeUi.optional_263737100400.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/0/com.google.android.gms/app_chimera/m/000007c7/oat/arm64/dl-MlkitBarcodeUi.optional_263737100400.vdex]
+        class loader context: DLC[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user_de/150/com.google.android.gms/app_chimera/m/000005a0/dl-TfliteDynamiteDynamite.integ_262730502100400.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/150/com.google.android.gms/app_chimera/m/000005a0/oat/arm64/dl-TfliteDynamiteDynamite.integ_262730502100400.vdex]
+        class loader context: DLC[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user_de/150/com.google.android.gms/app_chimera/m/000005a3/dl-MlkitOcrCommon.optional_263737100400.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/150/com.google.android.gms/app_chimera/m/000005a3/oat/arm64/dl-MlkitOcrCommon.optional_263737100400.vdex]
+        class loader context: DLC[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user_de/150/com.google.android.gms/app_chimera/m/000005a5/dl-PlayCloudSearch.optional_263737100000.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/150/com.google.android.gms/app_chimera/m/000005a5/oat/arm64/dl-PlayCloudSearch.optional_263737100000.vdex]
+        class loader context: DLC[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user_de/150/com.google.android.gms/app_chimera/m/000005a7/dl-IdentityCredentialsPlatform.optional_263737100400.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/150/com.google.android.gms/app_chimera/m/000005a7/oat/arm64/dl-IdentityCredentialsPlatform.optional_263737100400.vdex]
+        class loader context: DLC[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user_de/150/com.google.android.gms/app_chimera/m/000005a8/dl-VisionOcr.optional_263737100000.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/150/com.google.android.gms/app_chimera/m/000005a8/oat/arm64/dl-VisionOcr.optional_263737100000.vdex]
+        class loader context: DLC[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user_de/150/com.google.android.gms/app_chimera/m/000005a9/dl-Appsearch.optional_263737100400.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/150/com.google.android.gms/app_chimera/m/000005a9/oat/arm64/dl-Appsearch.optional_263737100400.vdex]
+        class loader context: DLC[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+      /data/user_de/150/com.google.android.gms/app_chimera/m/000005aa/dl-MlkitBarcodeUi.optional_263737100400.apk (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user_de/150/com.google.android.gms/app_chimera/m/000005aa/oat/arm64/dl-MlkitBarcodeUi.optional_263737100400.vdex]
+        class loader context: DLC[];PCL[/data/app/~~KFTcLZ17DG7tQsePOLxgjg==/com.google.android.gms-tENA57oADSe_UrvITgDqpQ==/base.apk]{PCL[/system/framework/org.apache.http.legacy.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.rangingintent.jar]#PCL[/system/system_ext/framework/org.carconnectivity.android.digitalkey.secureelement.jar]#PCL[/system/framework/com.android.location.provider.jar]#PCL[/system/framework/com.android.media.remotedisplay.jar]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar]#PCL[/system_ext/framework/androidx.window.extensions.jar]#PCL[/system_ext/framework/androidx.window.sidecar.jar]}
+  [com.google.android.gms.location.history]
+    path: /product/app/GoogleLocationHistory/GoogleLocationHistory.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /product/app/GoogleLocationHistory/oat/arm64/GoogleLocationHistory.vdex]
+  [com.google.android.gms.supervision]
+  [com.google.android.googlequicksearchbox]
+    path: /data/app/~~siZ5UHreHcF46wSeYCAoKg==/com.google.android.googlequicksearchbox-LE5zw1ZE7JvXXEY6u8wGEA==/base.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/app/~~siZ5UHreHcF46wSeYCAoKg==/com.google.android.googlequicksearchbox-LE5zw1ZE7JvXXEY6u8wGEA==/oat/arm64/base.vdex]
+  [com.google.android.gsf]
+  [com.google.android.health.connect.backuprestore]
+    path: /apex/com.android.healthfitness/app/HealthConnectBackupRestoreGoogle@370547060/HealthConnectBackupRestoreGoogle.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/dalvik-cache/arm64/apex@com.android.healthfitness@app@HealthConnectBackupRestoreGoogle@370547060@HealthConnectBackupRestoreGoogle.apk@classes.vdex]
+  [com.google.android.healthconnect.controller]
+    path: /apex/com.android.healthfitness/priv-app/HealthConnectControllerGoogle@370547060/HealthConnectControllerGoogle.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/dalvik-cache/arm64/apex@com.android.healthfitness@priv-app@HealthConnectControllerGoogle@370547060@HealthConnectControllerGoogle.apk@classes.vdex]
+  [com.google.android.modulemetadata]
+  [com.google.android.music]
+    path: /data/app/~~ITza_TFTSVKLnDmUfg3Yvg==/com.google.android.music-aywvgi24EkoJrw_ZDi7-Hg==/base.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/app/~~ITza_TFTSVKLnDmUfg3Yvg==/com.google.android.music-aywvgi24EkoJrw_ZDi7-Hg==/oat/arm64/base.vdex]
+  [com.google.android.networkstack]
+    path: /data/app/~~9oScPZbxhZx5rm5Jihjdzg==/com.google.android.networkstack-GfjEx4j56rbKtwst5p6vhg==/base.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/app/~~9oScPZbxhZx5rm5Jihjdzg==/com.google.android.networkstack-GfjEx4j56rbKtwst5p6vhg==/oat/arm64/base.vdex]
+      used by other apps: [com.google.android.cellbroadcastservice (isa=arm64)]
+  [com.google.android.networkstack.tethering]
+    path: /apex/com.android.tethering/priv-app/TetheringGoogle@370549120/TetheringGoogle.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/dalvik-cache/arm64/apex@com.android.tethering@priv-app@TetheringGoogle@370549120@TetheringGoogle.apk@classes.vdex]
+      used by other apps: [com.google.android.cellbroadcastservice (isa=arm64), com.google.android.networkstack (isa=arm64)]
+  [com.google.android.networkstack.tethering.overlay]
+  [com.google.android.ondevicepersonalization.services]
+    path: /apex/com.android.ondevicepersonalization/priv-app/OnDevicePersonalizationGoogle@370547060/OnDevicePersonalizationGoogle.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/dalvik-cache/arm64/apex@com.android.ondevicepersonalization@priv-app@OnDevicePersonalizationGoogle@370547060@OnDevicePersonalizationGoogle.apk@classes.vdex]
+  [com.google.android.onetimeinitializer]
+    path: /product/priv-app/GoogleOneTimeInitializer/GoogleOneTimeInitializer.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /product/priv-app/GoogleOneTimeInitializer/oat/arm64/GoogleOneTimeInitializer.vdex]
+  [com.google.android.overlay.gmsconfig.asi]
+  [com.google.android.overlay.gmsconfig.common]
+  [com.google.android.overlay.gmsconfig.geotz]
+  [com.google.android.overlay.gmsconfig.gsa]
+  [com.google.android.overlay.gmsconfig.photos]
+  [com.google.android.overlay.modules.captiveportallogin.forframework]
+  [com.google.android.overlay.modules.cellbroadcastreceiver]
+  [com.google.android.overlay.modules.cellbroadcastservice]
+  [com.google.android.overlay.modules.documentsui]
+  [com.google.android.overlay.modules.ext.services]
+  [com.google.android.overlay.modules.healthfitness.forframework]
+  [com.google.android.overlay.modules.modulemetadata.forframework]
+  [com.google.android.overlay.modules.permissioncontroller]
+  [com.google.android.overlay.modules.permissioncontroller.forframework]
+  [com.google.android.packageinstaller]
+    path: /system/priv-app/GooglePackageInstaller/GooglePackageInstaller.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /system/priv-app/GooglePackageInstaller/oat/arm64/GooglePackageInstaller.vdex]
+  [com.google.android.partnersetup]
+    path: /data/app/~~kVIyadeo8snGyCt-_7khMA==/com.google.android.partnersetup-kDQrTfhSqLo0fYQP3I--JQ==/base.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/app/~~kVIyadeo8snGyCt-_7khMA==/com.google.android.partnersetup-kDQrTfhSqLo0fYQP3I--JQ==/oat/arm64/base.vdex]
+  [com.google.android.permissioncontroller]
+    path: /apex/com.android.permission/priv-app/GooglePermissionController@370549180/GooglePermissionController.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/dalvik-cache/arm64/apex@com.android.permission@priv-app@GooglePermissionController@370549180@GooglePermissionController.apk@classes.vdex]
+  [com.google.android.photopicker]
+    path: /apex/com.android.mediaprovider/priv-app/PhotopickerGoogle@370549200/PhotopickerGoogle.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/dalvik-cache/arm64/apex@com.android.mediaprovider@priv-app@PhotopickerGoogle@370549200@PhotopickerGoogle.apk@classes.vdex]
+  [com.google.android.play.games]
+    path: /data/app/~~o6PAuFVhtyWFx5G-P-8LFQ==/com.google.android.play.games-rCNGy07FURcBiLqTC2d6QA==/base.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/app/~~o6PAuFVhtyWFx5G-P-8LFQ==/com.google.android.play.games-rCNGy07FURcBiLqTC2d6QA==/oat/arm64/base.vdex]
+    path: /data/app/~~o6PAuFVhtyWFx5G-P-8LFQ==/com.google.android.play.games-rCNGy07FURcBiLqTC2d6QA==/split_gpdeku.apk
+      arm64: [status=verify] [reason=vdex-dm] [primary-abi]
+        [location is primary.vdex mapped directly in memory from /data/app/~~o6PAuFVhtyWFx5G-P-8LFQ==/com.google.android.play.games-rCNGy07FURcBiLqTC2d6QA==/split_gpdeku.dm]
+  [com.google.android.printservice.recommendation]
+    path: /system/app/GooglePrintRecommendationService/GooglePrintRecommendationService.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /system/app/GooglePrintRecommendationService/oat/arm64/GooglePrintRecommendationService.vdex]
+  [com.google.android.projection.gearhead]
+    path: /data/app/~~v-6OIohRfzwjKQ0sTIovGw==/com.google.android.projection.gearhead-WyFyfr3RUSP-EIL44-aLzw==/base.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/app/~~v-6OIohRfzwjKQ0sTIovGw==/com.google.android.projection.gearhead-WyFyfr3RUSP-EIL44-aLzw==/oat/arm64/base.vdex]
+    known secondary dex files:
+      /data/user/0/com.google.android.projection.gearhead/app_impl/sdk_impl.jar (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user/0/com.google.android.projection.gearhead/app_impl/oat/arm64/sdk_impl.vdex]
+        class loader context: PCL[];PCL[]
+      /data/user/150/com.google.android.projection.gearhead/app_impl/sdk_impl.jar (public)
+        arm64: [status=verify] [reason=vdex] [primary-abi]
+          [location is /data/user/150/com.google.android.projection.gearhead/app_impl/oat/arm64/sdk_impl.vdex]
+        class loader context: PCL[];PCL[]
+  [com.google.android.providers.media.module]
+    path: /apex/com.android.mediaprovider/priv-app/MediaProviderGoogle@370549200/MediaProviderGoogle.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/dalvik-cache/arm64/apex@com.android.mediaprovider@priv-app@MediaProviderGoogle@370549200@MediaProviderGoogle.apk@classes.vdex]
+  [com.google.android.rkpdapp]
+    path: /apex/com.android.rkpd/priv-app/rkpdapp.google@370549040/rkpdapp.google.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/dalvik-cache/arm64/apex@com.android.rkpd@priv-app@rkpdapp.google@370549040@rkpdapp.google.apk@classes.vdex]
+  [com.google.android.safetycenter.resources]
+    path: /apex/com.android.permission/priv-app/GoogleSafetyCenterResources@370549180/GoogleSafetyCenterResources.apk
+      arm64: [status=unknown] [reason=unknown] [primary-abi]
+        [location is none]
+  [com.google.android.safetycore]
+    path: /data/app/~~IQr6BSL8NpV0cYjq0SvluA==/com.google.android.safetycore-tq5eVmbeV8r0e8Qq_3H5Xg==/base.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/app/~~IQr6BSL8NpV0cYjq0SvluA==/com.google.android.safetycore-tq5eVmbeV8r0e8Qq_3H5Xg==/oat/arm64/base.vdex]
+  [com.google.android.sdksandbox]
+    path: /apex/com.android.adservices/app/SdkSandboxGoogle@370547060/SdkSandboxGoogle.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/dalvik-cache/arm64/apex@com.android.adservices@app@SdkSandboxGoogle@370547060@SdkSandboxGoogle.apk@classes.vdex]
+  [com.google.android.setupwizard]
+    path: /system_ext/priv-app/SetupWizard/SetupWizard.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /system_ext/priv-app/SetupWizard/oat/arm64/SetupWizard.vdex]
+  [com.google.android.syncadapters.calendar]
+    path: /product/app/GoogleCalendarSyncAdapter/GoogleCalendarSyncAdapter.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /product/app/GoogleCalendarSyncAdapter/oat/arm64/GoogleCalendarSyncAdapter.vdex]
+  [com.google.android.trichromelibrary_699813531]
+  [com.google.android.tts]
+    path: /data/app/~~aqgumUe5U1tI04So-Xn4Jw==/com.google.android.tts-rmqy_ZRVCZ7CloU7nlWcnA==/base.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/app/~~aqgumUe5U1tI04So-Xn4Jw==/com.google.android.tts-rmqy_ZRVCZ7CloU7nlWcnA==/oat/arm64/base.vdex]
+  [com.google.android.verifier]
+    path: /data/app/~~o8ZslhHzE2xV5BazxKc_7A==/com.google.android.verifier-9QbP8KWUO6nHDsf52RNGBw==/base.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/app/~~o8ZslhHzE2xV5BazxKc_7A==/com.google.android.verifier-9QbP8KWUO6nHDsf52RNGBw==/oat/arm64/base.vdex]
+  [com.google.android.videos]
+    path: /data/app/~~OKHiD74r8M4Vmmk5KyQeEg==/com.google.android.videos-9Ge8LbgtmgHN8wePZgp_hQ==/base.apk
+      arm64: [status=verify] [reason=vdex] [primary-abi]
+        [location is /data/app/~~OKHiD74r8M4Vmmk5KyQeEg==/com.google.android.videos-9Ge8LbgtmgHN8wePZgp_hQ==/oat/arm64/base.vdex]
+  [com.google.android.webview]
+    path: /data/app/~~MjuOuRHiVEevnTwW46TUwg==/com.google.android.webview-td0bFyTvF7EmulJitVzgDw==/base.apk
+      arm64: [status=speed-profile] [reason=install-dm] [primary-abi]
+        [location is /data/app/~~MjuOuRHiVEevnTwW46TUwg==/com.google.android.webview-td0bFyTvF7EmulJitVzgDw==/oat/arm64/base.odex]
+      arm: [status=speed-profile] [reason=install-dm]
+        [location is /data/app/~~MjuOuRHiVEevnTwW46TUwg==/com.google.android.webview-td0bFyTvF7EmulJitVzgDw==/oat/arm/base.odex]
+  [com.sec.android.app.sbrowser]
+    path: /data/app/~~IT5sfph_AF452ZPN-eJsyA==/com.sec.android.app.sbrowser-m-ExOKKr9d8Xz8CirM5Qrg==/base.apk
+      arm64: [status=speed-profile] [reason=profile-utilization] [primary-abi]
+        [location is /data/app/~~IT5sfph_AF452ZPN-eJsyA==/com.sec.android.app.sbrowser-m-ExOKKr9d8Xz8CirM5Qrg==/oat/arm64/base.odex]
+      used by other apps: [com.sec.android.app.sbrowser (isolated) (isa=arm64)]

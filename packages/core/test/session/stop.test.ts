@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { compileStateFields, parseDexoptState } from '../../src/app/dexopt.js'
 import { MeasurementWindowViolationError, SessionStateError } from '../../src/errors.js'
 import type { CaptureManifest } from '../../src/session/manifest.js'
 import { startSession } from '../../src/session/start.js'
@@ -138,6 +139,8 @@ describe('stopSession — 정상 경로', () => {
       // 5) 기기 시계. 마킹을 시계열과 같은 축에 놓는 데 쓴다 (`device/clock.ts`).
       //    트레이서가 멈춘 뒤라 이 명령도 트레이스에 남지 않는다.
       `-s ${SERIAL} shell date +%s%N`,
+      // 6) 끝 컴파일 상태 (BP-1) — 이 한 줄만 늘었다. 그 밖 줄 · 순서는 그대로다.
+      `-s ${SERIAL} shell dumpsys package '${session.packageName}'`,
     ])
   })
 
@@ -374,5 +377,99 @@ describe('stopSession — 프로세스를 넘어온 위반 카운트 (I4)', () =
     expect(runner.commands).toEqual([])
     // 포인터도 살아 있어야 다음 stop 이 같은 세션을 다시 집는다.
     expect(await readActiveSession(SERIAL, home)).not.toBeNull()
+  })
+})
+
+/**
+ * 끝 컴파일 상태 (기능 문서 baseline-profile BP-1 · BP-2 · BP-3). 원문은 실기기 픽스처
+ * (`app/dexopt.test.ts` 머리 주석) — 시작 A1(speed-profile / profile-utilization) · 끝 F3(speed-profile / cmdline).
+ */
+describe('stopSession — 끝 컴파일 상태', () => {
+  const fixture = (name: string): string => readFileSync(join(import.meta.dirname, '..', 'fixtures', name), 'utf8')
+  /** 픽스처는 YouTube 원문이라 패키지 줄만 이 세션의 패키지로 바꾼다. */
+  const dexopt = (name: string, pkg: string): string =>
+    fixture(name).replaceAll('[com.google.android.youtube]', `[${pkg}]`)
+
+  async function startedWith(startFixture: string | null): Promise<{
+    session: Awaited<ReturnType<typeof startSession>>
+    home: string
+  }> {
+    const { home, out } = tempDirs()
+    const app = targetApp()
+    const start = startFixture === null ? {} : compileStateFields('start', parseDexoptState(dexopt(startFixture, app.package), app.package))
+    const session = await startSession({ adb: clientFor(startableDevice()), serial: SERIAL }, targetApp(start), {
+      launch: false,
+      outDir: out,
+      force: false,
+      now: NOW,
+      home,
+    })
+    return { session, home }
+  }
+
+  it('BP-1 끝 상태는 창 닫은 뒤 — 트레이서 정지 · 원본 회수 뒤에 한 줄로 읽어 capture.json 에 쓴다', async () => {
+    const { session, home } = await startedWith('dumpsys-package-dexopt-youtube.txt')
+    const runner = stoppableDevice(session).on(`-s ${SERIAL} shell dumpsys package '${session.packageName}'`, {
+      stdout: dexopt('dumpsys-package-dexopt-restored.txt', session.packageName),
+    })
+    const adb = clientFor(runner)
+    adb.window.open() // start 직후처럼 창이 열린 채로 stop 이 불린다
+
+    await stopSession({ adb, serial: SERIAL }, session, LATER, home)
+
+    const read = runner.commands.indexOf(`-s ${SERIAL} shell dumpsys package '${session.packageName}'`)
+    expect(read, '끝 상태를 읽지 않았다').toBeGreaterThanOrEqual(0)
+    expect(read).toBeGreaterThan(runner.commands.indexOf(`-s ${SERIAL} shell perfetto --attach=${session.perfettoKey} --stop`))
+    expect(read).toBeGreaterThan(runner.commands.findIndex((c) => c.startsWith(`-s ${SERIAL} pull `)))
+    // 창 밖이다 — stop 자신의 명령은 세션 중 호출로 세지 않는다.
+    expect(manifestOf(session.runDir).adb_commands_during_session).toBe(0)
+
+    const app = manifestOf(session.runDir).target_app
+    expect(app.compile_state_end?.map((l) => [l.status, l.reason])).toEqual([
+      ['speed-profile', 'cmdline'],
+      ['verify', 'vdex'],
+      ['run-from-apk', 'unknown'],
+      ['run-from-apk', 'unknown'],
+    ])
+    expect(app.compile_state_end_reason_code).toBeNull()
+    // 시작 상태는 건드리지 않는다.
+    expect(app.compile_state_start?.[0]?.reason).toBe('profile-utilization')
+  })
+
+  it('BP-2 끝 상태를 못 읽으면 null + 코드 — 기기 끊김에도 stop 은 끝난다', async () => {
+    const { session, home } = await startedWith('dumpsys-package-dexopt-youtube.txt')
+    // stoppableDevice 는 dumpsys package 에 응답하지 않는다 → exit 127.
+    const r = await stopSession({ adb: clientFor(stoppableDevice(session)), serial: SERIAL }, session, LATER, home)
+
+    expect(r.state).toBe('completed')
+    const app = manifestOf(session.runDir).target_app
+    expect(app.compile_state_end).toBeNull()
+    expect(app.compile_state_end_reason_code).toBe('dexopt_state_unavailable')
+    expect(app.compile_state_end_reason).toContain('세션 끝')
+    expect(manifestOf(session.runDir).warnings.map((w) => w.code)).not.toContain('compile_state_changed')
+  })
+
+  it('BP-3 상태 바뀜 경고 — stop 이 시작(A1) · 끝(F3)의 base.apk reason 차이를 warnings 에 하나 싣는다', async () => {
+    const { session, home } = await startedWith('dumpsys-package-dexopt-youtube.txt')
+    const runner = stoppableDevice(session).on(`-s ${SERIAL} shell dumpsys package '${session.packageName}'`, {
+      stdout: dexopt('dumpsys-package-dexopt-restored.txt', session.packageName),
+    })
+
+    await stopSession({ adb: clientFor(runner), serial: SERIAL }, session, LATER, home)
+
+    const changed = manifestOf(session.runDir).warnings.filter((w) => w.code === 'compile_state_changed')
+    expect(changed).toHaveLength(1)
+    expect(changed[0]!.message).toContain('reason profile-utilization → cmdline')
+  })
+
+  it('BP-3 상태가 같으면 경고 없음 · 시작 상태 키가 없는 옛 세션도 경고 없음', async () => {
+    for (const start of ['dumpsys-package-dexopt-youtube.txt', null]) {
+      const { session, home } = await startedWith(start)
+      const runner = stoppableDevice(session).on(`-s ${SERIAL} shell dumpsys package '${session.packageName}'`, {
+        stdout: dexopt('dumpsys-package-dexopt-youtube.txt', session.packageName),
+      })
+      await stopSession({ adb: clientFor(runner), serial: SERIAL }, session, LATER, home)
+      expect(manifestOf(session.runDir).warnings.map((w) => w.code), String(start)).not.toContain('compile_state_changed')
+    }
   })
 })

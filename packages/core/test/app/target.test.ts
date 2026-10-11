@@ -1,6 +1,7 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { AdbClient } from '../../src/adb/client.js'
 import { resolveTargetApp } from '../../src/app/target.js'
@@ -104,5 +105,54 @@ describe('resolveTargetApp', () => {
 
     const listCalls = runner.commands.filter((c) => c.includes('pm list packages'))
     expect(listCalls).toEqual(['shell pm list packages -U --show-versioncode'])
+  })
+})
+
+/**
+ * 시작 컴파일 상태 (기능 문서 baseline-profile BP-1). **명령을 늘리지 않는다** — 빌드 속성 다섯을 읽던
+ * 같은 `dumpsys package` 출력에서 읽는다. `start` 전 왕복 하나가 곧 콜드 스타트가 그만큼 늦게 시작된다는 뜻이다.
+ */
+describe('resolveTargetApp — 시작 컴파일 상태', () => {
+  const YT = 'com.google.android.youtube'
+  const DUMPSYS = readFileSync(
+    fileURLToPath(new URL('../fixtures/dumpsys-package-dexopt-youtube.txt', import.meta.url)),
+    'utf8',
+  )
+  const ytDevice = (): FakeProcessRunner =>
+    new FakeProcessRunner()
+      .on('shell pm list packages -U --show-versioncode', {
+        stdout: `${FULL_LIST}package:${YT} versionCode:1561301413 uid:10257\n`,
+      })
+      .on(`shell dumpsys package '${YT}'`, { stdout: DUMPSYS })
+
+  it('BP-1 시작 상태는 같은 dumpsys 출력에서 — 기기 명령 목록 그대로 · dumpsys package 한 번', async () => {
+    const runner = ytDevice()
+    const app = await resolveTargetApp(ctx(runner), YT)
+
+    // 이 기능 전과 같은 목록 — 컴파일 상태 때문에 늘어난 줄이 없다.
+    expect(runner.commands).toEqual([
+      'shell pm list packages -U --show-versioncode',
+      `shell cmd package resolve-activity -c android.intent.category.LAUNCHER '${YT}'`,
+      'shell cmd package query-activities --brief -c android.intent.category.LAUNCHER -a android.intent.action.MAIN',
+      `shell dumpsys package '${YT}'`,
+    ])
+    expect(runner.commands.filter((c) => c.includes('dumpsys package'))).toEqual([`shell dumpsys package '${YT}'`])
+    // 같은 출력에서 빌드 속성도 나온다 — 두 몫이 한 번의 출력을 나눠 읽는다는 증거.
+    expect(app.version_name).toBe('21.40.161')
+    expect(app.compile_state_start?.[0]).toMatchObject({ status: 'speed-profile', reason: 'profile-utilization' })
+    expect(app.compile_state_start).toHaveLength(4)
+    expect(app.compile_state_start_reason_code).toBeNull()
+    expect(app.compile_state_start_reason).toBeNull()
+    // 끝 상태는 stop 몫이다 — 대상 해석은 그 키를 만들지 않는다.
+    expect('compile_state_end' in app).toBe(false)
+  })
+
+  it('BP-2 시작 상태를 못 읽으면 null + 코드 — [] 로 채우지 않는다', async () => {
+    const runner = device('com.nhn.android.webtoon') // dumpsys package 가 `versionName=1.0` 한 줄뿐
+    const app = await resolveTargetApp(ctx(runner), 'com.nhn.android.webtoon')
+
+    expect(app.compile_state_start).toBeNull()
+    expect(app.compile_state_start_reason_code).toBe('dexopt_state_section_missing')
+    expect(app.compile_state_start_reason).toContain('Dexopt state')
   })
 })
