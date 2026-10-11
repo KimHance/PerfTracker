@@ -4,6 +4,12 @@
  *
  * 색은 **계열 구분에만** 쓴다. 빨강/초록으로 좋고 나쁨을 칠하지 않는다 — 이 화면은
  * 판정하지 않는다.
+ *
+ * **글자 바닥** (RR-1 · RR-2 · RR-3 · 결정 8 · 11): 모든 글자 12px 이상 · 표 · 카드 본문 13px 이상 ·
+ * 층은 섹션 제목 18 > 카드 제목 15 > 본문 13. 글자 색은 `--color-neutral-600` 이상(bg 6.13 ·
+ * surface 5.48 · neutral-200 4.84) — `neutral-500` 이하는 그림(띠 · 보조선 · 참고선)에만.
+ * 토큰 값은 고치지 않는다 — 측정 화면이 같은 토큰을 싣는다. 이 파일의 규칙은 전부 `.rp-` 안이라
+ * 측정 화면 글자에 닿지 않는다. 지키는 시험: `packages/gui/test/report-css.test.ts`.
  */
 
 .rp-shell {
@@ -41,7 +47,7 @@
 .rp-brand-2 { font-size: 12px; color: var(--color-neutral-600); margin-top: 2px; }
 
 .rp-tab {
-  font: inherit; font-size: 13.5px; text-align: left; cursor: pointer;
+  font: inherit; font-size: 14px; text-align: left; cursor: pointer;
   display: flex; align-items: center; justify-content: space-between; gap: var(--space-2);
   width: 100%; padding: 8px var(--space-4);
   border: 0; border-left: 2px solid transparent; border-radius: 0 99px 99px 0;
@@ -55,8 +61,8 @@
   color: var(--color-accent-800);
 }
 .rp-tab-count {
-  font-size: 9.5px; padding: 1px 5px; border-radius: 99px;
-  background: var(--color-neutral-200); color: var(--color-neutral-700);
+  font-size: 12px; padding: 1px 5px; border-radius: 99px;
+  background: var(--color-neutral-200); color: var(--color-neutral-800);
 }
 
 /* ── 본문 ──────────────────────────────────────────────────── */
@@ -67,14 +73,14 @@
 .rp-head { padding-bottom: var(--space-4); border-bottom: 1px solid var(--color-divider); }
 .rp-head-top { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
 .rp-sid {
-  font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-700);
+  font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-700);
 }
 .rp-name {
   font-family: var(--font-heading); font-weight: 600;
   font-size: clamp(26px, 3.4vw, 34px); margin: 0; letter-spacing: -0.01em;
 }
 .rp-state {
-  font-family: ui-monospace, Menlo, monospace; font-size: 10px;
+  font-family: ui-monospace, Menlo, monospace; font-size: 12px;
   letter-spacing: 0.1em; text-transform: uppercase;
   padding: 3px 10px; border-radius: 99px; flex: none;
   background: var(--color-neutral-200); color: var(--color-neutral-700);
@@ -91,9 +97,9 @@
 
 .rp-meta {
   display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4);
-  margin-top: var(--space-3); font-size: 12.5px; color: var(--color-neutral-700);
+  margin-top: var(--space-3); font-size: 13px; color: var(--color-neutral-700);
 }
-.rp-meta-item i { font-style: normal; color: var(--color-neutral-500); margin-right: 6px; }
+.rp-meta-item i { font-style: normal; font-size: 12px; color: var(--color-neutral-600); margin-right: 6px; }
 
 /*
  * **스크롤을 따라온다.** 마커는 시계열을 읽는 내내 참조하는 값이라, 화면 위로 사라지면
@@ -107,7 +113,7 @@
   border-top: 1px solid var(--color-divider); border-bottom: 1px solid var(--color-divider);
 }
 .rp-marks-label {
-  font-family: ui-monospace, Menlo, monospace; font-size: 10px;
+  font-family: ui-monospace, Menlo, monospace; font-size: 12px;
   letter-spacing: 0.16em; text-transform: uppercase; color: var(--color-neutral-600);
 }
 /*
@@ -136,7 +142,7 @@
   color: var(--color-accent-800);
 }
 .rp-mark-at {
-  font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--color-neutral-600);
+  font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--color-neutral-600);
 }
 .rp-mark:hover .rp-mark-at { color: var(--color-neutral-800); }
 .rp-mark-on .rp-mark-at { color: var(--color-accent-700); }
@@ -145,8 +151,8 @@
 .rp-section { margin-top: var(--space-4); }
 .rp-section-head {
   display: flex; align-items: center; gap: var(--space-3);
-  font-family: ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 400;
-  letter-spacing: 0.16em; text-transform: uppercase; color: var(--color-neutral-600);
+  font-family: var(--font-heading); font-size: 18px; font-weight: 600;
+  letter-spacing: 0.02em; text-transform: uppercase; color: var(--color-neutral-800);
   margin: 0 0 var(--space-3);
 }
 .rp-section-head i { flex: 1; height: 1px; background: var(--color-divider); }
@@ -176,40 +182,48 @@
   border-radius: var(--radius-md); padding: var(--space-3); min-width: 0;
 }
 .rp-card-head { display: flex; align-items: baseline; gap: var(--space-2); margin-bottom: var(--space-2); }
-.rp-card-title { font-family: var(--font-heading); font-weight: 600; font-size: 12.5px; margin: 0; }
-.rp-card-unit { font-size: 10px; color: var(--color-neutral-500); }
+.rp-card-title { font-family: var(--font-heading); font-weight: 600; font-size: 15px; margin: 0; }
+.rp-card-unit { font-size: 12px; color: var(--color-neutral-600); }
 .rp-badge {
-  font-family: ui-monospace, Menlo, monospace; font-size: 9.5px;
+  font-family: ui-monospace, Menlo, monospace; font-size: 12px;
   letter-spacing: 0.08em; text-transform: uppercase;
   padding: 2px 8px; border-radius: 99px; flex: none; white-space: nowrap;
   background: var(--color-neutral-200); color: var(--color-neutral-800);
 }
 
-.rp-readout { font-size: 11px; margin: -2px 0 var(--space-2); color: var(--color-neutral-700); }
+.rp-readout { font-size: 12px; margin: -2px 0 var(--space-2); color: var(--color-neutral-700); }
 .rp-readout-value { font-weight: 600; color: var(--color-accent-700); }
-.rp-readout-nosample { color: var(--color-neutral-500); }
+.rp-readout-nosample { color: var(--color-neutral-600); }
 
-.rp-none { font-size: 11.5px; color: var(--color-neutral-700); padding: var(--space-2) 0; }
+.rp-none { font-size: 13px; color: var(--color-neutral-700); padding: var(--space-2) 0; }
 .rp-none-code {
   display: block; margin-top: 6px;
-  font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--color-neutral-500);
+  font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--color-neutral-600);
 }
-.rp-footnote { font-size: 10.5px; color: var(--color-neutral-600); margin: var(--space-2) 0 0; }
+.rp-footnote { font-size: 12px; color: var(--color-neutral-600); margin: var(--space-2) 0 0; }
 
 /* ── 차트 ──────────────────────────────────────────────────── */
 .rp-gridline { stroke: var(--color-divider); stroke-width: 0.6; }
 .rp-axis { stroke: var(--color-neutral-400); stroke-width: 0.8; }
 /*
  * SVG 안의 글자는 viewBox 배율만큼 커진다. 분포는 컨테이너 폭을 그대로 viewBox 로 쓰므로
- * 1배지만, **시계열은 viewBox 가 300 고정**이라 카드 폭 420px 에서 1.4배가 된다 —
- * 같은 12px 이 한쪽은 12px, 한쪽은 17px 로 보인다. 그래서 시계열만 따로 줄인다.
+ * 1배지만, **시계열은 viewBox 가 300 고정**이라 카드 폭만큼 커진다 (390 ≈ 1.1배 · 1440 ≈ 1.2배).
+ * 줄이지 않는다 — 12 단위면 RR-1 이 재는 폭에서 렌더 12px 이상이다 (390 ≈ 13.1 · 1440 ≈ 14.8 · 결정 13:
+ * 렌더 상자로 잰다). 카드가 viewBox 보다 좁아지는 ≈ 362px 미만 창에서는 12 아래다 (360 ≈ 11.9 — 측정 폭 밖).
  */
 .rp-tick {
-  fill: var(--color-neutral-700); font-size: 11px;
+  fill: var(--color-neutral-700); font-size: 12px;
   font-family: ui-monospace, Menlo, monospace;
 }
-.rp-series .rp-tick { font-size: 8.5px; }
-.rp-tick-dim { fill: var(--color-neutral-500); font-size: 10px; }
+.rp-series .rp-tick { font-size: 12px; }
+.rp-tick-dim { fill: var(--color-neutral-600); font-size: 12px; }
+/*
+ * 분포 viewBox 는 최소 360 이다 (`blocks.ts` 의 `Math.max(360, width)`) — 그보다 좁은 카드(≈ 422px 미만 창)에서는
+ * 줄어 그려져 12 단위 눈금이 390 에서 10.9px 가 된다. 그 폭에서만 단위를 키워 렌더 12px 이상을 지킨다
+ * (390 ≈ 12.7 · 375 ≈ 12.1). 그보다 좁으면 다시 12 아래다 (360 ≈ 11.5 — RR-1 측정 폭 1440 · 390 밖).
+ * viewBox 가 잰 폭을 그대로 쓰게 되면 이 규칙은 지운다.
+ */
+@media (max-width: 422px) { .rp-dist .rp-tick { font-size: 14px; } }
 
 .rp-line { fill: none; stroke: var(--color-accent); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
 .rp-subline { fill: none; stroke: var(--color-neutral-500); stroke-width: 1.1; stroke-dasharray: 3 3; }
@@ -219,7 +233,9 @@
 .rp-markline { stroke: var(--color-neutral-600); stroke-width: 1; stroke-dasharray: 2 3; }
 .rp-cursor { stroke: var(--color-accent); stroke-width: 1; }
 .rp-cursor-dot { fill: var(--color-bg); stroke: var(--color-accent); stroke-width: 2; }
-.rp-series { display: block; }
+/* 왼쪽 여백(`SPAD.l`)이 12 단위 눈금 `3,000` 보다 좁다 — 잘리면 `,000` 이 다른 값으로 읽힌다.
+   카드 안쪽 여백으로 흘러 나가게 둔다 (여백을 넓히는 것은 `blocks.ts` 몫). */
+.rp-series { display: block; overflow: visible; }
 
 .rp-dist { display: block; }
 .rp-bar { fill: var(--color-accent); }
@@ -241,7 +257,7 @@
 
 .rp-ftl-legend {
   display: flex; flex-wrap: wrap; gap: var(--space-3);
-  margin-bottom: var(--space-2); font-size: 11px; color: var(--color-neutral-700);
+  margin-bottom: var(--space-2); font-size: 12px; color: var(--color-neutral-700);
 }
 .rp-ftl-key { display: inline-flex; align-items: center; gap: 5px; }
 .rp-ftl-sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
@@ -252,14 +268,14 @@
 
 .rp-pcts { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-bottom: var(--space-2); }
 .rp-pct-k {
-  display: block; font-family: ui-monospace, Menlo, monospace; font-size: 10px;
+  display: block; font-family: ui-monospace, Menlo, monospace; font-size: 12px;
   letter-spacing: 0.12em; color: var(--color-neutral-600);
 }
 .rp-pct b {
-  font-family: var(--font-heading); font-size: clamp(15px, 1.3vw, 18px); font-weight: 600;
+  font-family: var(--font-heading); font-size: clamp(18px, 1.4vw, 22px); font-weight: 600;
   letter-spacing: 0.01em;
 }
-.rp-pct-u { font-size: 11px; font-weight: 400; color: var(--color-neutral-600); margin-left: 3px; }
+.rp-pct-u { font-size: 12px; font-weight: 400; color: var(--color-neutral-600); margin-left: 3px; }
 /* 백분위(ms)와 마감 비율(%)은 다른 것이다 — 같은 줄에 두되 눈으로 갈린다. */
 .rp-pct-sep { padding-left: var(--space-4); border-left: 1px solid var(--color-border); }
 
@@ -270,17 +286,17 @@
  * 섞여 5.2 를 값으로 읽는 일이 생겼다. 크기·색·자리를 전부 다르게 해서 갈라 놓는다.
  */
 .rp-share {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-neutral-600);
   text-align: right;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.rp-card-alt .rp-share { color: var(--color-alt-400); }
+.rp-card-alt .rp-share { color: var(--color-neutral-600); }
 .rp-table td.rp-share { width: 1%; padding-left: var(--space-3); }
 .rp-bar-row {
   display: grid; grid-template-columns: minmax(72px, auto) minmax(24px, 1fr) 52px 44px;
-  align-items: center; gap: var(--space-2); font-size: 11.5px;
+  align-items: center; gap: var(--space-2); font-size: 13px;
 }
 .rp-bar-label { color: var(--color-neutral-700); }
 .rp-bar-track {
@@ -290,22 +306,32 @@
 .rp-bar-value { text-align: right; color: var(--color-neutral-800); }
 
 /* ── 표 ────────────────────────────────────────────────────── */
-.rp-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.rp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+/*
+ * 라벨 · 값은 줄바꿈한다 — 13px 에서 `target_process_slice_names_unfolded` 같은 경로 라벨이나 공백 없는
+ * 긴 값(dex 경로)이 한 줄이면 표가 카드 밖으로 밀어 페이지가 옆으로 넘친다 (1440 · 390 넘침 0 그대로).
+ * `anywhere` 는 다른 줄바꿈 기회(공백 · `<wbr>`)가 없을 때만 토막 안에서 끊는다. 키/값 표는 라벨 열에
+ * 45% 를 잡아 둔다 — 안 잡으면 긴 값이 폭을 다 가져가 라벨이 한 글자씩 선다. 전/후 · slice 표는 열 폭을
+ * 따로 정하므로 빼놓는다. **특정도는 `th` 하나(0,0,1)** — `:where()` 로 낮춰, 다른 표(진단 dex 표 같은)가
+ * 자기 클래스로 `width` · `vertical-align` 을 정하면 그쪽이 이긴다.
+ */
 .rp-table th {
-  text-align: left; font-weight: 400; color: var(--color-neutral-600);
-  padding: 4px 0; border-bottom: 1px solid var(--color-divider); white-space: nowrap;
+  text-align: left; font-weight: 400; color: var(--color-neutral-700);
+  padding: 4px var(--space-3) 4px 0; border-bottom: 1px solid var(--color-divider);
+  white-space: normal; overflow-wrap: anywhere;
 }
+:where(.rp-table:not(.rp-delta):not(.rp-slice)) th { width: 45%; vertical-align: top; }
 .rp-table td {
   padding: 4px 0; border-bottom: 1px solid var(--color-divider);
-  text-align: right; color: var(--color-neutral-800);
+  text-align: right; color: var(--color-neutral-800); overflow-wrap: anywhere;
 }
 .rp-table tr:last-child th, .rp-table tr:last-child td { border-bottom: 0; }
 .rp-wrap { word-break: break-all; }
 /* 기계값(원본 경로). 자르지 않고 줄바꿈한다 — 경로 끝(파일 이름)이 가장 쓸모 있다. */
-.rp-table td.rp-path { font-size: 11px; }
+.rp-table td.rp-path { font-family: var(--font-mono); font-size: 13px; }
 .rp-table td .rp-none-code { margin-top: 2px; }
 .rp-delta .rp-before { color: var(--color-neutral-700); }
-.rp-delta .rp-arrow { text-align: center; color: var(--color-neutral-500); width: 24px; }
+.rp-delta .rp-arrow { text-align: center; color: var(--color-neutral-600); width: 24px; }
 /* 차이. 판정이 아니라 세 번째 숫자라 색으로 좋고 나쁨을 말하지 않는다 (규칙 2) —
    증감을 빨강/초록으로 칠하면 온도가 내려간 것이 "좋다" 가 된다. */
 .rp-delta .rp-delta-v {
@@ -349,7 +375,7 @@
 .rp-slice-name-h { z-index: 3 !important; }
 .rp-slice .rp-slice-name {
   z-index: 1;
-  font-family: var(--font-mono); font-size: 11px; font-weight: 400;
+  font-family: var(--font-mono); font-size: 13px; font-weight: 400;
   text-align: left; color: var(--color-neutral-800);
   white-space: normal; overflow-wrap: anywhere; word-break: normal;
 }
@@ -374,14 +400,14 @@
 }
 
 /* ── stat ──────────────────────────────────────────────────── */
-.rp-stat-title { font-size: 11px; color: var(--color-neutral-600); }
+.rp-stat-title { font-size: 13px; color: var(--color-neutral-700); }
 .rp-stat-value {
   font-family: var(--font-heading); font-size: clamp(17px, 1.5vw, 21px); font-weight: 600;
   letter-spacing: 0.01em; line-height: 1.1; margin-top: 2px; white-space: nowrap;
 }
-.rp-stat-dim { font-size: 16px; color: var(--color-neutral-500); }
+.rp-stat-dim { font-size: 16px; color: var(--color-neutral-600); }
 .rp-stat-unit { font-size: 12px; font-weight: 400; color: var(--color-neutral-600); margin-left: 4px; }
-.rp-stat-sub { font-size: 10.5px; color: var(--color-neutral-600); margin-top: 4px; }
+.rp-stat-sub { font-size: 13px; color: var(--color-neutral-800); margin-top: 4px; }
 /* ── 기준선 막대 ────────────────────────────────────────────
    이 화면에서 **색이 좋고 나쁨을 말하는 유일한 자리**다 (규칙 2 의 의도적 예외).
    경계는 구글이 정한 것을 옮겨 적었고 그 출처가 축 라벨 툴팁에 있다.
@@ -394,7 +420,7 @@
 .rp-gauge-fill { height: 100%; border-radius: 3px; min-width: 2px; }
 .rp-gauge-axis {
   display: flex; justify-content: space-between; margin-top: 4px;
-  font-size: 10px; color: var(--color-neutral-600);
+  font-size: 12px; color: var(--color-neutral-600);
 }
 /* 채도를 낮춰 화면의 나머지(청색 계열)와 같은 온도로 둔다. 신호는 색상(hue)이 준다. */
 .rp-gauge-l0 { background: #6f9e7a; }
@@ -413,7 +439,7 @@
 
 /* 값이 없는 이유(reason_code). 스키마 식별자라 본문 글꼴이 아니라 등폭으로 쓴다. */
 .rp-stat-why {
-  font-family: ui-monospace, Menlo, monospace; font-size: 10.5px;
+  font-family: ui-monospace, Menlo, monospace; font-size: 12px;
   color: var(--color-neutral-600); margin-top: 5px;
 }
 
@@ -424,27 +450,28 @@
   box-shadow: var(--shadow-md); padding: 8px 11px;
   border-radius: var(--radius-md); min-width: 150px;
 }
-.rp-tip-head { font-size: 11px; color: var(--color-neutral-600); }
+.rp-tip-head { font-size: 12px; color: var(--color-neutral-600); }
 .rp-tip-value { font-size: 16px; font-weight: 600; margin-top: 2px; }
-.rp-tip-sub { font-size: 11.5px; color: var(--color-neutral-700); margin-top: 2px; }
+.rp-tip-sub { font-size: 12px; color: var(--color-neutral-700); margin-top: 2px; }
 
 .rp-footer {
   display: flex; flex-wrap: wrap; gap: var(--space-4);
   margin-top: var(--space-8); padding-top: var(--space-4);
   border-top: 1px solid var(--color-divider);
-  font-size: 11px; color: var(--color-neutral-500);
+  font-size: 12px; color: var(--color-neutral-600);
 }
 .rp-footer-warn { color: var(--color-accent-700); }
 
 /*
  * 두 번째 계열색. **경고가 아니라 구분이다** — 이 화면은 판정하지 않으므로 색으로 좋고
  * 나쁨을 말하지 않는다. 지금 쓰는 곳은 프레임 꼬리표 하나이고, 그것이 우리가 계산한 값이
- * 아니라 기기가 붙여 둔 것이라는 표시다.
+ * 아니라 기기가 붙여 둔 것이라는 표시다. **계열색은 막대에만** — 제목 · 값 · 비율 글자는 다른 카드와
+ * 같은 중립 토큰이다 (RR-5 · 결정 6). 글자까지 칠하면 이 카드만 눈에 걸려 색이 순서가 된다.
  */
 .rp-card-alt .rp-bar-track i { background: var(--color-alt-500); }
-.rp-card-alt .rp-bar-value { color: var(--color-alt-700); }
-.rp-card-alt .rp-card-title { color: var(--color-alt-700); }
-.rp-card-alt .rp-table td.num { color: var(--color-alt-700); }
+.rp-card-alt .rp-bar-value { color: var(--color-neutral-800); }
+.rp-card-alt .rp-card-title { color: var(--color-text); }
+.rp-card-alt .rp-table td.num { color: var(--color-neutral-800); }
 
 /* 섹션 설명. 값이 아니라 **읽는 법**이라 카드 밖, 제목 바로 아래에 둔다. */
 .rp-section-note {
