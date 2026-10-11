@@ -20,6 +20,7 @@ import {
 import { INLINE_REPORT_GLOBAL } from '../src/contract/api.js'
 import { computeMaxT, type Mark, readMarks } from '../src/web/report/axis.js'
 import { Tiles } from '../src/web/report/Charts.jsx'
+import { DexStatesBody } from '../src/web/report/DexStates.jsx'
 import { ReportPage } from '../src/web/report/ReportPage.jsx'
 import {
   badgeOf,
@@ -29,6 +30,7 @@ import {
   buildDelta,
   buildDexStates,
   buildDistribution,
+  commandParts,
   buildFrameTimeline,
   buildPairs,
   buildSeries,
@@ -2514,6 +2516,7 @@ describe('BP-8 컴파일 상태 카드 (dexstates)', () => {
         if (row.cells !== null) for (const c of vm.cols) if (c.path !== undefined) out.add(c.path)
         if (row.location !== undefined) out.add(vm.locationLabel!.path)
       }
+      if (l.location !== undefined) out.add(vm.locationLabel!.path)
     }
     if (buildHeader(doc).meta.find((m) => m.k === '옵션')!.v.includes('--compile ')) out.add('options.compile')
     return out
@@ -2549,16 +2552,19 @@ describe('BP-8 컴파일 상태 카드 (dexstates)', () => {
     // 기기 순서 · 끝에만 있는 보조 dex 는 뒤.
     expect(vm.lines.map((l) => l.head)).toEqual([APK, PCAM, QDEX])
     const [apk, , q] = vm.lines
+    // 때마다 같은 위치 — 줄에 한 번 (B42 · 아래 시험) · 때 행에는 없다.
+    expect(apk!.location).toBe(ODEX)
     expect(apk!.rows.map((r) => [r.when, r.cells, r.location])).toEqual([
-      ['바꾸기 전', ['speed-profile', 'profile-utilization'], ODEX],
-      ['시작', ['speed', 'cmdline'], ODEX],
-      ['끝', ['speed', 'bg-dexopt'], ODEX],
+      ['바꾸기 전', ['speed-profile', 'profile-utilization'], undefined],
+      ['시작', ['speed', 'cmdline'], undefined],
+      ['끝', ['speed', 'bg-dexopt'], undefined],
     ])
-    // 끝에만 있는 줄 — 앞 두 때는 `줄 없음`(cells null · 위치 행 없음) · location null 은 `값 없음`.
+    // 끝에만 있는 줄 — 앞 두 때는 `줄 없음`(cells null) · 있는 때가 하나라 위치도 한 번 · location null 은 `값 없음`.
+    expect(q!.location).toBe(NONE_NULL)
     expect(q!.rows.map((r) => [r.when, r.cells, r.location])).toEqual([
       ['바꾸기 전', null, undefined],
       ['시작', null, undefined],
-      ['끝', ['run-from-apk', 'unknown'], NONE_NULL],
+      ['끝', ['run-from-apk', 'unknown'], undefined],
     ])
     expect(vm.lineMissing).toBe('줄 없음')
     // 머리 행 2 — 필드 이름 그대로 · 참 거짓은 기존 bool 모양.
@@ -2639,11 +2645,26 @@ describe('BP-8 컴파일 상태 카드 (dexstates)', () => {
     const vm = asVm(compileDoc())
     expect(Object.keys(vm).sort()).toEqual(['cols', 'lineMissing', 'lines', 'locationLabel', 'records'])
     const recKeys = new Set(vm.records.flatMap((r) => Object.keys(r)))
-    expect([...recKeys].sort()).toEqual(['mono', 'path', 'value', 'word', 'wrap'])
+    expect([...recKeys].sort()).toEqual(['mono', 'parts', 'path', 'value', 'word', 'wrap'])
     for (const l of vm.lines) {
-      expect(Object.keys(l).sort()).toEqual(['fields', 'head', 'rows'])
+      for (const k of Object.keys(l)) expect(['fields', 'head', 'location', 'rows']).toContain(k)
       for (const r of l.rows) for (const k of Object.keys(r)) expect(['when', 'cells', 'location']).toContain(k)
     }
+    // **값을 바꿔 그려도 마크업이 같다** — 두 줄의 status 를 서로 바꾼 문서. 글자를 지우면 두 표가 한 글자도 안 다르다:
+    // 값에 따라 클래스 · 속성 · 태그가 바뀌는 길이 없다 (결정 6 · 같은 색 · 굵기 · 등폭).
+    const swapped = compileDoc()
+    const st = swapped['target_app']['compile_state_start'] as Record<string, unknown>[]
+    ;[st[0]!['status'], st[1]!['status']] = [st[1]!['status'], st[0]!['status']]
+    const bare = (doc: unknown): string =>
+      renderToStaticMarkup(createElement(DexStatesBody, { vm: buildDexStates(APP_CARD, doc) as DexStatesVm }))
+        .replace(/>[^<]*</g, '><')
+    expect(bare(swapped)).toBe(bare(compileDoc()))
+    expect(st.map((x) => x['status'])).toEqual(['verify', 'speed'])
+    // 값 칸은 모두 같은 클래스 하나 — `mono rp-dex-v`. `줄 없음` 칸은 클래스가 없다.
+    const raw = renderToStaticMarkup(createElement(DexStatesBody, { vm }))
+    const valueTds = [...raw.matchAll(/<tr class="rp-dex-row">(.*?)<\/tr>/g)].flatMap((m) => [...m[1]!.matchAll(/<td( class="[^"]*")?/g)].map((t) => t[1] ?? ''))
+    expect(valueTds.length).toBeGreaterThan(10)
+    expect([...new Set(valueTds)].sort()).toEqual(['', ' class="mono rp-dex-v"'])
     // 렌더 — 표 안 클래스가 모양 클래스뿐이고(값에 따라 갈리는 클래스 0) 굵게 · 인라인 색 0.
     const g = globalThis as Record<string, unknown>
     const before = g[INLINE_REPORT_GLOBAL]
@@ -2655,8 +2676,8 @@ describe('BP-8 컴파일 상태 카드 (dexstates)', () => {
       expect(dex.length).toBeGreaterThan(0)
       const classes = new Set([...dex.matchAll(/class="([^"]+)"/g)].flatMap((m) => m[1]!.split(' ')))
       expect([...classes].sort()).toEqual([
-        'mono', 'rp-dex', 'rp-dex-head', 'rp-dex-k', 'rp-dex-kv', 'rp-dex-kvs', 'rp-dex-loc', 'rp-dex-row',
-        'rp-dex-v', 'rp-dex-val', 'rp-dex-when', 'rp-lbl', 'rp-lbl-path', 'rp-table',
+        'mono', 'rp-dex', 'rp-dex-head', 'rp-dex-k', 'rp-dex-kv', 'rp-dex-kvs', 'rp-dex-loc', 'rp-dex-loc-one',
+        'rp-dex-row', 'rp-dex-v', 'rp-dex-val', 'rp-dex-w', 'rp-dex-when', 'rp-lbl', 'rp-lbl-path', 'rp-table',
       ])
       expect(dex).not.toMatch(/<b>|<strong>|style=/)
       // 보이는 낱말 — 옵션 · 제목 · 줄 없음 · 필드 이름.
@@ -2736,5 +2757,124 @@ describe('BP-8 진단 ART 칸', () => {
     // 켠 카테고리에 dalvik — 데이터 그대로 (BP-7).
     const scope = DIAG_BLOCKS.find((b): b is PairsBlock => b.kind === 'pairs' && b.title === '기록 범위')!
     expect((buildPairs(scope, diagDoc('collected')) as PairsVm).rows[0]!.value).toBe('am · wm · view · dalvik')
+  })
+})
+
+/* ══════════════════ bp-gui-report 검수 왕복 1 — 위치 한 번 (B42) · 깃발 토큰 (B40) · 렌더 결과 ══════════════════ */
+
+/** 문서 하나를 화면 전체로 그린다 — 첫 탭을 고를 수 있다 (진단 카드는 진단 탭에만 그려진다). */
+const renderDoc = (doc: unknown, initialTab: 'summary' | 'device' | 'diagnose' = 'summary'): string => {
+  const g = globalThis as Record<string, unknown>
+  const before = g[INLINE_REPORT_GLOBAL]
+  try {
+    g[INLINE_REPORT_GLOBAL] = doc
+    return renderToStaticMarkup(createElement(ReportPage, { runId: 'x', initialTab }))
+  } finally {
+    g[INLINE_REPORT_GLOBAL] = before
+  }
+}
+/** 속성 값의 React 이스케이프와 같은 꼴. */
+const attr = (s: string): string => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+/** 제목이 `title` 인 카드의 마크업 하나. */
+const cardHtml = (html: string, title: string): string => {
+  const at = html.indexOf(`>${title}</h3>`)
+  expect(at, title).toBeGreaterThan(0)
+  const start = html.lastIndexOf('<section class="rp-card', at)
+  return html.slice(start, html.indexOf('</section>', at))
+}
+
+describe('B42 위치 행 — 때마다 같으면 한 번', () => {
+  const line = (before: unknown, start: unknown, end: unknown) => {
+    const doc = compileDoc()
+    const at = (loc: unknown) => dex({ location: loc })
+    doc['session']['compile']['compile_state_before'] = [at(before)]
+    doc['target_app']['compile_state_start'] = [at(start)]
+    doc['target_app']['compile_state_end'] = [at(end)]
+    return (buildDexStates(APP_CARD, doc) as DexStatesVm).lines[0]!
+  }
+
+  it('B42 셋 같음 — 머리 행 아래 한 번 · 때 행엔 없음 · 한 줄 라벨', () => {
+    const l = line(ODEX, ODEX, ODEX)
+    expect(l.location).toBe(ODEX)
+    expect(l.rows.map((r) => r.location)).toEqual([undefined, undefined, undefined])
+    // 렌더 — 머리 행 바로 다음이 한 줄 위치 행 하나 · 두 줄 라벨 위치 행은 없다.
+    const html = renderToStaticMarkup(createElement(DexStatesBody, { vm: buildDexStates(APP_CARD, compileDoc()) as DexStatesVm }))
+    const lines = (buildDexStates(APP_CARD, compileDoc()) as DexStatesVm).lines.length
+    expect(html.match(/<tr class="rp-dex-loc rp-dex-loc-one">/g)?.length).toBe(lines)
+    expect(html).not.toMatch(/<tr class="rp-dex-loc">/)
+    expect(html).toMatch(/<\/tr><tr class="rp-dex-loc rp-dex-loc-one"><td colSpan="3"><span class="rp-dex-w">파일 위치<\/span> <span class="rp-dex-k">location<\/span> /)
+    // 그 줄의 원문 위치 (구분자 뒤 `<wbr>` 를 지우면 글자 그대로).
+    expect(html.split('rp-dex-loc-one')[1]!.split('</tr>')[0]!.replace(/<[^>]+>/g, '')).toBe(`">파일 위치 location ${ODEX}`)
+  })
+
+  it('B42 하나 다름 — 때마다 전부 · 같은 때도 그대로 (다른 칸만 고르지 않음) · 글자 그대로 비교', () => {
+    const l = line(ODEX, 'error', ODEX)
+    expect(l.location).toBeUndefined()
+    expect(l.rows.map((r) => r.location)).toEqual([ODEX, 'error', ODEX])
+    // 뒤 공백 하나도 다른 글자다 — 고르지 않는다 (추측 0).
+    expect(line(ODEX, `${ODEX} `, ODEX).location).toBeUndefined()
+  })
+
+  it('B42 null 섞임 — null 은 null 끼리만 같음', () => {
+    const mixed = line(null, ODEX, ODEX)
+    expect(mixed.location).toBeUndefined()
+    expect(mixed.rows.map((r) => r.location)).toEqual([NONE_NULL, ODEX, ODEX])
+    const all = line(null, null, null)
+    expect(all.location).toBe(NONE_NULL)
+    expect(all.rows.map((r) => r.location)).toEqual([undefined, undefined, undefined])
+  })
+})
+
+describe('B40 보낸 명령 깃발 토큰', () => {
+  const CMD = 'cmd package compile -m speed -f com.google.android.youtube'
+
+  it('B40 깃발 토큰은 통째 · 나머지는 구분자 줄바꿈 · 이어 붙이면 원문', () => {
+    const parts = commandParts(CMD)
+    expect(parts.map((p) => p.text).join('')).toBe(CMD)
+    expect(parts.filter((p) => p.keep).map((p) => p.text)).toEqual(['-m', '-f'])
+    expect(commandParts('cmd package compile --reset  pkg').map((p) => p.text).join('')).toBe('cmd package compile --reset  pkg')
+  })
+
+  it('B40 렌더 — 깃발은 nowrap 상자 · 글자를 지우거나 더하지 않음', () => {
+    const vm = buildDexStates(APP_CARD, compileDoc()) as DexStatesVm
+    expect(vm.records[1]!.parts?.map((p) => p.text).join('')).toBe(CMD)
+    const html = renderToStaticMarkup(createElement(DexStatesBody, { vm }))
+    expect(html).toContain('<span class="rp-nobr">-m</span>')
+    expect(html).toContain('<span class="rp-nobr">-f</span>')
+    const cell = /<span class="rp-wrap-in">(.*?)<\/span><\/td>/.exec(html)![1]!
+    expect(cell.replace(/<[^>]+>/g, '')).toBe(CMD)
+  })
+})
+
+describe('BP-8 렌더 결과 — 코드 · title · 진단 카드', () => {
+  it('BP-8 기록 칸 — 끝 값 없음 옆 코드 · 행 title 이 그려진다', () => {
+    const doc = withCompileState(withFrame(), [BASE_SP, PCAM_V], null)
+    const card = cardHtml(renderDoc(doc), '컴파일 상태 (전 → 후)')
+    expect(card).toContain(`<tr title="${attr('아직 stop 하지 않은 세션 — 세션 끝 컴파일 상태를 읽지 않음')}">`)
+    expect(card).toContain('<code class="rp-none-code">dexopt_state_unavailable</code>')
+  })
+
+  it('BP-8 진단 컴파일 상태 slice null — 화면에 칸의 코드 · 제목 title (cardState)', () => {
+    const doc = diagDoc('dalvik-off')
+    const reason = (doc['diagnose'] as Record<string, unknown>)['target_process_compile_state_slices_reason'] as string
+    const card = cardHtml(renderDoc(doc, 'diagnose'), '컴파일 상태 slice')
+    expect(card).toContain('<code class="rp-none-code">dalvik_not_recorded</code>')
+    expect(card).toContain(`<h3 class="rp-card-title" title="${attr(reason)}">컴파일 상태 slice</h3>`)
+    // 배지는 껍데기 그대로 — collected 라 없다.
+    expect(card).not.toContain('rp-badge')
+  })
+
+  it('BP-8 진단 컴파일 상태 slice — 값을 바꿔 그려도 마크업이 같고 값 칸 클래스는 하나', () => {
+    const a = diagDoc('collected')
+    const b = diagDoc('collected') as Record<string, any>
+    const sl = b['diagnose']['target_process_compile_state_slices'] as Record<string, unknown>[]
+    ;[sl[0]!['filter'], sl[1]!['filter']] = [sl[1]!['filter'], sl[0]!['filter']]
+    ;[sl[0]!['status'], sl[1]!['status']] = ['stale', sl[0]!['status']]
+    const bare = (doc: unknown): string => cardHtml(renderDoc(doc, 'diagnose'), '컴파일 상태 slice').replace(/>[^<]*</g, '><')
+    expect(bare(b)).toBe(bare(a))
+    const card = cardHtml(renderDoc(a, 'diagnose'), '컴파일 상태 slice')
+    const tds = [...card.matchAll(/<tr class="rp-dex-row">(.*?)<\/tr>/g)].flatMap((m) => [...m[1]!.matchAll(/<td class="([^"]*)"/g)].map((t) => t[1]))
+    expect(tds.length).toBe(COMPILE_STATES.length * 2)
+    expect([...new Set(tds)]).toEqual(['mono rp-dex-v'])
   })
 })

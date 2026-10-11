@@ -1007,6 +1007,11 @@ export interface DexRecordVm {
   mono: boolean
   /** 구분자 뒤 줄바꿈 (`<wbr>`) — 보낸 명령 원문. */
   wrap: boolean
+  /**
+   * 보낸 명령을 공백으로 나눈 토막 — `keep` 이면 그 토막 안에서 줄을 바꾸지 않는다 (깃발 `-m` · `-f` · plan B40).
+   * 이어 붙이면 `value` 그대로 (글자를 넣지도 빼지도 않는다). 명령 칸에만 있다.
+   */
+  parts?: CommandPart[]
   code?: string
   title?: string
 }
@@ -1016,7 +1021,10 @@ export interface DexRowVm {
   /** 때 단어 (`바꾸기 전` · `시작` · `끝`). 진단 slice 는 때가 없다. */
   when?: string
   cells: string[] | null
-  /** 위치 행 — 원문 그대로 · `null` 이면 `값 없음`. 진단 slice 와 `줄 없음` 에는 없다. */
+  /**
+   * 위치 행 — 원문 그대로 · `null` 이면 `값 없음`. 진단 slice · `줄 없음` · **위치가 줄에 한 번 선 때**(아래
+   * `DexLineVm.location`)에는 없다.
+   */
   location?: string
 }
 
@@ -1025,6 +1033,11 @@ export interface DexLineVm {
   head: string
   /** 머리 행 2. `word` 가 있으면 단어 줄을 이름 앞에 (진단 `oat 파일 상태`). */
   fields: { word?: string; name: string; value: string }[]
+  /**
+   * 그 줄이 있는 때의 위치가 **글자 그대로 모두 같으면** 그 위치 하나 — 머리 행 아래 한 번 · 한 줄 라벨로 선다
+   * (plan B42). 하나라도 다르면 없고 때 행마다 `location` 이 선다. 진단 slice 에는 없다.
+   */
+  location?: string
   rows: DexRowVm[]
 }
 
@@ -1040,6 +1053,22 @@ export interface DexStatesVm {
   lines: DexLineVm[]
   /** 줄 없음 글자 — 렌더러가 칸 자리에 찍는다. */
   lineMissing: string
+}
+
+/** 보낸 명령의 토막 하나 — 공백 덩어리도 토막이다 (이어 붙이면 원문). */
+export interface CommandPart {
+  text: string
+  /** 그 안에서 줄을 바꾸지 않는다 — `-` 로 시작하는 깃발 토큰 (`-m` · `-f` · `--reset`). */
+  keep: boolean
+}
+
+/**
+ * **보낸 명령을 토막 낸다** (plan B40). 브라우저는 하이픈 뒤에서도 줄을 바꿔 390 에서 `-m` 이 `-` / `m` 으로
+ * 갈렸다 — 깃발이 떨어지면 명령을 잘못 읽는다. 공백으로 나눈 토큰 가운데 `-` 로 시작하는 것만 통째로 두고, 나머지는
+ * 구분자 뒤 `<wbr>` 그대로(긴 패키지 이름이 칸 안에서 끊기게). 글자는 하나도 바꾸지 않는다.
+ */
+export function commandParts(s: string): CommandPart[] {
+  return s.split(/(\s+)/).filter((t) => t !== '').map((text) => ({ text, keep: text.startsWith('-') }))
 }
 
 /** dex 줄 원소에서 칸 하나를 문자열로 — 없는 칸 · `null` 도 그 말 그대로 (`fmtValue`). */
@@ -1103,7 +1132,9 @@ function buildDexWhen(b: DexStatesWhenBlock, res: unknown): DexStatesVm | NoneVm
     for (const f of b.record.fields) {
       const v = readPath(rec, f.field)
       const present = v !== MISSING && v !== null
-      records.push({ word: f.word, path: f.field, value: fmtValue(v, f.fmt), mono: present && f.mono === true, wrap: present && f.fmt === 'wrap' })
+      const row: DexRecordVm = { word: f.word, path: f.field, value: fmtValue(v, f.fmt), mono: present && f.mono === true, wrap: present && f.fmt === 'wrap' }
+      if (row.wrap) row.parts = commandParts(row.value)
+      records.push(row)
     }
   }
 
@@ -1145,21 +1176,29 @@ function buildDexWhen(b: DexStatesWhenBlock, res: unknown): DexStatesVm | NoneVm
     records,
     cols: [{ word: b.cols.when }, b.cols.status, b.cols.reason],
     locationLabel: b.cols.location,
-    lines: order.map((k) => {
+    lines: order.map((k): DexLineVm => {
       const head = first.get(k)!
-      return {
+      const at = live.map((t) => t.rows.find((x) => key(x) === k))
+      // 위치가 같은가 — 그 줄이 있는 때끼리 **원문 그대로** 비교한다 (`null` 은 `null` 끼리 · 필드 없음은 없음끼리 ·
+      // 공백 · 대소문자를 고르지 않는다). 하나라도 다르면 때마다 그대로 (plan B42).
+      const locs = at.filter((r) => r !== undefined).map((r) => (b.cols.location.path in r ? r[b.cols.location.path] : MISSING))
+      const shared = locs.every((l) => l === locs[0])
+      const line: DexLineVm = {
         head: cell(head, 'path', 'raw'),
         fields: b.lineFields.map((f) => ({ name: f.field, value: cell(head, f.field, f.fmt) })),
-        rows: live.map((t): DexRowVm => {
-          const r = t.rows.find((x) => key(x) === k)
+        rows: live.map((t, i): DexRowVm => {
+          const r = at[i]
           if (r === undefined) return { when: t.word, cells: null }
-          return {
+          const row: DexRowVm = {
             when: t.word,
             cells: [cell(r, b.cols.status.path, 'raw'), cell(r, b.cols.reason.path, 'raw')],
-            location: cell(r, b.cols.location.path, 'raw'),
           }
+          if (!shared) row.location = cell(r, b.cols.location.path, 'raw')
+          return row
         }),
       }
+      if (shared) line.location = fmtValue(locs[0] as Read, 'raw')
+      return line
     }),
     lineMissing: b.lineMissing,
   }

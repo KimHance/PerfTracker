@@ -1,5 +1,6 @@
+import { Fragment } from 'react'
 import { Wbr } from './BlockCard.jsx'
-import type { DexLineVm, DexRecordVm, DexStatesVm } from './blocks.js'
+import type { CommandPart, DexLineVm, DexRecordVm, DexStatesVm } from './blocks.js'
 
 /**
  * **dex 줄 표** (`dexstates` · baseline-profile BP-8). 계산은 `blocks.ts` 의 `buildDexStates` 가 다 했고 여기는
@@ -60,7 +61,7 @@ function Records({ rows }: { rows: DexRecordVm[] }) {
             <td className={`num${r.wrap ? ' rp-wrap' : ''}${r.mono ? ' mono rp-path' : ''}`}>
               {r.wrap ? (
                 <span className="rp-wrap-in">
-                  <Wbr text={r.value} />
+                  {r.parts !== undefined ? <Command parts={r.parts} /> : <Wbr text={r.value} />}
                 </span>
               ) : (
                 r.value
@@ -75,7 +76,21 @@ function Records({ rows }: { rows: DexRecordVm[] }) {
   )
 }
 
-/** dex 줄 하나 — 머리 행(경로 · 필드) + 때 행(+ 위치 행) 또는 값 행 하나. */
+/**
+ * 보낸 명령 — 깃발 토큰(`-m`)은 `nowrap` 으로 통째, 나머지는 구분자 뒤 `<wbr>` (plan B40). 토막을 이어 붙인 글자가
+ * 원문이라 복사하면 그대로다.
+ */
+function Command({ parts }: { parts: CommandPart[] }) {
+  return (
+    <>
+      {parts.map((p, i) => (
+        <Fragment key={i}>{p.keep ? <span className="rp-nobr">{p.text}</span> : <Wbr text={p.text} />}</Fragment>
+      ))}
+    </>
+  )
+}
+
+/** dex 줄 하나 — 머리 행(경로 · 필드) + 위치 행(때마다 같으면 한 번) + 때 행(+ 위치 행) 또는 값 행 하나. */
 function Line({ line, span, vm }: { line: DexLineVm; span: number; vm: DexStatesVm }) {
   return (
     <>
@@ -93,6 +108,16 @@ function Line({ line, span, vm }: { line: DexLineVm; span: number; vm: DexStates
           </span>
         </td>
       </tr>
+      {line.location !== undefined && vm.locationLabel !== undefined && (
+        // 때마다 같은 위치는 한 번 · 한 줄 라벨 (plan B42) — 단어 · 이름 · 원문이 한 흐름이고 원문만 줄바꿈한다.
+        <tr className="rp-dex-loc rp-dex-loc-one">
+          <td colSpan={span}>
+            <span className="rp-dex-w">{vm.locationLabel.word}</span>{' '}
+            <span className="rp-dex-k">{vm.locationLabel.path}</span>{' '}
+            <Wbr text={line.location} />
+          </td>
+        </tr>
+      )}
       {line.rows.map((r, i) => {
         const when = r.when === undefined ? null : <th>{r.when}</th>
         if (r.cells === null) {

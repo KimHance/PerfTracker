@@ -53,12 +53,16 @@ function inlineReport(): ReportDocument | null {
  * 초를 가리키고, 마커를 짚어도 같은 값이 움직인다 — "CPU 가 튄 그 순간 메모리는" 을 눈을
  * 옮기지 않고 읽으라는 것이 이 화면의 요점이다.
  */
-export function ReportPage({ runId }: { runId: string }) {
+export function ReportPage({ runId, initialTab = 'summary' }: {
+  runId: string
+  /** 처음 켜진 탭 — 화면은 늘 `summary` 다. 시험이 진단 탭을 첫 그림으로 그릴 때만 준다. */
+  initialTab?: TabId
+}) {
   // 심겨 있으면 첫 그림부터 그 문서다 — 불러오는 중 화면을 거치지 않는다. 시험도 같은 길로 화면 전체를 그린다
   // (`test/report.test.ts` 의 `react-dom/server` — 레일 배지 · 타일을 렌더 결과로 본다).
   const [doc, setDoc] = useState<ReportDocument | null>(inlineReport)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<TabId>('summary')
+  const [tab, setTab] = useState<TabId>(initialTab)
   const [sub, setSub] = useState<Record<string, string>>({})
   const [hoverT, setHoverT] = useState<number | null>(null)
   const [hotBucket, setHotBucket] = useState<number | null>(null)
