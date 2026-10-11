@@ -192,6 +192,7 @@ slice 표 머리 첫 줄 `line-height: 18px` · 둘째 줄 `top: 27px` 그대로
 |---|---|---|---|
 | 보고서 8상태 × 1440 · 390 | 없음 | `shoot.mjs` · `check_shots.py` (`--break` · 지금 코드 걸림 64) | `v1/shots/` 16장 (2026-10-11 · 고침 3) — **16/16: 12px 미만 0% · 4.5:1 미만 0% · 최소 12px · 5.48 · 층 31.7(390 26) > 18 > 15 > 13 · 390 넘침 0 · 카드 안 가로 스크롤 0** · 배지 0/4/1/2 · 판정 낱말 0 (`v1/README.md`) |
 | 지금 코드 8상태 × 1440 · 390 | 골든 없음 | `shoot.mjs … before` | `v1/before/` · 요약 1440 12px 미만 85.1% · 4.5:1 미만 12.3% |
+| 구현 rr-type (글자 크기 · 색) 8상태 × 1440 · 390 | 없음 | `packages/gui/test/report-css.test.ts` · `shoot.mjs <base> <runs>/shots/rr-type before` | 2026-10-11 · `samples/` → `perftracker report --file` 실렌더 · **16/16: 12px 미만 0% · 4.5:1 미만 0% · 최소 12px · 4.84 (neutral-200 배지) · 층 18 > 15 > 13 · 넘침 0** · 타일 · 라벨 두 줄 · `<wbr>` 은 rr-layout 뒤 |
 
 구현 화면 찍는 길: `gen_samples.py` → `perftracker report <id> -o <runs> --file <html> --no-browser` → `shoot.mjs <base> <폴더> before` (시계열 눈금은 SVG 배율로 잼 · 결정 13).
 
@@ -224,3 +225,4 @@ slice 표 머리 첫 줄 `line-height: 18px` · 둘째 줄 `top: 27px` 그대로
 |---|---|---|
 | 2026-10-11 | baseline-profile | 처음 — 제약 · 크기 · 색 · 타일 8 · 라벨 단어 · 시안 v1 후보 1 (16장) |
 | 2026-10-11 | baseline-profile | 고침 1 (디자인 검토 #5 · 6 · 8 · 9 · 11) — `스로틀 단계 · 종료` · 크기 표 셋 · HANDOFF 단위별 · 배지 2 (B30) · 기준 701a79f |
+| 2026-10-11 | baseline-profile | 구현 rr-type — `## 확인` 한 줄. `## 넘침` 의 표 th 줄바꿈 · 시계열 `overflow:visible` · 분포 ≤422px 눈금 14 단위는 글자를 키운 결과를 막으려고 rr-type 이 먼저 넣음 (intent rr-type 4) |
