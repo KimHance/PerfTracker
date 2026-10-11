@@ -40,6 +40,23 @@ python3 -I labs/report-readability-design/v1/check_shots.py …/before   # 지�
 | 고침 2 (`FIX-2.md`) | 위 다섯 되돌림 · 기기 · diag-noapp 핸드오프 사진 다시 · `_shots_tmp` 지움 | 다섯 다 고쳐짐 · 숫자 16/16 · 내용 검사 그대로 |
 | 고침 3 (`FIX-3.md` · 디자인 검토 조건부 11) | core 실제 이름 · 모양 (`states.js` · `gen_samples.py`) · 머리 행 필드 넷 · 줄 맞춤 (`줄 없음` · null 때 행 빼기) · 진단 표 값 칸 둘 · 스크롤 상자 0 · `스로틀 단계 · 종료` · 표식 · 툴팁 12px · 여백 46 · 핸드오프 사진 8장 다시 | 16/16 그대로 · 카드 안 가로 스크롤 0 (새 검사 — 고침 2 시안은 diag-390 `rp-dex-scroll` 로 걸림) |
 | 고침 4 (`FIX-4.md` · plan B31) | `session.compile.before` → `compile_state_before` (+ 짝) | 모양 같음 · 사진 안 다시 찍음 |
+| 고침 5 (`FIX-5.md` · ⑨ 승격 · plan B37 · B40 · B42) | 구현 뒤 결정을 손으로 (edit_file · 생성 0) — 위치가 때마다 같으면 머리 아래 한 번 · 보낸 명령 깃발 토큰 `.rp-nobr` · 온도 `zones` `[]` → `항목 없음` · 핸드오프 사진 두 폴더를 **구현 실렌더**로 (`design_handoff_report-readability` 6장 · `design_handoff_baseline-profile` 6장 — MCP `write_file` 이 utf8 만이라 같은 브라우저 세션의 `WriteFiles` 로 올림 · 서버가 C2PA `caBX` 덩이를 붙여 바이트는 다르고 픽셀 같음) | 16/16 그대로 · compile-1440 위치 한 번 (`shots/` 다시 찍음) |
+
+## RR-9 — 실기기 보고서 (2026-10-11 · ffca69c)
+
+SM-S901N · serial `R5CT0000001` · sdk 36 · YouTube 21.40.161 — 평소 `bfaf14` (18,324 ms) · 진단 `6c997f` (13,453 ms). 재료는 기기 접촉 없이 run 디렉토리 그대로 (레포 밖).
+`perftracker report <id> -o <rr9> --file <스크래치>/….html --no-browser` → 탭마다 클릭 → `measure.js` + 타일 · 배지 · 미수집 카드 셈 (`.rp-card` 안 `.rp-none` 이 `값 없음` · `수집 안 함` 으로 시작) · 기준은 `check_shots.py` 의 `problems()` 그대로.
+
+| 세션-탭-폭 | 글자 | 12px 미만 · 4.5:1 미만 | 최소 | 층 | 타일 | 배지 = 미수집 카드 | 390 넘침 · 카드 안 스크롤 |
+|---|---|---|---|---|---|---|---|
+| 평소-요약-1440 · 390 | 3,680 · 3,637 | 0% · 0% | 12px · 5.48 | 31.68(390 26) > 18 > 15 > 13 | 8 | 0 = 0 | 0 · 0 |
+| 평소-기기-1440 · 390 | 806 | 0% · 0% | 12px · 5.48 | — > 18 > 15 > 13 | — | 0 = 0 | 0 · 0 |
+| 진단-요약-1440 · 390 | 3,723 · 3,680 | 0% · 0% | 12px · 5.48 | 31.68(390 26) > 18 > 15 > 13 | 8 | 0 = 0 | 0 · 0 |
+| 진단-기기-1440 · 390 | 810 | 0% · 0% | 12px · 5.48 | — > 18 > 15 > 13 | — | 0 = 0 | 0 · 0 |
+| 진단-진단-1440 · 390 | 112,971 | 0% · 0% | 12px · 5.48 | — > 18 > 15 > 13 | — | 0 = 0 | 0 · 0 |
+
+걸림 0 (10장). 기기 모델 · serial 은 머리 메타와 기기 탭에 다 보임. 두 세션 모두 `수집 안 함` · `값 없음` 글자 0 — 배지 기준은 **0 = 0 으로만** 맞았다 (배지가 서는 실기기 경우는 못 봄 · 표본 `missing` · `legacy` · `diag-noapp` 이 대신 봄). hwui `partial` 은 배지 없음(정한 규칙). 두 세션 다 `--compile` 아님 — 보낸 명령 · 바꾼 기록 줄은 실기기에서 못 봄.
+사진 10장 · `measure.json`: 레포 밖 `runs/baseline-profile/shots/rr9/` (사진 다섯은 Claude Design `design_handoff_report-readability/screenshots/` 에도).
 
 ## 측정 (글자 측정 · 2026-10-11)
 

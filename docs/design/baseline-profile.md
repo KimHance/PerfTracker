@@ -5,7 +5,7 @@
 | 기능 | baseline-profile |
 | 기능 문서 | docs/spec/baseline-profile.md (701a79f) |
 | 등급 | 화면 (보고서 카드 · 진단 칸 · CLI 줄) |
-| 마지막 변경 | 2026-10-11 · 고침 1 — core 실제 이름 · `secondary_dex` · `public_dex` · 줄 맞춤 · 배지 셈 · core 문구 정본 · 진단 표 넘침 0 |
+| 마지막 변경 | 2026-10-11 · ⑨ 승격 — `## 정한 것` 12 · 시안 고침 5 (B40 · B42) · 핸드오프 사진 = 구현 실렌더 · RR-9 실기기 |
 
 보고서 자리는 **한 곳씩** — 요약 탭 맥락 섹션 카드 `컴파일 상태 (전 → 후)` 하나(전폭) · 머리 `옵션` 칸 · 진단 탭 카드 하나 + `slice 수` 행 하나 (결정 16).
 글자 크기 · 색 · 라벨 두 줄 규칙은 `docs/design/report-readability.md` 를 따른다 — 시안도 같은 파일의 상태다.
@@ -14,8 +14,8 @@
 
 | 차수 | 후보 | 고른 것 | 누가 | 로컬 폴더 | 시안 생성기 | 검사 명령 | Claude Design 파일 |
 |---|---|---|---|---|---|---|---|
-| 1 · 보고서 | 1 | | | `labs/report-readability-design/v1/shots/` (`summary` · `compile` · `end-null` · `legacy` · `diag` · `diag-noapp`) | Claude Design (`report-readability-design/v1/brief-claude-design.md` → `FIX-1` ~ `FIX-3`) | `python3 labs/report-readability-design/v1/check_shots.py` | [성능 측정 CLI GUI 도구](https://claude.ai/design/p/9ee5c8ab-33b9-4586-ae73-69f9e53ecd42) · `Report Readability.dc.html` · `design_handoff_baseline-profile/` |
-| 1 · CLI | 1 | | | `labs/baseline-profile-design/v1/cli/` | `gen_cli.py` → `cli/blocks.txt` | `python3 labs/baseline-profile-design/v1/check_cli.py` (깨 봄 `--break`) | `design_handoff_baseline-profile/cli-blocks.txt` |
+| 1 · 보고서 | 1 | 1 | 메인 (plan B16 · 후보 하나) | `labs/report-readability-design/v1/shots/` (`summary` · `compile` · `end-null` · `legacy` · `diag` · `diag-noapp`) | Claude Design (`report-readability-design/v1/brief-claude-design.md` → `FIX-1` ~ `FIX-5` · 5 는 구현 뒤 B40 · B42 를 손으로) | `python3 labs/report-readability-design/v1/check_shots.py` | [성능 측정 CLI GUI 도구](https://claude.ai/design/p/9ee5c8ab-33b9-4586-ae73-69f9e53ecd42) · `Report Readability.dc.html` · `design_handoff_baseline-profile/` |
+| 1 · CLI | 1 | 1 | 메인 (plan B28) | `labs/baseline-profile-design/v1/cli/` | `gen_cli.py` → `cli/blocks.txt` | `python3 labs/baseline-profile-design/v1/check_cli.py` (깨 봄 `--break`) | `design_handoff_baseline-profile/cli-blocks.txt` |
 | 1 · 문구 | — | — | 디자이너 | 이 문서 `## 문구` | 없음 | `check_cli.py` (cli 줄 단어형) | 없음 |
 
 후보 1 — 자리는 결정 16 · 모양은 규칙(같은 색 · 같은 굵기 · 원문 순)으로 닫힌다.
@@ -180,7 +180,24 @@ report-readability `## 상태` 의 행을 같이 쓴다 (6상태 × 2) · CLI 6�
 
 ## 정한 것
 
-비어 있다 — ⑨ 승격 때 온다. 이번 차수의 선택:
+⑨ 승격 (2026-10-11 · run baseline-profile) — 디자이너 intent 4 `사람: 예` (bp-design · bp-gui-report) 와 plan 화면 결정. plan B28 이 디자이너 기본값을 받았고 검토 · 검수가 건 것만 고쳤다.
+
+| # | 날짜 · run | 결정 | 확인 거리 |
+|---|---|---|---|
+| 1 | 2026-10-11 · baseline-profile | 후보 1 (후보 하나) · 자리 = 맥락 섹션 새 카드 `컴파일 상태 (전 → 후)` span 12 + 머리 `옵션` 칸 `--compile` · 진단 탭 카드 하나 + `slice 수` 행 하나 (plan B16 · 결정 16) | `## 화면` |
+| 2 | 2026-10-11 · baseline-profile | dex 표 = 머리 행 둘(경로 · 필드 넷) + 때 행 칸 셋 + 위치 행 · 값 칸 `nowrap` (bp-design 4-9) | `compile-390` |
+| 3 | 2026-10-11 · baseline-profile | 머리 행 2 = 필드 이름 그대로 `abi` · `primary_abi` · `secondary_dex` · `public_dex` + 값 (`예` · `아니오` 같은 모양) (bp-design 4-14) | `BP-8 새 필드 전부 보임` |
+| 4 | 2026-10-11 · baseline-profile | 위치 — 때마다 글자 그대로 같으면 머리 행 아래 한 번 · 한 줄 라벨 · 하나라도 다르면 때 행마다 (plan B42 · 검수 #1) | `B42 …` 시험 셋 · 사진 `01-compile` |
+| 5 | 2026-10-11 · baseline-profile | 보낸 명령 — 깃발 토큰(`-` 로 시작)은 통째 `nowrap` · 나머지 구분자 뒤 `<wbr>` · 복사 원문 그대로 (plan B40 · bp-gui-report 4-5) | 사진 `05-compile-390` (`-m speed -f` 붙음) |
+| 6 | 2026-10-11 · baseline-profile | 낱말 `status` 두 뜻 — 앱 = `컴파일 필터` · 진단 slice = `oat 파일 상태` (bp-design 4-10 · 결정 14) | `## 문구` |
+| 7 | 2026-10-11 · baseline-profile | 그 때 배열에 없는 줄 = `줄 없음` (null 아님 · 배지 밖) (bp-design 4-15) | `compile` 사진 |
+| 8 | 2026-10-11 · baseline-profile | 한 때 배열 null = 그 때 행을 줄마다 빼고 기록 칸 한 행 `값 없음` + 코드 · 둘 다 null 이면 카드 본문만 (배지 1) (bp-design 4-16) | `end-null` 사진 |
+| 9 | 2026-10-11 · baseline-profile | 진단 slice 표 = `oat 파일 상태` 를 머리 행 2 로 · 값 칸 둘 · 가로 스크롤 상자 0 (bp-design 4-17) | `diag-390` · 카드 안 스크롤 0 |
+| 10 | 2026-10-11 · baseline-profile | 진단 대상 앱 없음 = 진단 배지 2 (그린 미수집 카드 수 그대로 · plan B30) | `diag-noapp` 레일 |
+| 11 | 2026-10-11 · baseline-profile | CLI 줄 꼴 `Compile   {value} · base.apk {before} → {after} · {ms} ms` · 되돌림 머리 + 두 칸 들여 쓴 명령 · `--help` 에서 `--launch 와만` 뺌 (bp-design 4-11 · 디자인 검토 #10) | `check_cli.py` |
+| 12 | 2026-10-11 · baseline-profile | 상태 문자열 · 불 값 · 바뀐 칸을 칠하지 않음 — 같은 색 · 같은 굵기 · 원문 순 (BP-8 · 결정 6 그대로) | `B42 …` · 검수 #2 시험 |
+
+### 결정
 
 | # | 결정 | 왜 | 확인 거리 |
 |---|---|---|---|
@@ -196,19 +213,22 @@ report-readability `## 상태` 의 행을 같이 쓴다 (6상태 × 2) · CLI 6�
 |---|---|---|---|
 | 보고서 6상태 × 1440 · 390 | 없음 | `shoot.mjs` · `check_shots.py` | `labs/report-readability-design/v1/shots/` · `README.md` |
 | CLI 6블록 | 없음 | `check_cli.py` (`--break`) | `## 문구` 끝 줄 |
-| 구현 bp-gui-report (`dexstates` · 머리 `--compile` · 진단 ART 칸) 7상태 + device × 1440 · 390 | 없음 | `report.test.ts` (`BP-8 …` · `B30 …` · DM-13 블록 수 9) · `report-copy.test.ts` (`BP-6 문구 표 ↔ 코드 (gui)`) | 2026-10-11 · `samples/` → `perftracker report --file` 실렌더 · **16/16: 12px 미만 0% · 4.5:1 미만 0% · 390 넘침 0 · 카드 안 가로 스크롤 0** · 레일 summary 0 · missing 요약 4 · compile 0 · end-null 0 · legacy 요약 1 · diag 0 · diag-noapp 진단 2 (시안과 같음) · 390 의 `보낸 명령` 은 카드가 시안보다 14px 좁아 `-m` 의 `-` 뒤에서 줄이 바뀜 (브라우저 기본 줄바꿈 · 글자 그대로) |
+| 구현 bp-gui-report (`dexstates` · 머리 `--compile` · 진단 ART 칸) 7상태 + device × 1440 · 390 | 없음 | `report.test.ts` (`BP-8 …` · `B30 …` · DM-13 블록 수 9) · `report-copy.test.ts` (`BP-6 문구 표 ↔ 코드 (gui)`) | 2026-10-11 · `samples/` → `perftracker report --file` 실렌더 · **16/16: 12px 미만 0% · 4.5:1 미만 0% · 390 넘침 0 · 카드 안 가로 스크롤 0** · 레일 summary 0 · missing 요약 4 · compile 0 · end-null 0 · legacy 요약 1 · diag 0 · diag-noapp 진단 2 (시안과 같음) · 검수 고침 4d578ea 뒤 390 `보낸 명령` 은 `-m speed -f` 가 붙음 (B40) · 위치 한 번 (B42) — 사진은 Claude Design `design_handoff_baseline-profile/screenshots/` |
+| **RR-9 실기기** YouTube 평소 · 진단 (SM-S901N · sdk 36 · ffca69c) | 없음 | `measure.js` · `check_shots.py` `problems()` | 2026-10-11 · 요약 컴파일 카드 dex 4줄 · `바꾸지 않음` · 위치 한 번 · 진단 `컴파일 상태 slice` 6줄 · `JIT 컴파일 slice` 41 · 카테고리 `am · wm · view · dalvik` · 10/10 걸림 0 (report-readability `## 확인`) — `--compile` 세션이 아니라 보낸 명령 · 바꾼 기록 · 바뀜 경고는 실기기에서 못 봄 |
 
 시험은 패키지가 한다 — `BP-6 문구 표 ↔ 코드` (core · cli · gui) · `BP-5 되돌림 줄 — start · stop · 호스트 꼴` · `BP-8 새 필드 전부 보임`.
 
 ## HANDOFF 와 어긋남
 
-| 단위 | 문서 · 절 | 지금 HANDOFF | 이 기능 뒤 |
+없음 — bp-gui-report · bp-cli 가 옮김 (`docs/design/report/HANDOFF.md` 블록 9종 · 머리 `--compile` · 맥락 카드 · 진단 카드 다섯 · B40 · B42 / README 「명령 전체」 · `packages/cli/AGENTS.md` 의 `--compile` · `--launch` 와만). 단위별 옛 표는 git 이력 (ffca69c).
+
+## 열린 질문
+
+| # | 무엇 | 지금 기본값 | 날짜 · run |
 |---|---|---|---|
-| bp-gui-report | report §2 블록 | 8종 | 9 — `dexstates` (머리 행 둘 · 때 행 · 위치 행) |
-| bp-gui-report | report §3 헤더 메타 | 옵션 `--launch` 또는 `attach` | + `--compile {value}` |
-| bp-gui-report | report §3 요약 탭 · 맥락 | 온도 · 스로틀 · 기기 상태 · 네트워크 · 경고 · 측정 비용 | + `컴파일 상태 (전 → 후)` span 12 |
-| bp-gui-report | report §3 진단 탭 | 카드 넷 (bp-core-art 가 `slice 수` 에 넣은 list 행 포함) | 다섯 — `컴파일 상태 slice` 새 카드로 옮김 · `slice 수` 끝 JIT 행 · 카테고리 넷 |
-| bp-cli | README 「명령 전체」 · `packages/cli/AGENTS.md` | `--compile` 없음 | `--compile <reset\|speed-profile\|speed>` · **`--launch` 와만** (결정 4) |
+| 1 | labs 표본 · CLI 시안의 실기기 serial `R5CT0000001` (`labs/baseline-profile-design/v1/gen_cli.py` · `cli/blocks.txt` · report-readability `v1/samples/`) — 루트 AGENTS 「합성 픽스처만」 이 labs 를 말하지 않음 | 고치지 않음 · AGENTS 예외 한 줄은 기획 (메인) | 2026-10-11 · baseline-profile (디자인 검토 #12) |
+| 2 | 보낸 명령 · 바꾼 기록 · 바뀜 경고를 실기기 보고서로 본 적 없음 — RR-9 두 세션은 `--compile` 아님 · BP-9 는 CLI · 스펙만 | 표본 `compile` 실렌더로 대신 | 2026-10-11 · baseline-profile |
+| 3 | 390 카드 사진에 고정 표식 줄(`마커`)이 겹침 — 카드만 찍을 때(`05-compile-390`) 생기는 사진 꾸밈 · 화면 결함 아님 | 그대로 | 2026-10-11 · baseline-profile |
 
 ## 검토
 
@@ -226,3 +246,4 @@ report-readability `## 상태` 의 행을 같이 쓴다 (6상태 × 2) · CLI 6�
 | 2026-10-11 | baseline-profile | bp-gui-report 검수 왕복 1 · plan B40 · B42 — 위치 행: 때마다 글자 그대로 같으면 머리 행 아래 한 번 + 한 줄 라벨 · 다르면 때 행마다 그대로 · 보낸 명령 깃발 토큰 안 줄바꿈 0 |
 | 2026-10-11 | baseline-profile | bp-gui-report 구현 — `## HANDOFF 와 어긋남` report §2 · §3 넷을 HANDOFF 에 옮김 (블록 9종 · 머리 `--compile` · 맥락 카드 · 진단 카드 다섯) · `## 확인` 한 줄 |
 | 2026-10-11 | baseline-profile | bp-cli 검수 왕복 1 · plan B34 — cli 문구 둘 더함: 보조 dex `status` 모두 같은데 `-m` 밖 사실 줄 (#5 · 침묵 안 함) · 값 모름 낱말 `모름` (#3) |
+| 2026-10-11 | baseline-profile | ⑨ 승격 — `## 정한 것` 12 (intent 4 사람 예 · plan B16 · B28 · B30 · B40 · B42) · 옛 `## 정한 것` 표 → `### 결정` · `## 시안` 고른 것 1 · 시안 고침 5 · 핸드오프 사진 = 구현 실렌더 6장 · `## 확인` 390 보낸 명령 줄 고침 · RR-9 실기기 · `## HANDOFF 와 어긋남` 없음 · `## 열린 질문` 셋 |
