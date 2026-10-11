@@ -201,7 +201,7 @@ metrics.memory.data.system_timeline
 레일에 **요약 / 기기** 두 개를 둡니다. **진단 세션**(`session.options.diagnose === true`)이면 세 번째 **진단** 탭이 붙습니다 — 기준은 그 칸 하나이고 진단 블록의 유무로 가르지 않습니다. 평소 보고서는 탭 둘 그대로입니다. 섹션 목차나 스크롤 스파이는 없습니다.
 
 - 탭 버튼: `padding:8px var(--space-4)`, 13.5px, `border-radius:0 99px 99px 0`, 선택 시 `border-left:2px solid var(--color-accent)` + `background:var(--color-accent-100)` + `color:var(--color-accent-800)`
-- 미수집 블록이 있는 탭에는 개수 배지(monospace 9.5px, `--color-neutral-200`)
+- 미수집 블록이 있는 탭에는 개수 배지(monospace 9.5px, `--color-neutral-200`). 세는 것은 값 자리에 `수집 안 함` · `값 없음` 을 그린 블록뿐입니다 — 재 봤더니 없음(`[]`)으로 `크래시 없음` · `ANR 없음` · `경고 없음` 을 그린 블록은 세지 않습니다(RR-8). 셈은 카드가 그린 글자를 그대로 읽습니다(`blocks.ts` 의 `tabBadgeCount`)
 - **요약** 탭 = `summary` `render` `cpu` `memory` `log` `context` 섹션
 - **기기** 탭 = `device` 섹션
 - **진단** 탭 = `diagnose` 섹션(머리 `atrace slice`) — 카드 넷: `기록 범위`(`atrace_categories` · `atrace_apps` · `app_slices_open`) · `slice 수`(`trace_slices` · `target_process_slices` · `target_process_slices_unfinished` · `target_process_slice_names_unfolded` · `ftrace_overrun_events`) · `원본`(`artifacts.trace` · `diagnose.trace_bytes`) 각 span 4 + `slice 이름별` 표 span 12. 라벨은 **필드 경로 그대로**입니다(logcat 카드와 같은 이유). 표가 `null` 이면 탭 개수 배지에 1 이 섭니다.

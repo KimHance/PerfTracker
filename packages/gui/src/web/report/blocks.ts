@@ -22,7 +22,9 @@ import type {
   PairsBlock,
   SeriesBlock,
   StatBlock,
+  TabId,
 } from './manifest.js'
+import { SECTIONS } from './manifest.js'
 import { MISSING, type Read, readPath } from './read.js'
 
 /**
@@ -1000,4 +1002,69 @@ export function cardUnit(b: Block, vm: unknown, diagnose: boolean): string {
   if (!isNone && (b.kind === 'stat' || b.kind === 'slicetable')) return (vm as { unit: string }).unit
   if (diagnose && b.diagnoseUnit !== undefined) return b.diagnoseUnit
   return b.unit ?? ''
+}
+
+/* ══════════════════ 블록 하나 · 레일 배지 ══════════════════ */
+
+/**
+ * 매니페스트의 `kind` 하나가 빌더 하나로 간다. 지표 이름은 어디에도 안 나온다.
+ * `slicetable` 은 문서가 바뀔 때만 만들어 화면이 따로 넘긴다 (`ReportPage` 의 `sliceVms`).
+ */
+export function buildBlock(
+  b: Exclude<Block, { kind: 'slicetable' }>,
+  res: unknown,
+  maxT: number,
+  marks: Mark[],
+  hoverT: number | null,
+  distW: number,
+): unknown {
+  switch (b.kind) {
+    case 'series': return buildSeries(b, res, maxT, marks, hoverT)
+    case 'distribution': return buildDistribution(b, res, distW)
+    case 'frametimeline': return buildFrameTimeline(b, res, maxT, marks, hoverT)
+    case 'bars': return buildBars(b, res)
+    case 'delta': return buildDelta(b, res)
+    case 'pairs': return buildPairs(b, res)
+    case 'stat': return buildStat(b, res)
+    default: {
+      // **exhaustiveness 체크.** `Block` 에 새 `kind` 가 늘거나 여기서 하나가 빠지면
+      // `b` 가 `never` 로 좁혀지지 않아 컴파일이 깨진다 — case 를 빠뜨려도 테스트를
+      // 전부 통과하며 카드가 조용히 사라지는 사고(2번 지적 사항)를 빌드 시점에 잡는다.
+      const _exhaustive: never = b
+      return _exhaustive
+    }
+  }
+}
+
+/**
+ * **카드가 값 자리에 그린 빈 칸 글자.** 값이 없는 카드의 `NoneBody` 글자(`label`)이거나, 값이 없는
+ * stat 카드의 큰 글자(`value`)다. 값을 그린 카드는 `null`.
+ *
+ * 레일 배지는 이 글자로 센다 — 렌더러가 그리는 바로 그 필드를 읽으니 셈과 그림이 다른 규칙을 쓸 수 없다.
+ */
+function placeholderOf(b: Block, vm: unknown): string | null {
+  const v = vm as { none?: unknown; label?: unknown; dim?: unknown; value?: unknown } | null
+  if (v === null || typeof v !== 'object') return null
+  if (v.none === true) return typeof v.label === 'string' ? v.label : null
+  if (b.kind === 'stat' && v.dim === true) return typeof v.value === 'string' ? v.value : null
+  return null
+}
+
+/**
+ * **레일 배지가 세는 블록인가** (RR-8) — `수집 안 함` · `값 없음` 을 그린 블록.
+ *
+ * 재 봤더니 없음(`[]`)으로 `없음` 을 그린 블록(`크래시 없음` · `ANR 없음` · `경고 없음`)은 세지 않는다 —
+ * 그것은 잰 0 이다(규칙 3). 그 밖의 글자(`바꾸지 않음` 같은 사실 문장)도 같은 이유로 세지 않는다.
+ * 요약 타일은 블록이 아니라 이 셈에 들어오지 않는다 — 같은 값의 카드가 이미 센다 (RR 결정 12).
+ */
+export function isUncollected(b: Block, vm: unknown): boolean {
+  const p = placeholderOf(b, vm)
+  return p !== null && (p === NONE_NULL || p.startsWith(NONE_MISSING))
+}
+
+/** 탭 하나의 레일 배지 수 — 그 탭 섹션의 블록 가운데 `isUncollected` 인 것. `0` 이면 배지를 안 그린다. */
+export function tabBadgeCount(items: readonly { block: Block; vm: unknown }[], tab: TabId): number {
+  return items.filter(
+    (x) => SECTIONS.find((s) => s.id === x.block.section)?.tab === tab && isUncollected(x.block, x.vm),
+  ).length
 }

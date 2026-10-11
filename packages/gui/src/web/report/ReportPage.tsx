@@ -1,18 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { INLINE_REPORT_GLOBAL, type ReportDocument } from '../../contract/api.js'
 import { computeMaxT, readMarks } from './axis.js'
-import {
-  blockState,
-  buildBars,
-  buildDelta,
-  buildDistribution,
-  buildFrameTimeline,
-  buildPairs,
-  buildSeries,
-  buildStat,
-  cardUnit,
-  type NoneVm,
-} from './blocks.js'
+import { blockState, buildBlock, cardUnit, type NoneVm, tabBadgeCount } from './blocks.js'
 import { BlockCard, NoneBody } from './BlockCard.jsx'
 import {
   BarsBody,
@@ -129,15 +118,8 @@ export function ReportPage({ runId }: { runId: string }) {
     key: `b${i}`,
     block: b,
     metric: blockState(doc, b),
-    vm: b.kind === 'slicetable' ? sliceVms.get(b) : buildOne(b, doc, maxT, marks, hoverT, distW),
+    vm: b.kind === 'slicetable' ? sliceVms.get(b) : buildBlock(b, doc, maxT, marks, hoverT, distW),
   }))
-
-  const missingIn = (t: TabId): number =>
-    built.filter(
-      (x) =>
-        (x.vm as NoneVm).none === true &&
-        SECTIONS.find((s) => s.id === x.block.section)?.tab === t,
-    ).length
 
   const sections = SECTIONS.filter((s) => s.tab === tab)
     .map((s) => {
@@ -164,7 +146,7 @@ export function ReportPage({ runId }: { runId: string }) {
         tabs={tabs}
         tab={tab}
         setTab={setTab}
-        counts={Object.fromEntries(tabs.map((t) => [t.id, missingIn(t.id)]))}
+        counts={Object.fromEntries(tabs.map((t) => [t.id, tabBadgeCount(built, t.id)]))}
       />
 
       <main className="rp-main">
@@ -340,36 +322,6 @@ function Rail({
       ))}
     </nav>
   )
-}
-
-/**
- * 매니페스트의 `kind` 하나가 빌더 하나로 간다. 지표 이름은 어디에도 안 나온다.
- * `slicetable` 은 문서가 바뀔 때만 만들어 위에서 넘긴다 (`sliceVms`) — 여기서는 받은 것을 쓴다.
- */
-function buildOne(
-  b: Exclude<Block, { kind: 'slicetable' }>,
-  doc: ReportDocument,
-  maxT: number,
-  marks: { t: number; label: string }[],
-  hoverT: number | null,
-  distW: number,
-): unknown {
-  switch (b.kind) {
-    case 'series': return buildSeries(b, doc, maxT, marks, hoverT)
-    case 'distribution': return buildDistribution(b, doc, distW)
-    case 'frametimeline': return buildFrameTimeline(b, doc, maxT, marks, hoverT)
-    case 'bars': return buildBars(b, doc)
-    case 'delta': return buildDelta(b, doc)
-    case 'pairs': return buildPairs(b, doc)
-    case 'stat': return buildStat(b, doc)
-    default: {
-      // **exhaustiveness 체크.** `Block` 에 새 `kind` 가 늘거나 여기서 하나가 빠지면
-      // `b` 가 `never` 로 좁혀지지 않아 컴파일이 깨진다 — case 를 빠뜨려도 테스트를
-      // 전부 통과하며 카드가 조용히 사라지는 사고(2번 지적 사항)를 빌드 시점에 잡는다.
-      const _exhaustive: never = b
-      return _exhaustive
-    }
-  }
 }
 
 function Body({

@@ -12,6 +12,7 @@ import {
   badgeOf,
   blockState,
   buildBars,
+  buildBlock,
   buildDelta,
   buildDistribution,
   buildFrameTimeline,
@@ -28,6 +29,7 @@ import {
   type NoneVm,
   type PairsVm,
   type SeriesVm,
+  tabBadgeCount,
   VITALS_SLOW_FRAME_MS,
 } from '../src/web/report/blocks.js'
 import { fmtValue, NONE_MISSING, NONE_NULL, STATUS_LABEL } from '../src/web/report/format.js'
@@ -1859,5 +1861,95 @@ describe('DM-13 평소 보고서 그대로', () => {
       if ((vm as NoneVm).none === true) continue
       for (const r of (vm as PairsVm).rows) expect(Object.keys(r).sort(), b.title).toEqual(['label', 'share', 'value', 'wrap'])
     }
+  })
+})
+
+/**
+ * **레일 배지 = 따라가면 찾을 수 있는 블록 수** (RR-8). 배지 `3` 을 보고 요약 탭을 훑었는데 `수집 안 함` ·
+ * `값 없음` 이 하나도 없으면 배지가 거짓말을 한 것이다 — `크래시 없음` · `ANR 없음` · `경고 없음`(재 봤더니
+ * 0건, `[]`)을 세던 결함이 그랬다.
+ *
+ * 셈(`tabBadgeCount`)과 그림을 **같은 문서**로 대조한다. 그림 쪽은 렌더러가 읽는 필드를 그대로 읽는다 —
+ * 값이 없는 카드는 `NoneBody` 가 `label` 을, stat 카드는 `StatBody` 가 `value` 를 큰 글자로 쓴다.
+ */
+describe('RR-8 레일 배지', () => {
+  /** 화면이 만드는 블록 전부 — `ReportPage` 와 같은 빌더 · 같은 순서. 호버 없음 · 분포 폭은 아무 값. */
+  const built = (doc: unknown): { block: (typeof MANIFEST)[number]; vm: unknown }[] => {
+    const marks = readMarks(doc)
+    const maxT = computeMaxT(doc, marks)
+    return MANIFEST.map((b) => ({
+      block: b,
+      vm: b.kind === 'slicetable' ? buildSliceTable(b, doc) : buildBlock(b, doc, maxT, marks, null, 600),
+    }))
+  }
+  /** 카드가 값 자리에 그린 큰 글자. 값을 그린 카드(차트 · 표)는 `null`. */
+  const drawn = (b: (typeof MANIFEST)[number], vm: unknown): string | null => {
+    if ((vm as NoneVm).none === true) return (vm as NoneVm).label
+    if (b.kind === 'stat') return (vm as { value: string }).value
+    return null
+  }
+  const drawnUncollected = (doc: unknown, tab: string): string[] =>
+    built(doc)
+      .filter((x) => SECTIONS.find((s) => s.id === x.block.section)?.tab === tab)
+      .filter((x) => {
+        const t = drawn(x.block, x.vm)
+        return t !== null && (t === NONE_NULL || t.startsWith(NONE_MISSING))
+      })
+      .map((x) => x.block.title)
+  const badge = (doc: unknown, tab: 'summary' | 'device' | 'diagnose'): number => tabBadgeCount(built(doc), tab)
+
+  /**
+   * 크래시 · ANR · 경고 자리만 바꾼 세션. 나머지는 표본 `full` 에 프레임 한 장을 얹은 것 — `full` 은
+   * 시간별 프레임(`metrics.frame`)이 없는 옛 세션이라, 그대로면 그 카드 하나가 정말로 `수집 안 함` 이다.
+   */
+  const withLists = (lists: { crashes: unknown; anrs: unknown; warnings: unknown }): unknown => {
+    const doc = structuredClone(FULL) as Record<string, any>
+    doc['metrics']['frame'] = {
+      status: 'collected',
+      data: { samples: [[1000, 8, 4, 16.6]], sampling: 'all', bucket_ms: null, frames_seen: 1 },
+    }
+    doc['metrics']['log']['data']['device_crashes'] = lists.crashes
+    doc['metrics']['log']['data']['device_anrs'] = lists.anrs
+    doc['warnings'] = lists.warnings
+    return doc
+  }
+  const ALL_EMPTY = withLists({ crashes: [], anrs: [], warnings: [] })
+  const LIST_TITLES = ['크래시', 'ANR', '경고']
+
+  it('RR-8 [] 는 배지에 안 셈', () => {
+    // 세 카드는 `없음` 을 그린다 — 사라지지도 `값 없음` 이 되지도 않는다.
+    const vms = built(ALL_EMPTY).filter((x) => LIST_TITLES.includes(x.block.title))
+    expect(vms.map((x) => drawn(x.block, x.vm))).toEqual(['크래시 없음', 'ANR 없음', '경고 없음'])
+    expect(drawnUncollected(ALL_EMPTY, 'summary')).toEqual([])
+    expect(badge(ALL_EMPTY, 'summary')).toBe(0)
+
+    // 같은 세 자리가 못 읽었으면(null) · 필드가 없으면 그때는 센다 — 세 상태가 셈에서도 갈린다.
+    expect(badge(withLists({ crashes: null, anrs: null, warnings: null }), 'summary')).toBe(3)
+    const absent = withLists({ crashes: [], anrs: [], warnings: [] }) as Record<string, any>
+    delete absent['metrics']['log']['data']['device_crashes']
+    expect(badge(absent, 'summary')).toBe(1)
+  })
+
+  it('RR-8 배지 수 = 미수집 블록 수 (타일 밖)', () => {
+    const docs: [string, unknown][] = [
+      ['full', FULL], ['legacy', LEGACY], ['low-end', LOWEND], ['all-empty', ALL_EMPTY],
+      ...DIAG_STATES.map((s): [string, unknown] => [`diag:${s}`, diagDoc(s)]),
+    ]
+    let seen = 0
+    for (const [name, doc] of docs) {
+      for (const t of tabsFor(doc)) {
+        const want = drawnUncollected(doc, t.id)
+        seen += want.length
+        expect(badge(doc, t.id), `${name} / ${t.id} — ${want.join(' · ')}`).toBe(want.length)
+      }
+    }
+    // 대조가 0 = 0 만 본 것이 아니게 — 표본에는 못 잰 블록이 실제로 있다 (legacy 의 hwui · low-end 의 앱 시작).
+    expect(seen).toBeGreaterThan(0)
+  })
+
+  it('RR-8 진단 표가 null 이면 진단 탭 배지 1 · 다 모였으면 0', () => {
+    expect(drawnUncollected(diagDoc('failed'), 'diagnose')).toEqual([SLICE_CARD.title])
+    expect(badge(diagDoc('failed'), 'diagnose')).toBe(1)
+    expect(badge(diagDoc('collected'), 'diagnose')).toBe(0)
   })
 })
