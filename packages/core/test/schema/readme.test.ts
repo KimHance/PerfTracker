@@ -53,7 +53,7 @@ const README = readFileSync(fileURLToPath(new URL('../../../../README.md', impor
 /** README 는 짧은 안내만 두고 필드 설명은 이 파일로 옮겼다 — 스키마에 대해 숫자 · 목록으로 말하는 정본. */
 const RJ = readFileSync(fileURLToPath(new URL('../../../../docs/result-json.md', import.meta.url)), 'utf8')
 const USAGE = readFileSync(fileURLToPath(new URL('../../../../docs/usage.md', import.meta.url)), 'utf8')
-const RJ_URL = 'https://github.com/KimHance/PerfTracker/blob/main/docs/result-json.md'
+const RJ_URL = 'docs/result-json.md'
 const STATUS = readFileSync(fileURLToPath(new URL('../../../../docs/STATUS.md', import.meta.url)), 'utf8')
 const CORE_AGENTS = readFileSync(fileURLToPath(new URL('../../AGENTS.md', import.meta.url)), 'utf8')
 const RESULT_TS = readFileSync(fileURLToPath(new URL('../../src/schema/result.ts', import.meta.url)), 'utf8')

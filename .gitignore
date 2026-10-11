@@ -31,3 +31,4 @@ docs/superpowers/
 # 복사본을 커밋하면 두 벌이 되어 조용히 어긋난다 (scripts/prepack.mjs).
 packages/*/LICENSE
 packages/cli/README.md
+packages/cli/media/

@@ -18,7 +18,8 @@
     "directory": "packages/cli"
   },
   "files": [
-    "dist"
+    "dist",
+    "media"
   ],
   "scripts": {
     "prepack": "node ../../scripts/prepack.mjs dist/index.js"

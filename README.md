@@ -1,6 +1,6 @@
 # PerfTracker
 
-![PerfTracker](https://raw.githubusercontent.com/KimHance/PerfTracker/main/docs/media/banner.png)
+![PerfTracker](docs/media/banner.png)
 
 안드로이드 앱 성능을 앱 수정 없이 재는 CLI 입니다.
 adb 로 기기에 붙어 Perfetto 트레이스와 측정 전후 기기 상태를 남기고, 계산은 내 컴퓨터에서 합니다.
@@ -10,7 +10,7 @@ adb 로 기기에 붙어 Perfetto 트레이스와 측정 전후 기기 상태를
 - 측정하는 동안에는 기기에 명령을 하나도 보내지 않습니다
 - 결과는 판정 없는 숫자(`result.json`)와 보고서 HTML 한 장입니다
 
-![adb 연결 하나로 기기 신호 세 갈래를 모아 호스트에서 지표 8개를 계산하고, 결과 파일과 보고서 한 장으로 내보내는 흐름](https://raw.githubusercontent.com/KimHance/PerfTracker/main/docs/media/diagram-dataflow.png)
+![adb 연결 하나로 기기 신호 세 갈래를 모아 호스트에서 지표 8개를 계산하고, 결과 파일과 보고서 한 장으로 내보내는 흐름](docs/media/diagram-dataflow.png)
 
 ## 빠른 시작
 
@@ -30,14 +30,14 @@ npx perftracker stop --report                           # result.json + 보고�
 
 | 지표 | 귀속 범위 | 무엇인가 | 어디서 나오는가 |
 | --- | --- | --- | --- |
-| [`startup`](https://github.com/KimHance/PerfTracker/blob/main/docs/result-json.md#metricsstartup) | 앱 | 콜드 스타트 시간 (`--launch` 세션만) | `am start -W` — **유일하게 트레이스를 안 읽는 지표** |
-| [`cpu`](https://github.com/KimHance/PerfTracker/blob/main/docs/result-json.md#metricscpu) | **앱 + 기기 전역** | 앱 프로세스의 CPU 시간, 기기 전체 사용률·코어별·주파수 | perfetto `linux.sys_stats` + `linux.process_stats` |
-| [`memory`](https://github.com/KimHance/PerfTracker/blob/main/docs/result-json.md#metricsmemory) | **앱 + 기기 전역** | 앱 프로세스의 RSS 통계, 기기 전체 meminfo | perfetto `linux.process_stats` + `linux.sys_stats` |
-| [`log`](https://github.com/KimHance/PerfTracker/blob/main/docs/result-json.md#metricslog) | **앱 + 기기 전역** | 우선순위별 로그 개수, 크래시·ANR 목록 | perfetto `android.log` |
-| [`thermal`](https://github.com/KimHance/PerfTracker/blob/main/docs/result-json.md#metricsthermal) | 기기 전역 | 센서별 온도의 세션 전/후 차이 | `dumpsys thermalservice` 전/후 스냅샷 |
-| [`network`](https://github.com/KimHance/PerfTracker/blob/main/docs/result-json.md#metricsnetwork) | **uid** | 세션 동안 오간 바이트·패킷 | `dumpsys netstats` 전/후 스냅샷 |
-| [`hwui`](https://github.com/KimHance/PerfTracker/blob/main/docs/result-json.md#metricshwui) | 앱 | 프레임워크가 직접 센 렌더링 집계와 **원인별 개수** | `dumpsys gfxinfo` 전/후 스냅샷 |
-| [`frame`](https://github.com/KimHance/PerfTracker/blob/main/docs/result-json.md#metricsframe) | 앱 + **표시 프레임은 기기 합성** | 화면에 나간 프레임의 **시간축** (개수·백분위는 없음) | perfetto `android.surfaceflinger.frametimeline` — **sdk 31 이상** |
+| [`startup`](docs/result-json.md#metricsstartup) | 앱 | 콜드 스타트 시간 (`--launch` 세션만) | `am start -W` — **유일하게 트레이스를 안 읽는 지표** |
+| [`cpu`](docs/result-json.md#metricscpu) | **앱 + 기기 전역** | 앱 프로세스의 CPU 시간, 기기 전체 사용률·코어별·주파수 | perfetto `linux.sys_stats` + `linux.process_stats` |
+| [`memory`](docs/result-json.md#metricsmemory) | **앱 + 기기 전역** | 앱 프로세스의 RSS 통계, 기기 전체 meminfo | perfetto `linux.process_stats` + `linux.sys_stats` |
+| [`log`](docs/result-json.md#metricslog) | **앱 + 기기 전역** | 우선순위별 로그 개수, 크래시·ANR 목록 | perfetto `android.log` |
+| [`thermal`](docs/result-json.md#metricsthermal) | 기기 전역 | 센서별 온도의 세션 전/후 차이 | `dumpsys thermalservice` 전/후 스냅샷 |
+| [`network`](docs/result-json.md#metricsnetwork) | **uid** | 세션 동안 오간 바이트·패킷 | `dumpsys netstats` 전/후 스냅샷 |
+| [`hwui`](docs/result-json.md#metricshwui) | 앱 | 프레임워크가 직접 센 렌더링 집계와 **원인별 개수** | `dumpsys gfxinfo` 전/후 스냅샷 |
+| [`frame`](docs/result-json.md#metricsframe) | 앱 + **표시 프레임은 기기 합성** | 화면에 나간 프레임의 **시간축** (개수·백분위는 없음) | perfetto `android.surfaceflinger.frametimeline` — **sdk 31 이상** |
 
 Android 11(sdk 30)부터 됩니다. `network` 은 Android 14, `frame` 은 Android 12 이상에서만 나옵니다.
 
@@ -46,7 +46,7 @@ Android 11(sdk 30)부터 됩니다. `network` 은 Android 14, `frame` 은 Androi
 **측정이 측정 대상을 바꾸지 않습니다.** `start` 가 끝나고 `stop` 할 때까지 기기에 adb 명령을 하나도 보내지 않습니다.
 명령 하나만 보내도 CPU · 로그 수치가 흔들리기 때문입니다. 트레이스는 기기가 혼자 기록하고 `stop` 때 한 번에 가져옵니다.
 
-![측정 중엔 기기에 명령 0회 — 시작에서 상태를 찍고 기록을 켜고, 끝에서 기록을 회수하고 상태를 다시 찍는다. 계산은 나중에 기기 없이](https://raw.githubusercontent.com/KimHance/PerfTracker/main/docs/media/diagram-session.png)
+![측정 중엔 기기에 명령 0회 — 시작에서 상태를 찍고 기록을 켜고, 끝에서 기록을 회수하고 상태를 다시 찍는다. 계산은 나중에 기기 없이](docs/media/diagram-session.png)
 
 **판정하지 않습니다.** 결과에 "좋다 / 느리다" 가 없습니다. 기준과 비교하는 건 CI 나 사람의 몫이고,
 구글 기준치는 `references` 에 출처와 함께 적어 두기만 합니다. 못 잰 값은 0 이 아니라 `null` 과 이유 코드로 남깁니다.
@@ -73,6 +73,6 @@ Android 11(sdk 30)부터 됩니다. `network` 은 Android 14, `frame` 은 Androi
 
 ## 더 보기
 
-- [자세한 사용법](https://github.com/KimHance/PerfTracker/blob/main/docs/usage.md) — 설치 · 명령별 옵션 · 진단 세션 · `--compile` · 문제가 생겼을 때 · 개발
-- [`result.json` 읽는 법](https://github.com/KimHance/PerfTracker/blob/main/docs/result-json.md) — 필드 하나하나 · 스키마 버전
-- [CHANGELOG](https://github.com/KimHance/PerfTracker/blob/main/CHANGELOG.md) — 버전별 변경과 실기기 검증 기록
+- [자세한 사용법](docs/usage.md) — 설치 · 명령별 옵션 · 진단 세션 · `--compile` · 문제가 생겼을 때 · 개발
+- [`result.json` 읽는 법](docs/result-json.md) — 필드 하나하나 · 스키마 버전
+- [CHANGELOG](CHANGELOG.md) — 버전별 변경과 실기기 검증 기록

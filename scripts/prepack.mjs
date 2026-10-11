@@ -1,4 +1,4 @@
-import { accessSync, copyFileSync } from 'node:fs'
+import { accessSync, copyFileSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -37,4 +37,19 @@ for (const rel of process.argv.slice(2)) {
 const copies = basename(pkgDir) === 'cli' ? ['LICENSE', 'README.md'] : ['LICENSE']
 for (const name of copies) {
   copyFileSync(join(root, name), join(pkgDir, name))
+}
+
+// README 의 그림 · 문서 링크는 저장소 기준 상대 경로다 (GitHub 에서 그대로 보이게). 저장소가 비공개라
+// npm 페이지는 그 경로를 따라가지 못하므로, CLI 패키지에는 그림을 함께 싣고 README 사본의 그림 주소를
+// 그 버전의 패키지 파일(jsDelivr)로, 문서 링크를 저장소 주소로 바꾼다. 정본 README 는 건드리지 않는다.
+if (basename(pkgDir) === 'cli') {
+  const { version } = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'))
+  const media = join(root, 'docs', 'media')
+  mkdirSync(join(pkgDir, 'media'), { recursive: true })
+  for (const name of readdirSync(media)) copyFileSync(join(media, name), join(pkgDir, 'media', name))
+  const readme = join(pkgDir, 'README.md')
+  const text = readFileSync(readme, 'utf8')
+    .replaceAll('](docs/media/', `](https://cdn.jsdelivr.net/npm/perftracker@${version}/media/`)
+    .replace(/\]\(((?:docs\/[^)#]+|CHANGELOG)\.md)/g, '](https://github.com/KimHance/PerfTracker/blob/main/$1')
+  writeFileSync(readme, text)
 }
