@@ -1,3 +1,4 @@
+import { COMPILE_REPORT_COPY as CC } from './compile-copy.js'
 import { DIAGNOSE_REPORT_COPY as DX } from './diagnose-copy.js'
 import type { Fmt } from './format.js'
 import { LABEL_WORDS as LW, READABILITY_COPY as RC } from './readability-copy.js'
@@ -7,7 +8,7 @@ import { LABEL_WORDS as LW, READABILITY_COPY as RC } from './readability-copy.js
  *
  * 지표마다 컴포넌트를 만들지 않는다. `result.json` 안의 데이터 모양은 실제로 여덟 가지뿐이고,
  * 각 지표가 여기서 **자기 모양(`kind`)과 데이터 위치(`path`)** 를 선언하면 렌더러는 모양만
- * 안다. 지표가 늘면 이 배열에 한 줄, 새 *모양*이 나올 때만 `kind` 를 하나 늘린다.
+ * 안다. 지표가 늘면 이 배열에 한 줄, 새 *모양*이 나올 때만 `kind` 를 하나 늘린다 (아홉째가 `dexstates`).
  *
  * 실제로 이 도구는 필드가 계속 는다 — 최근에 `cpu.device_timeline` ·
  * `memory.system_timeline` · 앱 빌드 속성 다섯이 한 번에 들어왔고, 그때 화면 코드는
@@ -15,7 +16,8 @@ import { LABEL_WORDS as LW, READABILITY_COPY as RC } from './readability-copy.js
  */
 
 export type BlockKind =
-  'stat' | 'distribution' | 'series' | 'bars' | 'delta' | 'pairs' | 'frametimeline' | 'slicetable'
+  | 'stat' | 'distribution' | 'series' | 'bars' | 'delta' | 'pairs' | 'frametimeline' | 'slicetable'
+  | 'dexstates'
 
 export type SectionId =
   'startup' | 'render' | 'cpu' | 'memory' | 'log' | 'context' | 'device' | 'diagnose'
@@ -272,9 +274,74 @@ export interface SliceTableBlock extends BlockBase {
   rowsUnit: string
 }
 
+/** 단어 줄 + 경로 줄 라벨 (RR-6) — `path` 는 화면에 찍히는 경로 원문이다 (⌘F). */
+export interface WordPath {
+  word: string
+  path: string
+}
+
+/**
+ * 때 하나 — 컴파일 카드의 `바꾸기 전` · `시작` · `끝`. 배열이 `null` 이면 그 때 행을 모든 dex 줄에서 빼고 기록 칸에
+ * 한 행(`값 없음` + `code` · 문장은 행 title)으로 낸다. 경로는 문서 루트 기준 (점 표기 그대로).
+ */
+export interface DexTime {
+  word: string
+  /** 기록 칸에 찍는 경로 줄 (`compile_state_start`). */
+  label: string
+  path: string
+  code: string
+  reason: string
+}
+
+/**
+ * **dex 줄마다 머리 행 + 값 행인 표** (baseline-profile BP-8 · 결정 14 · 16). 줄 하나에 칸이 여럿이고(경로 ·
+ * ABI · 불 셋 · status · reason · location) 때가 셋이라 8종 어느 것으로도 안 그려진다 (`pairs` 는 값 하나 ·
+ * `delta` 는 전/후 숫자 둘).
+ *
+ * 모양 둘이 같은 종류다 — `when` 은 요약 탭 컴파일 카드(위 기록 칸 · 때 행 · 위치 행), `slice` 는 진단 탭
+ * 컴파일 상태 slice(머리 행에 `location` · `oat 파일 상태` · 값 행 칸 둘). **판정하지 않는다** (결정 6):
+ * 상태 문자열은 같은 색 · 굵기 · 등폭이고 행 순서는 기기 원문 순 · 강조 · 순위 · 차이 칸 0.
+ */
+export interface DexStatesWhenBlock extends BlockBase {
+  kind: 'dexstates'
+  rows: 'when'
+  /** 시작 상태 배열 — **키가 없으면 옛 파일**이라 카드째 `수집 안 함` (BP-8 · HANDOFF ①). */
+  path: string
+  /**
+   * 바꾼 기록 객체 (`session.compile`). 있으면 `fields` 를 기록 칸에, 없으면(시작 키는 있음) `바꾸지 않음` 한 행
+   * (결정 15 · 배지 밖). 경로 줄은 `field` 의 이름이다.
+   */
+  record: { path: string; fields: { field: string; word: string; fmt: Fmt; mono?: true }[]; none: WordPath & { value: string } }
+  /**
+   * 때 순서 — 줄 맞춤의 훑는 순서이고 때 행 순서다. `onlyIf` 가 있으면 그 경로가 객체일 때만 그 때가 있다
+   * (`바꾸기 전` 은 `--compile` 세션에만).
+   */
+  times: (DexTime & { onlyIf?: string })[]
+  /** 표 머리 — 때 · 컴파일 필터 · 컴파일 이유 · 위치 행 라벨. */
+  cols: { when: string; status: WordPath; reason: WordPath; location: WordPath }
+  /** 머리 행 2 — 필드 이름 그대로 넷. */
+  lineFields: { field: string; fmt: Fmt }[]
+  lineMissing: string
+}
+
+export interface DexStatesSliceBlock extends BlockBase {
+  kind: 'dexstates'
+  rows: 'slice'
+  path: string
+  /** 배열이 `null` 인 이유 짝 (문서 루트 기준) — 블록 껍데기가 아니라 이 칸의 것 (BP-7 · `dalvik_not_recorded`). */
+  why: { code: string; reason: string }
+  /** 머리 행 2 — `status`(oat 파일 상태 · 결정 14). */
+  headField: WordPath
+  cols: { filter: WordPath; reason: WordPath }
+  /** `[]` — 재 봤더니 0개. */
+  emptyLabel: string
+}
+
+export type DexStatesBlock = DexStatesWhenBlock | DexStatesSliceBlock
+
 export type Block =
   | StatBlock | DistributionBlock | SeriesBlock | BarsBlock | DeltaBlock | PairsBlock
-  | FrameTimelineBlock | SliceTableBlock
+  | FrameTimelineBlock | SliceTableBlock | DexStatesBlock
 
 /**
  * 보고서 섹션 순서. 요약 탭 맨 위 `지표` 섹션(타일 8)은 블록이 아니라 여기 없다 — 아래 `TILES` · `ReportPage`.
@@ -626,6 +693,51 @@ export const MANIFEST: Block[] = [
       { p: 'trace_buffer_overrun', l: '버퍼 넘침', f: 'bool' },
     ],
   },
+  {
+    // **측정 조건이라 맥락 끝 · 전폭 · 지표 아님** (baseline-profile 결정 16 — 요약 타일에 없다). 위는 기록 칸(바꾼
+    // 기록 · 못 읽은 때), 아래는 dex 줄마다 머리 행 둘 + 때 행 + 위치 행. 상태 문자열을 칠하지 않고 바뀐 칸을
+    // 가르지 않는다 — 바뀐 사실은 경고 카드의 `compile_state_changed` 행이 말한다 (BP-3).
+    kind: 'dexstates', rows: 'when', section: 'context', title: CC.cardApp, span: 12, unit: '',
+    path: 'target_app.compile_state_start',
+    record: {
+      path: 'session.compile',
+      fields: [
+        { field: 'value', word: CC.recValue, fmt: 'raw', mono: true },
+        { field: 'command', word: CC.recCommand, fmt: 'wrap', mono: true },
+        { field: 'elapsed_ms', word: CC.recElapsed, fmt: 'ms0' },
+      ],
+      none: { word: CC.recNone, path: 'session.compile', value: CC.notChanged },
+    },
+    times: [
+      {
+        word: CC.whenBefore, label: 'compile_state_before', onlyIf: 'session.compile',
+        path: 'session.compile.compile_state_before',
+        code: 'session.compile.compile_state_before_reason_code',
+        reason: 'session.compile.compile_state_before_reason',
+      },
+      {
+        word: CC.whenStart, label: 'compile_state_start', path: 'target_app.compile_state_start',
+        code: 'target_app.compile_state_start_reason_code', reason: 'target_app.compile_state_start_reason',
+      },
+      {
+        word: CC.whenEnd, label: 'compile_state_end', path: 'target_app.compile_state_end',
+        code: 'target_app.compile_state_end_reason_code', reason: 'target_app.compile_state_end_reason',
+      },
+    ],
+    cols: {
+      when: CC.colWhen,
+      status: { word: CC.colFilter, path: 'status' },
+      reason: { word: CC.colReason, path: 'reason' },
+      location: { word: CC.colLocation, path: 'location' },
+    },
+    lineFields: [
+      { field: CC.fieldAbi, fmt: 'raw' },
+      { field: CC.fieldPrimaryAbi, fmt: 'bool' },
+      { field: CC.fieldSecondaryDex, fmt: 'bool' },
+      { field: CC.fieldPublicDex, fmt: 'bool' },
+    ],
+    lineMissing: CC.lineMissing,
+  },
 
   // ── 기기 · 앱 ────────────────────────────────────────────────
   {
@@ -684,7 +796,7 @@ export const MANIFEST: Block[] = [
   //
   // 경로 줄은 **스키마 필드 경로 그대로**다 (logcat 카드와 같은 이유 — `result.json` 에서 그대로 찾을 수
   // 있어야 한다) · 그 위에 우리말 단어 줄 (RR-6). 이름의 정본은 README 「`diagnose`」. 카드 단위 칸은
-  // 비운다 — `diagnose` 는 뜻 없는 글자였다 (RR-6). 블록 껍데기(`status` · `reason`)는 네 카드가
+  // 비운다 — `diagnose` 는 뜻 없는 글자였다 (RR-6). 블록 껍데기(`status` · `reason`)는 다섯 카드가
   // 다 끌어온다 — 배지와 제목 툴팁. 블록 `status` 는 **트레이스에서 읽은 칸**의 상태이고, 앱 slice
   // 열림은 그와 따로 가므로(README) 자기 행에 자기 이유를 단다.
   {
@@ -708,19 +820,10 @@ export const MANIFEST: Block[] = [
       { p: 'target_process_slices_unfinished', l: 'target_process_slices_unfinished', w: LW.target_process_slices_unfinished, f: 'int' },
       { p: 'target_process_slice_names_unfolded', l: 'target_process_slice_names_unfolded', w: LW.target_process_slice_names_unfolded, f: 'int' },
       { p: 'ftrace_overrun_events', l: 'ftrace_overrun_events', w: LW.ftrace_overrun_events, f: 'int' },
-      // ART 칸 (baseline-profile BP-7) — 블록 status 와 따로 가는 이유를 행마다 단다 (열림 행과 같은 꼴).
-      // 자리 · 라벨은 최소로 둔 것이다 — bp-gui-report 가 디자인 문서대로 다듬는다 (plan B26).
-      // 컴파일 상태는 객체 배열이다 — `list` 포맷이 항목마다 `키=값` 을 공백으로 이은 한 줄(기기 slice 원문 꼴)로
-      // 내고 항목끼리는 `, ` 로 잇는다 (plan B27). 줄마다 나눠 그리는 꼴은 bp-gui-report 몫.
+      // JIT 컴파일 slice 수 (BP-7) — 블록 status 와 따로 가는 이유를 행에 단다 (열림 행과 같은 꼴). 컴파일 상태
+      // slice 는 칸이 넷이라 아래 `컴파일 상태 slice` 카드(dexstates)가 그린다.
       {
-        p: 'target_process_compile_state_slices', l: 'target_process_compile_state_slices', f: 'list',
-        why: {
-          code: 'target_process_compile_state_slices_reason_code',
-          reason: 'target_process_compile_state_slices_reason',
-        },
-      },
-      {
-        p: 'target_process_jit_slices', l: 'target_process_jit_slices', f: 'int',
+        p: 'target_process_jit_slices', l: 'target_process_jit_slices', w: CC.jitWord, f: 'int',
         why: { code: 'target_process_jit_slices_reason_code', reason: 'target_process_jit_slices_reason' },
       },
     ],
@@ -734,6 +837,23 @@ export const MANIFEST: Block[] = [
       { p: 'artifacts.trace', l: 'artifacts.trace', w: LW['artifacts.trace'], f: 'path' },
       { p: 'diagnose.trace_bytes', l: 'diagnose.trace_bytes', w: LW['diagnose.trace_bytes'], f: 'bytes' },
     ],
+  },
+  {
+    // 컴파일 상태 slice (BP-7 · BP-8) — `slice 이름별` 표 위 · 전폭. 머리 행 1 = `location` 원문 · 머리 행 2 =
+    // `oat 파일 상태`/`status` (결정 14 — 이 `status` 는 oat 파일 상태 · 컴파일 필터는 `filter`) · 값 행 칸 둘.
+    // `null` 이면 그 칸의 이유 짝(블록 껍데기가 아니다 — dalvik 안 켠 원본은 블록이 collected 다).
+    kind: 'dexstates', rows: 'slice', section: 'diagnose', title: CC.cardSlices, span: 12, unit: '',
+    statePath: 'diagnose', path: 'diagnose.target_process_compile_state_slices',
+    why: {
+      code: 'diagnose.target_process_compile_state_slices_reason_code',
+      reason: 'diagnose.target_process_compile_state_slices_reason',
+    },
+    headField: { word: CC.colOatStatus, path: 'status' },
+    cols: {
+      filter: { word: CC.colFilter, path: 'filter' },
+      reason: { word: CC.colReason, path: 'reason' },
+    },
+    emptyLabel: CC.slicesEmpty,
   },
   {
     kind: 'slicetable', section: 'diagnose', title: DX.cardNames, span: 12,

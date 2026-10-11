@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { INLINE_REPORT_GLOBAL, type ReportDocument } from '../../contract/api.js'
 import { computeMaxT, readMarks } from './axis.js'
-import { blockState, buildBlock, buildTiles, cardUnit, type NoneVm, tabBadgeCount } from './blocks.js'
+import {
+  blockState,
+  buildBlock,
+  buildTiles,
+  cardState,
+  cardUnit,
+  type DexStatesVm,
+  type NoneVm,
+  tabBadgeCount,
+} from './blocks.js'
 import { BlockCard, NoneBody } from './BlockCard.jsx'
 import {
   BarsBody,
@@ -16,6 +25,7 @@ import {
   type Tip,
   useWidth,
 } from './Charts.jsx'
+import { DexStatesBody } from './DexStates.jsx'
 import { clock } from './format.js'
 import { buildHeader, isDiagnoseSession, tabsFor } from './header.js'
 import { type Block, MANIFEST, SECTIONS, type TabId } from './manifest.js'
@@ -222,8 +232,11 @@ export function ReportPage({ runId }: { runId: string }) {
               </div>
             )}
             <div className="rp-grid">
-              {s.items.map(({ key, block, metric, vm }) => {
+              {s.items.map(({ key, block, metric: shell, vm }) => {
                 const isNone = (vm as NoneVm).none === true
+                // 값에 딸린 이유 짝이 있는 빈 자리(진단 컴파일 상태 slice)는 그 문장이 제목 title · 그 코드가 값 자리
+                // 코드다 — 배지는 블록 껍데기 그대로 (`cardState`).
+                const metric = cardState(shell, vm)
                 const stat = block.kind === 'stat'
                 return (
                   <BlockCard
@@ -396,6 +409,7 @@ function Body({
     case 'pairs': return <PairsBody vm={vm as Parameters<typeof PairsBody>[0]['vm']} />
     case 'stat': return <StatBody vm={vm as Parameters<typeof StatBody>[0]['vm']} title={block.title} />
     case 'slicetable': return <SliceTable vm={vm as SliceTableVm} />
+    case 'dexstates': return <DexStatesBody vm={vm as DexStatesVm} />
     default: {
       // **exhaustiveness 체크.** `case` 하나가 빠지면(예: `frametimeline` 삭제) `block` 이
       // `never` 로 안 좁혀져 컴파일이 깨진다 — 안 그러면 그 카드는 테스트를 다 통과한 채

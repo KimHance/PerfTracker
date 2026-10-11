@@ -420,6 +420,32 @@
   .rp-slice-name-h, .rp-slice-name { width: 140px; min-width: 140px; max-width: 140px; }
 }
 
+/* ── dex 줄 표 (dexstates · 컴파일 카드 · 진단 컴파일 상태 slice) ─────────
+   **칠하지 않는다** (baseline-profile 결정 6) — 상태 문자열 · 불 값은 모든 행이 같은 `neutral-800` 등폭 13px ·
+   같은 굵기. 새 색 0. 상자 스크롤 0 — 경로 · 위치는 칸 전부를 쓰는 행에서 구분자 뒤 줄바꿈, 값 칸은 `nowrap`
+   (19자 `profile-utilization` 까지 390 에서 카드 안 · 디자인 `## 넘침`). 시안 `report-rr.css` 의 `.rp-dex*` 그대로 —
+   키/값 표의 라벨 열 규칙은 `:where()` 라 `.rp-dex thead th` 가 이긴다. */
+.rp-dex { table-layout: auto; }
+.rp-dex thead th { vertical-align: bottom; width: auto; max-width: none; }
+.rp-dex th, .rp-dex td { text-align: left; padding: 4px 4px 4px 0; overflow-wrap: break-word; word-break: normal; }
+.rp-dex-when thead th:first-child, .rp-dex-row th { width: 72px; min-width: 72px; max-width: 72px; }
+.rp-dex td.rp-dex-v { white-space: nowrap; }
+.rp-dex td:last-child, .rp-dex th:last-child { padding-right: 0; }
+.rp-dex-kvs { display: flex; flex-wrap: wrap; gap: 2px 14px; margin-top: 2px; }
+.rp-dex-kv { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.rp-dex-w { font-family: var(--font-body); font-size: 13px; color: var(--color-neutral-700); }
+.rp-dex-k { font-family: var(--font-mono); font-size: 12px; color: var(--color-neutral-600); }
+.rp-dex-val { font-family: var(--font-mono); font-size: 13px; color: var(--color-neutral-800); }
+.rp-dex td.mono { font-size: 13px; }
+.rp-dex-head td {
+  font-family: var(--font-mono); font-size: 13px; color: var(--color-neutral-800);
+  padding-top: var(--space-3); border-bottom: 1px solid var(--color-divider);
+}
+.rp-dex-loc td { font-family: var(--font-mono); font-size: 12px; color: var(--color-neutral-600); }
+.rp-dex-row th, .rp-dex-row td { border-bottom: 0; }
+/* 기록 칸(키/값 표) 아래에 표가 오면 사이를 띄운다. */
+.rp-table + .rp-dex { margin-top: var(--space-3); }
+
 /* ── stat (앱 시작) ─────────────────────────────────────────
    큰 숫자가 없다 — 숫자는 요약 타일에 (결정 10). 값이 없으면 `.rp-none` 본문 크기 + 코드. */
 .rp-stat-title { font-size: 13px; color: var(--color-neutral-700); }

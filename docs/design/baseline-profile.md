@@ -195,6 +195,7 @@ report-readability `## 상태` 의 행을 같이 쓴다 (6상태 × 2) · CLI 6�
 |---|---|---|---|
 | 보고서 6상태 × 1440 · 390 | 없음 | `shoot.mjs` · `check_shots.py` | `labs/report-readability-design/v1/shots/` · `README.md` |
 | CLI 6블록 | 없음 | `check_cli.py` (`--break`) | `## 문구` 끝 줄 |
+| 구현 bp-gui-report (`dexstates` · 머리 `--compile` · 진단 ART 칸) 7상태 + device × 1440 · 390 | 없음 | `report.test.ts` (`BP-8 …` · `B30 …` · DM-13 블록 수 9) · `report-copy.test.ts` (`BP-6 문구 표 ↔ 코드 (gui)`) | 2026-10-11 · `samples/` → `perftracker report --file` 실렌더 · **16/16: 12px 미만 0% · 4.5:1 미만 0% · 390 넘침 0 · 카드 안 가로 스크롤 0** · 레일 summary 0 · missing 요약 4 · compile 0 · end-null 0 · legacy 요약 1 · diag 0 · diag-noapp 진단 2 (시안과 같음) · 390 의 `보낸 명령` 은 카드가 시안보다 14px 좁아 `-m` 의 `-` 뒤에서 줄이 바뀜 (브라우저 기본 줄바꿈 · 글자 그대로) |
 
 시험은 패키지가 한다 — `BP-6 문구 표 ↔ 코드` (core · cli · gui) · `BP-5 되돌림 줄 — start · stop · 호스트 꼴` · `BP-8 새 필드 전부 보임`.
 
@@ -221,4 +222,5 @@ report-readability `## 상태` 의 행을 같이 쓴다 (6상태 × 2) · CLI 6�
 |---|---|---|
 | 2026-10-11 | baseline-profile | 처음 — 보고서 카드 · 진단 ART 칸 · `dexstates` · CLI 6블록 · `## 문구` 정본 (cli 14 · gui 12) |
 | 2026-10-11 | baseline-profile | 고침 1 (디자인 검토 #1 ~ 5 · 7 · 10 · 11) — core 이름 · 필드 넷 · 줄 맞춤 · 배지 셈 · core 문구 11 · 진단 값 칸 둘 |
+| 2026-10-11 | baseline-profile | bp-gui-report 구현 — `## HANDOFF 와 어긋남` report §2 · §3 넷을 HANDOFF 에 옮김 (블록 9종 · 머리 `--compile` · 맥락 카드 · 진단 카드 다섯) · `## 확인` 한 줄 |
 | 2026-10-11 | baseline-profile | bp-cli 검수 왕복 1 · plan B34 — cli 문구 둘 더함: 보조 dex `status` 모두 같은데 `-m` 밖 사실 줄 (#5 · 침묵 안 함) · 값 모름 낱말 `모름` (#3) |

@@ -196,6 +196,7 @@ slice 표 머리 첫 줄 `line-height: 18px` · 둘째 줄 `top: 27px` 그대로
 | 지금 코드 8상태 × 1440 · 390 | 골든 없음 | `shoot.mjs … before` | `v1/before/` · 요약 1440 12px 미만 85.1% · 4.5:1 미만 12.3% |
 | 구현 rr-type (글자 크기 · 색) 8상태 × 1440 · 390 | 없음 | `packages/gui/test/report-css.test.ts` · `shoot.mjs <base> <runs>/shots/rr-type before` | 2026-10-11 · `samples/` → `perftracker report --file` 실렌더 · **16/16: 12px 미만 0% · 4.5:1 미만 0% · 최소 12px · 4.84 (neutral-200 배지) · 층 18 > 15 > 13 · 넘침 0** · 타일 · 라벨 두 줄 · `<wbr>` 은 rr-layout 뒤 |
 | 구현 rr-layout (타일 · 라벨 두 줄 · `<wbr>` · 차트 `[]` · 앱 시작 게이지만) 8상태 × 1440 · 390 | 없음 | `report.test.ts` (`RR-4 …` · `RR-5 …` · `RR-6 …` · `RR-7 …` · `B22 …`) · `report-copy.test.ts` (`RR-5 문구 표 ↔ 코드` · `RR-6 단어 표 ↔ 코드`) · `report-css.test.ts` (`RR-3 요약 타일 값 > 섹션 제목` · `RR-7 줄바꿈은 break-word`) | 2026-10-11 · `samples/` → `perftracker report --file` 실렌더 · **16/16: 12px 미만 0% · 4.5:1 미만 0% · 층 31.68(390 26) > 18 > 15 > 13 · 390 넘침 0 · 카드 안 가로 스크롤 0 · ellipsis 0** · 레일 요약 배지 summary 0 · missing 4 (시안과 같음) · legacy 0 · diag-noapp 진단 1 (시안 1 · 2 는 bp-gui-report 의 컴파일 카드 몫) |
+| 구현 bp-gui-report (컴파일 카드 · 진단 ART 칸) 같은 8상태 | 없음 | `report.test.ts` (`BP-8 …` · `B30 …`) | 2026-10-11 · 16/16 그대로 (12px · 4.5:1 · 390 넘침 · 카드 안 스크롤 0) · 레일 legacy 요약 1 · diag-noapp 진단 2 — 시안 숫자와 같아짐 (`docs/design/baseline-profile.md` `## 확인`) |
 
 구현 화면 찍는 길: `gen_samples.py` → `perftracker report <id> -o <runs> --file <html> --no-browser` → `shoot.mjs <base> <폴더> before` (시계열 눈금은 SVG 배율로 잼 · 결정 13).
 

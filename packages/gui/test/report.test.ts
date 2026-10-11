@@ -7,11 +7,15 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
+  CompileStateSliceSchema,
   copyViolations,
+  DexoptLineSchema,
   DiagnoseBlockSchema,
   renderReason,
+  SessionCompileSchema,
   SliceBranchStatsSchema,
   SliceNameRowSchema,
+  TargetAppSchema,
 } from '@perftracker/core'
 import { INLINE_REPORT_GLOBAL } from '../src/contract/api.js'
 import { computeMaxT, type Mark, readMarks } from '../src/web/report/axis.js'
@@ -23,13 +27,16 @@ import {
   buildBars,
   buildBlock,
   buildDelta,
+  buildDexStates,
   buildDistribution,
   buildFrameTimeline,
   buildPairs,
   buildSeries,
   buildStat,
   buildTiles,
+  cardState,
   cardUnit,
+  type DexStatesVm,
   FPAD,
   type FrameTimelineVm,
   metricState,
@@ -66,9 +73,12 @@ import {
   sortMark,
   sortSliceRows,
 } from '../src/web/report/slices.js'
+import { COMPILE_REPORT_COPY as CC } from '../src/web/report/compile-copy.js'
 import type {
   BarsBlock,
   DeltaBlock,
+  DexStatesSliceBlock,
+  DexStatesWhenBlock,
   DistributionBlock,
   FrameTimelineBlock,
   PairsBlock,
@@ -94,6 +104,61 @@ const LEGACY = sample('legacy')
 const LOWEND = sample('low-end')
 
 const block = <T>(title: string): T => MANIFEST.find((b) => b.title === title) as T
+
+/* ── 컴파일 상태 (baseline-profile BP-8) — 합성 dex 줄. 경로 꼴은 SM-S901N · YouTube 실측을 줄인 것 ── */
+
+const APK = '/data/app/~~j3NK==/com.google.android.youtube-_ZCw==/base.apk'
+const ODEX = '/data/app/~~j3NK==/com.google.android.youtube-_ZCw==/oat/arm64/base.odex'
+const PCAM = '/data/user/0/com.google.android.youtube/app_pccache2/5/59F779C9C12C0775BF45AFF26D8B5E2FA5A89D5B/pcam.jar'
+const QDEX = '/data/user/0/com.google.android.youtube/app_tmp/fx/q.dex'
+/** dex 줄 하나 — core 스키마로 검사한다 (시험 문서가 실제로 나올 수 있는 모양이어야 한다). */
+const dex = (o: Partial<Record<string, unknown>>): Record<string, unknown> =>
+  DexoptLineSchema.parse({
+    path: APK, secondary_dex: false, public_dex: false, abi: 'arm64',
+    status: 'speed-profile', reason: 'profile-utilization', primary_abi: true, location: ODEX, ...o,
+  }) as Record<string, unknown>
+const BASE_SP = dex({})
+const PCAM_V = dex({ path: PCAM, secondary_dex: true, status: 'verify', reason: 'vdex', location: `${PCAM}.vdex` })
+
+/**
+ * 평소 세션에 컴파일 상태를 얹는다 (BP-1 — 이 기능 뒤의 새 파일은 모든 세션에 시작 · 끝이 있다). 표본 `full` 은
+ * 이 기능 전 세션이라 그대로면 컴파일 카드가 정말로 `수집 안 함` 이다.
+ */
+const withCompileState = <T>(doc: T, start: unknown = [BASE_SP, PCAM_V], end: unknown = [BASE_SP, PCAM_V]): T => {
+  const d = doc as Record<string, any>
+  d['target_app'] = {
+    ...d['target_app'],
+    compile_state_start: start,
+    compile_state_start_reason_code: start === null ? 'dexopt_state_section_missing' : null,
+    compile_state_start_reason: start === null ? 'dumpsys package 출력에 Dexopt state 절 없음' : null,
+    compile_state_end: end,
+    compile_state_end_reason_code: end === null ? 'dexopt_state_unavailable' : null,
+    compile_state_end_reason: end === null ? '아직 stop 하지 않은 세션 — 세션 끝 컴파일 상태를 읽지 않음' : null,
+  }
+  return doc
+}
+
+/** `--compile speed` 세션 — 바꾼 기록 · 바꾸기 전 · 시작(바꾼 뒤) · 끝(끝에만 있는 보조 dex 한 줄). */
+const compileDoc = (): Record<string, any> => {
+  const doc = withCompileState(
+    structuredClone(FULL) as Record<string, any>,
+    [dex({ status: 'speed', reason: 'cmdline' }), PCAM_V],
+    [dex({ status: 'speed', reason: 'bg-dexopt' }), PCAM_V, dex({ path: QDEX, secondary_dex: true, status: 'run-from-apk', reason: 'unknown', location: null })],
+  )
+  doc['session']['options'] = { ...doc['session']['options'], launch: true, compile: 'speed' }
+  doc['session']['compile'] = SessionCompileSchema.parse({
+    value: 'speed',
+    command: 'cmd package compile -m speed -f com.google.android.youtube',
+    elapsed_ms: 67500,
+    compile_state_before: [BASE_SP, PCAM_V],
+    compile_state_before_reason_code: null,
+    compile_state_before_reason: null,
+  })
+  return doc
+}
+
+const APP_CARD = MANIFEST.find((b): b is DexStatesWhenBlock => b.kind === 'dexstates' && b.rows === 'when')!
+const SLICES_CARD = MANIFEST.find((b): b is DexStatesSliceBlock => b.kind === 'dexstates' && b.rows === 'slice')!
 
 /**
  * 빌더의 규칙을 보는 테스트는 매니페스트 카드가 아니라 이 블록을 쓴다 — 카드가 어느 경로를
@@ -146,6 +211,7 @@ describe('표본 셋이 전부 렌더된다', () => {
           else if (b.kind === 'delta') buildDelta(b, doc)
           else if (b.kind === 'pairs') buildPairs(b, doc)
           else if (b.kind === 'slicetable') buildSliceTable(b, doc)
+          else if (b.kind === 'dexstates') buildDexStates(b, doc)
           else buildStat(b, doc)
         }, `${name} / ${b.title}`).not.toThrow()
       }
@@ -1540,11 +1606,17 @@ const DIAG_STATES: DiagState[] = [
 const DIAG_BLOCKS = MANIFEST.filter((b) => b.section === 'diagnose')
 /** 이유 칸 → 그 이유가 딸린 값 칸 (매니페스트 `why` 선언에서). */
 const WHY_OWNER = new Map(
-  DIAG_BLOCKS.flatMap((b) =>
-    b.kind === 'pairs'
-      ? (b.keys ?? []).flatMap((k) => (k.why === undefined ? [] : [[k.why.code, k.p], [k.why.reason, k.p]] as [string, string][]))
-      : [],
-  ),
+  DIAG_BLOCKS.flatMap((b): [string, string][] => {
+    if (b.kind === 'pairs') {
+      return (b.keys ?? []).flatMap((k) => (k.why === undefined ? [] : [[k.why.code, k.p], [k.why.reason, k.p]] as [string, string][]))
+    }
+    // 컴파일 상태 slice 카드 — 경로가 문서 루트 기준이라 블록 안 이름으로 줄인다.
+    if (b.kind === 'dexstates' && b.rows === 'slice') {
+      const own = (p: string): string => p.slice('diagnose.'.length)
+      return [[own(b.why.code), own(b.path)], [own(b.why.reason), own(b.path)]]
+    }
+    return []
+  }),
 )
 const SLICE_CARD = MANIFEST.find((b) => b.kind === 'slicetable') as SliceTableBlock
 
@@ -1599,6 +1671,27 @@ function diagnosePlaces(doc: unknown): Map<string, string[]> {
       }
     }
 
+    // 컴파일 상태 slice (BP-8) — 값이 있으면 표(원문 순 · 칸 넷), null 이면 값 자리 `값 없음` + 그 칸의 코드 · 문장은
+    // 제목 title, [] 면 `컴파일 상태 slice 없음`.
+    if (b.kind === 'dexstates' && b.rows === 'slice') {
+      const vm = buildDexStates(b, doc)
+      const field = 'target_process_compile_state_slices'
+      const v = block[field] as Record<string, unknown>[] | null
+      if ((vm as NoneVm).none === true) {
+        const n = vm as NoneVm
+        if (v === null && n.label === NONE_NULL) add(field, '값 자리 값 없음')
+        if (Array.isArray(v) && v.length === 0 && n.label === CC.slicesEmpty) add(field, '없음 글자')
+        if (n.code !== undefined && n.code === block[`${field}_reason_code`]) add(`${field}_reason_code`, '값 자리 코드')
+        if (n.title !== undefined && n.title === block[`${field}_reason`]) add(`${field}_reason`, '제목 title')
+      } else {
+        const t = vm as DexStatesVm
+        const same = t.lines.length === v!.length && t.lines.every((l, i) =>
+          l.head === v![i]!['location'] && l.fields[0]!.value === v![i]!['status'] &&
+          l.rows[0]!.cells![0] === v![i]!['filter'] && l.rows[0]!.cells![1] === v![i]!['reason'])
+        if (same) add(field, '표')
+      }
+    }
+
     if (b.kind === 'slicetable') {
       const vm = buildSliceTable(b, doc)
       const names = block['target_process_slice_names'] as { name: string }[] | null
@@ -1619,41 +1712,6 @@ function diagnosePlaces(doc: unknown): Map<string, string[]> {
   }
   return places
 }
-
-/**
- * plan B27 — 진단 블록 컴파일 상태 slice(객체 배열)를 기존 `list` 칸이 그린다. 객체 항목은 `키=값` 을 공백으로
- * 이은 한 줄(기기 slice 원문 꼴)이고, 문자열 항목은 그대로다. `[object Object]` 가 찍히는 길이 없어야 한다.
- */
-describe('BP-7 컴파일 상태 칸 — list 의 객체 항목', () => {
-  it('BP-7 컴파일 상태 칸 — 객체 항목은 키=값 한 줄(객체 순서) · 문자열 항목은 그대로', () => {
-    expect(fmtValue([{ location: '/a b/base.odex', status: 'up-to-date', filter: 'speed', reason: 'cmdline' }] as never, 'list'))
-      .toBe('location=/a b/base.odex status=up-to-date filter=speed reason=cmdline')
-    expect(fmtValue([{ b: 2, a: 1 }, { c: null }] as never, 'list')).toBe('b=2 a=1, c=null')
-    expect(fmtValue(['tag1', 'tag2'] as never, 'list')).toBe('tag1, tag2')
-    expect(fmtValue([] as never, 'list')).toBe('없음')
-  })
-
-  it('BP-7 컴파일 상태 칸 — 진단 탭 어느 상태에서도 [object Object] 가 찍히지 않고, 값이 있으면 원문 꼴 줄이다', () => {
-    for (const s of DIAG_STATES) {
-      const doc = diagDoc(s)
-      for (const b of DIAG_BLOCKS) {
-        if (b.kind !== 'pairs') continue
-        const vm = buildPairs(b, doc)
-        if ((vm as NoneVm).none === true) continue
-        for (const row of (vm as PairsVm).rows) expect(row.value, `${s} / ${row.label}`).not.toContain('[object Object]')
-      }
-    }
-    const counts = DIAG_BLOCKS.find(
-      (b): b is PairsBlock => b.kind === 'pairs' && (b.keys ?? []).some((k) => k.p === 'target_process_compile_state_slices'),
-    )!
-    const row = (buildPairs(counts, diagDoc('collected')) as PairsVm).rows.find(
-      (r) => r.label === 'target_process_compile_state_slices',
-    )!
-    expect(row.value).toBe(
-      COMPILE_STATES.map((c) => `location=${c.location} status=${c.status} filter=${c.filter} reason=${c.reason}`).join(', '),
-    )
-  })
-})
 
 describe('DM-13 진단 탭 전 필드', () => {
   /** 스키마가 블록에 필드를 늘리면 여기서 먼저 깨진다 — 그 필드의 자리를 정하기 전엔 통과하지 않는다. */
@@ -2002,6 +2060,10 @@ describe('RR-8 레일 배지', () => {
   const drawn = (b: (typeof MANIFEST)[number], vm: unknown): string | null => {
     if ((vm as NoneVm).none === true) return (vm as NoneVm).label
     if (b.kind === 'stat') return (vm as { value: string }).value
+    // 컴파일 카드 — 표가 없으면 기록 칸이 그린 글자가 그 카드의 글자다 (BP-8 · 시작 · 끝 둘 다 null).
+    if (b.kind === 'dexstates' && (vm as DexStatesVm).lines.length === 0) {
+      return (vm as DexStatesVm).records.find((r) => r.value === NONE_NULL)?.value ?? null
+    }
     return null
   }
   const drawnUncollected = (doc: unknown, tab: string): string[] =>
@@ -2015,11 +2077,11 @@ describe('RR-8 레일 배지', () => {
   const badge = (doc: unknown, tab: 'summary' | 'device' | 'diagnose'): number => tabBadgeCount(built(doc), tab)
 
   /**
-   * 크래시 · ANR · 경고 자리만 바꾼 세션. 나머지는 표본 `full` 에 프레임 한 장을 얹은 것 — `full` 은
-   * 시간별 프레임(`metrics.frame`)이 없는 옛 세션이라, 그대로면 그 카드 하나가 정말로 `수집 안 함` 이다.
+   * 크래시 · ANR · 경고 자리만 바꾼 세션. 나머지는 표본 `full` 에 프레임 한 장 · 컴파일 상태를 얹은 것 — `full` 은
+   * 시간별 프레임(`metrics.frame`) · 컴파일 상태(BP-1)가 없는 옛 세션이라, 그대로면 그 두 카드가 정말로 `수집 안 함` 이다.
    */
   const withLists = (lists: { crashes: unknown; anrs: unknown; warnings: unknown }): unknown => {
-    const doc = structuredClone(FULL) as Record<string, any>
+    const doc = withCompileState(structuredClone(FULL) as Record<string, any>)
     doc['metrics']['frame'] = {
       status: 'collected',
       data: { samples: [[1000, 8, 4, 16.6]], sampling: 'all', bucket_ms: null, frames_seen: 1 },
@@ -2063,9 +2125,20 @@ describe('RR-8 레일 배지', () => {
     expect(seen).toBeGreaterThan(0)
   })
 
-  it('RR-8 진단 표가 null 이면 진단 탭 배지 1 · 다 모였으면 0', () => {
-    expect(drawnUncollected(diagDoc('failed'), 'diagnose')).toEqual([SLICE_CARD.title])
-    expect(badge(diagDoc('failed'), 'diagnose')).toBe(1)
+  /**
+   * **B30 — 진단 표와 컴파일 상태 slice 가 둘 다 null 이면 진단 배지 2.** RR-8 문장 「진단 표가 null 이면 진단 탭
+   * 배지 1」 은 그 탭에 `값 없음` 을 그릴 카드가 하나뿐이던 때의 사례다 — 배지 = 그 탭에서 `수집 안 함` · `값 없음` 을
+   * 그린 카드 수(RR-8 원리)가 정본이고, bp-gui-report 가 컴파일 상태 slice 카드를 더해 그 수가 2 가 됐다 (plan B30 ·
+   * RR-8 문장은 ⑨ 승격 때 기획이 고친다).
+   */
+  it('B30 진단 대상 앱 없음 배지 2 — 표 · 컴파일 상태 slice 둘 다 값 없음 · 다 모였으면 0', () => {
+    for (const s of ['failed', 'no-process'] as const) {
+      expect(drawnUncollected(diagDoc(s), 'diagnose'), s).toEqual([SLICES_CARD.title, SLICE_CARD.title])
+      expect(badge(diagDoc(s), 'diagnose'), s).toBe(2)
+    }
+    // 컴파일 상태 slice 만 null (dalvik 안 켠 원본) — 1. 표가 있으니 그 카드 하나다.
+    expect(drawnUncollected(diagDoc('dalvik-off'), 'diagnose')).toEqual([SLICES_CARD.title])
+    expect(badge(diagDoc('dalvik-off'), 'diagnose')).toBe(1)
     expect(badge(diagDoc('collected'), 'diagnose')).toBe(0)
   })
 })
@@ -2082,9 +2155,9 @@ const builtAll = (doc: unknown): { block: (typeof MANIFEST)[number]; vm: unknown
   }))
 }
 
-/** 표본 `full` 에 시간별 프레임을 얹은 세션 — `full` 은 `metrics.frame` 이 없는 옛 세션이다. */
+/** 표본 `full` 에 시간별 프레임 · 컴파일 상태를 얹은 세션 — `full` 은 `metrics.frame` · 컴파일 상태가 없는 옛 세션이다. */
 const withFrame = (status = 'collected'): Record<string, any> => {
-  const doc = structuredClone(FULL) as Record<string, any>
+  const doc = withCompileState(structuredClone(FULL) as Record<string, any>)
   doc['metrics']['frame'] = {
     status,
     data: { samples: [[1000, 8, 4, 16.6]], sampling: 'all', bucket_ms: null, frames_seen: 7531 },
@@ -2168,7 +2241,10 @@ describe('RR-4 요약 타일', () => {
           const want = builtAll(doc).filter((x) => {
             if (SECTIONS.find((s) => s.id === x.block.section)?.tab !== tab) return false
             const v = x.vm as { none?: boolean; label?: string; dim?: boolean; value?: string }
-            const t = v.none === true ? v.label : x.block.kind === 'stat' && v.dim === true ? v.value : null
+            const dexNone = x.block.kind === 'dexstates' && v.none !== true && (x.vm as DexStatesVm).lines.length === 0
+              ? (x.vm as DexStatesVm).records.find((r) => r.value === NONE_NULL)?.value
+              : undefined
+            const t = v.none === true ? v.label : x.block.kind === 'stat' && v.dim === true ? v.value : dexNone ?? null
             return typeof t === 'string' && (t === NONE_NULL || t.startsWith(NONE_MISSING))
           }).length
           expect(n, `${label}`).toBe(want)
@@ -2403,5 +2479,262 @@ describe('B37 전/후 표 · 주파수 카드 [] 낱말', () => {
     expect(tabBadgeCount(builtAll(gone), 'summary')).toBe(base + 2)
     // 문구는 모음에서 — 디자인 문서 표와 대조는 report-copy.test.ts.
     expect([RC.emptyDelta, RC.emptyFreq]).toEqual(['항목 없음', '항목 없음'])
+  })
+})
+
+/* ══════════════════ baseline-profile — 보고서 컴파일 카드 · 진단 ART 칸 (BP-8) ══════════════════ */
+
+describe('BP-8 컴파일 상태 카드 (dexstates)', () => {
+  const vmOf = (doc: unknown): DexStatesVm | NoneVm => buildDexStates(APP_CARD, doc)
+  const asVm = (doc: unknown): DexStatesVm => {
+    const vm = vmOf(doc)
+    expect((vm as NoneVm).none, JSON.stringify(vm)).not.toBe(true)
+    return vm as DexStatesVm
+  }
+  /** 때 단어 → 그 때 배열의 필드 이름 (기록 칸 경로 줄과 같은 이름). */
+  const WHEN_FIELD = new Map(APP_CARD.times.map((t) => [t.word, t.label]))
+
+  /**
+   * 화면에 나온 필드 이름 — 기록 칸(경로 줄 · 값 없음 코드 · 행 title) · 표(때 행 · 머리 행 · 칸 머리 · 위치 행) ·
+   * 머리 옵션. 선언이 아니라 **그려질 것**에서 센다.
+   */
+  const shown = (doc: Record<string, any>): Set<string> => {
+    const out = new Set<string>()
+    const vm = asVm(doc)
+    for (const r of vm.records) {
+      out.add(r.path)
+      if (r.code !== undefined) out.add(`${r.path}_reason_code`)
+      if (r.title !== undefined) out.add(`${r.path}_reason`)
+    }
+    for (const l of vm.lines) {
+      out.add('path')
+      for (const f of l.fields) out.add(f.name)
+      for (const row of l.rows) {
+        out.add(WHEN_FIELD.get(row.when!)!)
+        if (row.cells !== null) for (const c of vm.cols) if (c.path !== undefined) out.add(c.path)
+        if (row.location !== undefined) out.add(vm.locationLabel!.path)
+      }
+    }
+    if (buildHeader(doc).meta.find((m) => m.k === '옵션')!.v.includes('--compile ')) out.add('options.compile')
+    return out
+  }
+
+  /** 못 읽은 때를 하나씩 — 바꾸기 전 · 시작 · 끝이 null (+ 짝 코드 · 문장). */
+  const nullBefore = (): Record<string, any> => {
+    const doc = compileDoc()
+    Object.assign(doc['session']['compile'], {
+      compile_state_before: null,
+      compile_state_before_reason_code: 'dexopt_state_unparsable',
+      compile_state_before_reason: 'Dexopt state 절에 대상 패키지의 dex 줄 없음 — 꼴을 추측해 채우지 않음',
+    })
+    return doc
+  }
+
+  it('BP-8 새 필드 전부 보임 — dex 줄 칸 여덟 · target_app 여섯 · session.compile 여섯 · 옵션', () => {
+    const union = new Set<string>()
+    for (const doc of [compileDoc(), nullBefore(), withCompileState(structuredClone(FULL), null, null)]) {
+      for (const f of shown(doc as Record<string, any>)) union.add(f)
+    }
+    const dexKeys = Object.keys(DexoptLineSchema.shape)
+    const appKeys = Object.keys(TargetAppSchema.shape).filter((k) => k.startsWith('compile_state'))
+    const recKeys = Object.keys(SessionCompileSchema.shape)
+    // 대조가 비지 않게 — 스키마가 실제로 그만큼 갖는다.
+    expect([dexKeys.length, appKeys.length, recKeys.length]).toEqual([8, 6, 6])
+    const hidden = [...dexKeys, ...appKeys, ...recKeys, 'options.compile'].filter((k) => !union.has(k))
+    expect(hidden, [...union].join(' · ')).toEqual([])
+  })
+
+  it('BP-8 줄 맞춤 — path + abi · 처음 나온 자리 · 그 때 없으면 줄 없음 · 원문 그대로', () => {
+    const vm = asVm(compileDoc())
+    // 기기 순서 · 끝에만 있는 보조 dex 는 뒤.
+    expect(vm.lines.map((l) => l.head)).toEqual([APK, PCAM, QDEX])
+    const [apk, , q] = vm.lines
+    expect(apk!.rows.map((r) => [r.when, r.cells, r.location])).toEqual([
+      ['바꾸기 전', ['speed-profile', 'profile-utilization'], ODEX],
+      ['시작', ['speed', 'cmdline'], ODEX],
+      ['끝', ['speed', 'bg-dexopt'], ODEX],
+    ])
+    // 끝에만 있는 줄 — 앞 두 때는 `줄 없음`(cells null · 위치 행 없음) · location null 은 `값 없음`.
+    expect(q!.rows.map((r) => [r.when, r.cells, r.location])).toEqual([
+      ['바꾸기 전', null, undefined],
+      ['시작', null, undefined],
+      ['끝', ['run-from-apk', 'unknown'], NONE_NULL],
+    ])
+    expect(vm.lineMissing).toBe('줄 없음')
+    // 머리 행 2 — 필드 이름 그대로 · 참 거짓은 기존 bool 모양.
+    expect(q!.fields).toEqual([
+      { name: 'abi', value: 'arm64' },
+      { name: 'primary_abi', value: '예' },
+      { name: 'secondary_dex', value: '예' },
+      { name: 'public_dex', value: '아니오' },
+    ])
+    // 처음 나온 자리 — 끝 배열이 순서를 바꿔 찍어도 시작에서 먼저 나온 줄이 앞이다 (때 순서로 훑는다).
+    const moved = withCompileState(structuredClone(FULL) as Record<string, any>, [BASE_SP], [PCAM_V, BASE_SP])
+    expect(asVm(moved).lines.map((l) => l.head)).toEqual([APK, PCAM])
+    // 같은 path 라도 abi 가 다르면 다른 줄 (키 = path + abi).
+    const two = withCompileState(structuredClone(FULL) as Record<string, any>, [BASE_SP, dex({ abi: 'arm', primary_abi: false })], [BASE_SP])
+    const tv = asVm(two)
+    expect(tv.lines.map((l) => [l.head, l.fields[0]!.value])).toEqual([[APK, 'arm64'], [APK, 'arm']])
+    expect(tv.lines[1]!.rows.map((r) => r.cells)).toEqual([['speed-profile', 'profile-utilization'], null])
+  })
+
+  it('BP-8 바꾼 기록 — 값 · 보낸 명령(원문 · 줄바꿈) · 걸린 시간', () => {
+    const vm = asVm(compileDoc())
+    expect(vm.records.map((r) => [r.word, r.path, r.value, r.mono, r.wrap])).toEqual([
+      ['바꾼 값', 'value', 'speed', true, false],
+      ['보낸 명령', 'command', 'cmd package compile -m speed -f com.google.android.youtube', true, true],
+      ['걸린 시간', 'elapsed_ms', '67,500 ms', false, false],
+    ])
+    expect(buildHeader(compileDoc()).meta.find((m) => m.k === '옵션')!.v).toBe('--launch --compile speed')
+  })
+
+  it('BP-8 --compile 없는 새 세션 바꾸지 않음 · 배지 밖', () => {
+    const doc = withFrame()
+    const vm = asVm(doc)
+    expect(vm.records).toEqual([
+      { word: '바꾼 기록', path: 'session.compile', value: '바꾸지 않음', mono: false, wrap: false },
+    ])
+    // 때 행은 시작 · 끝 둘 — `바꾸기 전` 은 --compile 세션에만.
+    expect(vm.lines[0]!.rows.map((r) => r.when)).toEqual(['시작', '끝'])
+    expect(buildHeader(doc).meta.find((m) => m.k === '옵션')!.v).toBe('--launch')
+    // 나머지 카드가 다 모인 세션 — 요약 배지 0 (`바꾸지 않음` 을 세지 않는다 · 결정 15).
+    expect(tabBadgeCount(builtAll(doc), 'summary')).toBe(0)
+  })
+
+  it('BP-8 옛 result.json 수집 안 함 — 카드째 · 배지에 셈', () => {
+    for (const d of [LEGACY, FULL]) {
+      expect((vmOf(d) as NoneVm).label).toBe(`${NONE_MISSING} — target_app.compile_state_start 없음`)
+    }
+    // 같은 세션에서 컴파일 상태만 빼면 요약 배지가 정확히 1 는다.
+    const old = structuredClone(FULL) as Record<string, any>
+    old['metrics']['frame'] = withFrame()['metrics']['frame']
+    expect(tabBadgeCount(builtAll(old), 'summary')).toBe(tabBadgeCount(builtAll(withFrame()), 'summary') + 1)
+  })
+
+  it('BP-8 end-null — 기록 칸 끝 값 없음 + 코드 · 문장은 행 title · 끝 행 없음 · 배지에 안 셈', () => {
+    const doc = withCompileState(withFrame(), [BASE_SP, PCAM_V], null)
+    const vm = asVm(doc)
+    expect(vm.records.slice(1)).toEqual([{
+      word: '끝', path: 'compile_state_end', value: NONE_NULL, mono: false, wrap: false,
+      code: 'dexopt_state_unavailable', title: '아직 stop 하지 않은 세션 — 세션 끝 컴파일 상태를 읽지 않음',
+    }])
+    // 그 때 행은 모든 줄에서 빠진다 — 줄마다 되풀이하지 않는다.
+    for (const l of vm.lines) expect(l.rows.map((r) => r.when)).toEqual(['시작'])
+    expect(tabBadgeCount(builtAll(doc), 'summary')).toBe(0)
+  })
+
+  it('BP-8 시작 · 끝 둘 다 null — 표 없음 · 기록 행 값 없음 둘 · 배지 1', () => {
+    const doc = withCompileState(withFrame(), null, null)
+    const vm = asVm(doc)
+    expect(vm.lines).toEqual([])
+    expect(vm.records.map((r) => [r.path, r.value, r.code])).toEqual([
+      ['session.compile', '바꾸지 않음', undefined],
+      ['compile_state_start', NONE_NULL, 'dexopt_state_section_missing'],
+      ['compile_state_end', NONE_NULL, 'dexopt_state_unavailable'],
+    ])
+    expect(tabBadgeCount(builtAll(doc), 'summary')).toBe(1)
+  })
+
+  it('BP-8 칠하지 않음 — 뷰모델 키가 허용 목록과 같다 · 상태 문자열은 원문 그대로', () => {
+    const vm = asVm(compileDoc())
+    expect(Object.keys(vm).sort()).toEqual(['cols', 'lineMissing', 'lines', 'locationLabel', 'records'])
+    const recKeys = new Set(vm.records.flatMap((r) => Object.keys(r)))
+    expect([...recKeys].sort()).toEqual(['mono', 'path', 'value', 'word', 'wrap'])
+    for (const l of vm.lines) {
+      expect(Object.keys(l).sort()).toEqual(['fields', 'head', 'rows'])
+      for (const r of l.rows) for (const k of Object.keys(r)) expect(['when', 'cells', 'location']).toContain(k)
+    }
+    // 렌더 — 표 안 클래스가 모양 클래스뿐이고(값에 따라 갈리는 클래스 0) 굵게 · 인라인 색 0.
+    const g = globalThis as Record<string, unknown>
+    const before = g[INLINE_REPORT_GLOBAL]
+    try {
+      g[INLINE_REPORT_GLOBAL] = compileDoc()
+      const html = renderToStaticMarkup(createElement(ReportPage, { runId: 'x' }))
+      const table = html.slice(html.indexOf('<table class="rp-table rp-dex rp-dex-when">'))
+      const dex = table.slice(0, table.indexOf('</table>'))
+      expect(dex.length).toBeGreaterThan(0)
+      const classes = new Set([...dex.matchAll(/class="([^"]+)"/g)].flatMap((m) => m[1]!.split(' ')))
+      expect([...classes].sort()).toEqual([
+        'mono', 'rp-dex', 'rp-dex-head', 'rp-dex-k', 'rp-dex-kv', 'rp-dex-kvs', 'rp-dex-loc', 'rp-dex-row',
+        'rp-dex-v', 'rp-dex-val', 'rp-dex-when', 'rp-lbl', 'rp-lbl-path', 'rp-table',
+      ])
+      expect(dex).not.toMatch(/<b>|<strong>|style=/)
+      // 보이는 낱말 — 옵션 · 제목 · 줄 없음 · 필드 이름.
+      for (const w of ['--launch --compile speed', '컴파일 상태 (전 → 후)', '줄 없음', 'secondary_dex', 'public_dex', '바꾸기 전']) {
+        expect(html, w).toContain(w)
+      }
+      // 자리 — 맥락 섹션의 마지막 카드.
+      const ctx = MANIFEST.filter((b) => b.section === 'context')
+      expect(ctx[ctx.length - 1]).toBe(APP_CARD)
+      expect(APP_CARD.span).toBe(12)
+    } finally {
+      g[INLINE_REPORT_GLOBAL] = before
+    }
+  })
+})
+
+describe('BP-8 진단 ART 칸', () => {
+  it('BP-8 컴파일 상태 slice — 원문 순 · 머리 행 location · oat 파일 상태 · 값 행 칸 둘', () => {
+    const vm = buildDexStates(SLICES_CARD, diagDoc('collected')) as DexStatesVm
+    expect(vm.lines.map((l) => [l.head, l.fields, l.rows.map((r) => r.cells)])).toEqual(
+      COMPILE_STATES.map((c) => [c.location, [{ word: 'oat 파일 상태', name: 'status', value: c.status }], [[c.filter, c.reason]]]),
+    )
+    expect(vm.cols).toEqual([{ word: '컴파일 필터', path: 'filter' }, { word: '컴파일 이유', path: 'reason' }])
+    expect(vm.records).toEqual([])
+    // 칸 넷이 스키마와 같다 — 새 필드가 늘면 여기서 먼저 깨진다.
+    expect(Object.keys(CompileStateSliceSchema.shape).sort()).toEqual(['filter', 'location', 'reason', 'status'])
+    // 자리 — slice 이름별 바로 위 · 전폭.
+    const diag = MANIFEST.filter((b) => b.section === 'diagnose')
+    expect(diag[diag.indexOf(SLICE_CARD) - 1]).toBe(SLICES_CARD)
+    expect(SLICES_CARD.span).toBe(12)
+  })
+
+  it('BP-8 컴파일 상태 slice null — 값 없음 + 그 칸의 코드(블록 껍데기 아님) · 문장은 제목 title', () => {
+    const doc = diagDoc('dalvik-off')
+    const vm = buildDexStates(SLICES_CARD, doc) as NoneVm
+    const block = doc['diagnose'] as Record<string, unknown>
+    // 블록은 collected — 껍데기 코드는 null 이다. 코드 · 문장은 칸의 짝에서.
+    expect(blockState(doc, SLICES_CARD).reasonCode).toBeNull()
+    expect(vm).toEqual({
+      none: true, label: NONE_NULL, code: 'dalvik_not_recorded',
+      title: block['target_process_compile_state_slices_reason'],
+    })
+    // 카드에 닿는 상태 — 배지(status)는 껍데기 그대로 · 제목 title 은 칸의 문장 · 값 자리 코드는 칸의 코드.
+    const st = cardState(blockState(doc, SLICES_CARD), vm)
+    expect([st.status, st.reason, st.reasonCode]).toEqual(['collected', vm.title, 'dalvik_not_recorded'])
+    // 대상 앱 없음(partial) — 배지 없음은 그대로, 코드 · 문장은 칸의 것.
+    const noapp = diagDoc('no-process')
+    const nvm = buildDexStates(SLICES_CARD, noapp)
+    expect(badgeOf(cardState(blockState(noapp, SLICES_CARD), nvm))).toBeNull()
+    expect(cardState(blockState(noapp, SLICES_CARD), nvm).reasonCode).toBe('process_not_in_trace')
+    // 짝이 없는 뷰모델(값을 그린 카드)은 껍데기 그대로.
+    const shell = blockState(doc, SLICE_CARD)
+    expect(cardState(shell, buildSliceTable(SLICE_CARD, doc))).toBe(shell)
+  })
+
+  it('BP-8 컴파일 상태 slice [] — 컴파일 상태 slice 없음 · 배지에 안 셈', () => {
+    const doc = diagDoc('collected') as Record<string, any>
+    doc['diagnose'] = { ...doc['diagnose'], target_process_compile_state_slices: [] }
+    expect((buildDexStates(SLICES_CARD, doc) as NoneVm).label).toBe('컴파일 상태 slice 없음')
+    expect(tabBadgeCount(builtAll(doc), 'diagnose')).toBe(0)
+    // 필드가 없으면 수집 안 함.
+    const gone = diagDoc('collected') as Record<string, any>
+    delete gone['diagnose']['target_process_compile_state_slices']
+    expect((buildDexStates(SLICES_CARD, gone) as NoneVm).label.startsWith(NONE_MISSING)).toBe(true)
+  })
+
+  it('BP-8 JIT 컴파일 slice — slice 수 끝 행 · 단어 + 경로 · null 이면 그 행만 값 없음 + 코드', () => {
+    const counts = DIAG_BLOCKS.find((b): b is PairsBlock => b.kind === 'pairs' && b.title === 'slice 수')!
+    const last = counts.keys![counts.keys!.length - 1]!
+    expect([last.p, last.w]).toEqual(['target_process_jit_slices', 'JIT 컴파일 slice'])
+    // 임시 행(컴파일 상태 slice 를 list 키=값으로)이 걷혔다 (plan B26 · B27).
+    expect(counts.keys!.map((k) => k.p)).not.toContain('target_process_compile_state_slices')
+    const ok = (buildPairs(counts, diagDoc('collected')) as PairsVm).rows.at(-1)!
+    expect([ok.value, ok.code]).toEqual(['54', undefined])
+    const off = (buildPairs(counts, diagDoc('dalvik-off')) as PairsVm).rows.at(-1)!
+    expect([off.value, off.code]).toEqual([NONE_NULL, 'dalvik_not_recorded'])
+    // 켠 카테고리에 dalvik — 데이터 그대로 (BP-7).
+    const scope = DIAG_BLOCKS.find((b): b is PairsBlock => b.kind === 'pairs' && b.title === '기록 범위')!
+    expect((buildPairs(scope, diagDoc('collected')) as PairsVm).rows[0]!.value).toBe('am · wm · view · dalvik')
   })
 })
