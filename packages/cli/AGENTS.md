@@ -18,7 +18,7 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
 | `src/commands/` | 명령 하나당 파일 하나 (예외 둘 — `browser.ts` 는 브라우저 여는 헬퍼를 `open`·`report` 가, `compile.ts` 는 `--compile` 세션의 컴파일 줄 · 되돌림 줄을 `start`·`stop`·`status` 가 나눠 쓴다) |
 | `src/copy/diagnose.ts` | 진단 모드가 새로 내는 cli 문구 모음 — 정본은 `docs/design/diagnostic-mode.md` `## 문구` 표 |
 | `src/copy/compile.ts` | `start --compile` 의 cli 문구 모음 — 정본은 `docs/design/baseline-profile.md` `## 문구` 표 |
-| `test/readme.test.ts` | 등록된 명령이 전부 README 에 있는지 · `start` 옵션이 전부 README 에 있는지 대조 |
+| `test/readme.test.ts` | 등록된 명령이 전부 README 명령 표에 있는지 · `start` 옵션이 전부 README 에 있는지 · `docs/usage.md` 「명령 전체」 대조 |
 | `test/copy/diagnose.test.ts` | cli 진단 문구 ↔ 디자인 문서 `## 문구` 표 양방향 대조 · 단어형 규칙 (DM-15) |
 | `test/copy/compile.test.ts` | `--compile` 문구 ↔ 디자인 문서 `## 문구` 표 양방향 대조 · core 가 내는 거부 · 실패 문구 대조 · 단어형 · 80칸 (BP-6) |
 | `test/preview-flag.test.ts` | GUI 가 적는 `start` 줄(시작 바 예고 · 서버 실행 줄)의 플래그가 commander 에 등록된 `start` 옵션과 같은지 대조 (DM-2) |
@@ -37,12 +37,12 @@ commander 진입점. **판단은 core 가 하고 여기는 옵션을 넘기고 �
 **기기에 접촉하지 않는 명령**은 `createContext` 를 부르지 않는다 — `mark` 와 `runs` 가 그렇다.
 그것이 규칙 1 을 지키는 방식이다: 조심해서 안 부르는 것이 아니라 **부를 수단이 없는 것**.
 
-**명령을 늘리면 README 의 「명령 전체」도 같은 커밋에서 고친다.** `runs` 셋이 한동안 문서에
+**명령을 늘리면 README 명령 표와 `docs/usage.md` 의 「명령 전체」도 같은 커밋에서 고친다.** `runs` 셋이 한동안 문서에
 없었다 — 틀린 것이 아니라 빠진 것이라 읽는 사람은 알 길이 없었다. `test/readme.test.ts` 가
 이제 그것을 막는다. **`start` 의 옵션도 같다** — 등록된 옵션(`--app` `--name` `--device`
 `--launch` `--out` `--force` `--diagnose` `--compile`)이 README 어딘가에, `--diagnose` · `--compile` 은
-「명령 전체」 절 안에 있어야 한다. **`--compile` 은 `--launch` 와만** 받는다는 조건은 `--help` 설명(80칸)에 없으므로
-README 「명령 전체」와 이 파일이 말한다 — 시험(`BP-4 README 옵션 대조`)이 둘 다 본다.
+`docs/usage.md` 「명령 전체」 절 안에 있어야 한다. **`--compile` 은 `--launch` 와만** 받는다는 조건은 `--help` 설명(80칸)에 없으므로
+`docs/usage.md` 「명령 전체」와 이 파일이 말한다 — 시험(`BP-4 README 옵션 대조`)이 둘 다 본다.
 
 ## 제약
 
@@ -95,7 +95,7 @@ README 「명령 전체」와 이 파일이 말한다 — 시험(`BP-4 README �
 - **`open` 은 끝나지 않는 명령이다.** 문자열을 돌려주지 않고 Ctrl-C 까지 서버를 붙잡는다.
   서버 구현은 `@perftracker/gui` 에 있고 CLI 는 그것을 부르기만 한다.
 - **이름을 바꿔도 옛 이름을 끊지 않는다.** `gui` 는 `.alias('gui')` 로 계속 받는다.
-  도움말에는 commander 가 `open|gui` 로 함께 내지만 **README 의 「명령 전체」에는 `open`
+  도움말에는 commander 가 `open|gui` 로 함께 내지만 **README 명령 표 · `docs/usage.md` 「명령 전체」에는 `open`
   하나만 싣는다** — 표에 둘을 나란히 두면 정본이 둘로 보인다. 별칭은 눈에 잘 안 띄어서
   **누가 지워도 아무도 모르므로** `test/readme.test.ts` 가 그것을 고정한다.
 - **플래그 이름은 명령 이름과 싸우지 않는다.** 브라우저를 안 여는 옵션이 `--no-open` 이던

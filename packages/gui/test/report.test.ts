@@ -896,7 +896,7 @@ describe('스키마 메이저', () => {
 describe('README 가 말하는 숫자', () => {
   it('"시계열 다섯" 이 매니페스트의 series 개수와 같다', () => {
     const readme = readFileSync(
-      fileURLToPath(new URL('../../../README.md', import.meta.url)),
+      fileURLToPath(new URL('../../../docs/usage.md', import.meta.url)),
       'utf8',
     )
     const KO = ['영', '하나', '둘', '셋', '넷', '다섯', '여섯', '일곱', '여덟', '아홉', '열']

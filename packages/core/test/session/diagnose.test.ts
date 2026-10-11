@@ -163,7 +163,7 @@ describe('DM-17 — status 의 최대 시간 넘음은 세션의 상한을 따�
  * 코드와 같아야 한다 (루트 AGENTS.md 「문서가 숫자로 말하면 대조하는 시험」).
  */
 describe('README 1절 — 진단 --launch 의 atrace 대기 (D29)', () => {
-  const README = readFileSync(join(import.meta.dirname, '../../../../README.md'), 'utf8')
+  const README = readFileSync(join(import.meta.dirname, '../../../../docs/usage.md'), 'utf8')
   const start = README.indexOf('### 1. 측정이 측정 대상을 바꾸지 않는다')
   const section = README.slice(start, README.indexOf('### 2. ', start))
 

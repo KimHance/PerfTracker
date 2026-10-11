@@ -50,15 +50,19 @@ import {
  * 고정된 문장을 고칠 때는 이 대조가 여전히 성립하는지 사람이 한 번 봐야 한다.
  */
 const README = readFileSync(fileURLToPath(new URL('../../../../README.md', import.meta.url)), 'utf8')
+/** README 는 짧은 안내만 두고 필드 설명은 이 파일로 옮겼다 — 스키마에 대해 숫자 · 목록으로 말하는 정본. */
+const RJ = readFileSync(fileURLToPath(new URL('../../../../docs/result-json.md', import.meta.url)), 'utf8')
+const USAGE = readFileSync(fileURLToPath(new URL('../../../../docs/usage.md', import.meta.url)), 'utf8')
+const RJ_URL = 'https://github.com/KimHance/PerfTracker/blob/main/docs/result-json.md'
 const STATUS = readFileSync(fileURLToPath(new URL('../../../../docs/STATUS.md', import.meta.url)), 'utf8')
 const CORE_AGENTS = readFileSync(fileURLToPath(new URL('../../AGENTS.md', import.meta.url)), 'utf8')
 const RESULT_TS = readFileSync(fileURLToPath(new URL('../../src/schema/result.ts', import.meta.url)), 'utf8')
 
 /** `### <제목>` 절 하나 — 다음 `## ` · `### ` 머리 전까지. */
 function section(heading: string): string {
-  const start = README.indexOf(`\n${heading}\n`)
+  const start = RJ.indexOf(`\n${heading}\n`)
   if (start < 0) return ''
-  const rest = README.slice(start + heading.length + 2)
+  const rest = RJ.slice(start + heading.length + 2)
   const end = rest.search(/\n#{2,3} /)
   return end < 0 ? rest : rest.slice(0, end)
 }
@@ -104,20 +108,22 @@ describe('README 의 지표 목록', () => {
   })
 
   it('등록된 지표가 전부 표에 있다', () => {
-    const missing = ids.filter((id) => !README.includes(`[\`${id}\`](#metrics${id})`))
+    const missing = ids.filter(
+      (id) => !README.includes(`[\`${id}\`](${RJ_URL}#metrics${id})`) || !RJ.includes(`\n### \`metrics.${id}\`\n`),
+    )
     expect(missing, 'README 표에 없는 지표').toEqual([])
   })
 })
 
 describe('README 가 스키마에 대해 말하는 숫자', () => {
   it('reason_code 개수가 METRIC_REASON_CODES 와 같다', () => {
-    const m = /이 버전의 reason_code 값은 \*\*(\d+)개\*\*/.exec(README)
+    const m = /이 버전의 reason_code 값은 \*\*(\d+)개\*\*/.exec(RJ)
     expect(m, 'README 에서 reason_code 개수 문장을 찾지 못했다 — 문구를 바꿨다면 이 테스트도 함께 고칠 것').not.toBeNull()
     expect(Number(m![1])).toBe(METRIC_REASON_CODES.length)
   })
 
   it('schema_version 이 SCHEMA_VERSION 과 같다', () => {
-    const m = /`schema_version` 이 그 계약의 버전입니다 \(현재 `([^`]+)`\)/.exec(README)
+    const m = /`schema_version` 이 그 계약의 버전입니다 \(현재 `([^`]+)`\)/.exec(RJ)
     expect(m, 'README 에서 schema_version 문장을 찾지 못했다').not.toBeNull()
     expect(m![1]).toBe(SCHEMA_VERSION)
   })
@@ -129,7 +135,7 @@ describe('README 가 스키마에 대해 말하는 숫자', () => {
    * 진단 세션 산출물이 `1.1.0` 스키마에 걸리는 자리도 함께 적혀 있어야 한다 (DM-6).
    */
   it('캐시된 스키마가 깨지는 경로를 README 가 다 말한다 — 1.1.0 안의 셋과 1.2.0 의 진단 키', () => {
-    const section = README.slice(README.indexOf('### 스키마를 다시 꺼내야 하는 때'))
+    const section = RJ.slice(RJ.indexOf('### 스키마를 다시 꺼내야 하는 때'))
     expect(section.length, '"스키마를 다시 꺼내야 하는 때" 절이 없다').toBeGreaterThan(0)
 
     // 경로 1 — thermal_zones 항목이 닫힌 객체다.
@@ -164,6 +170,8 @@ describe('DM-6 schema_version 1.2.0', () => {
     const claim = /1\.1\.0[^\n]{0,40}(?:\n[^\n]{0,40})?출시된 적이 없/
     for (const [where, text] of [
       ['README.md', README],
+      ['docs/result-json.md', RJ],
+      ['docs/usage.md', USAGE],
       ['docs/STATUS.md', STATUS],
       ['packages/core/AGENTS.md', CORE_AGENTS],
       ['packages/core/src/schema/result.ts', RESULT_TS],
@@ -442,8 +450,9 @@ describe('DM-6 README 1.1.0 역사', () => {
   it('DM-6 1.1.0 역사 — 0.2.0 이 같은 1.1.0 으로 frame · no_frames 를 더한 사실이 있고, "첫 확장" 단정이 없다', () => {
     const cache = section('### 스키마를 다시 꺼내야 하는 때')
     expect(cache).toContain('0.2.0(2026-08-31)이 같은 `1.1.0` 으로 `metrics.frame` 과 `no_frames` 를 더했습니다')
+    // 스키마 역사는 README 에서 docs/result-json.md 로 옮겼다 — README 는 짧은 안내만 둔다.
     for (const [where, text] of [
-      ['README.md', README],
+      ['docs/result-json.md', RJ],
       ['docs/STATUS.md', STATUS],
       ['packages/core/src/schema/result.ts', RESULT_TS],
     ] as const) {

@@ -24,10 +24,10 @@
 - 진입점 · 디렉토리 구조가 바뀜 → 해당 모듈 `AGENTS.md` 의 맵
 - 계층 규율 · 제약이 바뀜 → 해당 모듈 `AGENTS.md` 의 제약 절
 - 새 모듈/서브디렉토리 추가 → 이 파일의 모듈 맵 + 새 `AGENTS.md`
-- 지표 · 스키마 · 수집 경로 변경 → `README.md`(정본) + `docs/STATUS.md`
+- 지표 · 스키마 · 수집 경로 변경 → `docs/result-json.md`(정본) + `docs/STATUS.md` (README 지표 표가 바뀌면 그것도)
 - **버전을 올리면 → `CHANGELOG.md` 에 그 버전 절.** README 는 사용법만 — 날짜가 붙은 검증 기록 · 버전 이력은
   `CHANGELOG.md` 로 간다
-- **명령 · 옵션 추가/이름 변경 → `README.md` 의 「명령 전체」 + `packages/cli/AGENTS.md`**
+- **명령 · 옵션 추가/이름 변경 → `README.md` 의 명령 표 · `start` 옵션 줄 + `docs/usage.md` 의 「명령 전체」 + `packages/cli/AGENTS.md`**
 - GUI 화면 · 카피 · 토큰 변경 → `docs/design/gui/HANDOFF.md` 와 어긋나지 않는지 확인
 - 기능 문서가 있는 기능의 동작 · 받아들임 기준이 바뀜 → `docs/spec/<기능>.md` 의 그 항목 행 ·
   `### 결정` · `## 바뀐 기록`. 지표 · 스키마 · 명령의 정본은 그대로 README 다
@@ -37,6 +37,9 @@
 문서가 코드에 대해 **숫자로** 말하거나 **목록으로** 말하면 그것을 코드와 대조하는 테스트를
 같이 넣는다 — `packages/core/test/schema/readme.test.ts`(버킷·지표 개수)와
 `packages/cli/test/readme.test.ts`(등록된 명령이 전부 README 에 있는가)가 그 일을 한다.
+
+**README 는 짧은 안내만 둔다** (npm 페이지가 된다). 자세한 사용법은 `docs/usage.md`, `result.json` 필드는
+`docs/result-json.md` 다. 기능 문서 · 디자인 문서 · 주석이 「README 「…」」 라고 부르는 절은 그 두 파일에 같은 제목으로 있다.
 **그 테스트는 반드시 깨 본다.** 통과하는 테스트는 문서가 맞다는 증거가 아니다 —
 틀린 문서와 틀린 테스트는 사이좋게 통과한다.
 

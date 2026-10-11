@@ -21,6 +21,8 @@ import { buildProgram } from '../src/program.js'
  * (`program.ts` 가 등록과 실행을 나눈 이유다). 이름을 바꾸면 여기가 같이 깨진다.
  */
 const README = readFileSync(fileURLToPath(new URL('../../../README.md', import.meta.url)), 'utf8')
+/** 명령별 자세한 설명(「명령 전체」)은 README 에서 이 파일로 옮겼다. README 에는 명령 표와 start 옵션 줄만 있다. */
+const USAGE = readFileSync(fileURLToPath(new URL('../../../docs/usage.md', import.meta.url)), 'utf8')
 
 /** 최상위 명령과 `runs` 처럼 하위를 가진 명령의 `부모 자식` 을 함께 낸다. */
 function commandPaths(): string[] {
@@ -64,6 +66,7 @@ describe('옛 이름 호환', () => {
   /** 별칭은 README 의 「명령 전체」에 넣지 않는다 — 정본이 둘로 보이면 그것이 혼란이다. */
   it('별칭은 문서에 싣지 않는다', () => {
     expect(README).not.toContain('perftracker gui')
+    expect(USAGE).not.toContain('perftracker gui')
   })
 })
 
@@ -71,9 +74,9 @@ describe('옛 이름 호환', () => {
 
 /** `## <제목>` 절 — 다음 `## ` 까지. 그 아래 `###` 소절은 절 안이다. */
 function section(title: string): string {
-  const start = README.search(new RegExp(`^## ${title}\\s*$`, 'm'))
-  if (start < 0) throw new Error(`README 에 「${title}」 절이 없다`)
-  const rest = README.slice(start + 1)
+  const start = USAGE.search(new RegExp(`^## ${title}\\s*$`, 'm'))
+  if (start < 0) throw new Error(`docs/usage.md 에 「${title}」 절이 없다`)
+  const rest = USAGE.slice(start + 1)
   const end = rest.search(/^## /m)
   return end < 0 ? rest : rest.slice(0, end)
 }

@@ -1,13 +1,13 @@
 # 변경 기록
 
 버전마다 무엇이 바뀌었고, 실기기 · 에뮬레이터에서 무엇을 어떻게 확인했는지를 적습니다.
-사용법은 [README](README.md) 가 정본입니다. `result.json` 의 스키마 버전(`schema_version`)은 도구 버전과
+사용법은 [README](README.md) · [docs/usage.md](docs/usage.md), 필드는 [docs/result-json.md](docs/result-json.md) 에 있습니다. `result.json` 의 스키마 버전(`schema_version`)은 도구 버전과
 따로 갑니다 — 어느 도구 버전이 어느 스키마를 내는지는 각 버전 절에 적습니다.
 
 ## 0.3.0 — 출시 준비 (2026-10-11)
 
 스키마 `1.2.0`. 옵셔널 필드만 늘었고 옛 `result.json` 은 새 스키마를 그대로 통과합니다. 다만 평소 세션 산출물에도
-`target_app` 의 컴파일 상태 칸이 생겨 **캐시해 둔 `1.1.0` 스키마는 평소 산출물도 거부합니다** — README
+`target_app` 의 컴파일 상태 칸이 생겨 **캐시해 둔 `1.1.0` 스키마는 평소 산출물도 거부합니다** — docs/result-json.md
 「스키마를 다시 꺼내야 하는 때」.
 
 ### 새로 생긴 것
@@ -78,7 +78,7 @@
 않고 관계를 단언합니다 — `trace_processor` 로 따로 센 수 = 블록의 수, 보고서 행 모델의 행 수 = 블록 표 행 수,
 `extract` 를 다시 돌린 블록 = `stop` 이 쓴 블록(바이트까지). 스펙 회차 가운데 한 번은 앱이 트레이스에
 낡은 이름으로 남아 블록이 `partial` + `process_name_stale_in_trace` 였고 값은 다 있었습니다
-([아래](README.md#트레이스가-앱을-다른-이름으로-아는-경우-zygote64--pre-initialized)). 스펙은 값을 싣는 `partial` 둘
+([아래](docs/usage.md#트레이스가-앱을-다른-이름으로-아는-경우-zygote64--pre-initialized)). 스펙은 값을 싣는 `partial` 둘
 (`process_name_stale_in_trace` · `ftrace_setup_errors`)을 받고 그 값이 `null` 이 아닌지 보며, 켜기 오류가 있던
 회에는 행(`bindApplication` 등)을 보지 않습니다 — 어느 카테고리가 빠졌는지 원본이 말하지 않기 때문입니다.
 
@@ -174,7 +174,7 @@
 
 즉 **현재 스펙 구성으로 5회 연속을 돌린 적은 없습니다.** 5회 연속의 근거는 그 앞 구성의
 것이고, 10 → 11 로 늘어난 스펙 하나는 "세션 스펙의 대상 앱이 이 기기에 설치되어 있다"(`m0`)입니다.
-대상 앱을 바꾼 이유는 README 의 "온-디바이스 테스트를 다른 기기에서 돌리기" 에 있습니다.
+대상 앱을 바꾼 이유는 docs/usage.md 의 "온-디바이스 테스트를 다른 기기에서 돌리기" 에 있습니다.
 11 → 20 은 진단 세션 스펙(`diagnose.test.ts`, 9개)이고, 그 회차의 대상 앱은 YouTube 입니다 —
 **20개를 웹툰으로 돌린 적은 없습니다** ([위](#진단-세션--diagnose을-실기기가-검증한-것-2026-10-08-sm-s901n--sdk-36)).
 20 → 27 은 컴파일 상태 스펙(`baseline.test.ts`, 6개)과 진단 스펙의 ART 칸 하나입니다 — `baseline.test.ts` 는

@@ -12,15 +12,18 @@ import { DexoptLineSchema, ResultSchema, TargetAppSchema, WARNING_CODES } from '
  */
 const read = (rel: string): string => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
 const README = read('../../../../README.md')
+/** 필드 설명은 README 에서 이 파일로 옮겼다. */
+const RJ = read('../../../../docs/result-json.md')
+const USAGE = read('../../../../docs/usage.md')
 const STATUS = read('../../../../docs/STATUS.md')
 const CORE_AGENTS = read('../../AGENTS.md')
 const RESULT_TS = read('../../src/schema/result.ts')
 
 /** `### <제목>` 절 하나 — 다음 `## ` · `### ` 머리 전까지. */
 function section(heading: string): string {
-  const start = README.indexOf(`\n${heading}\n`)
+  const start = RJ.indexOf(`\n${heading}\n`)
   if (start < 0) return ''
-  const rest = README.slice(start + heading.length + 2)
+  const rest = RJ.slice(start + heading.length + 2)
   const end = rest.search(/\n#{2,3} /)
   return end < 0 ? rest : rest.slice(0, end)
 }
@@ -50,7 +53,7 @@ describe('BP-1 README 1.2.0 문단', () => {
     expect(json.properties.target_app.additionalProperties).toBe(false)
     expect(Object.keys(json.properties.target_app.properties)).toContain('compile_state_start')
 
-    const intro = /> \*\*`1\.2\.0` 은[\s\S]*?\n\n/.exec(README)?.[0] ?? ''
+    const intro = /> \*\*`1\.2\.0` 은[\s\S]*?\n\n/.exec(RJ)?.[0] ?? ''
     expect(intro, 'README 1.2.0 문단을 찾지 못했다').not.toBe('')
     expect(intro).toContain('**모든 세션**의 `target_app`')
     expect(intro).toContain('평소 세션의\n> `result.json` 도 `1.1.0` 과 키가 다릅니다')
@@ -68,6 +71,8 @@ describe('BP-1 README 1.2.0 문단', () => {
       /평소[\s\S]{0,40}?(?:1\.1\.0 ?(?:과|와) 키가 같(?!지)|키가 1\.1\.0 ?(?:과|와) 같(?!지)|키는 1\.1\.0 ?(?:과|와) 같(?!지)|키 하나 다르지 않)/
     for (const [where, text] of [
       ['README.md', README],
+      ['docs/result-json.md', RJ],
+      ['docs/usage.md', USAGE],
       ['docs/STATUS.md', STATUS],
       ['packages/core/AGENTS.md', CORE_AGENTS],
       ['packages/core/src/schema/result.ts', RESULT_TS],

@@ -20,7 +20,7 @@ import { deviceCapabilities, DEVICE_OPTS, DEVICE_TARGET_APP } from './target.js'
  * 실기기 또는 에뮬레이터가 필요하다. `npm run test:device` 로만 실행된다.
  *
  * **에뮬레이터에서 정직하게 검증되지 않는 것은 여기서 단언하지 않는다.** 목록과 이유는
- * 저장소 루트 `README.md` 의 "검증 환경" 절에 있다 (계획서는 저장소에 없다 — 새로 clone 한
+ * `docs/usage.md` 의 "검증 환경" 절에 있다 (계획서는 저장소에 없다 — 새로 clone 한
  * 사람이 실제로 찾아볼 수 있는 문서를 가리킨다). 요약하면: 주파수 **값의 크기**
  * (에뮬은 cpuinfo_max_freq=2), android.log 개수(SELinux 가 logdr 를 막음),
  * runtime.* 이 0 보다 큰 것(10ms 해상도), 그리고 `am start -W` 가 TotalTime 을 내는 것
@@ -103,7 +103,7 @@ describe('M2 기기 통합', () => {
     //   (2) 값이 없으면 그 이유가 **기기가 실제로 말한 것**이어야 한다 — 도구가 지어낸
     //       "앱이 다시 실행되지 않았을 수 있음" 이 아니라.
     // 이 앱의 콜드 스타트는 이 에뮬레이터에서 12~15초라 `am start -W` 가 `Status: timeout` 을
-    // 내는 경우가 흔하다 (README "검증 환경" 절에 실측과 함께 적어 뒀다).
+    // 내는 경우가 흔하다 (docs/usage.md "검증 환경" 절에 실측과 함께 적어 뒀다).
     const startup = result.metrics.startup
     expect(startup?.status, `startup: ${startup?.reason ?? ''}`).toMatch(/^(collected|partial)$/)
     if (startup?.data != null) {

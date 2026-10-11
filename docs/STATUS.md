@@ -1359,7 +1359,7 @@ RED 가 나는지 확인하고 원복합니다.** 통과하는 테스트는 증�
 
 ### 먼저 읽을 것
 
-1. **[`README.md`](../README.md)** — 도구가 무엇이고 `result.json` 을 어떻게 읽는지. **정본입니다.**
+1. **[`README.md`](../README.md)** — 짧은 안내. 자세한 사용법은 [`usage.md`](usage.md), `result.json` 필드는 [`result-json.md`](result-json.md) 가 **정본입니다.**
 2. **[`CHANGELOG.md`](../CHANGELOG.md)** — 버전마다 무엇이 바뀌었고 실기기에서 무엇을 확인했는지.
 3. **기능 문서 [`docs/spec/`](spec/)** — 기능마다 항목 ID · 받아들임 기준 · `### 결정`(왜 이렇게 했는가).
    화면 쪽은 **디자인 문서 [`docs/design/`](design/)** 가 같은 일을 한다.
