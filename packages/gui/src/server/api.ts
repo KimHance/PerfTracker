@@ -56,6 +56,7 @@ import {
   toRunView,
   toStartedSessionView,
 } from './view.js'
+import { GUI_VERSION } from './version.js'
 
 /**
  * GUI 서버가 하는 일 전부. **CLI 의 로직을 다시 쓰지 않고 core 를 그대로 부른다** —
@@ -71,7 +72,7 @@ export interface GuiOptions {
   adb?: string | undefined
   /** 결과를 저장할 디렉토리. CLI 의 `-o` 와 같은 뜻이다. */
   outDir: string
-  version: string
+  // 버전 칸은 두지 않는다. 넘겨받으면 부르는 쪽이 문자열을 박는다 — `version.ts` 가 읽는다.
 }
 
 export class GuiApi {
@@ -80,10 +81,10 @@ export class GuiApi {
   env(): EnvView {
     try {
       const { located } = createBaseAdb({ adb: this.opts.adb })
-      return { version: this.opts.version, adbPath: located.path, outDir: this.opts.outDir }
+      return { version: GUI_VERSION, adbPath: located.path, outDir: this.opts.outDir }
     } catch {
       // adb 를 못 찾은 것은 화면이 알아야 할 사실이다. 서버가 죽을 이유는 아니다.
-      return { version: this.opts.version, adbPath: null, outDir: this.opts.outDir }
+      return { version: GUI_VERSION, adbPath: null, outDir: this.opts.outDir }
     }
   }
 

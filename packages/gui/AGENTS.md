@@ -316,6 +316,11 @@ CLI 를 감싸는 **로컬호스트 웹 GUI**. 브라우저에서 adb 를 부를
    `options.diagnose` 이고, 화면에 오는 것은 진단 여부와 **core 가 쓴 고지 줄 그대로**뿐이다
    (`server/view.ts` 의 `toDiagnoseView`) — 앱 slice 가 열리나를 화면이 다시 판정하지 않는다 (6 과 같은 이유).
    목업은 core 를 import 하지 않아 그 문장을 다시 적었으므로 `test/mock.test.ts` 가 core 와 대조한다.
+16. **버전을 화면도 CLI 도 정하지 않는다.** 머리의 버전은 서버가 gui 의 `package.json` 에서 읽어
+   (`server/version.ts`) `EnvView.version` 으로 낸다. `GuiOptions` 에 버전 칸이 없는 것은 빠뜨린 것이
+   아니다 — 칸이 있던 시절 `open` 이 `'0.1.0'` 을 박아 넘겨 0.3.0 화면이 `v0.1.0` 을 말했다. 브라우저의 초기
+   상태도 `null` 이고 받기 전에는 그리지 않는다. 세 패키지가 같은 버전으로 나가므로 이 값이 설치한
+   `perftracker` 의 버전이다 — `test/version.test.ts` 와 `cli/test/version.test.ts` 가 지킨다.
 
 ## 상태
 

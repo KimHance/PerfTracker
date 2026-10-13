@@ -31,7 +31,6 @@ export async function runOpen(opts: {
   const server = await startGuiServer({
     ...(opts.adb !== undefined ? { adb: opts.adb } : {}),
     outDir: opts.out,
-    version: '0.1.0',
     ...(opts.port !== undefined ? { port: Number(opts.port) } : {}),
   })
 

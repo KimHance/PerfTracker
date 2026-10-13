@@ -69,7 +69,8 @@ export interface CliLogEntry {
 
 export interface AppState {
   /** 서버가 알려 준 환경. **화면은 이것을 표시만 하고 정하지 않는다** (특히 `outDir`). */
-  env: { version: string; adbPath: string | null; outDir: string }
+  /** `version` 은 서버가 알려 주기 전까지 `null` 이다 — 화면이 버전을 지어내지 않는다. */
+  env: { version: string | null; adbPath: string | null; outDir: string }
   tabs: Tab[]
   activeTabKey: string
   devices: DeviceView[]
@@ -128,7 +129,7 @@ export function newTab(key: string, name = ''): Tab {
 }
 
 export function initialState(
-  env: AppState['env'] = { version: '0.1.0', adbPath: null, outDir: 'runs' },
+  env: AppState['env'] = { version: null, adbPath: null, outDir: 'runs' },
 ): AppState {
   const first = newTab('t1')
   return {

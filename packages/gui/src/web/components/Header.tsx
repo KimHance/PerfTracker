@@ -10,9 +10,12 @@ export function Header() {
     <header className="app-header">
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)' }}>
         <span className="wordmark">PerfTracker</span>
-        <span className="mono" style={{ fontSize: 10.5, color: 'var(--color-neutral-600)' }}>
-          v{state.env.version}
-        </span>
+        {/* 서버가 알려 주기 전에는 비워 둔다 — 짐작한 버전을 잠깐이라도 띄우지 않는다. */}
+        {state.env.version !== null && (
+          <span className="mono" style={{ fontSize: 10.5, color: 'var(--color-neutral-600)' }}>
+            v{state.env.version}
+          </span>
+        )}
       </div>
 
       <div className="adb-chip">

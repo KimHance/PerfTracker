@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { CLI_VERSION } from '../src/version.js'
@@ -16,18 +17,50 @@ import { CLI_VERSION } from '../src/version.js'
 describe('CLI 버전', () => {
   const pkg = JSON.parse(
     readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'),
-  ) as { version: string }
+  ) as { version: string; dependencies?: Record<string, string> }
 
   it('package.json 과 같다', () => {
     expect(CLI_VERSION).toBe(pkg.version)
   })
 
-  /** 폴백 문자열이 되살아나는 것을 막는다 — 소스에 버전을 다시 적지 않는다. */
+  /**
+   * 폴백 문자열이 되살아나는 것을 막는다 — 소스 어디에도 버전을 다시 적지 않는다.
+   * 처음엔 `program.ts` 만 봤는데, 그 사이 `open.ts` 가 화면에 `'0.1.0'` 을 넘기고 있었다.
+   */
   it('소스에 버전 문자열을 박아 두지 않는다', () => {
-    const src = readFileSync(
-      fileURLToPath(new URL('../src/program.ts', import.meta.url)),
-      'utf8',
-    )
-    expect(src, 'program.ts 에 하드코딩된 버전').not.toMatch(/\.version\(['"]\d+\.\d+\.\d+['"]\)/)
+    const root = fileURLToPath(new URL('../src', import.meta.url))
+    const files = (dir: string): string[] =>
+      readdirSync(dir).flatMap((name) => {
+        const path = join(dir, name)
+        if (statSync(path).isDirectory()) return files(path)
+        return name.endsWith('.ts') ? [path] : []
+      })
+    const hits = files(root)
+      .filter((path) =>
+        /\.version\(['"`]\d+\.\d+\.\d+|version:\s*['"`]\d+\.\d+\.\d+/.test(readFileSync(path, 'utf8')),
+      )
+      .map((path) => relative(root, path))
+
+    expect(hits, '버전 문자열이 박힌 파일').toEqual([])
+  })
+
+  /**
+   * 화면 머리의 버전은 gui 가 자기 `package.json` 에서 읽는다. 그 값이 사용자가 설치한
+   * `perftracker` 와 같으려면 세 패키지가 같은 버전으로 나가야 하고, 서로를 그 버전으로 물어야 한다.
+   */
+  it('세 패키지가 같은 버전으로 나간다', () => {
+    const read = (rel: string) =>
+      JSON.parse(readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')) as {
+        version: string
+        dependencies?: Record<string, string>
+      }
+    const core = read('../../core/package.json')
+    const gui = read('../../gui/package.json')
+
+    expect(core.version).toBe(pkg.version)
+    expect(gui.version).toBe(pkg.version)
+    expect(gui.dependencies?.['@perftracker/core']).toBe(pkg.version)
+    expect(pkg.dependencies?.['@perftracker/core']).toBe(pkg.version)
+    expect(pkg.dependencies?.['@perftracker/gui']).toBe(pkg.version)
   })
 })

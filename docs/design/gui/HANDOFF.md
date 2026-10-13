@@ -76,7 +76,7 @@
 | 요소 | 스펙 |
 | --- | --- |
 | 워드마크 `PERFTRACKER` | `--font-heading`, 700, 19px, `letter-spacing:.14em`, `text-transform:uppercase` |
-| 버전 `v0.1.0` | monospace 10.5px, `--color-neutral-600` |
+| 버전 `v{버전}` | monospace 10.5px, `--color-neutral-600`. 값은 서버의 `EnvView.version`(gui `package.json`)이고, 받기 전에는 그리지 않는다 |
 | adb 칩 | `display:flex; gap:var(--space-2); padding:3px var(--space-3); border:1px solid var(--color-divider); border-radius:99px; white-space:nowrap`. 내부: 6px 원형 `--color-accent` 도트 + `adb` + 경로(`--color-neutral-500`) |
 | `환경 점검 (doctor)` | `.btn .btn-ghost`, height 32px, 12px, `white-space:nowrap` |
 | `기록 N` | `.btn .btn-secondary`, height 32px. N 은 pill 배지: monospace 10px, `padding:1px 7px; border-radius:99px; background:var(--color-accent-200); color:var(--color-accent-800)`. 클릭 시 드로어 토글 |

@@ -26,7 +26,7 @@ let out: string
 
 beforeEach(async () => {
   out = await mkdtemp(join(tmpdir(), 'perftracker-runs-'))
-  server = await startGuiServer({ outDir: out, version: '9.9.9' })
+  server = await startGuiServer({ outDir: out })
 })
 
 afterEach(async () => {
@@ -59,11 +59,14 @@ async function writeSession(dir: string, extra: Record<string, unknown>): Promis
 }
 
 describe('환경', () => {
-  it('버전을 그대로 낸다', async () => {
+  it('버전은 gui 의 package.json 값이다 — 부르는 쪽이 넘기지 않는다', async () => {
+    const pkg = JSON.parse(
+      await readFile(new URL('../package.json', import.meta.url), 'utf8'),
+    ) as { version: string }
     const res = await fetch(`${server.url}/api/env`)
 
     expect(res.status).toBe(200)
-    expect(((await res.json()) as EnvView).version).toBe('9.9.9')
+    expect(((await res.json()) as EnvView).version).toBe(pkg.version)
   })
 })
 
